@@ -1,0 +1,44 @@
+*metabuffer.txt*\tSimple filter interface for buffer lines (Lua/Fennel port)
+
+==============================================================================
+CONTENTS\t\t\t\t*metabuffer-contents*
+
+INTRODUCTION\t\t\t|metabuffer-introduction|
+USAGE\t\t\t\t|metabuffer-usage|
+COMMANDS\t\t\t|metabuffer-commands|
+
+==============================================================================
+INTRODUCTION\t\t\t\t*metabuffer-introduction*
+
+metabuffer provides an interactive buffer-line filter with matcher/case/syntax
+cycling and optional line push-back to source.
+
+==============================================================================
+USAGE\t\t\t\t\t*metabuffer-usage*
+
+Run |:Meta| to start filtering current buffer lines.
+
+==============================================================================
+COMMANDS\t\t\t\t*metabuffer-commands*
+
+\t\t\t\t\t*:Meta*
+\t\t\t\t\t*:MetaCursorWord*
+:Meta [{query}]
+:MetaCursorWord
+\tStart metabuffer from current buffer.
+
+\t\t\t\t\t*:MetaResume*
+\t\t\t\t\t*:MetaResumeCursorWord*
+:MetaResume [{query}]
+:MetaResumeCursorWord
+\tResume latest metabuffer state for the current source buffer.
+
+\t\t\t\t\t*:MetaSync*
+:MetaSync [{query}]
+\tProgrammatically update active query.
+
+\t\t\t\t\t*:MetaPush*
+:MetaPush
+\tPush edited visible metabuffer lines back to source line locations.
+
+vim:tw=78:ts=8:noet:ft=help:norl:
