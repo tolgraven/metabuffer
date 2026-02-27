@@ -1,1 +1,3 @@
 WRN 2026-02-27T00:21:02.553 ?.19633    server_start:199: Failed to start server: operation not permitted: /var/folders/5x/dkqh5lsd7h777ngc337d4thw0000gn/T/nvim.tol/XEUXJn/nvim.19633.0
+WRN 2026-02-27T00:44:28.023 ?.35125    server_start:199: Failed to start server: operation not permitted: /var/folders/5x/dkqh5lsd7h777ngc337d4thw0000gn/T/nvim.tol/OR7WhO/nvim.35125.0
+WRN 2026-02-27T00:45:12.340 ?.35785    server_start:199: Failed to start server: operation not permitted: /var/folders/5x/dkqh5lsd7h777ngc337d4thw0000gn/T/nvim.tol/qo3JsG/nvim.35785.0

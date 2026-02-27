@@ -1,0 +1,2 @@
+lua/**/*.lua linguist-generated
+lua/metabuffer/nfnl/**/*.lua linguist-vendored

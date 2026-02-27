@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+set -xe
+
+mkdir -p deps
+
+if [ -d "deps/nfnl" ]; then
+  (cd deps/nfnl && git pull)
+else
+  git clone https://github.com/Olical/nfnl.git deps/nfnl
+fi
+
+# Embed nfnl under lua/metabuffer/nfnl and fnl/metabuffer/nfnl with project namespacing.
+rm -rf fnl/metabuffer/nfnl lua/metabuffer/nfnl
+mkdir -p fnl/metabuffer lua/metabuffer
+
+cp -R deps/nfnl/lua/nfnl lua/metabuffer/
+
+(
+  cd deps/nfnl/fnl/nfnl
+  find . -type f -name '*.fnlm' -print
+) | while IFS= read -r rel; do
+  dest="fnl/metabuffer/nfnl/${rel#./}"
+  mkdir -p "$(dirname "$dest")"
+  cp "deps/nfnl/fnl/nfnl/${rel#./}" "$dest"
+done
+
+find fnl/metabuffer/nfnl -type f -name '*.fnlm' -exec \
+  perl -0pi -e 's/ :nfnl\./ :metabuffer.nfnl./g' {} +
+
+find lua/metabuffer/nfnl -type f -name '*.lua' -exec \
+  perl -0pi -e 's/"nfnl\./"metabuffer.nfnl./g' {} +

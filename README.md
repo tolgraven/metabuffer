@@ -4,7 +4,7 @@ Fennel-first port of `metabuffer.nvim`, structured for an `nfnl` workflow.
 
 ## nfnl Layout
 
-This repository now follows the `nfnl` plugin pattern:
+This repository follows the `nfnl` plugin pattern:
 
 - Source of truth: `fnl/`
 - Generated runtime output: `lua/` and `plugin/`
@@ -19,16 +19,26 @@ Key entrypoints:
 
 ## Build / Compile
 
-`fennel` is used to compile all Fennel sources:
+Recommended workflow:
+
+- Use `nfnl` in Neovim to compile on write while editing `fnl/**/*.fnl`.
+- Run `:NfnlCompileAllFiles` for a full project compile.
+- Commit generated Lua (`lua/` + `plugin/`) so users do not need `nfnl` to run this plugin.
+
+Utility scripts:
 
 ```sh
+# Embed a namespaced copy of nfnl under lua/metabuffer/nfnl
+./script/nfnl
+
+# One-shot project compile via headless Neovim + embedded nfnl
 ./scripts/compile-fennel.sh
 ```
 
-The script compiles:
+Repository hygiene (aligned with nfnl recommendations):
 
-- `fnl/plugin/*.fnl -> plugin/*.lua`
-- `fnl/**/*.fnl -> lua/**/*.lua`
+- `.ignore` hides generated Lua from search tools.
+- `.gitattributes` marks generated and vendored Lua for GitHub linguist.
 
 ## Commands
 
