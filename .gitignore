@@ -1,2 +1,3 @@
 .nvimlog
 deps/
+lua/metabuffer/
