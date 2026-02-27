@@ -36,9 +36,8 @@
       (do
         (var ok true)
         (for [i 1 (# rhs)]
-          (when (~= (. (. lhs i) :code) (. (. rhs i) :code))
-            (set ok false)
-            (break)))
+          (when (and ok (~= (. (. lhs i) :code) (. (. rhs i) :code)))
+            (set ok false)))
         ok)))
 
 (fn M.parse [nvim expr]

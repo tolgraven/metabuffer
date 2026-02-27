@@ -24,12 +24,20 @@
   (set self._prev_text "")
   (set self.updates 0)
   (set self.debug_out "")
+  (set self.prefix "# ")
 
-  (set self.action prompt_action_mod.DEFAULT-ACTION)
-  (self.action.register-from-rules action.DEFAULT-ACTION-RULES)
+  (set self.action prompt_action_mod.DEFAULT_ACTION)
+  (self.action.register_from_rules action.DEFAULT-ACTION-RULES)
 
   (set self.win (meta_window_mod.new nvim (vim.api.nvim_get_current_win)))
   (set self.buf (meta_buffer_mod.new nvim (vim.api.nvim_get_current_buf)))
+  (local prompt-on-term self.on-term)
+  (fn clear-all-highlights []
+    (let [matcher-mode (. self.mode :matcher)]
+      (when matcher-mode
+        (each [_ m (ipairs matcher-mode.candidates)]
+          (when m
+            (pcall m.remove-highlight m))))))
 
   (set self.mode
        {:matcher (modeindexer.new [(all_matcher.new) (fuzzy_matcher.new) (regex_matcher.new)]
@@ -63,7 +71,7 @@
     (let [mode_obj (. self.mode which)]
       (mode_obj.next)
       (set self._prev_text "")
-      (self.on_update prompt_mod.STATUS_PROGRESS)))
+      (self.on-update prompt_mod.STATUS_PROGRESS)))
 
   (fn self.vim_query []
     (if (= self.text "")
@@ -90,36 +98,53 @@
       (self.syntax))
     (vim.cmd "redrawstatus"))
 
-  (fn self.on_init []
-    (self.buf.apply-syntax)
-    (vim.api.nvim_win_set_cursor 0 [(+ self.selected_index 1) 0])
+  (fn self.on-init []
+    (local init-syntax (or (. vim.g "meta#syntax_on_init") "buffer"))
+    (self.buf.apply-syntax (if (= init-syntax "meta") "meta" "buffer"))
+    (clear-all-highlights)
+    (self.buf.render)
+    (let [line (math.max 1 (math.min (+ self.selected_index 1) (vim.api.nvim_buf_line_count 0)))]
+      (vim.api.nvim_win_set_cursor 0 [line 0]))
     prompt_mod.STATUS_PROGRESS)
 
-  (fn self.on_redraw []
+  (fn self.on-redraw []
     (self.refresh_statusline)
+    (self.redraw-prompt)
     prompt_mod.STATUS_PROGRESS)
 
-  (fn self.on_update [status]
+  (fn self.on-update [status]
     (let [prev_text self._prev_text
           prev_hits (util.deepcopy self.buf.indices)
           prev_line (line_of_index self.buf self.selected_index)
           reset_if (or (= prev_text "") (not (vim.startswith self.text prev_text)))]
       (set self._prev_text self.text)
       (set self.updates (+ self.updates 1))
-      (self.buf.run-filter (self.matcher) self.text (self.ignorecase) reset_if)
+      (if (= self.text "")
+          (do
+            (self.buf.reset-filter)
+            (clear-all-highlights))
+          (self.buf.run-filter (self.matcher) self.text (self.ignorecase) reset_if))
+      (self.buf.render)
       (when (not (vim.deep_equal prev_hits self.buf.indices))
-        (self.buf.render)
         (var idx nil)
         (each [i src (ipairs self.buf.indices)]
-          (when (= src prev_line)
-            (set idx i)
-            (break)))
+          (when (and (not idx) (= src prev_line))
+            (set idx i)))
         (when (not idx)
           (set idx (self.buf.closest-index prev_line)))
         (when idx
           (set self.selected_index (- idx 1))
           (vim.api.nvim_win_set_cursor 0 [idx 0]))))
     status)
+
+  (fn self.on-term [status]
+    (clear-all-highlights)
+    (prompt-on-term status))
+
+  ;; Backward compatibility for callers using underscore names.
+  (set self.on_init self.on-init)
+  (set self.on_redraw self.on-redraw)
+  (set self.on_update self.on-update)
 
   (fn self.store []
     {:text self.text

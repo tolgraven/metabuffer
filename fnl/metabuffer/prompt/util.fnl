@@ -25,16 +25,18 @@
       (tostring code)))
 
 (fn M.getchar [& args]
-  (try
-    (let [ret (vim.fn.getchar (table.unpack args))]
-      (if (= (type ret) "number")
-          (do
-            (when (= ret 3)
-              (error "Keyboard interrupt"))
-            ret)
-          (M.ensure_str ret)))
-    (catch _
-      0)))
+  (let [unpack-fn (or table.unpack unpack)
+        packed [(pcall vim.fn.getchar (unpack-fn args))]
+        ok (. packed 1)
+        ret (. packed 2)]
+    (if (not ok)
+        0
+        (if (= (type ret) "number")
+            (do
+              (when (= ret 3)
+                (error "Keyboard interrupt"))
+              ret)
+            (M.ensure_str ret)))))
 
 (fn M.build_echon_expr [text hl]
   (local safe (string.gsub (string.gsub (or text "") "\\\\" "\\\\\\\\") "\"" "\\\\\""))

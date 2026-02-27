@@ -13,7 +13,7 @@
 
   (fn self.set-row [row addjump]
     (if addjump
-      (vim.cmd (.. row))
+      (vim.cmd (.. ":" (tostring row)))
       (self.set-cursor row)))
 
   (fn self.set-col [col]

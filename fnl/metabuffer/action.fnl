@@ -6,20 +6,20 @@
 
 (fn _select-next [meta _]
   (_change-line 1)
-  (meta.refresh-statusline))
+  (meta.refresh_statusline))
 
 (fn _select-prev [meta _]
   (_change-line -1)
-  (meta.refresh-statusline))
+  (meta.refresh_statusline))
 
 (fn _switch-matcher [meta _]
-  (meta.switch-mode "matcher"))
+  (meta.switch_mode "matcher"))
 
 (fn _switch-case [meta _]
-  (meta.switch-mode "case"))
+  (meta.switch_mode "case"))
 
 (fn _switch-highlight [meta _]
-  (meta.switch-mode "syntax"))
+  (meta.switch_mode "syntax"))
 
 (fn _pause [_ _]
   4)

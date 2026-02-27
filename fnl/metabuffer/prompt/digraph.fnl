@@ -6,7 +6,8 @@
 (fn parse_digraph_output [output]
   (local registry {})
   (each [_ line (ipairs (vim.split (or output "") "\n" {:trimempty true}))]
-    (let [k v _n (string.match line "(%S%S)%s+(%S+)%s+(%d+)")]
+    (let [k (string.match line "(%S%S)%s+%S+%s+%d+")
+          v (string.match line "%S%S%s+(%S+)%s+%d+")]
       (when (and k v)
         (tset registry k v))))
   registry)

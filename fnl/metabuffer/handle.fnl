@@ -7,7 +7,7 @@
                :saved-opts {}
                :terminated false})
 
-  (fn self.store-opts [names origin]
+  (fn self.store-opts [names _origin]
     (each [_ name (ipairs (or names []))]
       (tset self.saved-opts name (vim.api.nvim_get_option_value name {:scope "local"}))))
 

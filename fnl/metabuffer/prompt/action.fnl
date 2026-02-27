@@ -2,13 +2,27 @@
 (local util (require :metabuffer.prompt.util))
 
 (local M {})
-(set M.ACTION_PATTERN "^(%w+:%w+):?(.*)$")
+(set M.ACTION_PATTERN "^([%w_]+:[%w_]+):?(.*)$")
 
 (fn M.new []
   (local self {:registry {}})
 
   (fn self.clear [] (set self.registry {}))
-  (fn self.register [name callback] (tset self.registry name callback))
+  (fn normalize-action-name [name]
+    (if (= (type name) "string")
+        (string.gsub name "-" "_")
+        name))
+  (fn hyphen-action-name [name]
+    (if (= (type name) "string")
+        (string.gsub name "_" "-")
+        name))
+
+  (fn self.register [name callback]
+    (local normalized (normalize-action-name name))
+    (local hyphenated (hyphen-action-name normalized))
+    (tset self.registry normalized callback)
+    (when (~= hyphenated normalized)
+      (tset self.registry hyphenated callback)))
 
   (fn self.unregister [name fail_silently]
     (if (. self.registry name)
@@ -20,9 +34,10 @@
       (self.register (. r 1) (. r 2))))
 
   (fn self.call [prompt action]
-    (var name (or (string.match action "^(%w+:%w+)") action))
-    (local params (or (string.match action "^%w+:%w+:(.*)$") ""))
-    (local label (string.match name ":(%w+)$"))
+    (var name (or (string.match action "^([%w_-]+:[%w_-]+)") action))
+    (local params (or (string.match action "^[%w_-]+:[%w_-]+:(.*)$") ""))
+    (set name (normalize-action-name name))
+    (local label (string.match name ":([%w_]+)$"))
     (local alt (and label (.. "prompt:" label)))
     (when (and (not (. self.registry name)) alt (. self.registry alt))
       (set name alt))

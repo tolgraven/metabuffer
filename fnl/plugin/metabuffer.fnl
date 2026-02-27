@@ -3,10 +3,10 @@
     (do
       (set vim.g.loaded_metabuffer 1)
 
-      (tset vim.g "meta#custom_mappings" (or (. vim.g "meta#custom_mappings") {}))
-      (tset vim.g "meta#highlight_groups" (or (. vim.g "meta#highlight_groups") {:All "Title" :Fuzzy "Number" :Regex "Special"}))
-      (tset vim.g "meta#syntax_on_init" (or (. vim.g "meta#syntax_on_init") "buffer"))
-      (tset vim.g "meta#prefix" (or (. vim.g "meta#prefix") "#"))
+      (set (. vim.g "meta#custom_mappings") (or (. vim.g "meta#custom_mappings") {}))
+      (set (. vim.g "meta#highlight_groups") (or (. vim.g "meta#highlight_groups") {:All "Title" :Fuzzy "Number" :Regex "Special"}))
+      (set (. vim.g "meta#syntax_on_init") (or (. vim.g "meta#syntax_on_init") "buffer"))
+      (set (. vim.g "meta#prefix") (or (. vim.g "meta#prefix") "#"))
 
       (local hi vim.api.nvim_set_hl)
       (hi 0 "MetaStatuslineModeInsert" {:link "Tag" :default true})

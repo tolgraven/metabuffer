@@ -49,8 +49,8 @@
     (when run-clean (self.reset-filter))
     (set self.indices (matcher.filter matcher query self.indices self.content ignorecase))
     (if (< (# self.indices) 1000)
-        (matcher.highlight matcher query ignorecase)
-        (matcher.remove-highlight matcher)))
+        (matcher.highlight query ignorecase)
+        (matcher.remove-highlight)))
 
   (fn self.update []
     (local view (vim.fn.winsaveview))

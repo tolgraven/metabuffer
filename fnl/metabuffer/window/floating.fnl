@@ -3,7 +3,6 @@
 (local M {})
 
 (fn M.new [nvim buf opts]
-  (local columns vim.o.columns)
   (local lines (- vim.o.lines 2))
   (local cfg {:relative "editor"
               :width (or (and opts opts.width) 20)

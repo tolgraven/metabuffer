@@ -6,12 +6,22 @@
 (local M {})
 (set M.instances {})
 
+(fn wipe-temp-buffers [meta]
+  (when meta
+    (let [main-buf meta.buf.buffer
+          model-buf meta.buf.model
+          index-buf (and meta.buf.indexbuf meta.buf.indexbuf.buffer)]
+      (when (and index-buf (not (= index-buf model-buf)) (vim.api.nvim_buf_is_valid index-buf))
+        (pcall vim.api.nvim_buf_delete index-buf {:force true}))
+      (when (and main-buf (not (= main-buf model-buf)) (vim.api.nvim_buf_is_valid main-buf))
+        (pcall vim.api.nvim_buf_delete main-buf {:force true})))))
+
 (fn setup_state [query mode]
   (if (and (= mode "resume") vim.b._meta_context)
       (let [ctx (vim.deepcopy vim.b._meta_context)]
         (when (and query (~= query ""))
-          (tset ctx :text query)
-          (tset ctx :caret-locus (# query)))
+          (set ctx.text query)
+          (set ctx.caret-locus (# query)))
         ctx)
       (state.default-condition (or query ""))))
 
@@ -26,31 +36,51 @@
   (vim.cmd "redraw|redrawstatus")
   (M._store_vars meta))
 
-(fn M.start [query mode meta]
-  (let [condition (setup_state query mode)
-        curr (or meta (meta_mod.new vim condition))
-        _ (curr.on_init)
-        _ (curr.on_update prompt_mod.STATUS_PROGRESS)
-        _ (curr.on_redraw)
-        status prompt_mod.STATUS_PAUSE]
+(fn M.start [query mode _meta]
+  (let [origin-win (vim.api.nvim_get_current_win)
+        origin-buf (vim.api.nvim_get_current_buf)
+        condition (setup_state query mode)
+        curr (meta_mod.new vim condition)]
+    (base_buffer.switch-buf curr.buf.buffer)
+    (let [[ok status] (pcall curr.start)
+          resolved-status (if ok status prompt_mod.STATUS_INTERRUPT)]
+      (let [matcher (curr.matcher)]
+        (when matcher
+          (pcall matcher.remove-highlight matcher)))
 
-    (when (or (= status prompt_mod.STATUS_ACCEPT)
-              (= status prompt_mod.STATUS_CANCEL))
       (pcall vim.cmd (.. "sign unplace * buffer=" (vim.api.nvim_get_current_buf)))
-      (base_buffer.switch-buf curr.buf.model))
 
-    (when (= status prompt_mod.STATUS_ACCEPT)
-      (curr.win.set-row (curr.selected_line) true)
-      (vim.cmd "normal! zv")
-      (let [vq (curr.vim_query)]
-        (when (~= vq "")
-          (vim.fn.setreg "/" vq))))
+      (when (and (vim.api.nvim_win_is_valid origin-win)
+                 (vim.api.nvim_buf_is_valid origin-buf))
+        (pcall vim.api.nvim_win_set_buf origin-win origin-buf)
+        (pcall vim.api.nvim_set_current_win origin-win))
 
-    (when (= status prompt_mod.STATUS_PAUSE)
-      (base_buffer.switch-buf curr.buf.model))
+      (when (or (= resolved-status prompt_mod.STATUS_ACCEPT)
+                (= resolved-status prompt_mod.STATUS_CANCEL)
+                (not ok))
+        (wipe-temp-buffers curr))
 
-    (M._wrapup curr)
-    curr))
+      (when (= resolved-status prompt_mod.STATUS_ACCEPT)
+        (base_buffer.switch-buf curr.buf.model)
+        (curr.win.set-row (curr.selected_line) true)
+        (vim.cmd "normal! zv")
+        (let [vq (curr.vim_query)]
+          (when (~= vq "")
+            (vim.fn.setreg "/" vq)
+            (set vim.o.hlsearch true))))
+
+      (when (or (= resolved-status prompt_mod.STATUS_CANCEL)
+                (= resolved-status prompt_mod.STATUS_INTERRUPT))
+        (vim.cmd "silent! nohlsearch")
+        (base_buffer.switch-buf curr.buf.model))
+
+      (when (= resolved-status prompt_mod.STATUS_PAUSE)
+        (base_buffer.switch-buf curr.buf.model))
+
+      (M._wrapup curr)
+      (if ok
+          curr
+          (error status)))))
 
 (fn M.sync [meta query]
   (if (not meta)

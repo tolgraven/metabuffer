@@ -8,11 +8,11 @@
   (local out {:noremap false :nowait false :expr false})
   (each [_ flag (ipairs (vim.split (or flags "") " " {:trimempty true}))]
     (if (= flag "noremap")
-        (tset out :noremap true)
+        (set out.noremap true)
         (if (= flag "nowait")
-            (tset out :nowait true)
+            (set out.nowait true)
             (if (= flag "expr")
-                (tset out :expr true)
+                (set out.expr true)
                 (error (.. "Unknown flag \"" flag "\" has specified."))))))
   out)
 
@@ -102,17 +102,16 @@
     (var resolved nil)
     (while (not resolved)
       (local code (_getcode timeoutlen callback interval))
-      (if (and (= code nil) (= previous nil))
-          (do)
-          (if (= code nil)
-              (set resolved (or (self.resolve nvim previous true) previous))
-              (let [k (key_mod.parse nvim code)]
-                (set previous (if previous
-                                  (ks_mod.concat previous [k])
-                                  (ks_mod.parse nvim [k])))
-                (local ks (self.resolve nvim previous false))
-                (when ks
-                  (set resolved ks))))))
+      (if (= code nil)
+          (when previous
+            (set resolved (or (self.resolve nvim previous true) previous)))
+          (let [k (key_mod.parse nvim code)]
+            (set previous (if previous
+                              (ks_mod.concat previous [k])
+                              (ks_mod.parse nvim [k])))
+            (local ks (self.resolve nvim previous false))
+            (when ks
+              (set resolved ks)))))
     resolved)
 
   self)

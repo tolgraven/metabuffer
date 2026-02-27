@@ -107,17 +107,18 @@
   (fn self.start []
     (var status (or (self.on-init) M.STATUS_PROGRESS))
     (local timeoutlen (if vim.o.timeout (/ vim.o.timeoutlen 1000.0) nil))
-    (try
-      (set status (or (self.on-update status) M.STATUS_PROGRESS))
-      (while (= status M.STATUS_PROGRESS)
-        (self.on-redraw)
-        (local stroke (self.keymap.harvest self.nvim timeoutlen self.on-harvest self.harvest-interval))
-        (set status (or (self.on-keypress stroke) M.STATUS_PROGRESS))
-        (set status (or (self.on-update status) status)))
-      (catch e
-        (if (or (= e "Keyboard interrupt") (string.find (tostring e) "Keyboard interrupt"))
+    (let [[ok err] [(pcall
+                      (fn []
+                        (set status (or (self.on-update status) M.STATUS_PROGRESS))
+                        (while (= status M.STATUS_PROGRESS)
+                          (self.on-redraw)
+                          (local stroke (self.keymap.harvest self.nvim timeoutlen self.on-harvest self.harvest-interval))
+                          (set status (or (self.on-keypress stroke) M.STATUS_PROGRESS))
+                          (set status (or (self.on-update status) status)))))]]
+      (when (not ok)
+        (if (or (= err "Keyboard interrupt") (string.find (tostring err) "Keyboard interrupt"))
             (set status M.STATUS_INTERRUPT)
-            (error e))))
+            (error err))))
     (when (~= self.text "")
       (vim.fn.histadd "input" self.text))
     (self.on-term status))
