@@ -1,12 +1,36 @@
 # metabuffer
 
-Initial port of `metabuffer.nvim` from Python remote-plugin architecture to an in-process Neovim plugin with a Fennel source directory and Lua runtime.
+Fennel-first port of `metabuffer.nvim`, structured for an `nfnl` workflow.
 
-## Status
+## nfnl Layout
 
-This is an initial complete port focused on replacing the buggy Python host path while preserving the interactive workflow.
+This repository now follows the `nfnl` plugin pattern:
 
-Implemented commands:
+- Source of truth: `fnl/`
+- Generated runtime output: `lua/` and `plugin/`
+- nfnl config: `.nfnl.fnl`
+
+Key entrypoints:
+
+- Source module: `fnl/metabuffer/init.fnl`
+- Source plugin bootstrap: `fnl/plugin/metabuffer.fnl`
+- Generated module: `lua/metabuffer/init.lua`
+- Generated plugin bootstrap: `plugin/metabuffer.lua`
+
+## Build / Compile
+
+`fennel` is used to compile all Fennel sources:
+
+```sh
+./scripts/compile-fennel.sh
+```
+
+The script compiles:
+
+- `fnl/plugin/*.fnl -> plugin/*.lua`
+- `fnl/**/*.fnl -> lua/**/*.lua`
+
+## Commands
 
 - `:Meta[!] [query]`
 - `:MetaResume [query]`
@@ -15,41 +39,18 @@ Implemented commands:
 - `:MetaSync [query]`
 - `:MetaPush`
 
-Implemented matcher/case/syntax modes:
+## Module Structure
 
-- Matchers: `all`, `fuzzy`, `regex`
-- Case: `smart`, `ignore`, `normal`
-- Syntax: `buffer`, `meta`
+The port mirrors the original Python module breakdown:
 
-## Usage
-
-Run:
-
-```vim
-:Meta
-```
-
-In the metabuffer:
-
-- First line is query prompt (`# ...`)
-- Remaining lines are filtered candidates
-- Edit the first line to live-update filter
-- `<CR>` accept (jump to source line)
-- `<Esc>` cancel (restore original cursor)
-- `<C-z>` pause (return to source without accepting)
-- `<C-^>` / `<C-6>` switch matcher
-- `<C-_>` / `<C-o>` switch case mode
-- `<C-s>` switch syntax mode
-- `<Tab>` / `<S-Tab>` / `<C-j>` / `<C-k>` navigate selection
-
-Use `:MetaPush` to push edited visible candidate lines back to the source buffer.
-
-## Notes
-
-- This version intentionally avoids Python remote plugins.
-- The runtime module is in `lua/metabuffer/init.lua`.
-- Fennel source directory is under `fnl/metabuffer/` for continued migration.
-
-## License
-
-MIT
+- `fnl/metabuffer/router.fnl`
+- `fnl/metabuffer/meta.fnl`
+- `fnl/metabuffer/action.fnl`
+- `fnl/metabuffer/modeindexer.fnl`
+- `fnl/metabuffer/handle.fnl`
+- `fnl/metabuffer/util.fnl`
+- `fnl/metabuffer/sign.fnl`
+- `fnl/metabuffer/buffer/{base,metabuffer,regular,ui}.fnl`
+- `fnl/metabuffer/window/{base,metawindow,floating,prompt}.fnl`
+- `fnl/metabuffer/matcher/{base,all,fuzzy,regex,attrib,generic,range,textobj}.fnl`
+- `fnl/metabuffer/prompt/{prompt,action,keymap,key,keystroke,caret,history,digraph,util}.fnl`

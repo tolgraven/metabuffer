@@ -6,7 +6,24 @@ if ! command -v fennel >/dev/null 2>&1; then
   exit 1
 fi
 
-mkdir -p lua/metabuffer
-fennel --compile fnl/metabuffer/init.fnl > lua/metabuffer/from_fennel.lua
+# Clean compiled outputs so stale modules are removed.
+rm -rf lua
+mkdir -p lua plugin
 
-echo "compiled fnl/metabuffer/init.fnl -> lua/metabuffer/from_fennel.lua"
+# Compile fnl/* -> lua/* and fnl/plugin/* -> plugin/*
+find fnl -type f -name '*.fnl' | while IFS= read -r src; do
+  case "$src" in
+    fnl/plugin/*)
+      out="${src#fnl/}"
+      out="${out%.fnl}.lua"
+      ;;
+    *)
+      out="lua/${src#fnl/}"
+      out="${out%.fnl}.lua"
+      ;;
+  esac
+
+  mkdir -p "$(dirname "$out")"
+  fennel --compile "$src" > "$out"
+  echo "compiled $src -> $out"
+done
