@@ -28,10 +28,15 @@
     (set self.match-win nil))
 
   (fn matchadd-in-window [group pattern win]
-    (let [[ok id] (pcall vim.fn.matchadd group pattern 0 -1 {:window win})]
-      (if ok
-          id
-          (vim.fn.matchadd group pattern 0))))
+    (var id nil)
+    (local ok (xpcall
+                (fn []
+                  (set id (vim.fn.matchadd group pattern 0 -1 {:window win}))
+                  true)
+                (fn [_] false)))
+    (if ok
+        id
+        (vim.fn.matchadd group pattern 0)))
 
   (fn self.highlight [query ignorecase]
     (self.remove-highlight)

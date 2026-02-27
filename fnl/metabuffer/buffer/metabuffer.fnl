@@ -11,13 +11,24 @@
   (set self.indexbuf (ui.new nvim self "indexes"))
 
   (fn self.syntax []
-    (if (and (= self.syntax-type "buffer") (~= (. (. vim.bo self.model) :syntax) ""))
+    (if (= self.syntax-type "buffer")
         (. (. vim.bo self.model) :syntax)
         "metabuffer"))
 
   (fn self.apply-syntax [syntax-type]
-    (when syntax-type (set self.syntax-type syntax-type))
-    (tset (. vim.bo self.buffer) :syntax (self.syntax)))
+    (when syntax-type
+      (set self.syntax-type syntax-type))
+    (if (= self.syntax-type "buffer")
+        (let [ft (. (. vim.bo self.model) :filetype)
+              syn (. (. vim.bo self.model) :syntax)]
+          (when (and ft (~= ft ""))
+            (tset (. vim.bo self.buffer) :filetype ft))
+          (if (and syn (~= syn ""))
+              (tset (. vim.bo self.buffer) :syntax syn)
+              (tset (. vim.bo self.buffer) :syntax "")))
+        (do
+          (tset (. vim.bo self.buffer) :filetype "metabuffer")
+          (tset (. vim.bo self.buffer) :syntax "metabuffer"))))
 
   (fn self.update []
     (self.render))

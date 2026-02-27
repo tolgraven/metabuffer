@@ -30,3 +30,22 @@ if not ok then \
   vim.cmd('cq') \
 end" \
   -c "qa"
+
+# Validate generated Lua output with LuaLS (if available).
+if command -v lua-language-server >/dev/null 2>&1; then
+  mkdir -p .cache/luals/log .cache/luals/meta
+  lua-language-server \
+    --check=lua \
+    --checklevel=Error \
+    --check_format=pretty \
+    --configpath=.luarc.json \
+    --logpath=.cache/luals/log \
+    --metapath=.cache/luals/meta
+  lua-language-server \
+    --check=plugin \
+    --checklevel=Error \
+    --check_format=pretty \
+    --configpath=.luarc.json \
+    --logpath=.cache/luals/log \
+    --metapath=.cache/luals/meta
+fi

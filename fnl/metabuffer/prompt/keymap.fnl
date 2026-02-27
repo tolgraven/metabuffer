@@ -4,6 +4,16 @@
 
 (local M {})
 
+(fn debug-enabled? []
+  (or (= (. vim.g "meta#debug") 1)
+      (= (. vim.g "meta#debug") true)))
+
+(fn debug-log [msg]
+  (when (debug-enabled?)
+    (let [path (or (. vim.g "meta#debug_log") "/tmp/metabuffer-debug.log")
+          line (.. (os.date "%Y-%m-%d %H:%M:%S") " " msg)]
+      (pcall vim.fn.writefile [line] path "a"))))
+
 (fn parse_flags [flags]
   (local out {:noremap false :nowait false :expr false})
   (each [_ flag (ipairs (vim.split (or flags "") " " {:trimempty true}))]
@@ -28,23 +38,16 @@
      :expr opts.expr}))
 
 (fn _getcode [timeoutlen callback interval]
-  (local start (vim.loop.hrtime))
-  (local timeout_ms (and timeoutlen (math.floor (* timeoutlen 1000))))
-  (var done false)
-  (var out nil)
-  (while (not done)
-    (when callback (callback))
-    (local code (util.getchar false))
-    (if (~= code 0)
-        (do (set out code) (set done true))
-        (do
-          (when timeout_ms
-            (local elapsed (/ (- (vim.loop.hrtime) start) 1000000))
-            (when (>= elapsed timeout_ms)
-              (set done true)))
-          (when (not done)
-            (vim.wait (math.floor (* (or interval 0.033) 1000)))))))
-  out)
+  ;; Use blocking getcharstr() so Neovim decodes terminal/tmux escape
+  ;; sequences into full key tokens before we resolve mappings.
+  (when callback (callback))
+  (let [packed [(pcall vim.fn.getcharstr)]
+        ok (. packed 1)]
+    (if ok
+        (let [code (. packed 2)]
+          (debug-log (.. "[keymap] raw=" (tostring (vim.fn.keytrans code))))
+          code)
+        nil)))
 
 (fn M.new []
   (local self {:registry {}})
@@ -100,18 +103,28 @@
   (fn self.harvest [nvim timeoutlen callback interval]
     (var previous nil)
     (var resolved nil)
+    (fn feed-key [k]
+      (set previous (if previous
+                        (ks_mod.concat previous [k])
+                        (ks_mod.parse nvim [k])))
+      (local ks (self.resolve nvim previous false))
+      (when ks
+        (set resolved ks)))
     (while (not resolved)
       (local code (_getcode timeoutlen callback interval))
       (if (= code nil)
           (when previous
             (set resolved (or (self.resolve nvim previous true) previous)))
-          (let [k (key_mod.parse nvim code)]
-            (set previous (if previous
-                              (ks_mod.concat previous [k])
-                              (ks_mod.parse nvim [k])))
-            (local ks (self.resolve nvim previous false))
-            (when ks
-              (set resolved ks)))))
+          (let [chunk (if (= (type code) "string")
+                          (if (string.find code "\128" 1 true)
+                              ;; Internal keycode bytes (e.g. <80>kP) must be parsed as one key.
+                              [(key_mod.parse nvim code)]
+                              (ks_mod.parse nvim code))
+                          [(key_mod.parse nvim code)])]
+            (each [_ k (ipairs chunk)]
+              (when (not resolved)
+                (feed-key k))))))
+    (debug-log (.. "[keymap] resolved=" (tostring resolved)))
     resolved)
 
   self)

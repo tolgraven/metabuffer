@@ -27,7 +27,10 @@
   (set self.prefix "# ")
 
   (set self.action prompt_action_mod.DEFAULT_ACTION)
-  (self.action.register_from_rules action.DEFAULT-ACTION-RULES)
+  (self.action.register_from_rules action.DEFAULT_ACTION_RULES)
+  (self.keymap.register_from_rules nvim action.DEFAULT_ACTION_KEYMAP)
+  (when (= (type (. vim.g "meta#custom_mappings")) "table")
+    (self.keymap.register_from_rules nvim (. vim.g "meta#custom_mappings")))
 
   (set self.win (meta_window_mod.new nvim (vim.api.nvim_get_current_win)))
   (set self.buf (meta_buffer_mod.new nvim (vim.api.nvim_get_current_buf)))

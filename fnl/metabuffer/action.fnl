@@ -1,15 +1,47 @@
 (local M {})
 
-(fn _change-line [offset]
-  (let [c (vim.api.nvim_win_get_cursor 0)]
-    (vim.api.nvim_win_set_cursor 0 [(+ (. c 1) offset) (. c 2)])))
+(fn _sync-selected-from-cursor [meta]
+  (local max (# meta.buf.indices))
+  (if (<= max 0)
+      (set meta.selected_index 0)
+      (let [c (vim.api.nvim_win_get_cursor 0)
+            row (. c 1)
+            col (. c 2)
+            clamped (math.max 1 (math.min row max))]
+        (when (~= row clamped)
+          (vim.api.nvim_win_set_cursor 0 [clamped col]))
+        (set meta.selected_index (- clamped 1)))))
+
+(fn _change-line [meta offset]
+  (let [c (vim.api.nvim_win_get_cursor 0)
+        max (math.max 1 (# meta.buf.indices))
+        row (math.max 1 (math.min (+ (. c 1) offset) max))]
+    (vim.api.nvim_win_set_cursor 0 [row (. c 2)])
+    (_sync-selected-from-cursor meta)))
 
 (fn _select-next [meta _]
-  (_change-line 1)
+  (_change-line meta 1)
   (meta.refresh_statusline))
 
 (fn _select-prev [meta _]
-  (_change-line -1)
+  (_change-line meta -1)
+  (meta.refresh_statusline))
+
+(fn _select-clicked [meta _]
+  (let [mp (vim.fn.getmousepos)
+        winid (. mp :winid)
+        lnum (. mp :line)
+        col (. mp :column)
+        curwin (vim.api.nvim_get_current_win)
+        max (math.max 1 (# meta.buf.indices))]
+    (when (and (= winid curwin) (> lnum 0))
+      (let [row (math.max 1 (math.min lnum max))
+            zero-col (math.max 0 (- (or col 1) 1))]
+        (vim.api.nvim_win_set_cursor 0 [row zero-col]))))
+  (_sync-selected-from-cursor meta)
+  (meta.refresh_statusline))
+
+(fn _ignore [meta _]
   (meta.refresh_statusline))
 
 (fn _switch-matcher [meta _]
@@ -24,15 +56,17 @@
 (fn _pause [_ _]
   4)
 
-(set M.DEFAULT-ACTION-RULES
+(set M.DEFAULT_ACTION_RULES
   [ ["meta:select_next_candidate" _select-next]
     ["meta:select_previous_candidate" _select-prev]
+    ["meta:select_clicked_candidate" _select-clicked]
+    ["meta:ignore" _ignore]
     ["meta:switch_matcher" _switch-matcher]
     ["meta:switch_case" _switch-case]
     ["meta:switch_highlight" _switch-highlight]
     ["meta:pause_prompt" _pause]])
 
-(set M.DEFAULT-ACTION-KEYMAP
+(set M.DEFAULT_ACTION_KEYMAP
   [ ["<PageUp>" "<meta:select_previous_candidate>" "noremap"]
     ["<PageDown>" "<meta:select_next_candidate>" "noremap"]
     ["<C-A>" "<meta:move_caret_to_head>" "noremap"]
@@ -51,6 +85,12 @@
     ["<C-_>" "<meta:switch_case>" "noremap"]
     ["<C-O>" "<meta:switch_case>" "noremap"]
     ["<C-S>" "<meta:switch_highlight>" "noremap"]
+    ["<LeftMouse>" "<meta:select_clicked_candidate>" "noremap"]
+    ["<LeftRelease>" "<meta:select_clicked_candidate>" "noremap"]
     ["<C-z>" "<meta:pause_prompt>" "noremap"]])
+
+;; Backward compatibility aliases.
+(set M.DEFAULT-ACTION-RULES M.DEFAULT_ACTION_RULES)
+(set M.DEFAULT-ACTION-KEYMAP M.DEFAULT_ACTION_KEYMAP)
 
 M

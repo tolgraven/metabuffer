@@ -12,6 +12,11 @@
 (fn tokenise [expr]
   (if (not (= (type expr) "string"))
       expr
+      (if (or (string.find expr "\128" 1 true)
+              (vim.startswith expr "<80>"))
+          ;; Treat Vim's internal keycode strings/bytes (for example "<80>kb")
+          ;; as a single token so key parsing can canonicalize them.
+          [expr]
       (let [out []
             len (# expr)]
         (var i 1)
@@ -28,7 +33,7 @@
               (do
                 (table.insert out (string.sub expr i i))
                 (set i (+ i 1)))))
-        out)))
+        out))))
 
 (fn M.startswith [lhs rhs]
   (if (< (# lhs) (# rhs))

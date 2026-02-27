@@ -42,7 +42,15 @@
         condition (setup_state query mode)
         curr (meta_mod.new vim condition)]
     (base_buffer.switch-buf curr.buf.buffer)
-    (let [[ok status] (pcall curr.start)
+    (var status nil)
+    (var err nil)
+    (let [ok (xpcall
+               (fn []
+                 (set status (curr.start))
+                 true)
+               (fn [e]
+                 (set err e)
+                 e))
           resolved-status (if ok status prompt_mod.STATUS_INTERRUPT)]
       (let [matcher (curr.matcher)]
         (when matcher
@@ -62,7 +70,17 @@
 
       (when (= resolved-status prompt_mod.STATUS_ACCEPT)
         (base_buffer.switch-buf curr.buf.model)
-        (curr.win.set-row (curr.selected_line) true)
+        (let [row (curr.selected_line)]
+          (curr.win.set-row row true)
+          (let [vq (curr.vim_query)]
+            (when (~= vq "")
+              ;; Position cursor at first hit on selected line.
+              (vim.api.nvim_win_set_cursor 0 [row 0])
+              (let [pos (vim.fn.searchpos vq "cnW" row)
+                    hit-row (. pos 1)
+                    hit-col (. pos 2)]
+                (when (and (= hit-row row) (> hit-col 0))
+                  (vim.api.nvim_win_set_cursor 0 [row (- hit-col 1)]))))))
         (vim.cmd "normal! zv")
         (let [vq (curr.vim_query)]
           (when (~= vq "")
@@ -80,7 +98,7 @@
       (M._wrapup curr)
       (if ok
           curr
-          (error status)))))
+          (error err)))))
 
 (fn M.sync [meta query]
   (if (not meta)

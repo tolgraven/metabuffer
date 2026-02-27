@@ -17,6 +17,16 @@
 
 (set M.DEFAULT_HARVEST_INTERVAL 0.033)
 
+(fn debug-enabled? []
+  (or (= (. vim.g "meta#debug") 1)
+      (= (. vim.g "meta#debug") true)))
+
+(fn debug-log [msg]
+  (when (debug-enabled?)
+    (let [path (or (. vim.g "meta#debug_log") "/tmp/metabuffer-debug.log")
+          line (.. (os.date "%Y-%m-%d %H:%M:%S") " " msg)]
+      (pcall vim.fn.writefile [line] path "a"))))
+
 (fn is_action_keystroke [s]
   (and (= (type s) "string")
        (vim.startswith s "<")
@@ -89,7 +99,11 @@
     (local s (tostring keystroke))
     (if (is_action_keystroke s)
         (let [action (string.sub s 2 (- (# s) 1))]
-          (self.action.call self action))
+          (let [ret (self.action.call self action)]
+            ;; Only numeric return values are treated as prompt statuses.
+            ;; Side-effect actions may return ""/other truthy values (from vim.cmd),
+            ;; which must not terminate the prompt loop.
+            (if (= (type ret) "number") ret nil)))
         (self.update-text s)))
 
   (fn self.on-term [status]
@@ -106,21 +120,27 @@
 
   (fn self.start []
     (var status (or (self.on-init) M.STATUS_PROGRESS))
+    (debug-log (.. "[prompt] start status=" (tostring status)))
     (local timeoutlen (if vim.o.timeout (/ vim.o.timeoutlen 1000.0) nil))
     (let [[ok err] [(pcall
                       (fn []
                         (set status (or (self.on-update status) M.STATUS_PROGRESS))
+                        (debug-log (.. "[prompt] post-init-update status=" (tostring status)))
                         (while (= status M.STATUS_PROGRESS)
                           (self.on-redraw)
                           (local stroke (self.keymap.harvest self.nvim timeoutlen self.on-harvest self.harvest-interval))
+                          (debug-log (.. "[prompt] stroke=" (tostring stroke)))
                           (set status (or (self.on-keypress stroke) M.STATUS_PROGRESS))
+                          (debug-log (.. "[prompt] post-keypress status=" (tostring status)))
                           (set status (or (self.on-update status) status)))))]]
       (when (not ok)
+        (debug-log (.. "[prompt] error=" (tostring err)))
         (if (or (= err "Keyboard interrupt") (string.find (tostring err) "Keyboard interrupt"))
             (set status M.STATUS_INTERRUPT)
             (error err))))
     (when (~= self.text "")
       (vim.fn.histadd "input" self.text))
+    (debug-log (.. "[prompt] term status=" (tostring status)))
     (self.on-term status))
 
   self)
