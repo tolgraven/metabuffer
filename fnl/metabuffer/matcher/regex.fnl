@@ -12,13 +12,17 @@
         (var active (util.deepcopy indices))
         (each [_ pattern (ipairs patterns)]
           (local next [])
-          (each [_ idx (ipairs active)]
-            (local line (. candidates idx))
-            (local probe (if ignorecase (string.lower line) line))
-            (local p (if ignorecase (string.lower pattern) pattern))
-            (local ok (pcall string.find probe p))
-            (when (and ok (string.find probe p))
-              (table.insert next idx)))
+          (local vim-pattern (.. (if ignorecase "\\c" "\\C") pattern))
+          (var rx nil)
+          (let [[ok rex] [(pcall vim.regex vim-pattern)]]
+            (when ok
+              (set rx rex)))
+          (when rx
+            (each [_ idx (ipairs active)]
+              (local line (. candidates idx))
+              (let [[s _e] [(rx:match_str line)]]
+                (when s
+                  (table.insert next idx)))))
           (set active next))
         active)}))
 
