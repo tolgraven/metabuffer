@@ -17,6 +17,18 @@
     (when (or (= k "metabuffer") (vim.startswith k "metabuffer."))
       (tset package.loaded k nil))))
 
+(fn clear-plugin-loaded-flags! []
+  ;; Keep compatibility with older bootstrap guards.
+  (set vim.g.loaded_metabuffer nil)
+  (set vim.g.meta_loaded nil))
+
+(fn source-plugin-bootstrap! []
+  (let [root (plugin-root)
+        file (.. root "/plugin/metabuffer.lua")]
+    (if (= 1 (vim.fn.filereadable file))
+        (vim.cmd (.. "silent source " (vim.fn.fnameescape file)))
+        (error (.. "plugin bootstrap not found: " file)))))
+
 (fn maybe-compile! []
   (let [root (plugin-root)
         script (.. root "/scripts/compile-fennel.sh")]
@@ -33,8 +45,8 @@
     (when do-compile
       (maybe-compile!))
     (clear-module-cache)
-    (let [m (require :metabuffer)]
-      (m.setup))
+    (clear-plugin-loaded-flags!)
+    (source-plugin-bootstrap!)
     (vim.notify (if do-compile "[metabuffer] reloaded (compiled)" "[metabuffer] reloaded") vim.log.levels.INFO)
     true))
 

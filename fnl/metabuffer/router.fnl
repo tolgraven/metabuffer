@@ -19,11 +19,13 @@
 
 (fn push-history! [text]
   (when (and (= (type text) "string") (~= (vim.trim text) ""))
-    (local h (history-list))
+    ;; vim.g table values are copied on read; write back after mutation.
+    (local h (vim.deepcopy (history-list)))
     (if (or (= (# h) 0) (~= (. h (# h)) text))
         (table.insert h text))
     (while (> (# h) M.history-max)
-      (table.remove h 1))))
+      (table.remove h 1))
+    (set vim.g.metabuffer_prompt_history h)))
 
 (fn prompt-lines [session]
   (if (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
@@ -35,6 +37,7 @@
 
 (fn set-prompt-text! [session text]
   (when (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
+    (set session.last-prompt-text (or text ""))
     (local lines (if (= text "") [""] (vim.split text "\n" {:plain true})))
     (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false lines)
     (let [row (# lines)
@@ -80,8 +83,10 @@
 
 (fn remove-session [session]
   (when session
-    (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
-      (push-history! (prompt-text session)))
+    (push-history! (or session.last-prompt-text
+                       (if (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
+                           (prompt-text session)
+                           "")))
     (when session.augroup
       (pcall vim.api.nvim_del_augroup_by_id session.augroup))
     (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
@@ -96,6 +101,7 @@
 (fn apply-prompt-lines [session]
   (when (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
     (let [lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
+      (set session.last-prompt-text (table.concat lines "\n"))
       (session.meta.set-query-lines lines)
       (let [[ok err] [(pcall session.meta.on-update 0)]]
         (if ok
@@ -119,6 +125,8 @@
 
 (fn finish-accept [session]
   (local curr session.meta)
+  (set session.last-prompt-text (prompt-text session))
+  (push-history! session.last-prompt-text)
   (apply-prompt-lines session)
   (pcall vim.cmd "stopinsert")
   (let [matcher (curr.matcher)]
@@ -152,6 +160,8 @@
 
 (fn finish-cancel [session]
   (local curr session.meta)
+  (set session.last-prompt-text (prompt-text session))
+  (push-history! session.last-prompt-text)
   (pcall vim.cmd "stopinsert")
   (let [matcher (curr.matcher)]
     (when matcher
@@ -251,6 +261,12 @@
     (vim.keymap.set "i" "<Down>"
       "<Cmd>lua require('metabuffer.router')['history-or-move'](vim.api.nvim_get_current_buf(), -1)<CR>"
       {:buffer session.prompt-buf :silent true :noremap true :nowait true})
+    (vim.keymap.set "n" "<Up>"
+      (fn [] (M.history-or-move session.prompt-buf 1))
+      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
+    (vim.keymap.set "n" "<Down>"
+      (fn [] (M.history-or-move session.prompt-buf -1))
+      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
     ;; Statusline keys: C^ (matcher), C_ (case), Cs (syntax)
     (vim.keymap.set ["n" "i"] "<C-^>"
       (fn [] (switch-mode "matcher"))
@@ -318,6 +334,7 @@
                    :prompt-win prompt-win.window
                    :prompt-buf prompt-buf
                    :initial-prompt-text (table.concat initial-lines "\n")
+                   :last-prompt-text (table.concat initial-lines "\n")
                    :last-history-text ""
                    :history-index 0
                    :meta curr}]
