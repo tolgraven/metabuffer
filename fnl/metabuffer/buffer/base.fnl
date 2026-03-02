@@ -45,11 +45,11 @@
   (fn self.reset-filter []
     (set self.indices (util.deepcopy self.all-indices)))
 
-  (fn self.run-filter [matcher query ignorecase run-clean]
+  (fn self.run-filter [matcher query ignorecase run-clean target-win]
     (when run-clean (self.reset-filter))
     (set self.indices (matcher.filter matcher query self.indices self.content ignorecase))
     (if (< (# self.indices) 1000)
-        (matcher.highlight query ignorecase)
+        (matcher.highlight query ignorecase target-win)
         (matcher.remove-highlight)))
 
   (fn self.update []

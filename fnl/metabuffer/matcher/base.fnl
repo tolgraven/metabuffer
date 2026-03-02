@@ -38,13 +38,13 @@
         id
         (vim.fn.matchadd group pattern 0)))
 
-  (fn self.highlight [query ignorecase]
+  (fn self.highlight [query ignorecase target-win]
     (self.remove-highlight)
     (when (and query (~= query ""))
       (let [pat (self.get-highlight-pattern self query)
             group (.. M.default-hi-prefix (string.upper (string.sub self.name 1 1)) (string.sub self.name 2))
             case-prefix (if ignorecase "\\c" "\\C")
-            win (vim.api.nvim_get_current_win)]
+            win (or target-win (vim.api.nvim_get_current_win))]
         (set self.match-win win)
         (set self.match-id (matchadd-in-window group (.. case-prefix pat) win))
         (when self.also-highlight-per-char

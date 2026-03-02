@@ -25,6 +25,7 @@
   (set self.updates 0)
   (set self.debug_out "")
   (set self.prefix "# ")
+  (set self.query-lines [])
 
   (set self.action prompt_action_mod.DEFAULT_ACTION)
   (self.action.register_from_rules action.DEFAULT_ACTION_RULES)
@@ -53,6 +54,8 @@
                                                 (if (= (idx.current) "meta") "meta" nil)))})})
 
   (set self.text (or cond.text ""))
+  (when (~= self.text "")
+    (set self.query-lines [self.text]))
   (self.caret.set-locus (or cond.caret-locus (# self.text)))
 
   (fn self.matcher []
@@ -67,6 +70,18 @@
   (fn self.ignorecase []
     (state.ignorecase (self.case) self.text))
 
+  (fn self.active-queries []
+    (local out [])
+    (each [_ line (ipairs (or self.query-lines []))]
+      (when (and (= (type line) "string") (~= (vim.trim line) ""))
+        (table.insert out (vim.trim line))))
+    out)
+
+  (fn self.set-query-lines [lines]
+    (set self.query-lines (or lines []))
+    (local active (self.active-queries))
+    (set self.text (table.concat active " && ")))
+
   (fn self.selected_line []
     (line_of_index self.buf self.selected_index))
 
@@ -77,12 +92,14 @@
       (self.on-update prompt_mod.STATUS_PROGRESS)))
 
   (fn self.vim_query []
-    (if (= self.text "")
+    (let [active (self.active-queries)
+          q (. active (# active))]
+      (if (or (not q) (= q ""))
       ""
       (let [caseprefix (if (self.ignorecase) "\\c" "\\C")
             matcher_obj (self.matcher)
-            pat (matcher_obj.get-highlight-pattern matcher_obj self.text)]
-        (.. caseprefix pat))))
+            pat (matcher_obj.get-highlight-pattern matcher_obj q)]
+        (.. caseprefix pat)))))
 
   (fn self.refresh_statusline []
     (local mode_name (if (= self.insert-mode prompt_mod.INSERT_MODE_REPLACE) "replace" "insert"))
@@ -106,8 +123,9 @@
     (self.buf.apply-syntax (if (= init-syntax "meta") "meta" "buffer"))
     (clear-all-highlights)
     (self.buf.render)
-    (let [line (math.max 1 (math.min (+ self.selected_index 1) (vim.api.nvim_buf_line_count 0)))]
-      (vim.api.nvim_win_set_cursor 0 [line 0]))
+    (let [line (math.max 1 (math.min (+ self.selected_index 1) (vim.api.nvim_buf_line_count self.buf.buffer)))]
+      (when (vim.api.nvim_win_is_valid self.win.window)
+        (vim.api.nvim_win_set_cursor self.win.window [line 0])))
     prompt_mod.STATUS_PROGRESS)
 
   (fn self.on-redraw []
@@ -116,17 +134,22 @@
     prompt_mod.STATUS_PROGRESS)
 
   (fn self.on-update [status]
-    (let [prev_text self._prev_text
+    (let [queries (self.active-queries)
+          prev_text self._prev_text
           prev_hits (util.deepcopy self.buf.indices)
           prev_line (line_of_index self.buf self.selected_index)
-          reset_if (or (= prev_text "") (not (vim.startswith self.text prev_text)))]
+          _reset_if (or (= prev_text "") (not (vim.startswith self.text prev_text)))]
       (set self._prev_text self.text)
       (set self.updates (+ self.updates 1))
-      (if (= self.text "")
+      (if (= (# queries) 0)
           (do
             (self.buf.reset-filter)
             (clear-all-highlights))
-          (self.buf.run-filter (self.matcher) self.text (self.ignorecase) reset_if))
+          (do
+            (var first true)
+            (each [_ q (ipairs queries)]
+              (self.buf.run-filter (self.matcher) q (self.ignorecase) first self.win.window)
+              (set first false))))
       (self.buf.render)
       (when (not (vim.deep_equal prev_hits self.buf.indices))
         (var idx nil)
@@ -137,7 +160,8 @@
           (set idx (self.buf.closest-index prev_line)))
         (when idx
           (set self.selected_index (- idx 1))
-          (vim.api.nvim_win_set_cursor 0 [idx 0]))))
+          (when (vim.api.nvim_win_is_valid self.win.window)
+            (vim.api.nvim_win_set_cursor self.win.window [idx 0])))))
     status)
 
   (fn self.on-term [status]
