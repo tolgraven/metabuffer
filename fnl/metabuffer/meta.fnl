@@ -34,6 +34,7 @@
     (self.keymap.register_from_rules nvim (. vim.g "meta#custom_mappings")))
 
   (set self.win (meta_window_mod.new nvim (vim.api.nvim_get_current_win)))
+  (set self.status-win self.win)
   (set self.buf (meta_buffer_mod.new nvim (vim.api.nvim_get_current_buf)))
   (local prompt-on-term self.on-term)
   (fn clear-all-highlights []
@@ -104,7 +105,7 @@
   (fn self.refresh_statusline []
     (local mode_name (if (= self.insert-mode prompt_mod.INSERT_MODE_REPLACE) "replace" "insert"))
     (local hl_prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer"))
-    (self.win.set-statusline-state
+    (self.status-win.set-statusline-state
       (string.upper (string.sub mode_name 1 1))
       "# " self.text
       self.buf.name

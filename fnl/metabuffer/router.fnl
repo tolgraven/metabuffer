@@ -1,5 +1,6 @@
 (local meta_mod (require :metabuffer.meta))
 (local prompt_window_mod (require :metabuffer.window.prompt))
+(local meta_window_mod (require :metabuffer.window.metawindow))
 (local base_buffer (require :metabuffer.buffer.base))
 (local state (require :metabuffer.core.state))
 
@@ -320,6 +321,9 @@
                    :last-history-text ""
                    :history-index 0
                    :meta curr}]
+      (set curr.status-win (meta_window_mod.new vim prompt-win.window))
+      ;; Statusline info should live in prompt window, not result split.
+      (curr.win.set-statusline "")
       (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
       (register-prompt-hooks session)
       (tset M.active-by-source source-buf session)
