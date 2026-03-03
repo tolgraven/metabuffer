@@ -54,6 +54,21 @@
 
 ## Caution Points
 
-- If you rework compile tooling, keep compatibility with `plugin/metabuffer.lua` output path.
+- If you rework compile tooling, keep compatibility with `plugin/metabuffer.lua` and `lua/` output paths.
 - If vendored `nfnl` is refreshed, verify no plain `nfnl.*` namespace imports remain.
 - This repository intentionally commits compiled Lua so users do not need nfnl at runtime.
+
+## Fennel code style
+
+- Mirror Clojure best practices as close as possible.
+- Function arguments always on separate line (unless entire thing oneliner).
+- Write (brief) docstrings for functions and keep them up to date. Include expected output.
+
+## Self-improvement
+
+- When appropriate, update this file with new learnings, conventions, information, but make sure it is important enough, and ensure anything outdated is replaced rather than just countinously appending.
+
+## Feature files.
+
+- In the folder features/ we describe upcoming (branched) features in individual files. When told, and only then, use the relevant file as basis for feature implementation. Always check out a new branch for these, and make a PR at end.
+- The folder also has a running-todo.md describing minor fixes to be done, and then checked off (only when I say it works). Only work on them when told.
