@@ -48,12 +48,16 @@ Repository hygiene (aligned with nfnl recommendations):
 
 ## Commands
 
-- `:Meta[!] [query]`
+- `:Meta[!] [query]` (`!` starts repo-wide source mode)
 - `:MetaResume [query]`
 - `:MetaCursorWord`
 - `:MetaResumeCursorWord`
 - `:MetaSync [query]`
 - `:MetaPush`
+
+Runtime toggles while Meta is active:
+
+- `<C-b>` toggle repo-wide source mode (shows floating source info window on the right)
 
 ## Module Structure
 

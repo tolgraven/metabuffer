@@ -1,6 +1,7 @@
 (local meta_mod (require :metabuffer.meta))
 (local prompt_window_mod (require :metabuffer.window.prompt))
 (local meta_window_mod (require :metabuffer.window.metawindow))
+(local floating_window_mod (require :metabuffer.window.floating))
 (local base_buffer (require :metabuffer.buffer.base))
 (local state (require :metabuffer.core.state))
 
@@ -9,6 +10,98 @@
 (set M.active-by-source {})
 (set M.active-by-prompt {})
 (set M.history-max 100)
+(set M.project-max-file-bytes (or vim.g.meta_project_max_file_bytes (* 1024 1024)))
+(set M.project-max-total-lines (or vim.g.meta_project_max_total_lines 200000))
+(set M.default-include-hidden (or vim.g.meta_project_include_hidden false))
+(set M.default-include-ignored (or vim.g.meta_project_include_ignored false))
+(set M.default-include-deps (or vim.g.meta_project_include_deps false))
+(set M.info-max-lines (or vim.g.meta_info_max_lines 2000))
+(set M.info-min-width (or vim.g.meta_info_width 28))
+(set M.info-max-width (or vim.g.meta_info_max_width 52))
+
+(set M.dep-dir-names
+  {"node_modules" true
+   ".venv" true
+   "venv" true
+   "vendor" true
+   "dist" true
+   "build" true
+   "target" true
+   "__pycache__" true
+   ".mypy_cache" true
+   ".pytest_cache" true
+   ".tox" true
+   ".next" true
+   ".nuxt" true
+   ".yarn" true
+   ".pnpm-store" true})
+
+(fn truthy? [v]
+  (or (= v true) (= v 1) (= v "1") (= v "true")))
+
+(fn option-prefix []
+  (let [p (. vim.g "meta#prefix")]
+    (if (and (= (type p) "string") (~= p ""))
+        p
+        "#")))
+
+(fn parse-option-token [tok]
+  (let [prefix (option-prefix)
+        hidden-on (or (= tok "#hidden") (= tok "+hidden") (= tok (.. prefix "hidden")))
+        hidden-off (or (= tok "#nohidden") (= tok "-hidden") (= tok (.. prefix "nohidden")))
+        ignored-on (or (= tok "#ignored") (= tok "+ignored") (= tok (.. prefix "ignored")))
+        ignored-off (or (= tok "#noignored") (= tok "-ignored") (= tok (.. prefix "noignored")))
+        deps-on (or (= tok "#deps") (= tok "+deps") (= tok (.. prefix "deps")))
+        deps-off (or (= tok "#nodeps") (= tok "-deps") (= tok (.. prefix "nodeps")))]
+    (if hidden-on
+        [:hidden true]
+        (if hidden-off
+            [:hidden false]
+            (if ignored-on
+        [:ignored true]
+        (if ignored-off
+            [:ignored false]
+            (if deps-on
+                [:deps true]
+                (if deps-off
+                    [:deps false]
+                    nil))))))))
+
+(fn parse-query-lines [lines]
+  (var include-hidden nil)
+  (var include-ignored nil)
+  (var include-deps nil)
+  (local cleaned [])
+  (each [_ line (ipairs (or lines []))]
+    (local trimmed (vim.trim (or line "")))
+    (if (= trimmed "")
+        (table.insert cleaned "")
+        (let [parts (vim.split trimmed "%s+")
+              keep []]
+          (each [_ tok (ipairs (or parts []))]
+            (let [parsed (parse-option-token tok)]
+              (if parsed
+                  (let [k (. parsed 1)
+                        v (. parsed 2)]
+                    (if (= k :hidden)
+                        (set include-hidden v)
+                        (if (= k :ignored)
+                            (set include-ignored v)
+                            (when (= k :deps)
+                              (set include-deps v)))))
+                  (table.insert keep tok))))
+          (table.insert cleaned (table.concat keep " ")))))
+  {:lines cleaned :include-hidden include-hidden :include-ignored include-ignored :include-deps include-deps})
+
+(fn parse-query-text [query]
+  (if (not (and (= (type query) "string") (~= query "")))
+      {:query query :include-hidden nil :include-ignored nil :include-deps nil}
+      (let [lines (vim.split query "\n" {:plain true})
+            parsed (parse-query-lines lines)]
+        {:query (table.concat (. parsed :lines) "\n")
+         :include-hidden (. parsed :include-hidden)
+         :include-ignored (. parsed :include-ignored)
+         :include-deps (. parsed :include-deps)})))
 
 (fn history-list []
   (if (= (type vim.g.metabuffer_prompt_history) "table")
@@ -50,6 +143,339 @@
     (if (and (> idx 0) (<= idx n))
         (. h (+ (- n idx) 1))
         nil)))
+
+(fn current-buffer-path [buf]
+  (let [name (vim.api.nvim_buf_get_name buf)]
+    (if (and (= (type name) "string") (~= name ""))
+        name
+        nil)))
+
+(fn meta-buffer-name [session]
+  (if session.project-mode
+      "Metabuffer"
+      (let [original-name (vim.api.nvim_buf_get_name session.source-buf)
+            base-name (if (and (= (type original-name) "string") (~= original-name ""))
+                          (vim.fn.fnamemodify original-name ":t")
+                          "[No Name]")]
+        (.. base-name " • Metabuffer"))))
+
+(fn ensure-source-refs! [meta]
+  (when (not meta.buf.source-refs)
+    (set meta.buf.source-refs []))
+  (when (< (# meta.buf.source-refs) (# meta.buf.content))
+    (let [path (or (current-buffer-path meta.buf.model) "[Current Buffer]")]
+      (for [i (+ (# meta.buf.source-refs) 1) (# meta.buf.content)]
+        (table.insert meta.buf.source-refs {:path path :lnum i :buf meta.buf.model :line (. meta.buf.content i)}))))
+  meta.buf.source-refs)
+
+(fn selected-ref [meta]
+  (let [src-idx (. meta.buf.indices (+ meta.selected_index 1))
+        refs (or meta.buf.source-refs [])]
+    (and src-idx (. refs src-idx))))
+
+(fn hidden-path? [path]
+  (let [parts (vim.split path "/" {:plain true})]
+    (var hidden false)
+    (each [_ p (ipairs parts)]
+      (when (and (~= p "") (vim.startswith p "."))
+        (set hidden true)))
+    hidden))
+
+(fn dep-path? [path]
+  (let [parts (vim.split path "/" {:plain true})]
+    (var dep false)
+    (each [_ p (ipairs parts)]
+      (when (. M.dep-dir-names p)
+        (set dep true)))
+    dep))
+
+(fn allow-project-path? [rel include-hidden include-deps]
+  (let [s (or rel "")]
+    (if (or (= s "") (= s "."))
+        false
+        (if (or (vim.startswith s ".git/") (string.find s "/.git/" 1 true))
+            false
+            (if (and (not include-hidden) (hidden-path? s))
+                false
+                (if (and (not include-deps) (dep-path? s))
+                    false
+                    true))))))
+
+(fn project-file-list [root include-hidden include-ignored include-deps]
+  (if (= 1 (vim.fn.executable "rg"))
+      (let [cmd ["rg" "--files" "--glob" "!.git"]
+            _ (when include-hidden
+                (table.insert cmd "--hidden"))
+            _ (when include-ignored
+                (table.insert cmd "--no-ignore")
+                (table.insert cmd "--no-ignore-vcs")
+                (table.insert cmd "--no-ignore-parent"))
+            _ (when (not include-deps)
+                (table.insert cmd "--glob")
+                (table.insert cmd "!node_modules/**")
+                (table.insert cmd "--glob")
+                (table.insert cmd "!vendor/**")
+                (table.insert cmd "--glob")
+                (table.insert cmd "!.venv/**")
+                (table.insert cmd "--glob")
+                (table.insert cmd "!venv/**")
+                (table.insert cmd "--glob")
+                (table.insert cmd "!dist/**")
+                (table.insert cmd "--glob")
+                (table.insert cmd "!build/**")
+                (table.insert cmd "--glob")
+                (table.insert cmd "!target/**"))
+            rel (vim.fn.systemlist cmd)]
+        (vim.tbl_map
+          (fn [p] (vim.fn.fnamemodify (.. root "/" p) ":p"))
+          (or rel [])))
+      (vim.fn.globpath root "**/*" true true)))
+
+(fn collect-project-sources [session include-hidden include-ignored include-deps]
+  (let [meta session.meta
+        root (vim.fn.getcwd)
+        current-path (current-buffer-path session.source-buf)
+        content []
+        refs []]
+    (var total-lines 0)
+    (local push-line! (fn [path lnum line]
+                     (table.insert content line)
+                     (table.insert refs {:path path :lnum lnum :line line})
+                     (set total-lines (+ total-lines 1))))
+    ;; Include current buffer first.
+    (each [i line (ipairs (or session.single-content []))]
+      (push-line! (or current-path "[Current Buffer]") i line))
+    (each [_ path (ipairs (project-file-list root include-hidden include-ignored include-deps))]
+      (let [rel (vim.fn.fnamemodify path ":.")]
+        (when (and (< total-lines M.project-max-total-lines)
+                   (allow-project-path? rel include-hidden include-deps)
+                   (or (not current-path) (~= (vim.fn.fnamemodify path ":p") (vim.fn.fnamemodify current-path ":p")))
+                   (= 1 (vim.fn.filereadable path)))
+        (let [size (vim.fn.getfsize path)]
+          (when (and (>= size 0) (<= size M.project-max-file-bytes))
+            (let [[ok lines] [(pcall vim.fn.readfile path)]]
+              (when (and ok (= (type lines) "table"))
+                (each [lnum line (ipairs lines)]
+                  (when (< total-lines M.project-max-total-lines)
+                    (push-line! path lnum line))))))))))
+    {:content content :refs refs}))
+
+(fn apply-source-set! [session]
+  (local meta session.meta)
+  (if session.project-mode
+      (let [pool (collect-project-sources session session.effective-include-hidden session.effective-include-ignored session.effective-include-deps)]
+        (set meta.buf.content pool.content)
+        (set meta.buf.source-refs pool.refs))
+      (do
+        (set meta.buf.content (vim.deepcopy session.single-content))
+        (set meta.buf.source-refs (vim.deepcopy session.single-refs))))
+  ;; Keep main results buffer as pure content lines; source context is shown
+  ;; in the right floating info window.
+  (set meta.buf.show-source-prefix false)
+  (set meta.buf.show-source-separators session.project-mode)
+  (set meta.buf.all-indices [])
+  (for [i 1 (# meta.buf.content)]
+    (table.insert meta.buf.all-indices i))
+  (set meta.buf.indices (vim.deepcopy meta.buf.all-indices))
+  (set meta.selected_index (math.max 0 (math.min meta.selected_index (math.max 0 (- (# meta.buf.indices) 1)))))
+  (set meta._prev_text ""))
+
+(fn ensure-info-window! [session]
+  (when (not (and session.info-win (vim.api.nvim_win_is_valid session.info-win)))
+    (let [buf (vim.api.nvim_create_buf false true)
+          width M.info-min-width
+          height (math.max 7 (- vim.o.lines (+ (or vim.g.meta_prompt_height 3) 6)))
+          col vim.o.columns
+          row 1
+          win (floating_window_mod.new vim buf {:width width :height height :col col :row row})]
+      (set session.info-buf buf)
+      (set session.info-win win.window)
+      (let [bo (. vim.bo buf)]
+        (set (. bo :buftype) "nofile")
+        (set (. bo :bufhidden) "wipe")
+        (set (. bo :swapfile) false)
+        (set (. bo :modifiable) false)
+        (set (. bo :filetype) "metabuffer")))))
+
+(fn fit-info-width! [session lines]
+  (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
+    (let [widths (vim.tbl_map (fn [line] (# line)) (or lines []))
+          unpack-fn (or table.unpack unpack)
+          max-len (if (and (> (# widths) 0) unpack-fn) (math.max (unpack-fn widths)) 0)
+          needed max-len
+          max-available (math.max M.info-min-width (math.floor (* vim.o.columns 0.34)))
+          upper (math.min M.info-max-width max-available)
+          target (math.max M.info-min-width (math.min needed upper))
+          height (math.max 7 (- vim.o.lines (+ (or vim.g.meta_prompt_height 3) 6)))
+          cfg {:relative "editor"
+               :anchor "NE"
+               :row 1
+               :col vim.o.columns
+               :width target
+               :height height}]
+      (pcall vim.api.nvim_win_set_config session.info-win cfg))))
+
+(fn info-max-width-now []
+  (let [max-available (math.max M.info-min-width (math.floor (* vim.o.columns 0.34)))]
+    (math.min M.info-max-width max-available)))
+
+(fn compact-dir [dir]
+  (if (or (= dir "") (= dir "."))
+      ""
+      (let [parts (vim.split dir "/" {:plain true})
+            out []]
+        (each [_ p (ipairs (or parts []))]
+          (when (~= p "")
+            (table.insert out (string.sub p 1 1))))
+        (if (= (# out) 0)
+            ""
+            (.. (table.concat out "/") "/")))))
+
+(fn compact-dir-keep-last [dir]
+  (if (or (= dir "") (= dir "."))
+      ""
+      (let [parts0 (vim.split dir "/" {:plain true})
+            parts []]
+        (each [_ p (ipairs (or parts0 []))]
+          (when (~= p "")
+            (table.insert parts p)))
+        (let [n (# parts)]
+          (if (= n 0)
+              ""
+              (if (= n 1)
+                  (.. (. parts 1) "/")
+                  (let [out []]
+                    (for [i 1 (- n 1)]
+                      (table.insert out (string.sub (. parts i) 1 1)))
+                    (table.insert out (. parts n))
+                    (.. (table.concat out "/") "/"))))))))
+
+(fn fit-path-into-width [path path-width]
+  (let [dir0 (vim.fn.fnamemodify path ":h")
+        dir (if (or (= dir0 ".") (= dir0 "")) "" (.. dir0 "/"))
+        file (vim.fn.fnamemodify path ":t")
+        budget (math.max 1 path-width)
+        full (.. dir file)]
+    (if (<= (# full) budget)
+        [dir file]
+        (let [kdir (compact-dir-keep-last dir0)
+              keep-last (.. kdir file)]
+          (if (<= (# keep-last) budget)
+              [kdir file]
+              (let [cdir (compact-dir dir0)
+                    compact (.. cdir file)]
+                (if (<= (# compact) budget)
+                    [cdir file]
+                    (if (> (# file) budget)
+                        ["" (if (> budget 3)
+                                (.. "..." (string.sub file (+ (- (# file) budget) 4)))
+                                (string.sub file (+ (- (# file) budget) 1)))]
+                        (let [dir-budget (math.max 0 (- budget (# file)))
+                              short-dir (if (<= (# cdir) dir-budget)
+                                            cdir
+                                            (if (> dir-budget 3)
+                                                (.. "..." (string.sub cdir (+ (- (# cdir) dir-budget) 4)))
+                                                (string.sub cdir (+ (- (# cdir) dir-budget) 1))))]
+                          [short-dir file])))))))))
+
+(fn build-info-lines [meta refs idxs target-width]
+  (let [line-hl "LineNr"
+        dir-hl (if (= 1 (vim.fn.hlexists "NetrwDir")) "NetrwDir" "Directory")
+        file-hl (if (= 1 (vim.fn.hlexists "NetrwPlain"))
+                    "NetrwPlain"
+                    (if (= 1 (vim.fn.hlexists "NvimTreeFileName"))
+                        "NvimTreeFileName"
+                        "Normal"))
+        lnum-width (let [limit (math.min (# idxs) M.info-max-lines)
+                         max-lnum-len (if (> limit 0)
+                                          (let [lens []]
+                                            (for [i 1 limit]
+                                              (let [src-idx (. idxs i)
+                                                    ref (. refs src-idx)
+                                                    lnum (tostring (or (and ref ref.lnum) src-idx))]
+                                                (table.insert lens (# lnum))))
+                                            (let [unpack-fn (or table.unpack unpack)]
+                                              (if (and unpack-fn (> (# lens) 0))
+                                                  (math.max (unpack-fn lens))
+                                                  1)))
+                                          1)]
+                     (+ (math.max 2 max-lnum-len) 1))
+        path-width (math.max 1 (- target-width lnum-width))
+        lines []
+        highlights []]
+    (if (= (# idxs) 0)
+        (table.insert lines "No hits")
+        (do
+          (local limit (math.min (# idxs) M.info-max-lines))
+          (for [i 1 limit]
+            (let [src-idx (. idxs i)
+                  ref (. refs src-idx)
+                  lnum (tostring (or (and ref ref.lnum) src-idx))
+                  lnum-cell (.. (string.rep " " (math.max 0 (- lnum-width (+ (# lnum) 1)))) lnum " ")
+                  path (vim.fn.fnamemodify (or (and ref ref.path) "[Current Buffer]") ":~:.")
+                  [dir file] (fit-path-into-width path path-width)
+                  row (- i 1)
+                  line (.. lnum-cell dir file)
+                  num-start 0
+                  num-end (+ num-start (# lnum-cell))
+                  dir-start num-end
+                  file-start (+ dir-start (# dir))]
+              (table.insert lines line)
+              (table.insert highlights [row line-hl num-start num-end])
+              (when (> (# dir) 0)
+                (table.insert highlights [row dir-hl dir-start (+ dir-start (# dir))]))
+              (table.insert highlights [row file-hl file-start (+ file-start (# file))]))))
+          (when (> (# idxs) M.info-max-lines)
+            (table.insert lines (.. " ... +" (- (# idxs) M.info-max-lines) " more"))))
+    {:lines lines :highlights highlights}))
+
+(fn close-info-window! [session]
+  (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
+    (pcall vim.api.nvim_win_close session.info-win true))
+  (set session.info-win nil)
+  (set session.info-buf nil))
+
+(fn update-info-window! [session]
+  (if (not session.project-mode)
+      (close-info-window! session)
+      (do
+        (ensure-info-window! session)
+        (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
+          (let [meta session.meta
+                refs (or meta.buf.source-refs [])
+                idxs (or meta.buf.indices [])
+                built (build-info-lines meta refs idxs (info-max-width-now))
+                raw-lines (. built :lines)
+                lines (if (= (type raw-lines) "table")
+                          (vim.tbl_map tostring raw-lines)
+                          [(tostring raw-lines)])
+                highlights (or (. built :highlights) [])
+                ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
+            (let [bo (. vim.bo session.info-buf)]
+              (set (. bo :modifiable) true))
+            (fit-info-width! session lines)
+            (vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)
+            (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
+            (each [_ h (ipairs highlights)]
+              (vim.api.nvim_buf_add_highlight session.info-buf ns (. h 2) (. h 1) (. h 3) (. h 4)))
+            (let [bo (. vim.bo session.info-buf)]
+              (set (. bo :modifiable) false))
+            (when (vim.api.nvim_win_is_valid session.info-win)
+              (let [hits-shown (math.min (# idxs) M.info-max-lines)
+                    hits-total (# idxs)
+                    status (.. " Hits " hits-shown "/" hits-total " ")
+                    row (if (> (# lines) 0) (math.max 1 (math.min (+ meta.selected_index 1) (# lines))) 1)]
+                (pcall vim.api.nvim_win_set_option session.info-win "statusline" status)
+                (if (and (> (# lines) 0) (vim.api.nvim_win_is_valid meta.win.window))
+                    (let [main-view (vim.api.nvim_win_call meta.win.window (fn [] (vim.fn.winsaveview)))
+                          info-view (vim.api.nvim_win_call session.info-win (fn [] (vim.fn.winsaveview)))
+                          top (math.max 1 (math.min (or (. main-view :topline) row) (# lines)))
+                          lnum (math.max 1 (math.min (or (. main-view :lnum) row) (# lines)))]
+                      (set (. info-view :topline) top)
+                      (set (. info-view :lnum) lnum)
+                      (set (. info-view :leftcol) 0)
+                      (pcall vim.api.nvim_win_call session.info-win (fn [] (vim.fn.winrestview info-view))))
+                    (pcall vim.api.nvim_win_set_cursor session.info-win [row 0])))))))))
 
 (fn wipe-temp-buffers [meta]
   (when meta
@@ -118,6 +544,7 @@
       (pcall vim.api.nvim_win_close session.prompt-win true))
     (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
       (pcall vim.api.nvim_buf_delete session.prompt-buf {:force true}))
+    (close-info-window! session)
     (when session.source-buf
       (set (. M.active-by-source session.source-buf) nil))
     (when session.prompt-buf
@@ -127,17 +554,50 @@
   (when (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
     (let [lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
       (set session.last-prompt-text (table.concat lines "\n"))
-      (session.meta.set-query-lines lines)
+      (let [parsed (if session.project-mode
+                       (parse-query-lines lines)
+                       {:lines lines :include-ignored nil :include-deps nil})
+            next-ignored (if (= (. parsed :include-ignored) nil)
+                             session.include-ignored
+                             (. parsed :include-ignored))
+            next-deps (if (= (. parsed :include-deps) nil)
+                          session.include-deps
+                          (. parsed :include-deps))
+            next-hidden (if (= (. parsed :include-hidden) nil)
+                            session.include-hidden
+                            (. parsed :include-hidden))
+            changed (or (~= next-hidden session.effective-include-hidden)
+                        (~= next-ignored session.effective-include-ignored)
+                        (~= next-deps session.effective-include-deps))]
+        (set session.effective-include-hidden next-hidden)
+        (set session.effective-include-ignored next-ignored)
+        (set session.effective-include-deps next-deps)
+        (set session.meta.debug_out
+          (if session.project-mode
+              (.. " ["
+                  (if session.effective-include-hidden "+hidden" "-hidden")
+                  " "
+                  (if session.effective-include-ignored "+ignored" "-ignored")
+                  " "
+                  (if session.effective-include-deps "+deps" "-deps")
+                  "]")
+              ""))
+        (when (and session.project-mode changed)
+          (apply-source-set! session))
+        (session.meta.set-query-lines (. parsed :lines)))
       (let [[ok err] [(pcall session.meta.on-update 0)]]
         (if ok
-            (session.meta.refresh_statusline)
+            (do
+              (session.meta.refresh_statusline)
+              (update-info-window! session))
             (when (string.find (tostring err) "E565")
               ;; Textlock race: retry right after current input cycle.
               (vim.defer_fn (fn []
                               (when (and session.meta
                                          (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
                                 (pcall session.meta.on-update 0)
-                                (pcall session.meta.refresh_statusline)))
+                                (pcall session.meta.refresh_statusline)
+                                (pcall update-info-window! session)))
                             1)))))))
 
 (fn M.on-prompt-changed [prompt-buf]
@@ -162,17 +622,23 @@
              (vim.api.nvim_buf_is_valid session.origin-buf))
     (pcall vim.api.nvim_set_current_win session.origin-win)
     (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
-  (base_buffer.switch-buf curr.buf.model)
-  (let [row (curr.selected_line)]
-    (curr.win.set-row row true)
-    (let [vq (curr.vim_query)]
-      (when (~= vq "")
-        (vim.api.nvim_win_set_cursor 0 [row 0])
-        (let [pos (vim.fn.searchpos vq "cnW" row)
-              hit-row (. pos 1)
-              hit-col (. pos 2)]
-          (when (and (= hit-row row) (> hit-col 0))
-            (vim.api.nvim_win_set_cursor 0 [row hit-col]))))))
+  (if session.project-mode
+      (let [ref (selected-ref curr)]
+        (when (and ref ref.path)
+          (vim.cmd (.. "edit " (vim.fn.fnameescape ref.path)))
+          (vim.api.nvim_win_set_cursor 0 [(math.max 1 (or ref.lnum 1)) 0])))
+      (do
+        (base_buffer.switch-buf curr.buf.model)
+        (let [row (curr.selected_line)]
+          (curr.win.set-row row true)
+          (let [vq (curr.vim_query)]
+            (when (~= vq "")
+              (vim.api.nvim_win_set_cursor 0 [row 0])
+              (let [pos (vim.fn.searchpos vq "cnW" row)
+                    hit-row (. pos 1)
+                    hit-col (. pos 2)]
+                (when (and (= hit-row row) (> hit-col 0))
+                  (vim.api.nvim_win_set_cursor 0 [row hit-col]))))))))
   (vim.cmd "normal! zv")
   (let [vq (curr.vim_query)]
     (when (~= vq "")
@@ -221,11 +687,77 @@
                          (let [row (+ meta.selected_index 1)]
                            (when (vim.api.nvim_win_is_valid meta.win.window)
                              (pcall vim.api.nvim_win_set_cursor meta.win.window [row 0])))
-                         (pcall meta.refresh_statusline))))
+                         (pcall meta.refresh_statusline)
+                         (pcall update-info-window! session))))
             mode (. (vim.api.nvim_get_mode) :mode)]
         (if (and (= (type mode) "string") (vim.startswith mode "i"))
             (vim.schedule runner)
             (runner))))))
+
+(fn sync-selected-from-main-cursor! [session]
+  (let [meta session.meta
+        max (# meta.buf.indices)]
+    (if (<= max 0)
+        (set meta.selected_index 0)
+        (when (vim.api.nvim_win_is_valid meta.win.window)
+          (let [c (vim.api.nvim_win_get_cursor meta.win.window)
+                row (. c 1)
+                clamped (math.max 1 (math.min row max))]
+            (when (~= row clamped)
+              (pcall vim.api.nvim_win_set_cursor meta.win.window [clamped (. c 2)]))
+            (set meta.selected_index (- clamped 1)))))))
+
+(fn M.scroll-main [prompt-buf action]
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
+      (let [runner (fn []
+                     (vim.api.nvim_win_call session.meta.win.window
+                       (fn []
+                         (let [line-count (vim.api.nvim_buf_line_count session.meta.buf.buffer)
+                               win-height (math.max 1 (vim.api.nvim_win_get_height session.meta.win.window))
+                               half-step (math.max 1 (math.floor (/ win-height 2)))
+                               page-step (math.max 1 (- win-height 2))
+                               step (if (or (= action "half-down") (= action "half-up")) half-step page-step)
+                               dir (if (or (= action "half-down") (= action "page-down")) 1 -1)
+                               max-top (math.max 1 (+ (- line-count win-height) 1))
+                               view (vim.fn.winsaveview)
+                               old-top (. view :topline)
+                               old-lnum (. view :lnum)
+                               old-col (or (. view :col) 0)
+                               row-off (math.max 0 (- old-lnum old-top))
+                               new-top (math.max 1 (math.min (+ old-top (* dir step)) max-top))
+                               new-lnum (math.max 1 (math.min (+ new-top row-off) line-count))]
+                           (set (. view :topline) new-top)
+                           (set (. view :lnum) new-lnum)
+                           (set (. view :col) old-col)
+                           (vim.fn.winrestview view))))
+                     (sync-selected-from-main-cursor! session)
+                     (pcall session.meta.refresh_statusline)
+                     (pcall update-info-window! session))
+            mode (. (vim.api.nvim_get_mode) :mode)]
+        (if (and (= (type mode) "string") (vim.startswith mode "i"))
+            (vim.schedule runner)
+            (runner))))))
+
+(fn maybe-sync-from-main! [session force-refresh]
+  (when (and session
+             (vim.api.nvim_win_is_valid session.meta.win.window)
+             (vim.api.nvim_buf_is_valid session.prompt-buf)
+             (= (. M.active-by-prompt session.prompt-buf) session))
+    (let [before session.meta.selected_index]
+      (sync-selected-from-main-cursor! session)
+      (when (or force-refresh (~= before session.meta.selected_index))
+        (pcall session.meta.refresh_statusline)
+        (pcall update-info-window! session)))))
+
+(fn schedule-scroll-sync! [session]
+  (when (and session (not session.scroll-sync-pending))
+    (set session.scroll-sync-pending true)
+    (vim.defer_fn
+      (fn []
+        (set session.scroll-sync-pending false)
+        (maybe-sync-from-main! session true))
+      20)))
 
 (fn M.history-or-move [prompt-buf delta]
   (let [session (. M.active-by-prompt prompt-buf)]
@@ -249,6 +781,31 @@
                         (set-prompt-text! session entry))))))
             (M.move-selection prompt-buf delta))))))
 
+(fn M.toggle-scan-option [prompt-buf which]
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when session
+      (if (= which "ignored")
+          (set session.include-ignored (not session.include-ignored))
+          (if (= which "deps")
+              (set session.include-deps (not session.include-deps))
+              (when (= which "hidden")
+                (set session.include-hidden (not session.include-hidden)))))
+      (set session.effective-include-hidden session.include-hidden)
+      (set session.effective-include-ignored session.include-ignored)
+      (set session.effective-include-deps session.include-deps)
+      (when session.project-mode
+        (apply-source-set! session))
+      (apply-prompt-lines session))))
+
+(fn M.toggle-project-mode [prompt-buf]
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when session
+      (set session.project-mode (not session.project-mode))
+      (set session.meta.project-mode session.project-mode)
+      (session.meta.buf.set-name (meta-buffer-name session))
+      (apply-source-set! session)
+      (apply-prompt-lines session))))
+
 (fn register-prompt-hooks [session]
   (fn disable-cmp []
     (let [[ok cmp] [(pcall require :cmp)]]
@@ -260,63 +817,42 @@
       (meta.switch_mode which)
       (pcall meta.refresh_statusline)))
   (fn apply-keymaps []
-    (vim.keymap.set ["n" "i"] "<CR>"
-      (fn [] (M.finish "accept" session.prompt-buf))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    ;; In insert mode, <Esc> should only leave insert mode.
-    ;; Cancel/close only from normal mode.
-    (vim.keymap.set "n" "<Esc>"
-      (fn [] (M.finish "cancel" session.prompt-buf))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set "n" "<C-p>"
-      (fn [] (M.move-selection session.prompt-buf -1))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set "n" "<C-n>"
-      (fn [] (M.move-selection session.prompt-buf 1))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set "i" "<C-p>"
-      "<Cmd>lua require('metabuffer.router')['move-selection'](vim.api.nvim_get_current_buf(), -1)<CR>"
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set "i" "<C-n>"
-      "<Cmd>lua require('metabuffer.router')['move-selection'](vim.api.nvim_get_current_buf(), 1)<CR>"
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set "i" "<Up>"
-      "<Cmd>lua require('metabuffer.router')['history-or-move'](vim.api.nvim_get_current_buf(), 1)<CR>"
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set "i" "<Down>"
-      "<Cmd>lua require('metabuffer.router')['history-or-move'](vim.api.nvim_get_current_buf(), -1)<CR>"
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set "n" "<Up>"
-      (fn [] (M.history-or-move session.prompt-buf 1))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set "n" "<Down>"
-      (fn [] (M.history-or-move session.prompt-buf -1))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    ;; Statusline keys: C^ (matcher), C_ (case), Cs (syntax)
-    (vim.keymap.set ["n" "i"] "<C-^>"
-      (fn [] (switch-mode "matcher"))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set ["n" "i"] "<C-6>"
-      (fn [] (switch-mode "matcher"))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set ["n" "i"] "<C-_>"
-      (fn [] (switch-mode "case"))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set ["n" "i"] "<C-/>"
-      (fn [] (switch-mode "case"))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set ["n" "i"] "<C-?>"
-      (fn [] (switch-mode "case"))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set ["n" "i"] "<C-->"
-      (fn [] (switch-mode "case"))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set ["n" "i"] "<C-o>"
-      (fn [] (switch-mode "case"))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-    (vim.keymap.set ["n" "i"] "<C-s>"
-      (fn [] (switch-mode "syntax"))
-      {:buffer session.prompt-buf :silent true :noremap true :nowait true}))
+    (local opts {:buffer session.prompt-buf :silent true :noremap true :nowait true})
+    (fn map! [m lhs rhs]
+      (vim.keymap.set m lhs rhs opts))
+    (fn map-rules! [rules]
+      (each [_ r (ipairs rules)]
+        (map! (. r 1) (. r 2) (. r 3))))
+    (map-rules!
+      [ [["n" "i"] "<CR>" (fn [] (M.finish "accept" session.prompt-buf))]
+        ;; In insert mode, <Esc> should only leave insert mode.
+        ;; Cancel/close only from normal mode.
+        ["n" "<Esc>" (fn [] (M.finish "cancel" session.prompt-buf))]
+        ["n" "<C-p>" (fn [] (M.move-selection session.prompt-buf -1))]
+        ["n" "<C-n>" (fn [] (M.move-selection session.prompt-buf 1))]
+        ["i" "<C-p>" (fn [] (M.move-selection session.prompt-buf -1))]
+        ["i" "<C-n>" (fn [] (M.move-selection session.prompt-buf 1))]
+        ["i" "<Up>" (fn [] (M.history-or-move session.prompt-buf 1))]
+        ["i" "<Down>" (fn [] (M.history-or-move session.prompt-buf -1))]
+        ["n" "<Up>" (fn [] (M.history-or-move session.prompt-buf 1))]
+        ["n" "<Down>" (fn [] (M.history-or-move session.prompt-buf -1))]
+        ;; Statusline keys: C^ (matcher), C_ (case), Cs (syntax)
+        [["n" "i"] "<C-^>" (fn [] (switch-mode "matcher"))]
+        [["n" "i"] "<C-6>" (fn [] (switch-mode "matcher"))]
+        [["n" "i"] "<C-_>" (fn [] (switch-mode "case"))]
+        [["n" "i"] "<C-/>" (fn [] (switch-mode "case"))]
+        [["n" "i"] "<C-?>" (fn [] (switch-mode "case"))]
+        [["n" "i"] "<C-->" (fn [] (switch-mode "case"))]
+        [["n" "i"] "<C-o>" (fn [] (switch-mode "case"))]
+        [["n" "i"] "<C-s>" (fn [] (switch-mode "syntax"))]
+        ["n" "<C-g>" (fn [] (M.toggle-scan-option session.prompt-buf "ignored"))]
+        ["n" "<C-l>" (fn [] (M.toggle-scan-option session.prompt-buf "deps"))]
+        [["n" "i"] "<C-d>" (fn [] (M.scroll-main session.prompt-buf "half-down"))]
+        [["n" "i"] "<C-u>" (fn [] (M.scroll-main session.prompt-buf "half-up"))]
+        [["n" "i"] "<C-f>" (fn [] (M.scroll-main session.prompt-buf "page-down"))]
+        [["n" "i"] "<C-b>" (fn [] (M.scroll-main session.prompt-buf "page-up"))]
+        ;; keep project toggle available without conflicting with scroll/page keys
+        [["n" "i"] "<C-t>" (fn [] (M.toggle-project-mode session.prompt-buf))] ]))
   (local aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true}))
   (set session.augroup aug)
   ;; Low-level buffer attach catches edits reliably across Insert/Normal modes
@@ -365,11 +901,45 @@
                      (when (and session.meta
                                 (vim.api.nvim_buf_is_valid session.prompt-buf))
                        (pcall session.meta.refresh_statusline)))))})
+  ;; Recompute floating info rendering/width when editor windows resize.
+  (vim.api.nvim_create_autocmd ["VimResized" "WinResized"]
+    {:group aug
+     :callback (fn [_]
+                 (vim.schedule
+                   (fn []
+                     (when (and session.meta
+                                (vim.api.nvim_buf_is_valid session.prompt-buf))
+                       (pcall update-info-window! session)))))})
+  ;; Keep selection/status/info synced when user scrolls or moves in the
+  ;; main meta window with regular motions/mouse while prompt is open.
+  (vim.api.nvim_create_autocmd ["CursorMoved" "CursorMovedI"]
+    {:group aug
+     :buffer session.meta.buf.buffer
+     :callback (fn [_]
+                 (vim.schedule
+                   (fn []
+                     (maybe-sync-from-main! session))))})
+  (vim.api.nvim_create_autocmd "WinScrolled"
+    {:group aug
+     :callback (fn [_]
+                 (schedule-scroll-sync! session))})
   (disable-cmp)
   (apply-keymaps)
   )
 
-(fn M.start [query mode _meta]
+(fn M.start [query mode _meta project-mode]
+  (let [parsed-query (parse-query-text query)
+        query0 (. parsed-query :query)
+        start-hidden (if (= (. parsed-query :include-hidden) nil)
+                         (truthy? M.default-include-hidden)
+                         (. parsed-query :include-hidden))
+        start-ignored (if (= (. parsed-query :include-ignored) nil)
+                          (truthy? M.default-include-ignored)
+                          (. parsed-query :include-ignored))
+        start-deps (if (= (. parsed-query :include-deps) nil)
+                       (truthy? M.default-include-deps)
+                       (. parsed-query :include-deps))
+        query query0]
   (local source-buf (vim.api.nvim_get_current_buf))
   (when (. M.active-by-source source-buf)
     (remove-session (. M.active-by-source source-buf)))
@@ -379,7 +949,9 @@
         _ (set (. source-view :_meta_win_height) (vim.api.nvim_win_get_height origin-win))
         condition (setup-state query mode source-view)
         curr (meta_mod.new vim condition)]
+    (set curr.project-mode (or project-mode false))
     (base_buffer.switch-buf curr.buf.buffer)
+    (ensure-source-refs! curr)
     (curr.on-init)
     (let [initial-lines (if (and query (~= query ""))
                             (vim.split query "\n" {:plain true})
@@ -395,7 +967,17 @@
                    :last-prompt-text (table.concat initial-lines "\n")
                    :last-history-text ""
                    :history-index 0
+                   :project-mode (or project-mode false)
+                   :include-hidden start-hidden
+                   :include-ignored start-ignored
+                   :include-deps start-deps
+                   :effective-include-hidden start-hidden
+                   :effective-include-ignored start-ignored
+                   :effective-include-deps start-deps
+                   :single-content (vim.deepcopy curr.buf.content)
+                   :single-refs (vim.deepcopy (or curr.buf.source-refs []))
                    :meta curr}]
+      (apply-source-set! session)
       (set curr.status-win (meta_window_mod.new vim prompt-win.window))
       ;; Statusline info should live in prompt window, not result split.
       (curr.win.set-statusline "")
@@ -404,13 +986,14 @@
       (set (. M.active-by-source source-buf) session)
       (set (. M.active-by-prompt prompt-buf) session)
       (apply-prompt-lines session)
+      (update-info-window! session)
       ;; Opening prompt split resizes the meta window, which can shift scroll.
       ;; Re-apply source-relative view after layout settles.
       (restore-meta-view! curr source-view)
       (vim.api.nvim_set_current_win prompt-win.window)
       (vim.cmd "startinsert")
       (set (. M.instances source-buf) curr)
-      curr)))
+      curr))))
 
 (fn M.sync [meta query]
   (if (not meta)
@@ -428,7 +1011,7 @@
         (meta.buf.push-visible-lines lines))))
 
 (fn M.entry_start [query _bang]
-  (M.start query "start" nil))
+  (M.start query "start" nil _bang))
 
 (fn M.entry_resume [query]
   (M.start query "resume" nil))

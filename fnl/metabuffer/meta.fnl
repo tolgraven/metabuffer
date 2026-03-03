@@ -2,7 +2,6 @@
 (local prompt_action_mod (require :metabuffer.prompt.action))
 (local modeindexer (require :metabuffer.modeindexer))
 (local state (require :metabuffer.core.state))
-(local action (require :metabuffer.action))
 (local all_matcher (require :metabuffer.matcher.all))
 (local fuzzy_matcher (require :metabuffer.matcher.fuzzy))
 (local regex_matcher (require :metabuffer.matcher.regex))
@@ -21,6 +20,9 @@
                       (vim.fn.fnamemodify original-name ":t")
                       "[No Name]")]
     (.. base-name " • Metabuffer")))
+
+(fn project-display-name []
+  "Metabuffer")
 
 (fn nerd-font-enabled? []
   (or (= (. vim.g "meta#nerd_font") true)
@@ -51,10 +53,6 @@
   (set self.query-lines [])
 
   (set self.action prompt_action_mod.DEFAULT_ACTION)
-  (self.action.register_from_rules action.DEFAULT_ACTION_RULES)
-  (self.keymap.register_from_rules nvim action.DEFAULT_ACTION_KEYMAP)
-  (when (= (type (. vim.g "meta#custom_mappings")) "table")
-    (self.keymap.register_from_rules nvim (. vim.g "meta#custom_mappings")))
 
   (set self.win (meta_window_mod.new nvim (vim.api.nvim_get_current_win)))
   (set self.status-win self.win)
@@ -143,7 +141,9 @@
     (vim.cmd "redrawstatus"))
 
   (fn self.on-init []
-    (self.buf.set-name (metabuffer-display-name self.buf.model))
+    (self.buf.set-name (if self.project-mode
+                           (project-display-name)
+                           (metabuffer-display-name self.buf.model)))
     (local init-syntax (or (. vim.g "meta#syntax_on_init") "buffer"))
     (self.buf.apply-syntax (if (= init-syntax "meta") "meta" "buffer"))
     (clear-all-highlights)

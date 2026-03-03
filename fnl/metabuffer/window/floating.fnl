@@ -4,6 +4,7 @@
 
 (fn M.new [nvim buf opts]
   (local lines (- vim.o.lines 2))
+  (local winblend (or vim.g.meta_float_winblend 13))
   (local cfg {:relative "editor"
               :width (or (and opts opts.width) 20)
               :height (or (and opts opts.height) lines)
@@ -13,7 +14,7 @@
               :style "minimal"})
   (local win (vim.api.nvim_open_win buf false cfg))
   (let [wo (. vim.wo win)]
-    (set (. wo :winblend) 25))
+    (set (. wo :winblend) winblend))
   (window-base.new nvim win [] {}))
 
 M

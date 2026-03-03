@@ -54,6 +54,17 @@
         (set (. opts :sp) (. opts :fg))))
     opts))
 
+(fn thin-underline-from [group]
+  (let [opts {:default true :underdotted true :nocombine true}
+        [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
+    (when (and ok (= (type hl) "table"))
+      (if (. hl :sp)
+          (set (. opts :sp) (. hl :sp))
+          (if (. hl :fg)
+              (set (. opts :sp) (. hl :fg))
+              (set (. opts :sp) 0xFF0000))))
+    opts))
+
 (fn plain-hl-from [group]
   (let [opts {:default true}
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
@@ -95,7 +106,14 @@
   (hi 0 "MetaSearchHitBuffer" (undercurl-from "Statement"))
   (hi 0 "MetaSearchHitFuzzy" (undercurl-from "Number"))
   (hi 0 "MetaSearchHitFuzzyBetween" (undercurl-from "IncSearch"))
-  (hi 0 "MetaSearchHitRegex" (undercurl-from "Special")))
+  (hi 0 "MetaSearchHitRegex" (undercurl-from "Special"))
+  (hi 0 "MetaSourceLineNr" {:default true :link "LineNr"})
+  (hi 0 "MetaSourceDir" {:default true :link "Directory"})
+  (hi 0 "MetaSourceBoundary" (thin-underline-from "Error"))
+  ;; Prefer netrw-like plain file coloring if present.
+  (if (= 1 (vim.fn.hlexists "NetrwPlain"))
+      (hi 0 "MetaSourceFile" {:default true :link "NetrwPlain"})
+      (hi 0 "MetaSourceFile" {:default true :link "Normal"})))
 
 (fn ensure-command [name callback opts]
   (pcall vim.api.nvim_del_user_command name)
