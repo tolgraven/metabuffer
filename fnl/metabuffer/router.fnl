@@ -80,20 +80,15 @@
     (let [line-count (vim.api.nvim_buf_line_count meta.buf.buffer)
           line (math.max 1 (math.min (meta.selected_line) line-count))
           src-view (or source-view {})
-          src-height (or (. src-view :_meta_win_height) (vim.api.nvim_win_get_height meta.win.window))
-          dst-height (vim.api.nvim_win_get_height meta.win.window)
           src-lnum (or (. src-view :lnum) line)
           src-topline (or (. src-view :topline) src-lnum)
           offset (math.max 0 (- src-lnum src-topline))
-          ;; Preserve distance from bottom when prompt split reduces window height.
-          ;; This avoids the perceptual "jump" from losing rows at the bottom.
-          adjusted-offset (math.max 0 (math.min (+ offset (- dst-height src-height)) (- dst-height 1)))
           topline (math.max 1 (math.min (- line offset) line-count))]
       (vim.api.nvim_win_call meta.win.window
         (fn []
           (local view (vim.fn.winsaveview))
           (set (. view :lnum) line)
-          (set (. view :topline) (math.max 1 (math.min (- line adjusted-offset) line-count)))
+          (set (. view :topline) topline)
           (when (~= (. src-view :leftcol) nil)
             (set (. view :leftcol) (. src-view :leftcol)))
           (when (~= (. src-view :col) nil)
@@ -177,7 +172,7 @@
               hit-row (. pos 1)
               hit-col (. pos 2)]
           (when (and (= hit-row row) (> hit-col 0))
-            (vim.api.nvim_win_set_cursor 0 [row (- hit-col 1)]))))))
+            (vim.api.nvim_win_set_cursor 0 [row hit-col]))))))
   (vim.cmd "normal! zv")
   (let [vq (curr.vim_query)]
     (when (~= vq "")
@@ -352,6 +347,16 @@
   ;; switches) can overwrite local statusline state. Re-apply ours when the
   ;; prompt window regains focus.
   (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
+    {:group aug
+     :buffer session.prompt-buf
+     :callback (fn [_]
+                 (vim.schedule
+                   (fn []
+                     (when (and session.meta
+                                (vim.api.nvim_buf_is_valid session.prompt-buf))
+                       (pcall session.meta.refresh_statusline)))))})
+  ;; Refresh mode segment when switching Insert/Normal/Replace in the prompt.
+  (vim.api.nvim_create_autocmd ["ModeChanged" "InsertEnter" "InsertLeave"]
     {:group aug
      :buffer session.prompt-buf
      :callback (fn [_]

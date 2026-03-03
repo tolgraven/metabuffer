@@ -30,6 +30,10 @@
   - `./script/nfnl`
 - Compile all Fennel through nfnl (headless Neovim):
   - `./scripts/compile-fennel.sh`
+- Continuous source lint watch (for immediate paren/syntax failures):
+  - `./scripts/watch-fennel.sh`
+- Continuous lint + compile watch:
+  - `./scripts/watch-fennel.sh --compile`
 - Optional compile logging:
   - default: quiet (`NVIM_LOG_FILE` defaults to `/dev/null`)
   - debug: `NVIM_LOG_FILE=.nvimlog ./scripts/compile-fennel.sh`

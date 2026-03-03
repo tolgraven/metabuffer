@@ -22,6 +22,22 @@
                       "[No Name]")]
     (.. base-name " • Metabuffer")))
 
+(fn nerd-font-enabled? []
+  (or (= (. vim.g "meta#nerd_font") true)
+      (= (. vim.g "meta#nerd_font") 1)
+      (= vim.g.have_nerd_font true)
+      (= vim.g.have_nerd_font 1)
+      (= vim.g.nerd_font true)
+      (= vim.g.nerd_font 1)))
+
+(fn statusline-mode-state []
+  (let [m (or (. (vim.api.nvim_get_mode) :mode) "")]
+    (if (vim.startswith m "R")
+        {:group "Replace" :label (if (nerd-font-enabled?) "R" "Replace")}
+        (vim.startswith m "i")
+        {:group "Insert" :label (if (nerd-font-enabled?) "𝐈" "Insert")}
+        {:group "Normal" :label (if (nerd-font-enabled?) "𝗡" "Normal")})))
+
 (fn M.new [nvim condition]
   (local cond (or condition (state.default-condition "")))
   (local self (prompt_mod.new nvim))
@@ -59,7 +75,7 @@
         :syntax (modeindexer.new state.syntax-types (or cond.syntax-index 1)
                                  {:on-active (fn [idx]
                                                (self.buf.apply-syntax
-                                                (if (= (idx.current) "meta") "meta" nil)))})})
+                                                (if (= (idx.current) "meta") "meta" "buffer")))})})
 
   (set self.text (or cond.text ""))
   (when (~= self.text "")
@@ -110,11 +126,11 @@
         (.. caseprefix pat)))))
 
   (fn self.refresh_statusline []
-    (local mode_suffix (if (= self.insert-mode prompt_mod.INSERT_MODE_REPLACE) "Replace" "Insert"))
+    (local mode-state (statusline-mode-state))
     (local hl_prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer"))
     (self.status-win.set-statusline-state
-      mode_suffix
-      "# " self.text
+      (. mode-state :group)
+      (. mode-state :label)
       self.buf.name
       (# self.buf.indices)
       (self.buf.line-count)

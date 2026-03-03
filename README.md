@@ -33,6 +33,12 @@ Utility scripts:
 
 # One-shot project compile via headless Neovim + embedded nfnl
 ./scripts/compile-fennel.sh
+
+# Continuous Fennel lint watch (fast syntax/parens feedback)
+./scripts/watch-fennel.sh
+
+# Lint + full compile watch (heavier, end-to-end)
+./scripts/watch-fennel.sh --compile
 ```
 
 Repository hygiene (aligned with nfnl recommendations):

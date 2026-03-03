@@ -76,6 +76,7 @@
   (local hi vim.api.nvim_set_hl)
   (hi 0 "MetaStatuslineModeInsert" (statusline-color-from "Tag"))
   (hi 0 "MetaStatuslineModeReplace" (statusline-color-from "Todo"))
+  (hi 0 "MetaStatuslineModeNormal" (statusline-color-from "Comment"))
   (hi 0 "MetaStatuslineQuery" (statusline-color-from "Normal"))
   (hi 0 "MetaStatuslineFile" (statusline-color-from "Comment"))
   ;; Fill area around %= should blend with the host statusline theme.
@@ -86,7 +87,7 @@
   (hi 0 "MetaStatuslineCaseSmart" (statusline-color-from "String"))
   (hi 0 "MetaStatuslineCaseIgnore" (statusline-color-from "Special"))
   (hi 0 "MetaStatuslineCaseNormal" (statusline-color-from "Normal"))
-  (hi 0 "MetaStatuslineSyntaxBuffer" (statusline-color-from "Normal"))
+  (hi 0 "MetaStatuslineSyntaxBuffer" (statusline-color-from "Comment"))
   (hi 0 "MetaStatuslineSyntaxMeta" (statusline-color-from "Number"))
   (hi 0 "MetaStatuslineIndicator" (statusline-color-from "Tag"))
   (hi 0 "MetaStatuslineKey" (statusline-color-from "Comment"))
