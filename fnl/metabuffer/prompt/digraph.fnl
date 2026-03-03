@@ -9,7 +9,7 @@
     (let [k (string.match line "(%S%S)%s+%S+%s+%d+")
           v (string.match line "%S%S%s+(%S+)%s+%d+")]
       (when (and k v)
-        (tset registry k v))))
+        (set (. registry k) v))))
   registry)
 
 (fn M.new []

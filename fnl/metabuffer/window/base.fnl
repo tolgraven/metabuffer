@@ -6,7 +6,8 @@
   (set self.window win)
 
   (fn self.set-statusline [text]
-    (tset (. vim.wo self.window) :statusline text))
+    (let [wo (. vim.wo self.window)]
+      (set (. wo :statusline) text)))
 
   (fn self.set-cursor [row col]
     (vim.api.nvim_win_set_cursor self.window [row (or col 0)]))

@@ -15,6 +15,13 @@
 (fn line_of_index [buf idx]
   (or (. buf.indices (+ idx 1)) 1))
 
+(fn metabuffer-display-name [model-buf]
+  (let [original-name (vim.api.nvim_buf_get_name model-buf)
+        base-name (if (and (= (type original-name) "string") (~= original-name ""))
+                      (vim.fn.fnamemodify original-name ":t")
+                      "[No Name]")]
+    (.. base-name " • Metabuffer")))
+
 (fn M.new [nvim condition]
   (local cond (or condition (state.default-condition "")))
   (local self (prompt_mod.new nvim))
@@ -103,10 +110,10 @@
         (.. caseprefix pat)))))
 
   (fn self.refresh_statusline []
-    (local mode_name (if (= self.insert-mode prompt_mod.INSERT_MODE_REPLACE) "replace" "insert"))
+    (local mode_suffix (if (= self.insert-mode prompt_mod.INSERT_MODE_REPLACE) "Replace" "Insert"))
     (local hl_prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer"))
     (self.status-win.set-statusline-state
-      (string.upper (string.sub mode_name 1 1))
+      mode_suffix
       "# " self.text
       self.buf.name
       (# self.buf.indices)
@@ -120,13 +127,27 @@
     (vim.cmd "redrawstatus"))
 
   (fn self.on-init []
+    (self.buf.set-name (metabuffer-display-name self.buf.model))
     (local init-syntax (or (. vim.g "meta#syntax_on_init") "buffer"))
     (self.buf.apply-syntax (if (= init-syntax "meta") "meta" "buffer"))
     (clear-all-highlights)
     (self.buf.render)
-    (let [line (math.max 1 (math.min (+ self.selected_index 1) (vim.api.nvim_buf_line_count self.buf.buffer)))]
+    (let [line-count (vim.api.nvim_buf_line_count self.buf.buffer)
+          line (math.max 1 (math.min (+ self.selected_index 1) line-count))
+          source-view (or cond.source-view {})
+          source-lnum (or (. source-view :lnum) line)
+          source-topline (or (. source-view :topline) source-lnum)
+          offset (math.max 0 (- source-lnum source-topline))
+          topline (math.max 1 (math.min (- line offset) line-count))]
       (when (vim.api.nvim_win_is_valid self.win.window)
-        (vim.api.nvim_win_set_cursor self.win.window [line 0])))
+        (let [view (vim.fn.winsaveview)]
+          (set (. view :lnum) line)
+          (set (. view :topline) topline)
+          (when (~= (. source-view :leftcol) nil)
+            (set (. view :leftcol) (. source-view :leftcol)))
+          (when (~= (. source-view :col) nil)
+            (set (. view :col) (. source-view :col)))
+          (vim.fn.winrestview view))))
     prompt_mod.STATUS_PROGRESS)
 
   (fn self.on-redraw []

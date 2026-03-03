@@ -61,14 +61,44 @@
       (when (and main-buf (not (= main-buf model-buf)) (vim.api.nvim_buf_is_valid main-buf))
         (pcall vim.api.nvim_buf_delete main-buf {:force true})))))
 
-(fn setup-state [query mode]
+(fn setup-state [query mode source-view]
   (if (and (= mode "resume") vim.b._meta_context)
       (let [ctx (vim.deepcopy vim.b._meta_context)]
         (when (and query (~= query ""))
           (set ctx.text query)
           (set ctx.caret-locus (# query)))
+        (when source-view
+          (set ctx.source-view source-view))
         ctx)
-      (state.default-condition (or query ""))))
+      (let [ctx (state.default-condition (or query ""))]
+        (when source-view
+          (set ctx.source-view source-view))
+        ctx)))
+
+(fn restore-meta-view! [meta source-view]
+  (when (and meta (vim.api.nvim_win_is_valid meta.win.window))
+    (let [line-count (vim.api.nvim_buf_line_count meta.buf.buffer)
+          line (math.max 1 (math.min (meta.selected_line) line-count))
+          src-view (or source-view {})
+          src-height (or (. src-view :_meta_win_height) (vim.api.nvim_win_get_height meta.win.window))
+          dst-height (vim.api.nvim_win_get_height meta.win.window)
+          src-lnum (or (. src-view :lnum) line)
+          src-topline (or (. src-view :topline) src-lnum)
+          offset (math.max 0 (- src-lnum src-topline))
+          ;; Preserve distance from bottom when prompt split reduces window height.
+          ;; This avoids the perceptual "jump" from losing rows at the bottom.
+          adjusted-offset (math.max 0 (math.min (+ offset (- dst-height src-height)) (- dst-height 1)))
+          topline (math.max 1 (math.min (- line offset) line-count))]
+      (vim.api.nvim_win_call meta.win.window
+        (fn []
+          (local view (vim.fn.winsaveview))
+          (set (. view :lnum) line)
+          (set (. view :topline) (math.max 1 (math.min (- line adjusted-offset) line-count)))
+          (when (~= (. src-view :leftcol) nil)
+            (set (. view :leftcol) (. src-view :leftcol)))
+          (when (~= (. src-view :col) nil)
+            (set (. view :col) (. src-view :col)))
+          (vim.fn.winrestview view))))))
 
 (fn M._store_vars [meta]
   (set vim.b._meta_context (meta.store))
@@ -94,9 +124,9 @@
     (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
       (pcall vim.api.nvim_buf_delete session.prompt-buf {:force true}))
     (when session.source-buf
-      (tset M.active-by-source session.source-buf nil))
+      (set (. M.active-by-source session.source-buf) nil))
     (when session.prompt-buf
-      (tset M.active-by-prompt session.prompt-buf nil))))
+      (set (. M.active-by-prompt session.prompt-buf) nil))))
 
 (fn apply-prompt-lines [session]
   (when (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
@@ -277,6 +307,15 @@
     (vim.keymap.set ["n" "i"] "<C-_>"
       (fn [] (switch-mode "case"))
       {:buffer session.prompt-buf :silent true :noremap true :nowait true})
+    (vim.keymap.set ["n" "i"] "<C-/>"
+      (fn [] (switch-mode "case"))
+      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
+    (vim.keymap.set ["n" "i"] "<C-?>"
+      (fn [] (switch-mode "case"))
+      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
+    (vim.keymap.set ["n" "i"] "<C-->"
+      (fn [] (switch-mode "case"))
+      {:buffer session.prompt-buf :silent true :noremap true :nowait true})
     (vim.keymap.set ["n" "i"] "<C-o>"
       (fn [] (switch-mode "case"))
       {:buffer session.prompt-buf :silent true :noremap true :nowait true})
@@ -292,7 +331,7 @@
                  (M.on-prompt-changed session.prompt-buf))
      :on_detach (fn []
                   (when session.prompt-buf
-                    (tset M.active-by-prompt session.prompt-buf nil)))})
+                    (set (. M.active-by-prompt session.prompt-buf) nil)))})
   ;; Keep autocmd hooks as a fallback.
   (vim.api.nvim_create_autocmd ["TextChanged" "TextChangedI"]
     {:group aug
@@ -309,6 +348,18 @@
                    (fn []
                      (disable-cmp)
                      (apply-keymaps))))})
+  ;; Some statusline plugins or focus transitions (for example tmux pane
+  ;; switches) can overwrite local statusline state. Re-apply ours when the
+  ;; prompt window regains focus.
+  (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
+    {:group aug
+     :buffer session.prompt-buf
+     :callback (fn [_]
+                 (vim.schedule
+                   (fn []
+                     (when (and session.meta
+                                (vim.api.nvim_buf_is_valid session.prompt-buf))
+                       (pcall session.meta.refresh_statusline)))))})
   (disable-cmp)
   (apply-keymaps)
   )
@@ -319,7 +370,9 @@
     (remove-session (. M.active-by-source source-buf)))
   (let [origin-win (vim.api.nvim_get_current_win)
         origin-buf source-buf
-        condition (setup-state query mode)
+        source-view (vim.fn.winsaveview)
+        _ (set (. source-view :_meta_win_height) (vim.api.nvim_win_get_height origin-win))
+        condition (setup-state query mode source-view)
         curr (meta_mod.new vim condition)]
     (base_buffer.switch-buf curr.buf.buffer)
     (curr.on-init)
@@ -343,12 +396,15 @@
       (curr.win.set-statusline "")
       (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
       (register-prompt-hooks session)
-      (tset M.active-by-source source-buf session)
-      (tset M.active-by-prompt prompt-buf session)
+      (set (. M.active-by-source source-buf) session)
+      (set (. M.active-by-prompt prompt-buf) session)
       (apply-prompt-lines session)
+      ;; Opening prompt split resizes the meta window, which can shift scroll.
+      ;; Re-apply source-relative view after layout settles.
+      (restore-meta-view! curr source-view)
       (vim.api.nvim_set_current_win prompt-win.window)
       (vim.cmd "startinsert")
-      (tset M.instances source-buf curr)
+      (set (. M.instances source-buf) curr)
       curr)))
 
 (fn M.sync [meta query]

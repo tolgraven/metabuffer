@@ -56,7 +56,7 @@
     (set self.registry {}))
 
   (fn self.register [definition]
-    (tset self.registry (tostring definition.lhs) definition))
+    (set (. self.registry (tostring definition.lhs)) definition))
 
   (fn self.register_from_rule [nvim rule]
     (self.register (parse_definition nvim rule)))

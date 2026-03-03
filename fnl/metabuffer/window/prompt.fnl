@@ -8,18 +8,21 @@
     (let [win (vim.api.nvim_get_current_win)
           buf (vim.api.nvim_get_current_buf)
           self (base.new nvim win [] {})]
-      (tset (. vim.bo buf) :buftype "nofile")
-      (tset (. vim.bo buf) :bufhidden "wipe")
-      (tset (. vim.bo buf) :swapfile false)
-      (tset (. vim.bo buf) :modifiable true)
-      (tset (. vim.bo buf) :filetype "metabufferprompt")
+      (let [bo (. vim.bo buf)]
+        (set (. bo :buftype) "nofile")
+        (set (. bo :bufhidden) "wipe")
+        (set (. bo :swapfile) false)
+        (set (. bo :modifiable) true)
+        (set (. bo :filetype) "metabufferprompt"))
       ;; Common nvim-cmp convention: buffer-local opt-out.
-      (tset (. vim.b buf) :cmp_enabled false)
-      (tset (. vim.wo win) :number false)
-      (tset (. vim.wo win) :relativenumber false)
-      (tset (. vim.wo win) :signcolumn "no")
-      (tset (. vim.wo win) :foldcolumn "0")
-      (tset (. vim.wo win) :spell false)
+      (let [b (. vim.b buf)
+            wo (. vim.wo win)]
+        (set (. b :cmp_enabled) false)
+        (set (. wo :number) false)
+        (set (. wo :relativenumber) false)
+        (set (. wo :signcolumn) "no")
+        (set (. wo :foldcolumn) "0")
+        (set (. wo :spell) false))
       (set self.buffer buf)
       self)))
 

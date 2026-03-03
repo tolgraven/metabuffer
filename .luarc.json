@@ -1,26 +1,32 @@
 {
   "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
-  "runtime": {
-    "version": "LuaJIT",
-    "path": [
-      "?.lua",
-      "?/init.lua"
-    ]
-  },
-  "workspace": {
-    "checkThirdParty": false,
-    "ignoreDir": [
-      "lua/metabuffer/nfnl",
-      ".rocks",
-      "deps"
-    ]
-  },
-  "diagnostics": {
-    "globals": [
-      "vim"
-    ]
-  },
-  "telemetry": {
-    "enable": false
+  "Lua": {
+    "runtime": {
+      "version": "LuaJIT",
+      "path": [
+        "?.lua",
+        "?/init.lua"
+      ]
+    },
+    "workspace": {
+      "checkThirdParty": false,
+      "ignoreDir": [
+        "metabuffer/nfnl",
+        "lua/metabuffer/nfnl",
+        ".rocks",
+        "deps"
+      ]
+    },
+    "diagnostics": {
+      "globals": [
+        "vim"
+      ],
+      "disable": [
+        "duplicate-set-field"
+      ]
+    },
+    "telemetry": {
+      "enable": false
+    }
   }
 }

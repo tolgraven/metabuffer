@@ -16,7 +16,7 @@
         (local words (util.split-input query))
         (when ignorecase
           (each [i w (ipairs words)]
-            (tset words i (string.lower w))))
+            (set (. words i) (string.lower w))))
         (local out [])
         (each [_ idx (ipairs indices)]
           (local line (. candidates idx))

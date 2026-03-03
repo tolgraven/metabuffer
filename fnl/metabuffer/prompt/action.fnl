@@ -20,13 +20,13 @@
   (fn self.register [name callback]
     (local normalized (normalize-action-name name))
     (local hyphenated (hyphen-action-name normalized))
-    (tset self.registry normalized callback)
+    (set (. self.registry normalized) callback)
     (when (~= hyphenated normalized)
-      (tset self.registry hyphenated callback)))
+      (set (. self.registry hyphenated) callback)))
 
   (fn self.unregister [name fail_silently]
     (if (. self.registry name)
-        (tset self.registry name nil)
+        (set (. self.registry name) nil)
         (when (not fail_silently) (error name))))
 
   (fn self.register_from_rules [rules]

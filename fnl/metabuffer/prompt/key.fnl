@@ -56,13 +56,14 @@
         (let [canonical (canonical-token tok)
               encoded (vim.keycode tok)
               trans (vim.fn.keytrans encoded)]
-          (tset reverse-termcodes encoded canonical)
-          (tset reverse-termcodes trans canonical)))))
+          (set (. reverse-termcodes encoded) canonical)
+          (set (. reverse-termcodes trans) canonical)))))
   reverse-termcodes)
 
 (fn decode-special-string [s]
-  (and (= (type s) "string")
-       (. (ensure-reverse-termcodes) s)))
+  (if (= (type s) "string")
+      (. (ensure-reverse-termcodes) s)
+      nil))
 
 (fn normalize [expr]
   (if (= (type expr) "number")
@@ -89,7 +90,7 @@
       (. cache k)
       (let [char (M.represent nil k)
             obj {:code k :char char}]
-        (tset cache k obj)
+        (set (. cache k) obj)
         obj)))
 
 M

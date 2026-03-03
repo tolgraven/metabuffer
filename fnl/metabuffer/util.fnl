@@ -11,9 +11,11 @@
 
 (fn M.assign-content [buf lines]
   (local view (vim.fn.winsaveview))
-  (tset (. vim.bo buf) :modifiable true)
+  (let [bo (. vim.bo buf)]
+    (set (. bo :modifiable) true))
   (vim.api.nvim_buf_set_lines buf 0 -1 false lines)
-  (tset (. vim.bo buf) :modifiable false)
+  (let [bo (. vim.bo buf)]
+    (set (. bo :modifiable) false))
   (vim.fn.winrestview view))
 
 (fn M.escape-vim-pattern [text]

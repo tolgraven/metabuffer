@@ -11,9 +11,11 @@
     (local out [])
     (each [_ src (ipairs self.parent.indices)]
       (table.insert out (string.format "%d\t%s" src self.parent.name)))
-    (tset (. vim.bo self.buffer) :modifiable true)
+    (let [bo (. vim.bo self.buffer)]
+      (set (. bo :modifiable) true))
     (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
-    (tset (. vim.bo self.buffer) :modifiable false))
+    (let [bo (. vim.bo self.buffer)]
+      (set (. bo :modifiable) false)))
 
   self)
 

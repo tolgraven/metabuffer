@@ -12,7 +12,8 @@
               :anchor "NE"
               :style "minimal"})
   (local win (vim.api.nvim_open_win buf false cfg))
-  (tset (. vim.wo win) :winblend 25)
+  (let [wo (. vim.wo win)]
+    (set (. wo :winblend) 25))
   (window-base.new nvim win [] {}))
 
 M

@@ -24,14 +24,14 @@
   `(local
      ,mod-sym
      (let [pkg# (require :package)]
-       (tset pkg#.loaded ,(tostring mod-name) ,(or mod-base {}))
+       (set (. pkg#.loaded ,(tostring mod-name)) ,(or mod-base {}))
        (. pkg#.loaded ,(tostring mod-name)))))
 
 (fn def- [name value]
   `(local ,name ,value))
 
 (fn def [name value]
-  `(local ,name (do (tset ,mod-sym ,(tostring name) ,value) (. ,mod-sym ,(tostring name)))))
+  `(local ,name (do (set (. ,mod-sym ,(tostring name)) ,value) (. ,mod-sym ,(tostring name)))))
 
 (fn defn- [name ...]
   `(fn ,name ,...))

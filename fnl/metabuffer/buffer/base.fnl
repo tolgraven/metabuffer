@@ -54,12 +54,14 @@
 
   (fn self.update []
     (local view (vim.fn.winsaveview))
-    (tset (. vim.bo self.buffer) :modifiable true)
+    (let [bo (. vim.bo self.buffer)]
+      (set (. bo :modifiable) true))
     (local out [])
     (each [_ idx (ipairs self.indices)]
       (table.insert out (. self.content idx)))
     (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
-    (tset (. vim.bo self.buffer) :modifiable false)
+    (let [bo (. vim.bo self.buffer)]
+      (set (. bo :modifiable) false))
     (vim.fn.winrestview view))
 
   (fn self.activate [target-buf]

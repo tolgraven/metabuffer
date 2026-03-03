@@ -18,29 +18,32 @@
   (fn self.apply-syntax [syntax-type]
     (when syntax-type
       (set self.syntax-type syntax-type))
-    (if (= self.syntax-type "buffer")
-        (let [ft (. (. vim.bo self.model) :filetype)
-              syn (. (. vim.bo self.model) :syntax)]
-          (when (and ft (~= ft ""))
-            (tset (. vim.bo self.buffer) :filetype ft))
-          (if (and syn (~= syn ""))
-              (tset (. vim.bo self.buffer) :syntax syn)
-              (tset (. vim.bo self.buffer) :syntax "")))
-        (do
-          (tset (. vim.bo self.buffer) :filetype "metabuffer")
-          (tset (. vim.bo self.buffer) :syntax "metabuffer"))))
+    (let [bo (. vim.bo self.buffer)]
+      (if (= self.syntax-type "buffer")
+          (let [ft (. (. vim.bo self.model) :filetype)
+                syn (. (. vim.bo self.model) :syntax)]
+            (when (and ft (~= ft ""))
+              (set (. bo :filetype) ft))
+            (if (and syn (~= syn ""))
+                (set (. bo :syntax) syn)
+                (set (. bo :syntax) "")))
+          (do
+            (set (. bo :filetype) "metabuffer")
+            (set (. bo :syntax) "metabuffer")))))
 
   (fn self.update []
     (self.render))
 
   (fn self.render []
     (local view (vim.fn.winsaveview))
-    (tset (. vim.bo self.buffer) :modifiable true)
+    (let [bo (. vim.bo self.buffer)]
+      (set (. bo :modifiable) true))
     (local out [])
     (each [_ idx (ipairs self.indices)]
       (table.insert out (. self.content idx)))
     (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
-    (tset (. vim.bo self.buffer) :modifiable false)
+    (let [bo (. vim.bo self.buffer)]
+      (set (. bo :modifiable) false))
     (vim.fn.winrestview view)
     (self.indexbuf.update))
 
@@ -53,7 +56,7 @@
             new-line (. visible i)]
         (when (~= old-line new-line)
           (vim.api.nvim_buf_set_lines self.model (- src 1) src false [new-line])
-          (tset self.content src new-line)))))
+          (set (. self.content src) new-line)))))
 
   self)
 
