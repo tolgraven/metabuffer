@@ -67,14 +67,24 @@
   (fn self.activate [target-buf]
     (M.switch-buf (or target-buf self.buffer)))
 
+  (fn self.unique-name [base-name]
+    (local base (or base-name "buffer"))
+    (var n 1)
+    (var candidate base)
+    (while (and (> (vim.fn.bufnr candidate) 0)
+                (~= (vim.fn.bufnr candidate) self.buffer))
+      (set n (+ n 1))
+      (set candidate (.. base " [" n "]")))
+    candidate)
+
   (fn self.set-name [buf-name]
-    (local curr (vim.api.nvim_get_current_buf))
-    (when (~= curr self.buffer)
-      (self.activate self.buffer))
-    (vim.cmd (.. "silent keepalt file! " buf-name))
-    (set self.name buf-name)
-    (when (~= curr self.buffer)
-      (self.activate curr)))
+    (local target-name (self.unique-name buf-name))
+    (let [[ok err] [(pcall vim.api.nvim_buf_set_name self.buffer target-name)]]
+      (if ok
+          (set self.name target-name)
+          ;; Last-resort fallback keeps plugin functional even if name APIs
+          ;; reject a candidate due to race/collision.
+          (set self.name (.. (or buf-name "buffer") " [" self.buffer "]")))))
 
   self)
 

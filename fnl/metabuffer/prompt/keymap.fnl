@@ -1,18 +1,12 @@
 (local key_mod (require :metabuffer.prompt.key))
 (local ks_mod (require :metabuffer.prompt.keystroke))
 (local util (require :metabuffer.prompt.util))
+(local debug (require :metabuffer.debug))
 
 (local M {})
 
-(fn debug-enabled? []
-  (or (= (. vim.g "meta#debug") 1)
-      (= (. vim.g "meta#debug") true)))
-
 (fn debug-log [msg]
-  (when (debug-enabled?)
-    (let [path (or (. vim.g "meta#debug_log") "/tmp/metabuffer-debug.log")
-          line (.. (os.date "%Y-%m-%d %H:%M:%S") " " msg)]
-      (pcall vim.fn.writefile [line] path "a"))))
+  (debug.log "keymap" msg))
 
 (fn parse_flags [flags]
   (local out {:noremap false :nowait false :expr false})

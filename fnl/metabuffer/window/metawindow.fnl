@@ -6,7 +6,7 @@
 (set M.opts-to-stash ["foldcolumn" "number" "relativenumber" "wrap" "conceallevel"])
 
 (set M.statusline
-  "%%#MetaStatuslineMode%s# %s%%#MetaStatuslineIndicator# %d/%d %%#Normal# %d%s%%#MetaStatuslineMiddle#%%=%%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s ")
+  "%%#MetaStatuslineMode%s# %s%%#MetaStatuslineIndicator# %d/%d%s%%#MetaStatuslineMiddle#%%=%%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s ")
 
 (fn title-case [s]
   (if (and (= (type s) "string") (> (# s) 0))
@@ -21,7 +21,7 @@
     (local case-suffix (title-case case-mode))
     (local text (string.format M.statusline
                   mode-group mode-label
-                  num-hits num-lines line-nr (or debug-out "")
+                  num-hits num-lines (or debug-out "")
                   matcher-suffix matcher "C^"
                   case-suffix case-mode "C-o"
                   hl-prefix syntax "Cs"))

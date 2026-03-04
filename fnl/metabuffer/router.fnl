@@ -4,20 +4,62 @@
 (local floating_window_mod (require :metabuffer.window.floating))
 (local base_buffer (require :metabuffer.buffer.base))
 (local state (require :metabuffer.core.state))
+(local debug (require :metabuffer.debug))
 
 (local M {})
 (set M.instances {})
 (set M.active-by-source {})
 (set M.active-by-prompt {})
+(var update-info-window nil)
 (set M.history-max 100)
 (set M.project-max-file-bytes (or vim.g.meta_project_max_file_bytes (* 1024 1024)))
 (set M.project-max-total-lines (or vim.g.meta_project_max_total_lines 200000))
 (set M.default-include-hidden (or vim.g.meta_project_include_hidden false))
 (set M.default-include-ignored (or vim.g.meta_project_include_ignored false))
 (set M.default-include-deps (or vim.g.meta_project_include_deps false))
-(set M.info-max-lines (or vim.g.meta_info_max_lines 2000))
+(set M.info-max-lines (or vim.g.meta_info_max_lines 10000))
 (set M.info-min-width (or vim.g.meta_info_width 28))
 (set M.info-max-width (or vim.g.meta_info_max_width 52))
+
+(fn debug-log [msg]
+  (debug.log "router" msg))
+
+(fn prompt-height []
+  (or (tonumber vim.g.meta_prompt_height)
+      (tonumber (. vim.g "meta#prompt_height"))
+      7))
+
+(fn info-height [session]
+  (if (and session session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [p-row-col (vim.api.nvim_win_get_position session.prompt-win)
+            p-row (. p-row-col 1)]
+        (math.max 7 (- p-row 2)))
+      (math.max 7 (- vim.o.lines (+ (prompt-height) 4)))))
+
+(fn mark-preview-buffer! [buf]
+  (when (and buf (vim.api.nvim_buf_is_valid buf))
+    ;; Keep syntax/filetype, but hint heavy tooling to skip preview-only buffers.
+    (pcall vim.api.nvim_buf_set_var buf "conjure_disable" true)
+    (pcall vim.api.nvim_buf_set_var buf "lsp_disabled" 1)
+    (pcall vim.api.nvim_buf_set_var buf "gitgutter_enabled" 0)
+    (pcall vim.api.nvim_buf_set_var buf "gitsigns_disable" true)
+    (pcall vim.api.nvim_buf_set_var buf "meta_preview" true)
+    (pcall vim.diagnostic.enable false {:bufnr buf})))
+
+(fn apply-preview-window-opts! [win]
+  (when (and win (vim.api.nvim_win_is_valid win))
+    (pcall vim.api.nvim_set_option_value "number" true {:win win})
+    (pcall vim.api.nvim_set_option_value "relativenumber" false {:win win})
+    (pcall vim.api.nvim_set_option_value "signcolumn" "no" {:win win})
+    (pcall vim.api.nvim_set_option_value "foldcolumn" "0" {:win win})
+    (pcall vim.api.nvim_set_option_value "spell" false {:win win})
+    (pcall vim.api.nvim_set_option_value "cursorline" true {:win win})
+    ;; Match regular window palette in preview.
+    (pcall vim.api.nvim_set_option_value "winblend" 0 {:win win})
+    (pcall vim.api.nvim_set_option_value "winhighlight"
+           "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal"
+           {:win win})
+    (pcall vim.api.nvim_set_option_value "statusline" " Preview " {:win win})))
 
 (set M.dep-dir-names
   {"node_modules" true
@@ -128,6 +170,17 @@
 (fn prompt-text [session]
   (table.concat (prompt-lines session) "\n"))
 
+(fn mark-prompt-buffer! [buf]
+  (when (and buf (vim.api.nvim_buf_is_valid buf))
+    ;; Best-effort disables for common auto-pairs/completion helpers.
+    (pcall vim.api.nvim_buf_set_var buf "autopairs_enabled" false)
+    (pcall vim.api.nvim_buf_set_var buf "AutoPairsDisabled" 1)
+    (pcall vim.api.nvim_buf_set_var buf "delimitMate_enabled" 0)
+    (pcall vim.api.nvim_buf_set_var buf "pear_tree_disable" 1)
+    (pcall vim.api.nvim_buf_set_var buf "endwise_disable" 1)
+    (pcall vim.api.nvim_buf_set_var buf "cmp_enabled" false)
+    (pcall vim.api.nvim_buf_set_var buf "meta_prompt" true)))
+
 (fn set-prompt-text! [session text]
   (when (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
     (set session.last-prompt-text (or text ""))
@@ -172,6 +225,83 @@
   (let [src-idx (. meta.buf.indices (+ meta.selected_index 1))
         refs (or meta.buf.source-refs [])]
     (and src-idx (. refs src-idx))))
+
+(fn trim-or-pad-lines [lines target]
+  (let [out []]
+    (each [_ line (ipairs (or lines []))]
+      (when (< (# out) target)
+        (table.insert out (or line ""))))
+    (while (< (# out) target)
+      (table.insert out ""))
+    out))
+
+(fn context-lines-for-ref [session ref height]
+  (let [h (math.max 1 height)
+        lnum (math.max 1 (or (and ref ref.lnum) 1))
+        start (math.max 1 (- lnum 1))
+        stop (+ start h -1)]
+    (if (and ref ref.buf (vim.api.nvim_buf_is_valid ref.buf))
+        (let [lines (vim.api.nvim_buf_get_lines ref.buf (- start 1) stop false)]
+          (trim-or-pad-lines lines h))
+        (if (and ref ref.path (= 1 (vim.fn.filereadable ref.path)))
+            (let [cache (or session.preview-file-cache {})
+                  _ (set session.preview-file-cache cache)
+                  all0 (. cache ref.path)
+                  all (if (= (type all0) "table")
+                          all0
+                          (let [[ok lines] [(pcall vim.fn.readfile ref.path)]]
+                            (if (and ok (= (type lines) "table"))
+                                (do
+                                  (set (. cache ref.path) lines)
+                                  lines)
+                                [])))]
+              (if (= (type all) "table")
+                  (let [slice []]
+                    (for [i start stop]
+                      (table.insert slice (or (. all i) "")))
+                    (trim-or-pad-lines slice h))
+                  (trim-or-pad-lines [] h)))
+            (trim-or-pad-lines [] h)))))
+
+(fn filetype-for-ref [ref]
+  (if (and ref ref.buf (vim.api.nvim_buf_is_valid ref.buf))
+      (. (. vim.bo ref.buf) :filetype)
+      (if (and ref ref.path)
+          (let [[ok ft] [(pcall vim.filetype.match {:filename ref.path})]]
+            (if (and ok (= (type ft) "string")) ft ""))
+          "")))
+
+(fn ensure-ref-buffer! [session ref]
+  (if (and ref ref.buf (vim.api.nvim_buf_is_valid ref.buf))
+      ref.buf
+      (if (and ref ref.path (= 1 (vim.fn.filereadable ref.path)))
+          (let [cache (or session.preview-path-bufs {})
+                _ (set session.preview-path-bufs cache)
+                cached (. cache ref.path)]
+            (if (and cached (vim.api.nvim_buf_is_valid cached))
+                cached
+                (let [[ok lines] [(pcall vim.fn.readfile ref.path)]]
+                  (if (and ok (= (type lines) "table"))
+                        (let [buf (vim.api.nvim_create_buf false true)
+                              ft (filetype-for-ref ref)]
+                        (mark-preview-buffer! buf)
+                        (pcall vim.api.nvim_buf_set_name buf ref.path)
+                        (let [bo (. vim.bo buf)]
+                          (set (. bo :buftype) "nofile")
+                          (set (. bo :bufhidden) "hide")
+                          (set (. bo :swapfile) false)
+                          (set (. bo :modifiable) true))
+                        (vim.api.nvim_buf_set_lines buf 0 -1 false lines)
+                        (let [bo (. vim.bo buf)]
+                          (set (. bo :modifiable) false)
+                          (set (. bo :filetype)
+                               (if (and (= (type ft) "string") (~= ft ""))
+                                   ft
+                                   "text")))
+                        (set (. cache ref.path) buf)
+                        buf)
+                      nil))))
+          nil)))
 
 (fn hidden-path? [path]
   (let [parts (vim.split path "/" {:plain true})]
@@ -235,6 +365,8 @@
   (let [meta session.meta
         root (vim.fn.getcwd)
         current-path (current-buffer-path session.source-buf)
+        file-cache (or session.preview-file-cache {})
+        _ (set session.preview-file-cache file-cache)
         content []
         refs []]
     (var total-lines 0)
@@ -245,6 +377,8 @@
     ;; Include current buffer first.
     (each [i line (ipairs (or session.single-content []))]
       (push-line! (or current-path "[Current Buffer]") i line))
+    (when (and current-path (= (type session.single-content) "table"))
+      (set (. file-cache current-path) (vim.deepcopy session.single-content)))
     (each [_ path (ipairs (project-file-list root include-hidden include-ignored include-deps))]
       (let [rel (vim.fn.fnamemodify path ":.")]
         (when (and (< total-lines M.project-max-total-lines)
@@ -255,6 +389,7 @@
           (when (and (>= size 0) (<= size M.project-max-file-bytes))
             (let [[ok lines] [(pcall vim.fn.readfile path)]]
               (when (and ok (= (type lines) "table"))
+                (set (. file-cache path) lines)
                 (each [lnum line (ipairs lines)]
                   (when (< total-lines M.project-max-total-lines)
                     (push-line! path lnum line))))))))))
@@ -284,7 +419,7 @@
   (when (not (and session.info-win (vim.api.nvim_win_is_valid session.info-win)))
     (let [buf (vim.api.nvim_create_buf false true)
           width M.info-min-width
-          height (math.max 7 (- vim.o.lines (+ (or vim.g.meta_prompt_height 3) 6)))
+          height (info-height session)
           col vim.o.columns
           row 1
           win (floating_window_mod.new vim buf {:width width :height height :col col :row row})]
@@ -297,6 +432,137 @@
         (set (. bo :modifiable) false)
         (set (. bo :filetype) "metabuffer")))))
 
+(fn ensure-preview-window! [session]
+  (when (not (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win)))
+    (let [buf (vim.api.nvim_create_buf false true)
+          p-row-col (vim.api.nvim_win_get_position session.prompt-win)
+          p-row (. p-row-col 1)
+          p-col (. p-row-col 2)
+          p-width (vim.api.nvim_win_get_width session.prompt-win)
+          p-height (vim.api.nvim_win_get_height session.prompt-win)
+          width (math.max 36 (math.min 128 (math.floor (* p-width 0.58))))
+          col (+ p-col p-width)
+          row p-row
+          win (floating_window_mod.new vim buf {:width width :height p-height :col col :row row})]
+      (set session.preview-buf buf)
+      (set session.preview-win win.window)
+      (let [bo (. vim.bo buf)
+            wo (. vim.wo win.window)]
+        (set (. bo :buftype) "nofile")
+        ;; Keep scratch alive even when preview window temporarily shows source
+        ;; buffers, otherwise it gets wiped and future fallback updates stop.
+        (set (. bo :bufhidden) "hide")
+        (set (. bo :swapfile) false)
+        (set (. bo :modifiable) false)
+        (set (. bo :filetype) "text")
+        (set (. wo :number) true)
+        (set (. wo :relativenumber) false)
+        (set (. wo :signcolumn) "no")
+        (set (. wo :foldcolumn) "0")
+        (set (. wo :cursorline) true)
+        (set (. wo :statusline) " Preview ")
+        (mark-preview-buffer! buf))
+      (apply-preview-window-opts! win.window))))
+
+(fn close-preview-window! [session]
+  (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
+    (pcall vim.api.nvim_win_close session.preview-win true))
+  (set session.preview-win nil)
+  (set session.preview-buf nil))
+
+(fn ensure-preview-scratch-buf! [session]
+  (when (or (not session.preview-buf) (not (vim.api.nvim_buf_is_valid session.preview-buf)))
+    (set session.preview-buf (vim.api.nvim_create_buf false true))
+    (let [bo (. vim.bo session.preview-buf)]
+      (set (. bo :buftype) "nofile")
+      (set (. bo :bufhidden) "hide")
+      (set (. bo :swapfile) false)
+      (set (. bo :modifiable) false)
+      (set (. bo :filetype) "text"))
+    (mark-preview-buffer! session.preview-buf)))
+
+(fn preview-context [session]
+  (let [ref (selected-ref session.meta)
+        p-row-col (vim.api.nvim_win_get_position session.prompt-win)
+        p-row (. p-row-col 1)
+        p-col (. p-row-col 2)
+        p-width (vim.api.nvim_win_get_width session.prompt-win)
+        p-height (vim.api.nvim_win_get_height session.prompt-win)
+        width (math.max 36 (math.min 128 (math.floor (* p-width 0.58))))
+        col (+ p-col p-width)
+        cfg {:relative "editor"
+             :anchor "NE"
+             :row p-row
+             :col col
+             :width width
+             :height p-height}
+        ft (filetype-for-ref ref)
+        lines (context-lines-for-ref session ref p-height)
+        focus-row (if ref (math.max 1 (math.min 2 p-height)) 1)]
+    {:ref ref
+     :p-row p-row
+     :p-height p-height
+     :width width
+     :col col
+     :cfg cfg
+     :ft ft
+     :lines lines
+     :focus-row focus-row}))
+
+(fn maybe-update-preview-layout! [session ctx]
+  (let [row (. ctx :p-row)
+        col (. ctx :col)
+        width (. ctx :width)
+        height (. ctx :p-height)]
+    (when (or (not session.preview-layout)
+              (~= (. session.preview-layout :row) row)
+              (~= (. session.preview-layout :col) col)
+              (~= (. session.preview-layout :width) width)
+              (~= (. session.preview-layout :height) height))
+      (set session.preview-layout {:row row :col col :width width :height height})
+      (pcall vim.api.nvim_win_set_config session.preview-win (. ctx :cfg)))))
+
+(fn render-preview-scratch! [session ctx]
+  (when (~= (vim.api.nvim_win_get_buf session.preview-win) session.preview-buf)
+    (pcall vim.api.nvim_win_set_buf session.preview-win session.preview-buf))
+  (let [bo (. vim.bo session.preview-buf)]
+    (set (. bo :modifiable) true))
+  (vim.api.nvim_buf_set_lines session.preview-buf 0 -1 false (. ctx :lines))
+  (let [bo (. vim.bo session.preview-buf)
+        ft (. ctx :ft)]
+    (set (. bo :modifiable) false)
+    (let [next-ft (if (and (= (type ft) "string") (~= ft ""))
+                      ft
+                      "text")]
+      (when (~= (. bo :filetype) next-ft)
+        (set (. bo :filetype) next-ft))))
+  (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0]))
+
+(fn update-preview-window! [session]
+  (ensure-preview-window! session)
+  (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
+    (ensure-preview-scratch-buf! session)
+    (when (and session.preview-buf (vim.api.nvim_buf_is_valid session.preview-buf))
+      (let [ctx (preview-context session)]
+        (debug-log (.. "preview idx=" (tostring session.meta.selected_index)
+                       " path=" (tostring (and (. ctx :ref) (. (. ctx :ref) :path)))
+                       " lnum=" (tostring (and (. ctx :ref) (. (. ctx :ref) :lnum)))))
+        (maybe-update-preview-layout! session ctx)
+        (apply-preview-window-opts! session.preview-win)
+        (render-preview-scratch! session ctx)))))
+
+(fn schedule-preview-update! [session]
+  (when (and session (not session.preview-update-pending))
+    (set session.preview-update-pending true)
+    (vim.defer_fn
+      (fn []
+        (set session.preview-update-pending false)
+        (when (and session
+                   session.prompt-buf
+                   (= (. M.active-by-prompt session.prompt-buf) session))
+          (pcall update-preview-window! session)))
+      16)))
+
 (fn fit-info-width! [session lines]
   (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
     (let [widths (vim.tbl_map (fn [line] (# line)) (or lines []))
@@ -306,7 +572,7 @@
           max-available (math.max M.info-min-width (math.floor (* vim.o.columns 0.34)))
           upper (math.min M.info-max-width max-available)
           target (math.max M.info-min-width (math.min needed upper))
-          height (math.max 7 (- vim.o.lines (+ (or vim.g.meta_prompt_height 3) 6)))
+          height (info-height session)
           cfg {:relative "editor"
                :anchor "NE"
                :row 1
@@ -435,47 +701,73 @@
   (set session.info-win nil)
   (set session.info-buf nil))
 
-(fn update-info-window! [session]
-  (if (not session.project-mode)
-      (close-info-window! session)
-      (do
-        (ensure-info-window! session)
-        (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
-          (let [meta session.meta
-                refs (or meta.buf.source-refs [])
-                idxs (or meta.buf.indices [])
-                built (build-info-lines meta refs idxs (info-max-width-now))
-                raw-lines (. built :lines)
-                lines (if (= (type raw-lines) "table")
-                          (vim.tbl_map tostring raw-lines)
-                          [(tostring raw-lines)])
-                highlights (or (. built :highlights) [])
-                ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
-            (let [bo (. vim.bo session.info-buf)]
-              (set (. bo :modifiable) true))
-            (fit-info-width! session lines)
-            (vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)
-            (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
-            (each [_ h (ipairs highlights)]
-              (vim.api.nvim_buf_add_highlight session.info-buf ns (. h 2) (. h 1) (. h 3) (. h 4)))
-            (let [bo (. vim.bo session.info-buf)]
-              (set (. bo :modifiable) false))
-            (when (vim.api.nvim_win_is_valid session.info-win)
-              (let [hits-shown (math.min (# idxs) M.info-max-lines)
-                    hits-total (# idxs)
-                    status (.. " Hits " hits-shown "/" hits-total " ")
-                    row (if (> (# lines) 0) (math.max 1 (math.min (+ meta.selected_index 1) (# lines))) 1)]
-                (pcall vim.api.nvim_win_set_option session.info-win "statusline" status)
-                (if (and (> (# lines) 0) (vim.api.nvim_win_is_valid meta.win.window))
-                    (let [main-view (vim.api.nvim_win_call meta.win.window (fn [] (vim.fn.winsaveview)))
-                          info-view (vim.api.nvim_win_call session.info-win (fn [] (vim.fn.winsaveview)))
-                          top (math.max 1 (math.min (or (. main-view :topline) row) (# lines)))
-                          lnum (math.max 1 (math.min (or (. main-view :lnum) row) (# lines)))]
-                      (set (. info-view :topline) top)
-                      (set (. info-view :lnum) lnum)
-                      (set (. info-view :leftcol) 0)
-                      (pcall vim.api.nvim_win_call session.info-win (fn [] (vim.fn.winrestview info-view))))
-                    (pcall vim.api.nvim_win_set_cursor session.info-win [row 0])))))))))
+(fn render-info-lines! [session meta]
+  (let [refs (or meta.buf.source-refs [])
+        idxs (or meta.buf.indices [])
+        built (build-info-lines meta refs idxs (info-max-width-now))
+        raw-lines (. built :lines)
+        lines (if (= (type raw-lines) "table")
+                  (vim.tbl_map tostring raw-lines)
+                  [(tostring raw-lines)])
+        highlights (or (. built :highlights) [])
+        ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
+    (debug-log (.. "info render hits=" (tostring (# idxs))
+                   " lines=" (tostring (# lines))))
+    (let [bo (. vim.bo session.info-buf)]
+      (set (. bo :modifiable) true))
+    (fit-info-width! session lines)
+    (let [[ok-set err-set] [(pcall vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)]]
+      (when (not ok-set)
+        (debug-log (.. "info set_lines failed: " (tostring err-set)))))
+    (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
+    (each [_ h (ipairs highlights)]
+      (vim.api.nvim_buf_add_highlight session.info-buf ns (. h 2) (. h 1) (. h 3) (. h 4)))
+    (let [bo (. vim.bo session.info-buf)]
+      (set (. bo :modifiable) false))))
+
+(fn sync-info-cursor! [session meta]
+  (when (vim.api.nvim_win_is_valid session.info-win)
+    (let [idxs (or meta.buf.indices [])
+          info-lines (vim.api.nvim_buf_line_count session.info-buf)
+          hits-shown (math.min (# idxs) M.info-max-lines)
+          hits-total (# idxs)
+          status (.. " Hits " hits-shown "/" hits-total " ")
+          row (if (> info-lines 0)
+                  (math.max 1 (math.min (+ meta.selected_index 1) info-lines))
+                  1)]
+      (pcall vim.api.nvim_win_set_option session.info-win "statusline" status)
+      (when (> info-lines 0)
+        (let [[ok-cur err-cur] [(pcall vim.api.nvim_win_set_cursor session.info-win [row 0])]]
+          (when (not ok-cur)
+            (debug-log (.. "info set_cursor failed: " (tostring err-cur)))))))))
+
+(fn update-info-window-regular! [session]
+  (close-info-window! session)
+  (update-preview-window! session))
+
+(fn update-info-window-project! [session refresh-lines]
+  (ensure-info-window! session)
+  (debug-log (.. "info enter refresh=" (tostring refresh-lines)
+                 " selected=" (tostring session.meta.selected_index)
+                 " info-win=" (tostring session.info-win)
+                 " info-buf=" (tostring session.info-buf)))
+  (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
+    (let [meta session.meta]
+      (when refresh-lines
+        (let [idxs (or meta.buf.indices [])
+              sig (.. (tostring idxs) "|" (tostring (# idxs)) "|" (tostring (info-max-width-now)))]
+          (when (~= session.info-render-sig sig)
+            (set session.info-render-sig sig)
+            (render-info-lines! session meta))))
+      (sync-info-cursor! session meta)))
+  (update-preview-window! session))
+
+(set update-info-window
+  (fn [session refresh-lines]
+    (let [refresh-lines (if (= refresh-lines nil) true refresh-lines)]
+      (if session.project-mode
+          (update-info-window-project! session refresh-lines)
+          (update-info-window-regular! session)))))
 
 (fn wipe-temp-buffers [meta]
   (when meta
@@ -545,6 +837,7 @@
     (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
       (pcall vim.api.nvim_buf_delete session.prompt-buf {:force true}))
     (close-info-window! session)
+    (close-preview-window! session)
     (when session.source-buf
       (set (. M.active-by-source session.source-buf) nil))
     (when session.prompt-buf
@@ -589,7 +882,7 @@
         (if ok
             (do
               (session.meta.refresh_statusline)
-              (update-info-window! session))
+              (update-info-window session))
             (when (string.find (tostring err) "E565")
               ;; Textlock race: retry right after current input cycle.
               (vim.defer_fn (fn []
@@ -597,7 +890,7 @@
                                          (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
                                 (pcall session.meta.on-update 0)
                                 (pcall session.meta.refresh_statusline)
-                                (pcall update-info-window! session)))
+                                (pcall update-info-window session)))
                             1)))))))
 
 (fn M.on-prompt-changed [prompt-buf]
@@ -688,7 +981,7 @@
                            (when (vim.api.nvim_win_is_valid meta.win.window)
                              (pcall vim.api.nvim_win_set_cursor meta.win.window [row 0])))
                          (pcall meta.refresh_statusline)
-                         (pcall update-info-window! session))))
+                         (pcall update-info-window session false))))
             mode (. (vim.api.nvim_get_mode) :mode)]
         (if (and (= (type mode) "string") (vim.startswith mode "i"))
             (vim.schedule runner)
@@ -733,7 +1026,7 @@
                            (vim.fn.winrestview view))))
                      (sync-selected-from-main-cursor! session)
                      (pcall session.meta.refresh_statusline)
-                     (pcall update-info-window! session))
+                     (pcall update-info-window session false))
             mode (. (vim.api.nvim_get_mode) :mode)]
         (if (and (= (type mode) "string") (vim.startswith mode "i"))
             (vim.schedule runner)
@@ -748,7 +1041,7 @@
       (sync-selected-from-main-cursor! session)
       (when (or force-refresh (~= before session.meta.selected_index))
         (pcall session.meta.refresh_statusline)
-        (pcall update-info-window! session)))))
+        (pcall update-info-window session false)))))
 
 (fn schedule-scroll-sync! [session]
   (when (and session (not session.scroll-sync-pending))
@@ -808,6 +1101,7 @@
 
 (fn register-prompt-hooks [session]
   (fn disable-cmp []
+    (mark-prompt-buffer! session.prompt-buf)
     (let [[ok cmp] [(pcall require :cmp)]]
       (when ok
         (pcall cmp.setup.buffer {:enabled false})
@@ -909,7 +1203,7 @@
                    (fn []
                      (when (and session.meta
                                 (vim.api.nvim_buf_is_valid session.prompt-buf))
-                       (pcall update-info-window! session)))))})
+                       (pcall update-info-window session)))))})
   ;; Keep selection/status/info synced when user scrolls or moves in the
   ;; main meta window with regular motions/mouse while prompt is open.
   (vim.api.nvim_create_autocmd ["CursorMoved" "CursorMovedI"]
@@ -924,6 +1218,7 @@
      :callback (fn [_]
                  (schedule-scroll-sync! session))})
   (disable-cmp)
+  (mark-prompt-buffer! session.prompt-buf)
   (apply-keymaps)
   )
 
@@ -956,7 +1251,7 @@
     (let [initial-lines (if (and query (~= query ""))
                             (vim.split query "\n" {:plain true})
                             [""])
-          prompt-win (prompt_window_mod.new vim {:height (or vim.g.meta_prompt_height 3)})
+          prompt-win (prompt_window_mod.new vim {:height (prompt-height)})
           prompt-buf prompt-win.buffer
           session {:source-buf source-buf
                    :origin-win origin-win
@@ -982,11 +1277,11 @@
       ;; Statusline info should live in prompt window, not result split.
       (curr.win.set-statusline "")
       (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
+      (mark-prompt-buffer! prompt-buf)
       (register-prompt-hooks session)
       (set (. M.active-by-source source-buf) session)
       (set (. M.active-by-prompt prompt-buf) session)
       (apply-prompt-lines session)
-      (update-info-window! session)
       ;; Opening prompt split resizes the meta window, which can shift scroll.
       ;; Re-apply source-relative view after layout settles.
       (restore-meta-view! curr source-view)
