@@ -1,0 +1,4 @@
+interface:
+  display_name: "Symbol Index"
+  short_description: "Build/update function and global symbol index"
+  default_prompt: "Update the repository symbol index after code changes and report what changed."

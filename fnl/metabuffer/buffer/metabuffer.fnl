@@ -160,7 +160,11 @@
     (self.render))
 
   (fn self.render []
-    (local view (vim.fn.winsaveview))
+    (local win-views {})
+    (each [_ win (ipairs (vim.fn.win_findbuf self.buffer))]
+      (when (vim.api.nvim_win_is_valid win)
+        (set (. win-views win)
+             (vim.api.nvim_win_call win (fn [] (vim.fn.winsaveview))))))
     (let [bo (. vim.bo self.buffer)]
       (set (. bo :modifiable) true))
     (local out [])
@@ -237,7 +241,11 @@
     (self.apply-source-syntax-regions)
     (let [bo (. vim.bo self.buffer)]
       (set (. bo :modifiable) false))
-    (vim.fn.winrestview view)
+    (each [win view (pairs win-views)]
+      (when (vim.api.nvim_win_is_valid win)
+        (vim.api.nvim_win_call win
+          (fn []
+            (pcall vim.fn.winrestview view)))))
     (self.indexbuf.update))
 
   (fn self.push-visible-lines [visible]

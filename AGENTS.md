@@ -67,10 +67,17 @@
 - Mirror Clojure best practices as close as possible.
 - Function arguments always on separate line (unless entire thing oneliner).
 - Write (brief) docstrings for functions and keep them up to date. Include expected output.
+- Beware of tendency to try to call locally defined functions globally (through vim dispatch), ensure no __fnl_global__ related errors by using vars in these instances. Forward declaration issue due to Lua transpilation.
 
 ## Self-improvement
 
 - When appropriate, update this file with new learnings, conventions, information, but make sure it is important enough, and ensure anything outdated is replaced rather than just countinously appending.
+
+## Symbol Index
+
+- After major code changes (new functions or other global symbols), update `SYMBOL_INDEX.md` by running `./skills/symbol-index/scripts/update-symbol-index.py`.
+- Prefer using a worker sub-agent to run this update step and report what changed.
+- Keep this file in context to avoid unecessary slow lookups.
 
 ## Feature files.
 

@@ -10,3 +10,4 @@
 - 7 [] closing bang mode incurs a noticable delay. We should unload buffers async and in background, and only after closing our windows etc.
 - 8 [] if lines are very indented we can't see much of them in either the main hit buffer or preview. adjust preview to scroll sideways appropriately, to fit more in view.
 - 9 [] changing the prompt window height now made the info window half as tall as it should be
+- 10 [] when invoking something like `:Meta! end` the cursor stays before the text instead of after
