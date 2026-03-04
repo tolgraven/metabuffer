@@ -8,6 +8,7 @@
 (local debug (require :metabuffer.debug))
 (local config (require :metabuffer.config))
 (local query (require :metabuffer.query))
+(local history_store (require :metabuffer.history_store))
 
 (local M {})
 (set M.instances {})
@@ -23,6 +24,10 @@
 (local parse-query-lines query.parse-query-lines)
 (local parse-query-text query.parse-query-text)
 (local query-lines-has-active? query.query-lines-has-active?)
+(local history-list history_store.list)
+(local push-history! (fn [text]
+                       (history_store.push! text M.history-max)))
+(local history-entry history_store.entry)
 
 (fn debug-log [msg]
   (debug.log "router" msg))
@@ -175,23 +180,6 @@
               (set m (. vals i))))
           m))))
 
-(fn history-list []
-  (if (= (type vim.g.metabuffer_prompt_history) "table")
-      vim.g.metabuffer_prompt_history
-      (do
-        (set vim.g.metabuffer_prompt_history [])
-        vim.g.metabuffer_prompt_history)))
-
-(fn push-history! [text]
-  (when (and (= (type text) "string") (~= (vim.trim text) ""))
-    ;; vim.g table values are copied on read; write back after mutation.
-    (local h (vim.deepcopy (history-list)))
-    (if (or (= (# h) 0) (~= (. h (# h)) text))
-        (table.insert h text))
-    (while (> (# h) M.history-max)
-      (table.remove h 1))
-    (set vim.g.metabuffer_prompt_history h)))
-
 (set prompt-lines (fn [session]
   (if (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
       (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)
@@ -219,13 +207,6 @@
     (let [row (# lines)
           col (# (. lines row))]
       (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col]))))
-
-(fn history-entry [session idx]
-  (let [h (history-list)
-        n (# h)]
-    (if (and (> idx 0) (<= idx n))
-        (. h (+ (- n idx) 1))
-        nil)))
 
 (fn current-buffer-path [buf]
   (if (and buf (vim.api.nvim_buf_is_valid buf))
