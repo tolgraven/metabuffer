@@ -30,9 +30,14 @@
      "vendor" true
      "dist" true
      "build" true
+     "target" true
+     "__pycache__" true
+     ".mypy_cache" true
+     ".pytest_cache" true
+     ".tox" true
      ".next" true
      ".nuxt" true
-     "target" true
-     ".git" true}))
+     ".yarn" true
+     ".pnpm-store" true}))
 
 M

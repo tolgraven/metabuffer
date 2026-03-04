@@ -5,6 +5,7 @@
 (local base_buffer (require :metabuffer.buffer.base))
 (local state (require :metabuffer.core.state))
 (local debug (require :metabuffer.debug))
+(local config (require :metabuffer.config))
 
 (local M {})
 (set M.instances {})
@@ -15,28 +16,7 @@
 (var prompt-lines nil)
 (var parse-query-lines nil)
 (var restore-meta-view! nil)
-(set M.history-max 100)
-(set M.project-max-file-bytes (or vim.g.meta_project_max_file_bytes (* 1024 1024)))
-(set M.project-max-total-lines (or vim.g.meta_project_max_total_lines 200000))
-(set M.default-include-hidden (or vim.g.meta_project_include_hidden false))
-(set M.default-include-ignored (or vim.g.meta_project_include_ignored false))
-(set M.default-include-deps (or vim.g.meta_project_include_deps false))
-(set M.info-max-lines (or vim.g.meta_info_max_lines 10000))
-(set M.info-min-width (or vim.g.meta_info_width 28))
-(set M.info-max-width (or vim.g.meta_info_max_width 52))
-(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 100))
-(set M.prompt-update-idle-ms (or vim.g.meta_prompt_update_idle_ms 90))
-(set M.project-file-cache {})
-(set M.project-lazy-enabled (if (= vim.g.meta_project_lazy_enabled nil) true vim.g.meta_project_lazy_enabled))
-(set M.project-lazy-disable-headless (if (= vim.g.meta_project_lazy_disable_headless nil) true vim.g.meta_project_lazy_disable_headless))
-(set M.project-lazy-min-estimated-lines (or vim.g.meta_project_lazy_min_estimated_lines 10000))
-(set M.project-lazy-chunk-size (or vim.g.meta_project_lazy_chunk_size 8))
-(set M.project-lazy-refresh-debounce-ms (or vim.g.meta_project_lazy_refresh_debounce_ms 80))
-(set M.project-lazy-prefilter-enabled (if (= vim.g.meta_project_lazy_prefilter_enabled nil) true vim.g.meta_project_lazy_prefilter_enabled))
-(set M.project-bootstrap-delay-ms (or vim.g.meta_project_bootstrap_delay_ms 120))
-(set M.project-bootstrap-idle-delay-ms (or vim.g.meta_project_bootstrap_idle_delay_ms 700))
-(set M.prompt-forced-coalesce-ms (or vim.g.meta_prompt_forced_coalesce_ms 700))
-(set M.preview-source-switch-debounce-ms (or vim.g.meta_preview_source_switch_debounce_ms 60))
+(config.apply-router-defaults M vim)
 
 (fn debug-log [msg]
   (debug.log "router" msg))
@@ -223,23 +203,6 @@
            "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal"
            {:win win})
     (pcall vim.api.nvim_set_option_value "statusline" " Preview " {:win win})))
-
-(set M.dep-dir-names
-  {"node_modules" true
-   ".venv" true
-   "venv" true
-   "vendor" true
-   "dist" true
-   "build" true
-   "target" true
-   "__pycache__" true
-   ".mypy_cache" true
-   ".pytest_cache" true
-   ".tox" true
-   ".next" true
-   ".nuxt" true
-   ".yarn" true
-   ".pnpm-store" true})
 
 (fn truthy? [v]
   (or (= v true) (= v 1) (= v "1") (= v "true")))
