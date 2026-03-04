@@ -831,17 +831,33 @@
   (if session.project-mode
       (do
         (var match-idx nil)
+        (local old-ref-path (canonical-path (and old-ref old-ref.path)))
+        (local target-path (or old-ref-path (canonical-path (current-buffer-path session.source-buf))))
+        (local target-lnum (or (and old-ref old-ref.lnum) old-line))
         (when (and old-ref old-ref.path old-ref.lnum meta.buf.source-refs)
           (for [i 1 (# meta.buf.source-refs)]
             (let [r (. meta.buf.source-refs i)]
               (when (and (not match-idx)
                          r
-                         (= (or r.path "") (or old-ref.path ""))
+                         (= (or (canonical-path r.path) "") (or old-ref-path ""))
                          (= (or r.lnum 0) (or old-ref.lnum 0)))
                 (set match-idx i)))))
+        ;; If exact ref misses, keep line continuity in current file.
+        (when (and (not match-idx) target-path meta.buf.source-refs)
+          (var best-idx nil)
+          (var best-dist math.huge)
+          (for [i 1 (# meta.buf.source-refs)]
+            (let [r (. meta.buf.source-refs i)
+                  r-path (and r (canonical-path r.path))]
+              (when (and r-path (= r-path target-path))
+                (let [dist (math.abs (- (or r.lnum 1) (or target-lnum 1)))]
+                  (when (< dist best-dist)
+                    (set best-dist dist)
+                    (set best-idx i))))))
+          (set match-idx best-idx))
         (set meta.selected_index
              (math.max 0
-                       (math.min (if match-idx (- match-idx 1) meta.selected_index)
+                       (math.min (if match-idx (- match-idx 1) (- (meta.buf.closest-index old-line) 1))
                                  (math.max 0 (- (# meta.buf.indices) 1))))))
       (set meta.selected_index
            (math.max 0
