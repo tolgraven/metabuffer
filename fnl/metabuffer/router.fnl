@@ -21,7 +21,7 @@
 (set M.info-max-lines (or vim.g.meta_info_max_lines 10000))
 (set M.info-min-width (or vim.g.meta_info_width 28))
 (set M.info-max-width (or vim.g.meta_info_max_width 52))
-(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 16))
+(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 0))
 (set M.project-file-cache {})
 (set M.project-lazy-enabled (if (= vim.g.meta_project_lazy_enabled nil) true vim.g.meta_project_lazy_enabled))
 (set M.project-lazy-disable-headless (if (= vim.g.meta_project_lazy_disable_headless nil) true vim.g.meta_project_lazy_disable_headless))
@@ -63,10 +63,44 @@
         scale (if (< n 2000)
                   0
                   (if (< n 10000)
-                      6
-                      (if (< n 50000) 14 24)))
-        extra (if (and session session.project-mode (not session.lazy-stream-done)) 6 0)]
+                      2
+                      (if (< n 50000) 6 10)))
+        extra (if (and session session.project-mode (not session.lazy-stream-done)) 2 0)]
     (+ base scale extra)))
+
+(fn active-query-lines [lines]
+  (local out [])
+  (each [_ line (ipairs (or lines []))]
+    (when (and (= (type line) "string") (~= (vim.trim line) ""))
+      (table.insert out (vim.trim line))))
+  out)
+
+(fn prompt-cache-hit? [session]
+  (if (not (and session session.meta session.meta._filter-cache))
+      false
+      (let [lines (prompt-lines session)
+            parsed (if session.project-mode
+                       (parse-query-lines lines)
+                       {:lines lines
+                        :include-hidden nil
+                        :include-ignored nil
+                        :include-deps nil
+                        :prefilter nil
+                        :lazy nil})]
+        (if (or (~= (. parsed :include-hidden) nil)
+                (~= (. parsed :include-ignored) nil)
+                (~= (. parsed :include-deps) nil)
+                (~= (. parsed :prefilter) nil)
+                (~= (. parsed :lazy) nil))
+            false
+            (let [active (active-query-lines (. parsed :lines))]
+              (if (= (# active) 0)
+                  true
+                  (let [text (table.concat active " && ")
+                        matcher-name (. (session.meta.matcher) :name)
+                        ignorecase (state.ignorecase (session.meta.case) text)
+                        key (.. matcher-name "|" (if ignorecase "1" "0") "|" (table.concat active "\n"))]
+                    (~= (. session.meta._filter-cache key) nil))))))))
 
 (fn schedule-prompt-update! [session wait-ms]
   (when (and session (not session.prompt-update-pending))
@@ -1419,11 +1453,16 @@
 (fn M.on-prompt-changed [prompt-buf]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
-      ;; Keep prompt updates trailing-edge debounced so heavy filter/render work
-      ;; cannot leave input state one keystroke behind under load.
+      ;; Keep prompt updates responsive: cached/empty queries apply immediately,
+      ;; while non-cached expensive queries use a small adaptive debounce.
       (set session.prompt-update-dirty true)
       (set session.prompt-last-change-ms (now-ms))
-      (when (not session.prompt-update-pending)
+      (when (and (prompt-cache-hit? session)
+                 (not session.prompt-update-pending))
+        (set session.prompt-update-dirty false)
+        (set session.prompt-last-apply-ms (now-ms))
+        (apply-prompt-lines session))
+      (when (and session.prompt-update-dirty (not session.prompt-update-pending))
         (set session.prompt-last-apply-ms (or session.prompt-last-apply-ms 0))
         (let [elapsed (- (now-ms) session.prompt-last-apply-ms)
               delay (math.max 0 (prompt-update-delay-ms session))
