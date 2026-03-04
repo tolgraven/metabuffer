@@ -1539,6 +1539,12 @@
               (set session.prompt-update-dirty true)
               (set session.prompt-last-change-ms (now-ms))
               (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
+              ;; Keep empty :Meta! startup lightweight; only bootstrap full
+              ;; project sources once there is an active prompt query.
+              (when (and session.project-mode
+                         (not session.project-bootstrapped)
+                         (prompt-has-active-query? session))
+                (schedule-project-bootstrap! session))
               ;; Avoid double post-typing updates in project mode while bootstrap is
               ;; still pending; we'll schedule exactly one refresh once bootstrap ends.
               (when (or (not session.project-mode) session.project-bootstrapped)
@@ -1984,13 +1990,7 @@
                    :meta curr}]
       (local initial-query-active session.initial-query-active)
       (if session.project-mode
-          (if initial-query-active
-              (apply-minimal-source-set! session)
-              (do
-                ;; For plain :Meta! (no active query), avoid delayed bootstrap
-                ;; transition so startup view stays smooth and stable.
-                (apply-source-set! session)
-                (set session.project-bootstrapped true)))
+          (apply-minimal-source-set! session)
           (apply-source-set! session))
       (set curr.status-win (meta_window_mod.new vim prompt-win.window))
       ;; Statusline info should live in prompt window, not result split.
@@ -2004,13 +2004,9 @@
       (set (. M.active-by-source source-buf) session)
       (set (. M.active-by-prompt prompt-buf) session)
       (apply-prompt-lines session)
-      ;; Ensure the results window cursor/view reflects selected_index after
-      ;; startup updates; preview may already be correct while main view lags.
-      (when (and session.project-mode (not initial-query-active))
-        (restore-meta-view! curr session.source-view))
       (vim.api.nvim_set_current_win prompt-win.window)
       (vim.cmd "startinsert")
-      (when (and session.project-mode (not session.project-bootstrapped))
+      (when (and session.project-mode initial-query-active)
         (schedule-project-bootstrap! session))
       (set (. M.instances source-buf) curr)
       curr))))
