@@ -44,14 +44,25 @@
   (let [opts {:default true :undercurl true}
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
     (when (and ok (= (type hl) "table"))
-      (when (. hl :fg)
-        (set (. opts :fg) (. hl :fg)))
-      (when (. hl :bg)
-        (set (. opts :bg) (. hl :bg)))
       (when (. hl :sp)
         (set (. opts :sp) (. hl :sp)))
-      (when (and (not (. opts :sp)) (. opts :fg))
-        (set (. opts :sp) (. opts :fg))))
+      (when (and (not (. opts :sp)) (. hl :fg))
+        (set (. opts :sp) (. hl :fg))))
+    opts))
+
+(fn hit-hl [main-group curl-group]
+  (let [opts {:default true :undercurl true}
+        [ok-main main] [(pcall vim.api.nvim_get_hl 0 {:name main-group :link false})]
+        [ok-curl curl] [(pcall vim.api.nvim_get_hl 0 {:name curl-group :link false})]]
+    (when (and ok-main (= (type main) "table"))
+      (when (. main :fg) (set (. opts :fg) (. main :fg)))
+      (when (. main :bg) (set (. opts :bg) (. main :bg)))
+      (when (. main :ctermfg) (set (. opts :ctermfg) (. main :ctermfg)))
+      (when (. main :ctermbg) (set (. opts :ctermbg) (. main :ctermbg))))
+    (when (and ok-curl (= (type curl) "table"))
+      (if (. curl :sp)
+          (set (. opts :sp) (. curl :sp))
+          (when (. curl :fg) (set (. opts :sp) (. curl :fg)))))
     opts))
 
 (fn thin-underline-from [group]
@@ -102,11 +113,11 @@
   (hi 0 "MetaStatuslineSyntaxMeta" (statusline-color-from "Number"))
   (hi 0 "MetaStatuslineIndicator" (statusline-color-from "Tag"))
   (hi 0 "MetaStatuslineKey" (statusline-color-from "Comment"))
-  (hi 0 "MetaSearchHitAll" (undercurl-from "Statement"))
-  (hi 0 "MetaSearchHitBuffer" (undercurl-from "Statement"))
-  (hi 0 "MetaSearchHitFuzzy" (undercurl-from "Number"))
-  (hi 0 "MetaSearchHitFuzzyBetween" (undercurl-from "IncSearch"))
-  (hi 0 "MetaSearchHitRegex" (undercurl-from "Special"))
+  (hi 0 "MetaSearchHitAll" (hit-hl "Statement" "Error"))
+  (hi 0 "MetaSearchHitBuffer" (hit-hl "Statement" "Error"))
+  (hi 0 "MetaSearchHitFuzzy" (hit-hl "Number" "WarningMsg"))
+  (hi 0 "MetaSearchHitFuzzyBetween" (hit-hl "IncSearch" "Question"))
+  (hi 0 "MetaSearchHitRegex" (hit-hl "Special" "Type"))
   (hi 0 "MetaSourceLineNr" {:default true :link "LineNr"})
   (hi 0 "MetaSourceDir" {:default true :link "Directory"})
   (hi 0 "MetaSourceBoundary" (thin-underline-from "Error"))

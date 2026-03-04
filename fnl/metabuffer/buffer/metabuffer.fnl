@@ -35,8 +35,11 @@
   (set self.source-hl-ns (vim.api.nvim_create_namespace "metabuffer_source"))
   (set self.source-sep-ns (vim.api.nvim_create_namespace "metabuffer_source_separator"))
 
+  (fn self.model-valid? []
+    (and self.model (vim.api.nvim_buf_is_valid self.model)))
+
   (fn self.syntax []
-    (if (= self.syntax-type "buffer")
+    (if (and (= self.syntax-type "buffer") (self.model-valid?))
         (. (. vim.bo self.model) :syntax)
         "metabuffer"))
 
@@ -45,13 +48,17 @@
       (set self.syntax-type syntax-type))
     (let [bo (. vim.bo self.buffer)]
       (if (= self.syntax-type "buffer")
-          (let [ft (. (. vim.bo self.model) :filetype)
-                syn (. (. vim.bo self.model) :syntax)]
-            (when (and ft (~= ft ""))
-              (set (. bo :filetype) ft))
-            (if (and syn (~= syn ""))
-                (set (. bo :syntax) syn)
-                (set (. bo :syntax) "")))
+          (if (self.model-valid?)
+              (let [ft (. (. vim.bo self.model) :filetype)
+                    syn (. (. vim.bo self.model) :syntax)]
+                (when (and ft (~= ft ""))
+                  (set (. bo :filetype) ft))
+                (if (and syn (~= syn ""))
+                    (set (. bo :syntax) syn)
+                    (set (. bo :syntax) "")))
+              (do
+                (set (. bo :filetype) "metabuffer")
+                (set (. bo :syntax) "metabuffer")))
           (do
             (set (. bo :filetype) "metabuffer")
             (set (. bo :syntax) "metabuffer")))))
@@ -116,15 +123,16 @@
     (self.indexbuf.update))
 
   (fn self.push-visible-lines [visible]
-    (local n (math.min (# visible) (# self.indices)))
-    (for [i 1 n]
-      (let [src (. self.indices i)
-            old (vim.api.nvim_buf_get_lines self.model (- src 1) src false)
-            old-line (. old 1)
-            new-line (. visible i)]
-        (when (~= old-line new-line)
-          (vim.api.nvim_buf_set_lines self.model (- src 1) src false [new-line])
-          (set (. self.content src) new-line)))))
+    (when (self.model-valid?)
+      (local n (math.min (# visible) (# self.indices)))
+      (for [i 1 n]
+        (let [src (. self.indices i)
+              old (vim.api.nvim_buf_get_lines self.model (- src 1) src false)
+              old-line (. old 1)
+              new-line (. visible i)]
+          (when (~= old-line new-line)
+            (vim.api.nvim_buf_set_lines self.model (- src 1) src false [new-line])
+            (set (. self.content src) new-line))))))
 
   self)
 

@@ -29,12 +29,30 @@
       (tonumber (. vim.g "meta#prompt_height"))
       7))
 
+(fn persist-prompt-height! [session]
+  (when (and session session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+    (let [[ok h] [(pcall vim.api.nvim_win_get_height session.prompt-win)]]
+      (when (and ok h (> h 0))
+        (set vim.g.meta_prompt_height h)
+        (set (. vim.g "meta#prompt_height") h)))))
+
 (fn info-height [session]
   (if (and session session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
       (let [p-row-col (vim.api.nvim_win_get_position session.prompt-win)
             p-row (. p-row-col 1)]
         (math.max 7 (- p-row 2)))
       (math.max 7 (- vim.o.lines (+ (prompt-height) 4)))))
+
+(fn lnum-width-from-max-len [max-len]
+  (+ (math.max 2 (or max-len 1)) 1))
+
+(fn lnum-width-from-max-value [max-value]
+  (lnum-width-from-max-len (# (tostring (math.max 1 (or max-value 1))))))
+
+(fn lnum-cell [lnum width]
+  (.. (string.rep " " (math.max 0 (- width (+ (# lnum) 1))))
+      lnum
+      " "))
 
 (fn mark-preview-buffer! [buf]
   (when (and buf (vim.api.nvim_buf_is_valid buf))
@@ -48,10 +66,13 @@
 
 (fn apply-preview-window-opts! [win]
   (when (and win (vim.api.nvim_win_is_valid win))
-    (pcall vim.api.nvim_set_option_value "number" true {:win win})
+    (pcall vim.api.nvim_set_option_value "number" false {:win win})
     (pcall vim.api.nvim_set_option_value "relativenumber" false {:win win})
     (pcall vim.api.nvim_set_option_value "signcolumn" "no" {:win win})
     (pcall vim.api.nvim_set_option_value "foldcolumn" "0" {:win win})
+    (pcall vim.api.nvim_set_option_value "statuscolumn"
+           "%#LineNr#%=%{v:virtnum>0?'':printf('%*d ',get(b:,'meta_preview_lnum_width',3)-1,get(b:,'meta_preview_start_lnum',1)+v:lnum-1)}"
+           {:win win})
     (pcall vim.api.nvim_set_option_value "spell" false {:win win})
     (pcall vim.api.nvim_set_option_value "cursorline" true {:win win})
     ;; Match regular window palette in preview.
@@ -198,15 +219,17 @@
         nil)))
 
 (fn current-buffer-path [buf]
-  (let [name (vim.api.nvim_buf_get_name buf)]
-    (if (and (= (type name) "string") (~= name ""))
-        name
-        nil)))
+  (if (and buf (vim.api.nvim_buf_is_valid buf))
+      (let [[ok name] [(pcall vim.api.nvim_buf_get_name buf)]]
+        (if (and ok (= (type name) "string") (~= name ""))
+            name
+            nil))
+      nil))
 
 (fn meta-buffer-name [session]
   (if session.project-mode
       "Metabuffer"
-      (let [original-name (vim.api.nvim_buf_get_name session.source-buf)
+      (let [original-name (current-buffer-path session.source-buf)
             base-name (if (and (= (type original-name) "string") (~= original-name ""))
                           (vim.fn.fnamemodify original-name ":t")
                           "[No Name]")]
@@ -216,9 +239,12 @@
   (when (not meta.buf.source-refs)
     (set meta.buf.source-refs []))
   (when (< (# meta.buf.source-refs) (# meta.buf.content))
-    (let [path (or (current-buffer-path meta.buf.model) "[Current Buffer]")]
+    (let [path (or (current-buffer-path meta.buf.model) "[Current Buffer]")
+          model-buf (if (and meta.buf.model (vim.api.nvim_buf_is_valid meta.buf.model))
+                        meta.buf.model
+                        nil)]
       (for [i (+ (# meta.buf.source-refs) 1) (# meta.buf.content)]
-        (table.insert meta.buf.source-refs {:path path :lnum i :buf meta.buf.model :line (. meta.buf.content i)}))))
+        (table.insert meta.buf.source-refs {:path path :lnum i :buf model-buf :line (. meta.buf.content i)}))))
   meta.buf.source-refs)
 
 (fn selected-ref [meta]
@@ -498,6 +524,7 @@
              :height p-height}
         ft (filetype-for-ref ref)
         lines (context-lines-for-ref session ref p-height)
+        start-lnum (if ref (math.max 1 (- (or ref.lnum 1) 1)) 1)
         focus-row (if ref (math.max 1 (math.min 2 p-height)) 1)]
     {:ref ref
      :p-row p-row
@@ -507,6 +534,7 @@
      :cfg cfg
      :ft ft
      :lines lines
+     :start-lnum start-lnum
      :focus-row focus-row}))
 
 (fn maybe-update-preview-layout! [session ctx]
@@ -528,6 +556,13 @@
   (let [bo (. vim.bo session.preview-buf)]
     (set (. bo :modifiable) true))
   (vim.api.nvim_buf_set_lines session.preview-buf 0 -1 false (. ctx :lines))
+  (let [b (. vim.b session.preview-buf)
+        start (or (. ctx :start-lnum) 1)
+        stop (+ start (math.max 0 (- (# (. ctx :lines)) 1)))
+        width (lnum-width-from-max-value stop)]
+    (set (. b :meta_preview_start_lnum) start)
+    (set (. b :meta_preview_lnum_width) width)
+    (pcall vim.api.nvim_set_option_value "numberwidth" width {:win session.preview-win}))
   (let [bo (. vim.bo session.preview-buf)
         ft (. ctx :ft)]
     (set (. bo :modifiable) false)
@@ -584,6 +619,36 @@
 (fn info-max-width-now []
   (let [max-available (math.max M.info-min-width (math.floor (* vim.o.columns 0.34)))]
     (math.min M.info-max-width max-available)))
+
+(fn ext-from-path [path]
+  (let [file (vim.fn.fnamemodify (or path "") ":t")
+        dot (string.match file ".*()%.")]
+    (if (and dot (> dot 0) (< dot (# file)))
+        (string.sub file (+ dot 1))
+        "")))
+
+(fn devicon-for-path [path fallback-hl]
+  (let [file (vim.fn.fnamemodify (or path "") ":t")
+        ext (ext-from-path path)
+        [ok-web web] [(pcall require :nvim-web-devicons)]]
+    (if (and ok-web web)
+        (let [[ok-i icon icon-hl] [(pcall web.get_icon file ext {:default true})]
+              file-hl fallback-hl]
+          {:icon (if (and ok-i (= (type icon) "string") (~= icon "")) icon "")
+           :icon-hl (if (and ok-i (= (type icon-hl) "string") (~= icon-hl "")) icon-hl fallback-hl)
+           :file-hl file-hl})
+        (if (= 1 (vim.fn.exists "*WebDevIconsGetFileTypeSymbol"))
+            (let [icon (vim.fn.WebDevIconsGetFileTypeSymbol file)]
+              {:icon (if (and (= (type icon) "string") (~= icon "")) icon "")
+               :icon-hl fallback-hl
+               :file-hl fallback-hl})
+            {:icon "" :icon-hl fallback-hl :file-hl fallback-hl}))))
+
+(fn icon-field [icon]
+  (if (and (= (type icon) "string") (~= icon ""))
+      (let [text (.. icon " ")]
+        {:text text :width (vim.fn.strdisplaywidth text)})
+      {:text "" :width 0}))
 
 (fn compact-dir [dir]
   (if (or (= dir "") (= dir "."))
@@ -644,14 +709,29 @@
                                                 (string.sub cdir (+ (- (# cdir) dir-budget) 1))))]
                           [short-dir file])))))))))
 
-(fn build-info-lines [meta refs idxs target-width]
+(fn info-range [selected-index total cap]
+  (if (or (<= total 0) (<= cap 0))
+      [1 0]
+      (if (<= total cap)
+          [1 total]
+          (let [sel (math.max 1 (math.min total (+ selected-index 1)))
+                half (math.floor (/ cap 2))
+                start (math.max 1 (math.min (- sel half) (+ (- total cap) 1)))
+                stop (math.min total (+ start cap -1))]
+            [start stop]))))
+
+(fn build-info-lines [meta refs idxs target-width start-index stop-index]
   (let [line-hl "LineNr"
-        dir-hl (if (= 1 (vim.fn.hlexists "NetrwDir")) "NetrwDir" "Directory")
-        file-hl (if (= 1 (vim.fn.hlexists "NetrwPlain"))
-                    "NetrwPlain"
-                    (if (= 1 (vim.fn.hlexists "NvimTreeFileName"))
-                        "NvimTreeFileName"
-                        "Normal"))
+        dir-hl (if (= 1 (vim.fn.hlexists "NERDTreeDir"))
+                   "NERDTreeDir"
+                   (if (= 1 (vim.fn.hlexists "NetrwDir")) "NetrwDir" "Directory"))
+        file-hl (if (= 1 (vim.fn.hlexists "NERDTreeFile"))
+                    "NERDTreeFile"
+                    (if (= 1 (vim.fn.hlexists "NetrwPlain"))
+                        "NetrwPlain"
+                        (if (= 1 (vim.fn.hlexists "NvimTreeFileName"))
+                            "NvimTreeFileName"
+                            "Normal")))
         lnum-width (let [limit (math.min (# idxs) M.info-max-lines)
                          max-lnum-len (if (> limit 0)
                                           (let [lens []]
@@ -665,34 +745,43 @@
                                                   (math.max (unpack-fn lens))
                                                   1)))
                                           1)]
-                     (+ (math.max 2 max-lnum-len) 1))
+                     (lnum-width-from-max-len max-lnum-len))
         path-width (math.max 1 (- target-width lnum-width))
         lines []
         highlights []]
     (if (= (# idxs) 0)
         (table.insert lines "No hits")
         (do
-          (local limit (math.min (# idxs) M.info-max-lines))
-          (for [i 1 limit]
+          (for [i start-index stop-index]
             (let [src-idx (. idxs i)
                   ref (. refs src-idx)
                   lnum (tostring (or (and ref ref.lnum) src-idx))
-                  lnum-cell (.. (string.rep " " (math.max 0 (- lnum-width (+ (# lnum) 1)))) lnum " ")
+                  lnum-cell (lnum-cell lnum lnum-width)
                   path (vim.fn.fnamemodify (or (and ref ref.path) "[Current Buffer]") ":~:.")
-                  [dir file] (fit-path-into-width path path-width)
-                  row (- i 1)
-                  line (.. lnum-cell dir file)
+                  icon-info (devicon-for-path path file-hl)
+                  icon (or (. icon-info :icon) "")
+                  iconf (icon-field icon)
+                  icon-prefix (. iconf :text)
+                  icon-hl (or (. icon-info :icon-hl) file-hl)
+                  icon-width (. iconf :width)
+                  [dir file0] (fit-path-into-width path (math.max 1 (- path-width icon-width)))
+                  file (.. icon-prefix file0)
+                  this-file-hl (or (. icon-info :file-hl) file-hl)
+                  row (# lines)
+                  line (.. lnum-cell icon-prefix dir file0)
                   num-start 0
                   num-end (+ num-start (# lnum-cell))
-                  dir-start num-end
+                  icon-start num-end
+                  icon-end (+ icon-start (# icon-prefix))
+                  dir-start icon-end
                   file-start (+ dir-start (# dir))]
               (table.insert lines line)
               (table.insert highlights [row line-hl num-start num-end])
+              (when (> (# icon-prefix) 0)
+                (table.insert highlights [row icon-hl icon-start icon-end]))
               (when (> (# dir) 0)
                 (table.insert highlights [row dir-hl dir-start (+ dir-start (# dir))]))
-              (table.insert highlights [row file-hl file-start (+ file-start (# file))]))))
-          (when (> (# idxs) M.info-max-lines)
-            (table.insert lines (.. " ... +" (- (# idxs) M.info-max-lines) " more"))))
+              (table.insert highlights [row this-file-hl file-start (+ file-start (# file0))])))))
     {:lines lines :highlights highlights}))
 
 (fn close-info-window! [session]
@@ -704,7 +793,11 @@
 (fn render-info-lines! [session meta]
   (let [refs (or meta.buf.source-refs [])
         idxs (or meta.buf.indices [])
-        built (build-info-lines meta refs idxs (info-max-width-now))
+        total (# idxs)
+        [start-index stop-index] (info-range meta.selected_index total M.info-max-lines)
+        _ (set session.info-start-index start-index)
+        _ (set session.info-stop-index stop-index)
+        built (build-info-lines meta refs idxs (info-max-width-now) start-index stop-index)
         raw-lines (. built :lines)
         lines (if (= (type raw-lines) "table")
                   (vim.tbl_map tostring raw-lines)
@@ -729,11 +822,14 @@
   (when (vim.api.nvim_win_is_valid session.info-win)
     (let [idxs (or meta.buf.indices [])
           info-lines (vim.api.nvim_buf_line_count session.info-buf)
-          hits-shown (math.min (# idxs) M.info-max-lines)
+          start-index (or session.info-start-index 1)
+          stop-index (or session.info-stop-index (math.min (# idxs) M.info-max-lines))
+          hits-shown (if (>= stop-index start-index) (+ (- stop-index start-index) 1) 0)
           hits-total (# idxs)
           status (.. " Hits " hits-shown "/" hits-total " ")
+          selected1 (+ meta.selected_index 1)
           row (if (> info-lines 0)
-                  (math.max 1 (math.min (+ meta.selected_index 1) info-lines))
+                  (math.max 1 (math.min (+ (- selected1 start-index) 1) info-lines))
                   1)]
       (pcall vim.api.nvim_win_set_option session.info-win "statusline" status)
       (when (> info-lines 0)
@@ -753,12 +849,27 @@
                  " info-buf=" (tostring session.info-buf)))
   (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
     (let [meta session.meta]
-      (when refresh-lines
+      (let [selected1 (+ meta.selected_index 1)
+            start-index (or session.info-start-index 1)
+            stop-index (or session.info-stop-index 0)
+            out-of-range (or (< selected1 start-index) (> selected1 stop-index))]
+      (when (or refresh-lines out-of-range)
         (let [idxs (or meta.buf.indices [])
-              sig (.. (tostring idxs) "|" (tostring (# idxs)) "|" (tostring (info-max-width-now)))]
-          (when (~= session.info-render-sig sig)
+              sig (.. (tostring idxs)
+                      "|"
+                      (tostring (# idxs))
+                      "|"
+                      (tostring (info-max-width-now))
+                      "|"
+                      (tostring (info-height session))
+                      "|"
+                      (tostring vim.o.columns))]
+          ;; Selection can move outside the currently rendered slice while
+          ;; indices/layout stay identical. In that case we must rerender to
+          ;; recentre the info window range.
+          (when (or out-of-range (~= session.info-render-sig sig))
             (set session.info-render-sig sig)
-            (render-info-lines! session meta))))
+            (render-info-lines! session meta)))))
       (sync-info-cursor! session meta)))
   (update-preview-window! session))
 
@@ -830,6 +941,7 @@
                        (if (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
                            (prompt-text session)
                            "")))
+    (persist-prompt-height! session)
     (when session.augroup
       (pcall vim.api.nvim_del_augroup_by_id session.augroup))
     (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
@@ -1126,6 +1238,10 @@
         ["n" "<C-n>" (fn [] (M.move-selection session.prompt-buf 1))]
         ["i" "<C-p>" (fn [] (M.move-selection session.prompt-buf -1))]
         ["i" "<C-n>" (fn [] (M.move-selection session.prompt-buf 1))]
+        ["n" "<C-k>" (fn [] (M.move-selection session.prompt-buf -1))]
+        ["n" "<C-j>" (fn [] (M.move-selection session.prompt-buf 1))]
+        ["i" "<C-k>" (fn [] (M.move-selection session.prompt-buf -1))]
+        ["i" "<C-j>" (fn [] (M.move-selection session.prompt-buf 1))]
         ["i" "<Up>" (fn [] (M.history-or-move session.prompt-buf 1))]
         ["i" "<Down>" (fn [] (M.history-or-move session.prompt-buf -1))]
         ["n" "<Up>" (fn [] (M.history-or-move session.prompt-buf 1))]
