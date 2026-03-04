@@ -35,7 +35,7 @@
 (set M.project-lazy-prefilter-enabled (if (= vim.g.meta_project_lazy_prefilter_enabled nil) true vim.g.meta_project_lazy_prefilter_enabled))
 (set M.project-bootstrap-delay-ms (or vim.g.meta_project_bootstrap_delay_ms 120))
 (set M.project-bootstrap-idle-delay-ms (or vim.g.meta_project_bootstrap_idle_delay_ms 700))
-(set M.prompt-forced-coalesce-ms (or vim.g.meta_prompt_forced_coalesce_ms 250))
+(set M.prompt-forced-coalesce-ms (or vim.g.meta_prompt_forced_coalesce_ms 700))
 
 (fn debug-log [msg]
   (debug.log "router" msg))
@@ -1588,12 +1588,20 @@
                           ;; identical prompt state (for example rapid backspace).
                           nil
                           (if (and force
+                                   ;; Also block forced updates while prompt
+                                   ;; input is still considered "active".
+                                   (< (- (now-ms) (or session.prompt-last-change-ms 0))
+                                      (math.max
+                                        (math.max 0 (or M.prompt-update-idle-ms 0))
+                                        (math.max 0 (or M.prompt-forced-coalesce-ms 0)))))
+                              nil
+                              (if (and force
                                (> (math.max 0 (or M.prompt-update-idle-ms 0)) 0)
                                (< (- (now-ms) (or session.prompt-last-change-ms 0))
                                   (math.max 0 (or M.prompt-update-idle-ms 0))))
-                              ;; During active typing, defer forced refreshes to idle.
-                              (schedule-prompt-update! session (math.max delay M.prompt-update-idle-ms))
-                              (schedule-prompt-update! session delay))))))))))))
+                                  ;; During active typing, defer forced refreshes to idle.
+                                  (schedule-prompt-update! session (math.max delay M.prompt-update-idle-ms))
+                                  (schedule-prompt-update! session delay)))))))))))))
 
 (fn finish-accept [session]
   (local curr session.meta)
