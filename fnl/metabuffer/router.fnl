@@ -63,47 +63,65 @@
         n (if (and session session.meta session.meta.buf session.meta.buf.indices)
               (# session.meta.buf.indices)
               0)
+        qlen (let [lines (prompt-lines session)
+                   parsed (if session.project-mode
+                              (parse-query-lines lines)
+                              {:lines lines})
+                   last-active (do
+                                 (var s "")
+                                 (each [_ line (ipairs (or (. parsed :lines) []))]
+                                   (let [trimmed (vim.trim (or line ""))]
+                                     (when (~= trimmed "")
+                                       (set s trimmed))))
+                                 s)]
+               (# (or last-active "")))
+        short-extra (if (<= qlen 1)
+                        180
+                        (if (<= qlen 2)
+                            120
+                            (if (<= qlen 3) 70 0)))
         scale (if (< n 2000)
                   0
                   (if (< n 10000)
                       2
                       (if (< n 50000) 6 10)))
         extra (if (and session session.project-mode (not session.lazy-stream-done)) 2 0)]
-    (+ base scale extra)))
+    (+ base short-extra scale extra)))
+
+(fn cancel-prompt-update! [session]
+  (when (and session session.prompt-update-timer)
+    (let [timer session.prompt-update-timer
+          stopf (. timer :stop)
+          closef (. timer :close)]
+      (when stopf (pcall stopf timer))
+      (when closef (pcall closef timer))
+      (set session.prompt-update-timer nil)
+      (set session.prompt-update-pending false))))
 
 (fn schedule-prompt-update! [session wait-ms]
-  (when (and session (not session.prompt-update-pending))
+  (when session
+    (cancel-prompt-update! session)
     (set session.prompt-update-pending true)
-    (let [seq (or session.prompt-change-seq 0)]
-      (vim.defer_fn
-        (fn []
-          (set session.prompt-update-pending false)
-          (let [idle-ms (math.max 0 (or M.prompt-update-idle-ms 0))
-                quiet-for (- (now-ms) (or session.prompt-last-change-ms 0))]
-            (when (and session
-                       session.prompt-buf
-                       (= (. M.active-by-prompt session.prompt-buf) session)
-                       session.prompt-update-dirty
-                       (< quiet-for idle-ms))
-              ;; User is still actively typing; keep deferring heavy work.
-              (schedule-prompt-update! session (- idle-ms quiet-for))))
-          (when (and session
-                     session.prompt-buf
-                     (= (. M.active-by-prompt session.prompt-buf) session)
-                     session.prompt-update-dirty
-                     (>= (- (now-ms) (or session.prompt-last-change-ms 0))
-                         (math.max 0 (or M.prompt-update-idle-ms 0)))
-                     (= seq (or session.prompt-change-seq 0)))
-            (set session.prompt-update-dirty false)
-            (set session.prompt-last-apply-ms (now-ms))
-            (apply-prompt-lines session))
-          (when (and session
-                     session.prompt-buf
-                     (= (. M.active-by-prompt session.prompt-buf) session)
-                     session.prompt-update-dirty
-                     (not session.prompt-update-pending))
-            (schedule-prompt-update! session (prompt-update-delay-ms session))))
-        (math.max 0 wait-ms)))))
+    (set session.prompt-update-token (+ 1 (or session.prompt-update-token 0)))
+    (let [token session.prompt-update-token
+          timer (vim.loop.new_timer)]
+      (set session.prompt-update-timer timer)
+      ((. timer :start)
+       timer
+       (math.max 0 wait-ms)
+       0
+       (vim.schedule_wrap
+         (fn []
+           (when (and session.prompt-update-timer (= session.prompt-update-timer timer))
+             (cancel-prompt-update! session))
+           (when (and session
+                      session.prompt-buf
+                      (= (. M.active-by-prompt session.prompt-buf) session)
+                      (= token session.prompt-update-token)
+                      session.prompt-update-dirty)
+             (set session.prompt-update-dirty false)
+             (set session.prompt-last-apply-ms (now-ms))
+             (apply-prompt-lines session))))))))
 
 (fn lnum-width-from-max-len [max-len]
   (+ (math.max 2 (or max-len 1)) 1))
@@ -1436,13 +1454,24 @@
 (fn M.on-prompt-changed [prompt-buf]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
-      ;; Keep input path lightweight: never filter/render synchronously from
-      ;; text-change callbacks. Just mark dirty and schedule deferred work.
+      ;; Keep prompt state instant, but debounce expensive filter/render work.
+      (let [lines (prompt-lines session)
+            parsed (if session.project-mode
+                       (parse-query-lines lines)
+                       {:lines lines
+                        :include-hidden nil
+                        :include-ignored nil
+                        :include-deps nil
+                        :prefilter nil
+                        :lazy nil})]
+        (set session.last-prompt-text (table.concat lines "\n"))
+        (set session.last-parsed-query parsed)
+        (session.meta.set-query-lines (. parsed :lines))
+        (pcall session.meta.refresh_statusline))
       (set session.prompt-update-dirty true)
       (set session.prompt-last-change-ms (now-ms))
       (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
-      (when (not session.prompt-update-pending)
-        (schedule-prompt-update! session (prompt-update-delay-ms session))))))
+      (schedule-prompt-update! session (prompt-update-delay-ms session)))))
 
 (fn finish-accept [session]
   (local curr session.meta)
