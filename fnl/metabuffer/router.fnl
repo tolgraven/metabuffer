@@ -32,6 +32,7 @@
 (set M.project-lazy-chunk-size (or vim.g.meta_project_lazy_chunk_size 8))
 (set M.project-lazy-refresh-debounce-ms (or vim.g.meta_project_lazy_refresh_debounce_ms 80))
 (set M.project-lazy-prefilter-enabled (if (= vim.g.meta_project_lazy_prefilter_enabled nil) true vim.g.meta_project_lazy_prefilter_enabled))
+(set M.project-bootstrap-delay-ms (or vim.g.meta_project_bootstrap_delay_ms 120))
 
 (fn debug-log [msg]
   (debug.log "router" msg))
@@ -833,7 +834,7 @@
              (not session.project-bootstrap-pending)
              (not session.project-bootstrapped))
     (set session.project-bootstrap-pending true)
-    (vim.schedule
+    (vim.defer_fn
       (fn []
         (set session.project-bootstrap-pending false)
         (when (and session
@@ -843,7 +844,8 @@
                    (not session.project-bootstrapped))
           (apply-source-set! session)
           (set session.project-bootstrapped true)
-          (M.on-prompt-changed session.prompt-buf))))))
+          (M.on-prompt-changed session.prompt-buf)))
+      (math.max 0 (or M.project-bootstrap-delay-ms 120)))))
 
 (fn ensure-info-window! [session]
   (when (not (and session.info-win (vim.api.nvim_win_is_valid session.info-win)))
@@ -1866,7 +1868,6 @@
     (set curr.project-mode (or project-mode false))
     (base_buffer.switch-buf curr.buf.buffer)
     (ensure-source-refs! curr)
-    (curr.on-init)
     (let [initial-lines (if (and query (~= query ""))
                             (vim.split query "\n" {:plain true})
                             [""])
@@ -1913,15 +1914,15 @@
       (set curr.status-win (meta_window_mod.new vim prompt-win.window))
       ;; Statusline info should live in prompt window, not result split.
       (curr.win.set-statusline "")
+      ;; Initialize/render after prompt split exists so we avoid an extra
+      ;; post-split view correction pass that can visually "flash" scroll.
+      (curr.on-init)
       (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
       (mark-prompt-buffer! prompt-buf)
       (register-prompt-hooks session)
       (set (. M.active-by-source source-buf) session)
       (set (. M.active-by-prompt prompt-buf) session)
       (apply-prompt-lines session)
-      ;; Opening prompt split resizes the meta window, which can shift scroll.
-      ;; Re-apply source-relative view after layout settles.
-      (restore-meta-view! curr source-view)
       (vim.api.nvim_set_current_win prompt-win.window)
       (vim.cmd "startinsert")
       (when session.project-mode
