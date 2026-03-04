@@ -1,0 +1,4 @@
+interface:
+  display_name: "Metabuffer Checks"
+  short_description: "Run metabuffer lint/compile/smoke scripts"
+  default_prompt: "Run lint, compile, and smoke checks for the metabuffer plugin and report failures succinctly."
