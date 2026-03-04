@@ -23,7 +23,7 @@
 (set M.info-max-lines (or vim.g.meta_info_max_lines 10000))
 (set M.info-min-width (or vim.g.meta_info_width 28))
 (set M.info-max-width (or vim.g.meta_info_max_width 52))
-(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 10))
+(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 24))
 (set M.project-file-cache {})
 (set M.project-lazy-enabled (if (= vim.g.meta_project_lazy_enabled nil) true vim.g.meta_project_lazy_enabled))
 (set M.project-lazy-disable-headless (if (= vim.g.meta_project_lazy_disable_headless nil) true vim.g.meta_project_lazy_disable_headless))
@@ -73,22 +73,25 @@
 (fn schedule-prompt-update! [session wait-ms]
   (when (and session (not session.prompt-update-pending))
     (set session.prompt-update-pending true)
-    (vim.defer_fn
-      (fn []
-        (set session.prompt-update-pending false)
-        (when (and session
-                   session.prompt-buf
-                   (= (. M.active-by-prompt session.prompt-buf) session)
-                   session.prompt-update-dirty)
-          (set session.prompt-update-dirty false)
-          (set session.prompt-last-apply-ms (now-ms))
-          (apply-prompt-lines session))
-        (when (and session
-                   session.prompt-buf
-                   (= (. M.active-by-prompt session.prompt-buf) session)
-                   session.prompt-update-dirty)
-          (M.on-prompt-changed session.prompt-buf)))
-      (math.max 0 wait-ms))))
+    (let [seq (or session.prompt-change-seq 0)]
+      (vim.defer_fn
+        (fn []
+          (set session.prompt-update-pending false)
+          (when (and session
+                     session.prompt-buf
+                     (= (. M.active-by-prompt session.prompt-buf) session)
+                     session.prompt-update-dirty
+                     (= seq (or session.prompt-change-seq 0)))
+            (set session.prompt-update-dirty false)
+            (set session.prompt-last-apply-ms (now-ms))
+            (apply-prompt-lines session))
+          (when (and session
+                     session.prompt-buf
+                     (= (. M.active-by-prompt session.prompt-buf) session)
+                     session.prompt-update-dirty
+                     (not session.prompt-update-pending))
+            (schedule-prompt-update! session (prompt-update-delay-ms session))))
+        (math.max 0 wait-ms)))))
 
 (fn lnum-width-from-max-len [max-len]
   (+ (math.max 2 (or max-len 1)) 1))
@@ -1425,12 +1428,9 @@
       ;; text-change callbacks. Just mark dirty and schedule deferred work.
       (set session.prompt-update-dirty true)
       (set session.prompt-last-change-ms (now-ms))
+      (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
       (when (not session.prompt-update-pending)
-        (set session.prompt-last-apply-ms (or session.prompt-last-apply-ms 0))
-        (let [elapsed (- (now-ms) session.prompt-last-apply-ms)
-              delay (math.max 0 (prompt-update-delay-ms session))
-              wait (math.max 0 (- delay elapsed))]
-          (schedule-prompt-update! session wait))))))
+        (schedule-prompt-update! session (prompt-update-delay-ms session))))))
 
 (fn finish-accept [session]
   (local curr session.meta)
@@ -1842,6 +1842,7 @@
                    :history-index 0
                    :prompt-update-pending false
                    :prompt-update-dirty false
+                   :prompt-change-seq 0
                    :prompt-last-apply-ms 0
                    :project-mode (or project-mode false)
                    :include-hidden start-hidden
