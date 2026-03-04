@@ -37,11 +37,10 @@
   (when callback (callback))
   (let [packed [(pcall vim.fn.getcharstr)]
         ok (. packed 1)]
-    (if ok
-        (let [code (. packed 2)]
-          (debug-log (.. "[keymap] raw=" (tostring (vim.fn.keytrans code))))
-          code)
-        nil)))
+    (when ok
+      (let [code (. packed 2)]
+        (debug-log (.. "[keymap] raw=" (tostring (vim.fn.keytrans code))))
+        code))))
 
 (fn M.new []
   (local self {:registry {}})
@@ -81,18 +80,15 @@
         lhs
         (if (= n 1)
             (let [d (. candidates 1)]
-              (if (= (tostring d.lhs) (tostring lhs))
-                  (self._resolve nvim d)
-                  nil))
+              (when (= (tostring d.lhs) (tostring lhs))
+                (self._resolve nvim d)))
             (if nowait
                 (let [d (. candidates 1)]
-                  (if (= (tostring d.lhs) (tostring lhs))
-                      (self._resolve nvim d)
-                      nil))
+                  (when (= (tostring d.lhs) (tostring lhs))
+                    (self._resolve nvim d)))
                 (let [d (. candidates 1)]
-                  (if (and d.nowait (= (tostring d.lhs) (tostring lhs)))
-                      (self._resolve nvim d)
-                      nil))))))
+                  (when (and d.nowait (= (tostring d.lhs) (tostring lhs)))
+                    (self._resolve nvim d)))))))
 
   (fn self.harvest [nvim timeoutlen callback interval]
     (var previous nil)

@@ -209,12 +209,11 @@
       (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col]))))
 
 (fn current-buffer-path [buf]
-  (if (and buf (vim.api.nvim_buf_is_valid buf))
-      (let [[ok name] [(pcall vim.api.nvim_buf_get_name buf)]]
-        (if (and ok (= (type name) "string") (~= name ""))
-            name
-            nil))
-      nil))
+  (and buf
+       (vim.api.nvim_buf_is_valid buf)
+       (let [[ok name] [(pcall vim.api.nvim_buf_get_name buf)]]
+         (when (and ok (= (type name) "string") (~= name ""))
+           name))))
 
 (fn meta-buffer-name [session]
   (if session.project-mode
@@ -230,9 +229,9 @@
     (set meta.buf.source-refs []))
   (when (< (# meta.buf.source-refs) (# meta.buf.content))
     (let [path (or (current-buffer-path meta.buf.model) "[Current Buffer]")
-          model-buf (if (and meta.buf.model (vim.api.nvim_buf_is_valid meta.buf.model))
-                        meta.buf.model
-                        nil)]
+          model-buf (and meta.buf.model
+                         (vim.api.nvim_buf_is_valid meta.buf.model)
+                         meta.buf.model)]
       (for [i (+ (# meta.buf.source-refs) 1) (# meta.buf.content)]
         (table.insert meta.buf.source-refs {:path path :lnum i :buf model-buf :line (. meta.buf.content i)}))))
   meta.buf.source-refs)
@@ -316,9 +315,8 @@
        (= (. M.active-by-prompt session.prompt-buf) session)))
 
 (fn canonical-path [path]
-  (if (and (= (type path) "string") (~= path ""))
-      (vim.fn.fnamemodify path ":p")
-      nil))
+  (when (and (= (type path) "string") (~= path ""))
+    (vim.fn.fnamemodify path ":p")))
 
 (fn path-under-root? [path root]
   (let [p (canonical-path path)
@@ -341,11 +339,9 @@
                      (= (type (. cached :lines)) "table"))
                 (. cached :lines)
                 (let [[ok lines] [(pcall vim.fn.readfile path)]]
-                  (if (and ok (= (type lines) "table"))
-                      (do
-                        (set (. cache path) {:size size :mtime mtime :lines lines})
-                        lines)
-                      nil)))))))
+                  (when (and ok (= (type lines) "table"))
+                    (set (. cache path) {:size size :mtime mtime :lines lines})
+                    lines)))))))
 
 (set preview-window
   (preview_window_mod.new
@@ -595,11 +591,10 @@
   (if session.project-mode
       (let [prefilter-active (and (truthy? M.project-lazy-prefilter-enabled)
                                   (~= session.prefilter-mode false))
-            prefilter (if prefilter-active
-                          {:groups (parse-prefilter-terms (or (. session.last-parsed-query :lines) [])
-                                                          (session.meta.ignorecase))
-                           :ignorecase (session.meta.ignorecase)}
-                          nil)
+            prefilter (when prefilter-active
+                        {:groups (parse-prefilter-terms (or (. session.last-parsed-query :lines) [])
+                                                        (session.meta.ignorecase))
+                         :ignorecase (session.meta.ignorecase)})
             init (init-project-pool! session prefilter)]
         (if (lazy-preferred? session (or (. init :estimated-lines) 0))
             (start-project-stream! session prefilter init)
@@ -1728,11 +1723,8 @@
       (register-prompt-hooks session)
       (set (. M.active-by-source source-buf) session)
       (set (. M.active-by-prompt prompt-buf) session)
-      (if (and session.project-mode (not initial-query-active))
-          ;; Empty-query startup already has the right source set; avoid
-          ;; immediate on-update/filter pipeline work here.
-          nil
-          (apply-prompt-lines session))
+      (when (not (and session.project-mode (not initial-query-active)))
+        (apply-prompt-lines session))
       (vim.api.nvim_set_current_win prompt-win.window)
       (vim.cmd "startinsert")
       (vim.schedule (fn [] (set session.startup-initializing false)))
@@ -1749,13 +1741,13 @@
       curr))))
 
 (fn M.sync [meta query]
-  (if (not meta)
-      (do (vim.notify "No Meta instance" vim.log.levels.WARN) nil)
-      (do
-        (meta.set-query-lines (if (and query (~= query "")) [query] []))
-        (meta.on-update 0)
-        (M._store_vars meta)
-        meta)))
+  (when (not meta)
+    (vim.notify "No Meta instance" vim.log.levels.WARN))
+  (when meta
+    (meta.set-query-lines (if (and query (~= query "")) [query] []))
+    (meta.on-update 0)
+    (M._store_vars meta)
+    meta))
 
 (fn M.push [meta]
   (if (not meta)

@@ -20,8 +20,7 @@
 (fn M.entry [idx]
   (let [h (M.list)
         n (# h)]
-    (if (and (> idx 0) (<= idx n))
-        (. h (+ (- n idx) 1))
-        nil)))
+    (when (and (> idx 0) (<= idx n))
+      (. h (+ (- n idx) 1)))))
 
 M

@@ -104,9 +104,8 @@
 
 (fn hl-bg [group]
   (let [[ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
-    (if (and ok (= (type hl) "table"))
-        (. hl :bg)
-        nil)))
+    (when (and ok (= (type hl) "table"))
+      (. hl :bg))))
 
 (fn alt-bg-from [group]
   (let [opts {}

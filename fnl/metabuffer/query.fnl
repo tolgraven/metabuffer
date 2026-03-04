@@ -39,9 +39,8 @@
                                     [:prefilter true]
                                     (if lazy-off
                                         [:lazy false]
-                                        (if lazy-on
-                                            [:lazy true]
-                                            nil))))))))))))
+                                        (when lazy-on
+                                          [:lazy true]))))))))))))
 
 (fn M.parse-query-lines [lines]
   (var include-hidden nil)

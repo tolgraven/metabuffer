@@ -57,10 +57,9 @@
 
   (fn self.ref-filetype [ref]
     (let [path (and ref ref.path)
-          ft (if (and (= (type path) "string") (~= path ""))
-                 (or (vim.filetype.match {:filename (vim.fn.fnamemodify path ":t")})
-                     (vim.filetype.match {:filename path}))
-                 nil)]
+          ft (when (and (= (type path) "string") (~= path ""))
+               (or (vim.filetype.match {:filename (vim.fn.fnamemodify path ":t")})
+                   (vim.filetype.match {:filename path})))]
       (if (and (= (type ft) "string") (~= ft ""))
           ft
           "text")))

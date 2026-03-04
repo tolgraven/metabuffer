@@ -61,9 +61,8 @@
   reverse-termcodes)
 
 (fn decode-special-string [s]
-  (if (= (type s) "string")
-      (. (ensure-reverse-termcodes) s)
-      nil))
+  (when (= (type s) "string")
+    (. (ensure-reverse-termcodes) s)))
 
 (fn normalize [expr]
   (if (= (type expr) "number")
