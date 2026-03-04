@@ -90,6 +90,37 @@
         (set (. opts :ctermbg) (. hl :ctermbg))))
     opts))
 
+(fn darken-rgb [n factor]
+  (if (not n)
+      nil
+      (let [r (math.floor (/ n 0x10000))
+            g (math.floor (% (/ n 0x100) 0x100))
+            b (% n 0x100)
+            f (math.max 0 (math.min factor 1))
+            dr (math.max 0 (math.min 255 (math.floor (* r (- 1 f)))))
+            dg (math.max 0 (math.min 255 (math.floor (* g (- 1 f)))))
+            db (math.max 0 (math.min 255 (math.floor (* b (- 1 f)))))]
+        (+ (* dr 0x10000) (* dg 0x100) db))))
+
+(fn hl-bg [group]
+  (let [[ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
+    (if (and ok (= (type hl) "table"))
+        (. hl :bg)
+        nil)))
+
+(fn alt-bg-from [group]
+  (let [opts {}
+        base-bg (or (hl-bg group)
+                    (hl-bg "Normal")
+                    (hl-bg "NormalNC")
+                    (hl-bg "ColorColumn")
+                    (hl-bg "CursorLine")
+                    0x1e1e1e)
+        bg (darken-rgb base-bg 0.15)]
+    (when bg
+      (set (. opts :bg) bg))
+    opts))
+
 (fn ensure-defaults-and-highlights! []
   (set (. vim.g "meta#custom_mappings") (or (. vim.g "meta#custom_mappings") {}))
   (set (. vim.g "meta#highlight_groups") (or (. vim.g "meta#highlight_groups") {:All "Title" :Fuzzy "Number" :Regex "Special"}))
@@ -121,6 +152,8 @@
   (hi 0 "MetaSourceLineNr" {:default true :link "LineNr"})
   (hi 0 "MetaSourceDir" {:default true :link "Directory"})
   (hi 0 "MetaSourceBoundary" (thin-underline-from "Error"))
+  ;; Intentionally not :default so theme/background recalculations always apply.
+  (hi 0 "MetaSourceAltBg" (alt-bg-from "Normal"))
   ;; Prefer netrw-like plain file coloring if present.
   (if (= 1 (vim.fn.hlexists "NetrwPlain"))
       (hi 0 "MetaSourceFile" {:default true :link "NetrwPlain"})

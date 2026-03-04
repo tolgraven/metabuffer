@@ -525,7 +525,11 @@
         ft (filetype-for-ref ref)
         lines (context-lines-for-ref session ref p-height)
         start-lnum (if ref (math.max 1 (- (or ref.lnum 1) 1)) 1)
-        focus-row (if ref (math.max 1 (math.min 2 p-height)) 1)]
+        focus-row (if ref
+                      (let [src-lnum (math.max 1 (or ref.lnum 1))
+                            row (+ (- src-lnum start-lnum) 1)]
+                        (math.max 1 (math.min row p-height)))
+                      1)]
     {:ref ref
      :p-row p-row
      :p-height p-height
@@ -720,6 +724,23 @@
                 stop (math.min total (+ start cap -1))]
             [start stop]))))
 
+(fn info-visible-range [session meta total cap]
+  (if (or (<= total 0) (<= cap 0))
+      [1 0]
+      (if (and session
+               meta
+               meta.win
+               (vim.api.nvim_win_is_valid meta.win.window))
+          (let [view (vim.api.nvim_win_call meta.win.window (fn [] (vim.fn.winsaveview)))
+                top (math.max 1 (math.min total (or (. view :topline) 1)))
+                height (math.max 1 (vim.api.nvim_win_get_height meta.win.window))
+                stop0 (math.min total (+ top height -1))
+                shown (math.max 1 (+ (- stop0 top) 1))]
+            (if (<= shown cap)
+                [top stop0]
+                [top (+ top cap -1)]))
+          (info-range meta.selected_index total cap))))
+
 (fn build-info-lines [meta refs idxs target-width start-index stop-index]
   (let [line-hl "LineNr"
         dir-hl (if (= 1 (vim.fn.hlexists "NERDTreeDir"))
@@ -790,11 +811,10 @@
   (set session.info-win nil)
   (set session.info-buf nil))
 
-(fn render-info-lines! [session meta]
+(fn render-info-lines! [session meta start-index stop-index]
   (let [refs (or meta.buf.source-refs [])
         idxs (or meta.buf.indices [])
         total (# idxs)
-        [start-index stop-index] (info-range meta.selected_index total M.info-max-lines)
         _ (set session.info-start-index start-index)
         _ (set session.info-stop-index stop-index)
         built (build-info-lines meta refs idxs (info-max-width-now) start-index stop-index)
@@ -850,14 +870,20 @@
   (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
     (let [meta session.meta]
       (let [selected1 (+ meta.selected_index 1)
+            [wanted-start wanted-stop] (info-visible-range session meta (# (or meta.buf.indices [])) M.info-max-lines)
             start-index (or session.info-start-index 1)
             stop-index (or session.info-stop-index 0)
-            out-of-range (or (< selected1 start-index) (> selected1 stop-index))]
-      (when (or refresh-lines out-of-range)
+            out-of-range (or (< selected1 start-index) (> selected1 stop-index))
+            range-changed (or (~= wanted-start start-index) (~= wanted-stop stop-index))]
+      (when (or refresh-lines out-of-range range-changed)
         (let [idxs (or meta.buf.indices [])
               sig (.. (tostring idxs)
                       "|"
                       (tostring (# idxs))
+                      "|"
+                      (tostring wanted-start)
+                      "|"
+                      (tostring wanted-stop)
                       "|"
                       (tostring (info-max-width-now))
                       "|"
@@ -867,9 +893,9 @@
           ;; Selection can move outside the currently rendered slice while
           ;; indices/layout stay identical. In that case we must rerender to
           ;; recentre the info window range.
-          (when (or out-of-range (~= session.info-render-sig sig))
+          (when (or out-of-range range-changed (~= session.info-render-sig sig))
             (set session.info-render-sig sig)
-            (render-info-lines! session meta)))))
+            (render-info-lines! session meta wanted-start wanted-stop)))))
       (sync-info-cursor! session meta)))
   (update-preview-window! session))
 
@@ -1112,6 +1138,34 @@
               (pcall vim.api.nvim_win_set_cursor meta.win.window [clamped (. c 2)]))
             (set meta.selected_index (- clamped 1)))))))
 
+(fn can-refresh-source-syntax? [session]
+  (let [buf (and session session.meta session.meta.buf)]
+    (and session
+         session.project-mode
+         buf
+         buf.show-source-separators
+         (= buf.syntax-type "buffer"))))
+
+(fn schedule-source-syntax-refresh! [session]
+  (when (can-refresh-source-syntax? session)
+    (set session.syntax-refresh-dirty true)
+    (when (not session.syntax-refresh-pending)
+      (set session.syntax-refresh-pending true)
+      (vim.defer_fn
+        (fn []
+          (set session.syntax-refresh-pending false)
+          (when (and session
+                     session.prompt-buf
+                     (= (. M.active-by-prompt session.prompt-buf) session))
+            (when session.syntax-refresh-dirty
+              (set session.syntax-refresh-dirty false)
+              (pcall session.meta.buf.apply-source-syntax-regions))
+            ;; If additional scroll events arrived while refreshing, ensure we
+            ;; run one trailing update.
+            (when session.syntax-refresh-dirty
+              (schedule-source-syntax-refresh! session))))
+        80))))
+
 (fn M.scroll-main [prompt-buf action]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
@@ -1151,6 +1205,8 @@
              (= (. M.active-by-prompt session.prompt-buf) session))
     (let [before session.meta.selected_index]
       (sync-selected-from-main-cursor! session)
+      (when force-refresh
+        (schedule-source-syntax-refresh! session))
       (when (or force-refresh (~= before session.meta.selected_index))
         (pcall session.meta.refresh_statusline)
         (pcall update-info-window session false)))))
