@@ -3,6 +3,7 @@
 
 (set M.default-hi-prefix "MetaSearchHit")
 (set M.default-hi-char "MetaSearchHitFuzzyBetween")
+(set M.default-match-priority (or vim.g.meta_search_match_priority 220))
 
 (fn M.new [name opts]
   (local self {:name name
@@ -31,12 +32,12 @@
     (var id nil)
     (local ok (xpcall
                 (fn []
-                  (set id (vim.fn.matchadd group pattern 0 -1 {:window win}))
+                  (set id (vim.fn.matchadd group pattern M.default-match-priority -1 {:window win}))
                   true)
                 (fn [_] false)))
     (if ok
         id
-        (vim.fn.matchadd group pattern 0)))
+        (vim.fn.matchadd group pattern M.default-match-priority)))
 
   (fn self.highlight [query ignorecase target-win]
     (self.remove-highlight)
