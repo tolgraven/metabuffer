@@ -36,6 +36,7 @@
 (set M.project-bootstrap-delay-ms (or vim.g.meta_project_bootstrap_delay_ms 120))
 (set M.project-bootstrap-idle-delay-ms (or vim.g.meta_project_bootstrap_idle_delay_ms 700))
 (set M.prompt-forced-coalesce-ms (or vim.g.meta_prompt_forced_coalesce_ms 700))
+(set M.preview-source-switch-debounce-ms (or vim.g.meta_preview_source_switch_debounce_ms 60))
 
 (fn debug-log [msg]
   (debug.log "router" msg))
@@ -1102,19 +1103,46 @@
                        " lnum=" (tostring (and (. ctx :ref) (. (. ctx :ref) :lnum)))))
         (maybe-update-preview-layout! session ctx)
         (apply-preview-window-opts! session.preview-win)
-        (render-preview-scratch! session ctx)))))
+        (render-preview-scratch! session ctx)
+        (set session.preview-last-path (and (. ctx :ref) (. (. ctx :ref) :path)))))))
 
-(fn schedule-preview-update! [session]
-  (when (and session (not session.preview-update-pending))
+(fn selected-preview-path [session]
+  (let [ref (and session session.meta (selected-ref session.meta))]
+    (or (and ref ref.path) "")))
+
+(fn cancel-preview-update! [session]
+  (when session
+    (set session.preview-update-token (+ 1 (or session.preview-update-token 0)))
+    (set session.preview-update-pending false)))
+
+(fn schedule-preview-update! [session wait-ms]
+  (when session
+    (cancel-preview-update! session)
     (set session.preview-update-pending true)
-    (vim.defer_fn
-      (fn []
-        (set session.preview-update-pending false)
-        (when (and session
-                   session.prompt-buf
-                   (= (. M.active-by-prompt session.prompt-buf) session))
-          (pcall update-preview-window! session)))
-      16)))
+    (set session.preview-update-token (+ 1 (or session.preview-update-token 0)))
+    (let [token session.preview-update-token
+          target-path (selected-preview-path session)]
+      (vim.defer_fn
+        (fn []
+          (when (= token session.preview-update-token)
+            (set session.preview-update-pending false))
+          (when (and session
+                     (= token session.preview-update-token)
+                     session.prompt-buf
+                     (= (. M.active-by-prompt session.prompt-buf) session)
+                     (= target-path (selected-preview-path session)))
+            (pcall update-preview-window! session)))
+        (math.max 0 (or wait-ms 0))))))
+
+(fn maybe-update-preview-for-selection! [session]
+  (let [target-path (selected-preview-path session)
+        shown-path (or session.preview-last-path "")]
+    (if (and (~= shown-path "")
+             (~= target-path shown-path))
+        (schedule-preview-update! session M.preview-source-switch-debounce-ms)
+        (do
+          (cancel-preview-update! session)
+          (update-preview-window! session)))))
 
 (fn fit-info-width! [session lines]
   (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
@@ -1369,7 +1397,7 @@
 
 (fn update-info-window-regular! [session]
   (close-info-window! session)
-  (update-preview-window! session))
+  (maybe-update-preview-for-selection! session))
 
 (fn update-info-window-project! [session refresh-lines]
   (ensure-info-window! session)
@@ -1407,7 +1435,7 @@
             (set session.info-render-sig sig)
             (render-info-lines! session meta wanted-start wanted-stop)))))
       (sync-info-cursor! session meta)))
-  (update-preview-window! session))
+  (maybe-update-preview-for-selection! session))
 
 (set update-info-window
   (fn [session refresh-lines]
