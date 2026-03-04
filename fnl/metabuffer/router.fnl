@@ -20,6 +20,13 @@
 (set M.info-max-lines (or vim.g.meta_info_max_lines 10000))
 (set M.info-min-width (or vim.g.meta_info_width 28))
 (set M.info-max-width (or vim.g.meta_info_max_width 52))
+(set M.project-file-cache {})
+(set M.project-lazy-enabled (if (= vim.g.meta_project_lazy_enabled nil) true vim.g.meta_project_lazy_enabled))
+(set M.project-lazy-disable-headless (if (= vim.g.meta_project_lazy_disable_headless nil) true vim.g.meta_project_lazy_disable_headless))
+(set M.project-lazy-min-estimated-lines (or vim.g.meta_project_lazy_min_estimated_lines 10000))
+(set M.project-lazy-chunk-size (or vim.g.meta_project_lazy_chunk_size 8))
+(set M.project-lazy-refresh-debounce-ms (or vim.g.meta_project_lazy_refresh_debounce_ms 80))
+(set M.project-lazy-prefilter-enabled (if (= vim.g.meta_project_lazy_prefilter_enabled nil) true vim.g.meta_project_lazy_prefilter_enabled))
 
 (fn debug-log [msg]
   (debug.log "router" msg))
@@ -115,7 +122,11 @@
         ignored-on (or (= tok "#ignored") (= tok "+ignored") (= tok (.. prefix "ignored")))
         ignored-off (or (= tok "#noignored") (= tok "-ignored") (= tok (.. prefix "noignored")))
         deps-on (or (= tok "#deps") (= tok "+deps") (= tok (.. prefix "deps")))
-        deps-off (or (= tok "#nodeps") (= tok "-deps") (= tok (.. prefix "nodeps")))]
+        deps-off (or (= tok "#nodeps") (= tok "-deps") (= tok (.. prefix "nodeps")))
+        prefilter-off (or (= tok "#escape") (= tok "+escape") (= tok (.. prefix "escape")) (= tok "#noprefilter") (= tok "-prefilter") (= tok (.. prefix "noprefilter")))
+        prefilter-on (or (= tok "#prefilter") (= tok "+prefilter") (= tok (.. prefix "prefilter")))
+        lazy-off (or (= tok "#nolazy") (= tok "-lazy") (= tok (.. prefix "nolazy")))
+        lazy-on (or (= tok "#lazy") (= tok "+lazy") (= tok (.. prefix "lazy")))]
     (if hidden-on
         [:hidden true]
         (if hidden-off
@@ -128,12 +139,22 @@
                 [:deps true]
                 (if deps-off
                     [:deps false]
-                    nil))))))))
+                    (if prefilter-off
+                        [:prefilter false]
+                        (if prefilter-on
+                            [:prefilter true]
+                            (if lazy-off
+                                [:lazy false]
+                                (if lazy-on
+                                    [:lazy true]
+                                    nil))))))))))))
 
 (fn parse-query-lines [lines]
   (var include-hidden nil)
   (var include-ignored nil)
   (var include-deps nil)
+  (var prefilter nil)
+  (var lazy nil)
   (local cleaned [])
   (each [_ line (ipairs (or lines []))]
     (local trimmed (vim.trim (or line "")))
@@ -150,21 +171,32 @@
                         (set include-hidden v)
                         (if (= k :ignored)
                             (set include-ignored v)
-                            (when (= k :deps)
-                              (set include-deps v)))))
+                            (if (= k :deps)
+                                (set include-deps v)
+                                (if (= k :prefilter)
+                                    (set prefilter v)
+                                    (when (= k :lazy)
+                                      (set lazy v)))))))
                   (table.insert keep tok))))
           (table.insert cleaned (table.concat keep " ")))))
-  {:lines cleaned :include-hidden include-hidden :include-ignored include-ignored :include-deps include-deps})
+  {:lines cleaned
+   :include-hidden include-hidden
+   :include-ignored include-ignored
+   :include-deps include-deps
+   :prefilter prefilter
+   :lazy lazy})
 
 (fn parse-query-text [query]
   (if (not (and (= (type query) "string") (~= query "")))
-      {:query query :include-hidden nil :include-ignored nil :include-deps nil}
+      {:query query :include-hidden nil :include-ignored nil :include-deps nil :prefilter nil :lazy nil}
       (let [lines (vim.split query "\n" {:plain true})
             parsed (parse-query-lines lines)]
         {:query (table.concat (. parsed :lines) "\n")
          :include-hidden (. parsed :include-hidden)
          :include-ignored (. parsed :include-ignored)
-         :include-deps (. parsed :include-deps)})))
+         :include-deps (. parsed :include-deps)
+         :prefilter (. parsed :prefilter)
+         :lazy (. parsed :lazy)})))
 
 (fn history-list []
   (if (= (type vim.g.metabuffer_prompt_history) "table")
@@ -387,6 +419,152 @@
           (or rel [])))
       (vim.fn.globpath root "**/*" true true)))
 
+(fn ui-attached? []
+  (> (# (vim.api.nvim_list_uis)) 0))
+
+(fn lazy-streaming-allowed? [session]
+  (and session
+       session.project-mode
+       (truthy? M.project-lazy-enabled)
+       (or (not (truthy? M.project-lazy-disable-headless))
+           (ui-attached?))))
+
+(fn session-active? [session]
+  (and session
+       session.prompt-buf
+       (= (. M.active-by-prompt session.prompt-buf) session)))
+
+(fn canonical-path [path]
+  (if (and (= (type path) "string") (~= path ""))
+      (vim.fn.fnamemodify path ":p")
+      nil))
+
+(fn path-under-root? [path root]
+  (let [p (canonical-path path)
+        r (canonical-path root)]
+    (and p r (vim.startswith p r))))
+
+(fn read-file-lines-cached [path]
+  (if (or (not path) (= 0 (vim.fn.filereadable path)))
+      nil
+      (let [size (vim.fn.getfsize path)
+            mtime (vim.fn.getftime path)
+            cache (or M.project-file-cache {})
+            _ (set M.project-file-cache cache)
+            cached (. cache path)]
+        (if (or (< size 0) (> size M.project-max-file-bytes))
+            nil
+            (if (and (= (type cached) "table")
+                     (= (. cached :size) size)
+                     (= (. cached :mtime) mtime)
+                     (= (type (. cached :lines)) "table"))
+                (. cached :lines)
+                (let [[ok lines] [(pcall vim.fn.readfile path)]]
+                  (if (and ok (= (type lines) "table"))
+                      (do
+                        (set (. cache path) {:size size :mtime mtime :lines lines})
+                        lines)
+                      nil)))))))
+
+(fn parse-prefilter-terms [query-lines]
+  (local groups [])
+  (each [_ line (ipairs (or query-lines []))]
+    (let [trimmed (vim.trim (or line ""))]
+      (when (~= trimmed "")
+        (local toks [])
+        (each [_ tok (ipairs (vim.split trimmed "%s+"))]
+          (when (~= tok "")
+            (table.insert toks tok)))
+        (when (> (# toks) 0)
+          (table.insert groups toks)))))
+  groups)
+
+(fn line-matches-prefilter? [line spec]
+  (if (or (not spec) (not spec.groups) (= (# spec.groups) 0))
+      true
+      (let [probe0 (or line "")
+            probe (if spec.ignorecase (string.lower probe0) probe0)]
+        (var all-groups true)
+        (each [_ grp (ipairs spec.groups)]
+          (var grp-ok true)
+          (each [_ tok0 (ipairs grp)]
+            (let [tok (if spec.ignorecase (string.lower tok0) tok0)]
+              (when (and grp-ok (not (string.find probe tok 1 true)))
+                (set grp-ok false))))
+          (when (and all-groups (not grp-ok))
+            (set all-groups false)))
+        all-groups)))
+
+(fn schedule-lazy-refresh! [session]
+  (when (and session (session-active? session))
+    (set session.lazy-refresh-dirty true)
+    (when (not session.lazy-refresh-pending)
+      (set session.lazy-refresh-pending true)
+      (vim.defer_fn
+        (fn []
+          (set session.lazy-refresh-pending false)
+          (when (and session (session-active? session) session.lazy-refresh-dirty)
+            (set session.lazy-refresh-dirty false)
+            (M.on-prompt-changed session.prompt-buf))
+          (when (and session (session-active? session) session.lazy-refresh-dirty)
+            (schedule-lazy-refresh! session)))
+        (math.max 20 (or M.project-lazy-refresh-debounce-ms 80))))))
+
+(fn append-lines! [session lines refs]
+  (when (and session lines refs (> (# lines) 0))
+    (local meta session.meta)
+    (each [_ line (ipairs lines)]
+      (table.insert meta.buf.content line))
+    (each [_ ref (ipairs refs)]
+      (table.insert meta.buf.source-refs ref))
+    (for [i (+ (# meta.buf.all-indices) 1) (# meta.buf.content)]
+      (table.insert meta.buf.all-indices i))))
+
+(fn push-file-into-pool! [session path lines prefilter]
+  (if (or (not lines) (= (type lines) "nil"))
+      0
+      (let [meta session.meta
+            take (math.max 0 (- M.project-max-total-lines (# meta.buf.content)))]
+        (if (<= take 0)
+            0
+            (let [added-lines []
+                  added-refs []]
+              (each [lnum line (ipairs lines)]
+                (when (and (< (# added-lines) take)
+                           (line-matches-prefilter? line prefilter))
+                  (table.insert added-lines line)
+                  (table.insert added-refs {:path path :lnum lnum :line line})))
+              (append-lines! session added-lines added-refs)
+              (# added-lines))))))
+
+(fn open-project-buffer-paths [session root include-hidden include-deps]
+  (local out [])
+  (local seen {})
+  (local current (canonical-path (current-buffer-path session.source-buf)))
+  (each [_ buf (ipairs (vim.api.nvim_list_bufs))]
+    (when (and (vim.api.nvim_buf_is_valid buf)
+               (= (. (. vim.bo buf) :buftype) "")
+               (truthy? (. (. vim.bo buf) :buflisted)))
+      (let [name (canonical-path (vim.api.nvim_buf_get_name buf))]
+        (when (and name
+                   (or (not current) (~= name current))
+                   (not (. seen name))
+                   (= 1 (vim.fn.filereadable name))
+                   (path-under-root? name root))
+          (let [rel (vim.fn.fnamemodify name ":.")]
+            (when (allow-project-path? rel include-hidden include-deps)
+              (set (. seen name) true)
+              (table.insert out name)))))))
+  out)
+
+(fn estimate-lines-from-files [paths]
+  (var bytes 0)
+  (each [_ path (ipairs (or paths []))]
+    (let [size (vim.fn.getfsize path)]
+      (when (> size 0)
+        (set bytes (+ bytes size)))))
+  (math.floor (/ bytes 80)))
+
 (fn collect-project-sources [session include-hidden include-ignored include-deps]
   (let [meta session.meta
         root (vim.fn.getcwd)
@@ -421,13 +599,105 @@
                     (push-line! path lnum line))))))))))
     {:content content :refs refs}))
 
+(fn init-project-pool! [session prefilter]
+  (local meta session.meta)
+  (set meta.buf.content (vim.deepcopy session.single-content))
+  (set meta.buf.source-refs (vim.deepcopy session.single-refs))
+  (set meta.buf.show-source-prefix false)
+  (set meta.buf.show-source-separators session.project-mode)
+  (set meta.buf.all-indices [])
+  (for [i 1 (# meta.buf.content)]
+    (table.insert meta.buf.all-indices i))
+  (set meta.buf.indices (vim.deepcopy meta.buf.all-indices))
+  (let [root (vim.fn.getcwd)
+        include-hidden session.effective-include-hidden
+        include-ignored session.effective-include-ignored
+        include-deps session.effective-include-deps
+        current (canonical-path (current-buffer-path session.source-buf))
+        open-paths (open-project-buffer-paths session root include-hidden include-deps)
+        all-paths (project-file-list root include-hidden include-ignored include-deps)
+        deferred []
+        deferred-seen {}]
+    ;; Prioritize nearby context by materializing already-open buffers first.
+    (each [_ path (ipairs open-paths)]
+      (let [p (canonical-path path)]
+        (when (and p (= 1 (vim.fn.filereadable p)))
+          (set (. deferred-seen p) true)
+          (push-file-into-pool! session p (read-file-lines-cached p) prefilter))))
+    (each [_ path (ipairs all-paths)]
+      (let [p (canonical-path path)]
+        (when (and p
+                   (not (. deferred-seen p))
+                   (or (not current) (~= p current)))
+          (set (. deferred-seen p) true)
+          (table.insert deferred p))))
+    {:deferred-paths deferred :estimated-lines (estimate-lines-from-files deferred)}))
+
+(fn lazy-preferred? [session estimated-lines]
+  (and (lazy-streaming-allowed? session)
+       (truthy? session.lazy-mode)
+       (or (<= M.project-lazy-min-estimated-lines 0)
+           (>= estimated-lines M.project-lazy-min-estimated-lines))))
+
+(fn start-project-stream! [session prefilter init]
+  (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
+  (set session.lazy-stream-done false)
+  (set session.lazy-stream-next 1)
+  (set session.lazy-stream-paths (or (. init :deferred-paths) []))
+  (set session.lazy-stream-total (# session.lazy-stream-paths))
+  (set session.lazy-prefilter prefilter)
+  (local stream-id session.lazy-stream-id)
+  (fn run-batch []
+    (when (and (session-active? session)
+               (= stream-id session.lazy-stream-id)
+               (not session.lazy-stream-done))
+      (let [paths session.lazy-stream-paths
+            total (# paths)
+            chunk (math.max 1 (or M.project-lazy-chunk-size 8))]
+        (var consumed 0)
+        (var touched false)
+        (while (and (< consumed chunk)
+                    (<= session.lazy-stream-next total)
+                    (< (# session.meta.buf.content) M.project-max-total-lines))
+          (let [path (. paths session.lazy-stream-next)
+                lines (and path (read-file-lines-cached path))
+                before (# session.meta.buf.content)]
+            (when lines
+              (push-file-into-pool! session path lines prefilter)
+              (when (> (# session.meta.buf.content) before)
+                (set touched true)))
+            (set consumed (+ consumed 1))
+            (set session.lazy-stream-next (+ session.lazy-stream-next 1))))
+        (if (or (> session.lazy-stream-next total)
+                (>= (# session.meta.buf.content) M.project-max-total-lines))
+            (set session.lazy-stream-done true))
+        (when touched
+          (schedule-lazy-refresh! session))
+        (when (and (not session.lazy-stream-done)
+                   (= stream-id session.lazy-stream-id)
+                   (session-active? session))
+          (vim.defer_fn run-batch 0)))))
+  (vim.defer_fn run-batch 0))
+
 (fn apply-source-set! [session]
   (local meta session.meta)
   (if session.project-mode
-      (let [pool (collect-project-sources session session.effective-include-hidden session.effective-include-ignored session.effective-include-deps)]
-        (set meta.buf.content pool.content)
-        (set meta.buf.source-refs pool.refs))
+      (let [prefilter-active (and (truthy? M.project-lazy-prefilter-enabled)
+                                  (~= session.prefilter-mode false))
+            prefilter (if prefilter-active
+                          {:groups (parse-prefilter-terms (or (. session.last-parsed-query :lines) []))
+                           :ignorecase (session.meta.ignorecase)}
+                          nil)
+            init (init-project-pool! session prefilter)]
+        (if (lazy-preferred? session (or (. init :estimated-lines) 0))
+            (start-project-stream! session prefilter init)
+            (let [pool (collect-project-sources session session.effective-include-hidden session.effective-include-ignored session.effective-include-deps)]
+              (set meta.buf.content pool.content)
+              (set meta.buf.source-refs pool.refs)
+              (set session.lazy-stream-done true))))
       (do
+        (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
+        (set session.lazy-stream-done true)
         (set meta.buf.content (vim.deepcopy session.single-content))
         (set meta.buf.source-refs (vim.deepcopy session.single-refs))))
   ;; Keep main results buffer as pure content lines; source context is shown
@@ -987,7 +1257,12 @@
       (set session.last-prompt-text (table.concat lines "\n"))
       (let [parsed (if session.project-mode
                        (parse-query-lines lines)
-                       {:lines lines :include-ignored nil :include-deps nil})
+                       {:lines lines
+                        :include-hidden nil
+                        :include-ignored nil
+                        :include-deps nil
+                        :prefilter nil
+                        :lazy nil})
             next-ignored (if (= (. parsed :include-ignored) nil)
                              session.include-ignored
                              (. parsed :include-ignored))
@@ -997,12 +1272,23 @@
             next-hidden (if (= (. parsed :include-hidden) nil)
                             session.include-hidden
                             (. parsed :include-hidden))
+            next-prefilter (if (= (. parsed :prefilter) nil)
+                               session.prefilter-mode
+                               (. parsed :prefilter))
+            next-lazy (if (= (. parsed :lazy) nil)
+                          session.lazy-mode
+                          (. parsed :lazy))
             changed (or (~= next-hidden session.effective-include-hidden)
                         (~= next-ignored session.effective-include-ignored)
-                        (~= next-deps session.effective-include-deps))]
+                        (~= next-deps session.effective-include-deps)
+                        (~= next-prefilter session.prefilter-mode)
+                        (~= next-lazy session.lazy-mode))]
         (set session.effective-include-hidden next-hidden)
         (set session.effective-include-ignored next-ignored)
         (set session.effective-include-deps next-deps)
+        (set session.prefilter-mode next-prefilter)
+        (set session.lazy-mode next-lazy)
+        (set session.last-parsed-query parsed)
         (set session.meta.debug_out
           (if session.project-mode
               (.. " ["
@@ -1011,6 +1297,10 @@
                   (if session.effective-include-ignored "+ignored" "-ignored")
                   " "
                   (if session.effective-include-deps "+deps" "-deps")
+                  " "
+                  (if session.prefilter-mode "+prefilter" "-prefilter")
+                  " "
+                  (if session.lazy-mode "+lazy" "-lazy")
                   "]")
               ""))
         (when (and session.project-mode changed)
@@ -1406,6 +1696,12 @@
         start-deps (if (= (. parsed-query :include-deps) nil)
                        (truthy? M.default-include-deps)
                        (. parsed-query :include-deps))
+        start-prefilter (if (= (. parsed-query :prefilter) nil)
+                            (truthy? M.project-lazy-prefilter-enabled)
+                            (. parsed-query :prefilter))
+        start-lazy (if (= (. parsed-query :lazy) nil)
+                       (truthy? M.project-lazy-enabled)
+                       (. parsed-query :lazy))
         query query0]
   (local source-buf (vim.api.nvim_get_current_buf))
   (when (. M.active-by-source source-buf)
@@ -1441,6 +1737,16 @@
                    :effective-include-hidden start-hidden
                    :effective-include-ignored start-ignored
                    :effective-include-deps start-deps
+                   :prefilter-mode start-prefilter
+                   :lazy-mode start-lazy
+                   :last-parsed-query {:lines (if (and query (~= query ""))
+                                                  (vim.split query "\n" {:plain true})
+                                                  [""])
+                                       :include-hidden start-hidden
+                                       :include-ignored start-ignored
+                                       :include-deps start-deps
+                                       :prefilter start-prefilter
+                                       :lazy start-lazy}
                    :single-content (vim.deepcopy curr.buf.content)
                    :single-refs (vim.deepcopy (or curr.buf.source-refs []))
                    :meta curr}]
