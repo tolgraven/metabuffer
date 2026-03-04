@@ -936,7 +936,17 @@
           ;; Avoid a bootstrap-triggered filter/view update for plain `:Meta!`
           ;; with empty prompt; defer filtering until the user types.
           (when has-query
-            (M.on-prompt-changed session.prompt-buf true))
+            ;; If user typed while bootstrap was pending, force-path guards can
+            ;; suppress the immediate refresh and leave results stale.
+            ;; Drive the pending prompt apply directly through the trailing-edge
+            ;; timer path so early keystrokes are always honored.
+            (set session.prompt-update-dirty true)
+            (let [now (now-ms)
+                  quiet-for (- now (or session.prompt-last-change-ms 0))
+                  need-quiet (math.max 0 (prompt-update-delay-ms session))]
+              (if (< quiet-for need-quiet)
+                  (schedule-prompt-update! session (math.max 1 (- need-quiet quiet-for)))
+                  (schedule-prompt-update! session 0))))
           ;; Keep selection/view stable even when no prompt filter is applied.
           (when (not has-query)
             (pcall session.meta.buf.render)
