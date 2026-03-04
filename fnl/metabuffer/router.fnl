@@ -98,6 +98,13 @@
         (set has true)))
     has))
 
+(fn query-lines-has-active? [lines]
+  (var has false)
+  (each [_ line (ipairs (or lines []))]
+    (when (and (not has) (~= (vim.trim (or line "")) ""))
+      (set has true)))
+  has)
+
 (fn cancel-prompt-update! [session]
   (when (and session session.prompt-update-timer)
     (let [timer session.prompt-update-timer
@@ -1958,8 +1965,15 @@
                    :single-content (vim.deepcopy curr.buf.content)
                    :single-refs (vim.deepcopy (or curr.buf.source-refs []))
                    :meta curr}]
+      (local initial-query-active (query-lines-has-active? (. session.last-parsed-query :lines)))
       (if session.project-mode
-          (apply-minimal-source-set! session)
+          (if initial-query-active
+              (apply-minimal-source-set! session)
+              (do
+                ;; For plain :Meta! (no active query), avoid delayed bootstrap
+                ;; transition so startup view stays smooth and stable.
+                (apply-source-set! session)
+                (set session.project-bootstrapped true)))
           (apply-source-set! session))
       (set curr.status-win (meta_window_mod.new vim prompt-win.window))
       ;; Statusline info should live in prompt window, not result split.
@@ -1975,7 +1989,7 @@
       (apply-prompt-lines session)
       (vim.api.nvim_set_current_win prompt-win.window)
       (vim.cmd "startinsert")
-      (when session.project-mode
+      (when (and session.project-mode (not session.project-bootstrapped))
         (schedule-project-bootstrap! session))
       (set (. M.instances source-buf) curr)
       curr))))
