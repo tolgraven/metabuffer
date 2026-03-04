@@ -889,12 +889,7 @@
           ;; Keep selection/view stable even when no prompt filter is applied.
           (when (not (prompt-has-active-query? session))
             (pcall session.meta.buf.render)
-            (let [max-lines (math.max 1 (# session.meta.buf.indices))
-                  row (math.max 1
-                                (math.min (+ (math.max 0 (or session.meta.selected_index 0)) 1)
-                                          max-lines))]
-              (when (vim.api.nvim_win_is_valid session.meta.win.window)
-                (pcall vim.api.nvim_win_set_cursor session.meta.win.window [row 0])))
+            (restore-meta-view! session.meta session.source-view)
             (pcall session.meta.refresh_statusline)
             (pcall update-info-window session))))
       (math.max 0 (or M.project-bootstrap-delay-ms 120)))))
