@@ -151,9 +151,17 @@
                       (= (. M.active-by-prompt session.prompt-buf) session)
                       (= token session.prompt-update-token)
                       session.prompt-update-dirty)
-             (set session.prompt-update-dirty false)
-             (set session.prompt-last-apply-ms (now-ms))
-             (apply-prompt-lines session))))))))
+             (let [now (now-ms)
+                   quiet-for (- now (or session.prompt-last-change-ms 0))
+                   need-quiet (math.max 0 (prompt-update-delay-ms session))]
+               (if (< quiet-for need-quiet)
+                   ;; Still within active typing window: push matcher apply
+                   ;; further out so prompt input remains fluid.
+                   (schedule-prompt-update! session (math.max 1 (- need-quiet quiet-for)))
+                   (do
+                     (set session.prompt-update-dirty false)
+                     (set session.prompt-last-apply-ms now)
+                     (apply-prompt-lines session)))))))))))
 
 (fn lnum-width-from-max-len [max-len]
   (+ (math.max 2 (or max-len 1)) 1))
@@ -1545,63 +1553,77 @@
                                 (pcall update-info-window session)))
                             1))))))))
 
-(fn M.on-prompt-changed [prompt-buf force]
+(fn M.on-prompt-changed [prompt-buf force event-tick]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when (and session (not session.closing))
-      (let [txt (prompt-text session)]
-        (if (and (not force) (= txt (or session.prompt-last-event-text "")))
-            (when session.prompt-update-pending
-              ;; Strict trailing-edge debounce: even if duplicate prompt events
-              ;; report the same text, re-arm from now while input continues.
-              (set session.prompt-last-change-ms (now-ms))
-              (schedule-prompt-update! session (prompt-update-delay-ms session)))
-            (do
-              ;; Prompt display state is independent; matcher query state updates only
-              ;; in deferred apply-prompt-lines.
-              (set session.prompt-last-event-text txt)
-              (set session.last-prompt-text txt)
-              (set session.prompt-update-dirty true)
-              (set session.prompt-last-change-ms (now-ms))
-              (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
-              ;; Keep empty :Meta! startup lightweight; only bootstrap full
-              ;; project sources once there is an active prompt query.
-              (when (and session.project-mode
-                         (not session.project-bootstrapped)
-                         (prompt-has-active-query? session))
-                ;; User started typing: expedite bootstrap instead of waiting
-                ;; for any longer idle startup timeout.
-                (schedule-project-bootstrap! session M.project-bootstrap-delay-ms))
-              ;; Avoid double post-typing updates in project mode while bootstrap is
-              ;; still pending; we'll schedule exactly one refresh once bootstrap ends.
-              (when (or (not session.project-mode) session.project-bootstrapped)
-                (if (and force session.prompt-update-pending)
-                    ;; A trailing user-typing update is already queued; do not
-                    ;; re-arm timers for forced/lazy refreshes.
-                    nil
-                    (let [delay (prompt-update-delay-ms session)]
-                      (if (and force
-                               (= txt (or session.prompt-last-applied-text ""))
-                               (> (math.max 0 (or M.prompt-forced-coalesce-ms 0)) 0)
-                               (< (- (now-ms) (or session.prompt-last-apply-ms 0))
-                                  (math.max 0 (or M.prompt-forced-coalesce-ms 0))))
-                          ;; Skip near-immediate forced refresh after a just-applied
-                          ;; identical prompt state (for example rapid backspace).
-                          nil
-                          (if (and force
-                                   ;; Also block forced updates while prompt
-                                   ;; input is still considered "active".
-                                   (< (- (now-ms) (or session.prompt-last-change-ms 0))
-                                      (math.max
-                                        (math.max 0 (or M.prompt-update-idle-ms 0))
-                                        (math.max 0 (or M.prompt-forced-coalesce-ms 0)))))
-                              nil
+      (if (and (not force)
+               event-tick
+               (= event-tick (or session.prompt-last-event-tick -1)))
+          nil
+          (let [txt (prompt-text session)
+                now (now-ms)]
+            (when (and (not force) event-tick)
+              (set session.prompt-last-event-tick event-tick))
+            (if (and force
+                     (< now (or session.prompt-force-block-until 0)))
+                nil
+                (if (and (not force) (= txt (or session.prompt-last-event-text "")))
+                    (when session.prompt-update-pending
+                      ;; Strict trailing-edge debounce: even if duplicate prompt events
+                      ;; report the same text, re-arm from now while input continues.
+                      (set session.prompt-last-change-ms now)
+                      (set session.prompt-force-block-until (+ now (math.max 0 (prompt-update-delay-ms session))))
+                      (schedule-prompt-update! session (prompt-update-delay-ms session)))
+                    (do
+                      ;; Prompt display state is independent; matcher query state updates only
+                      ;; in deferred apply-prompt-lines.
+                      (set session.prompt-last-event-text txt)
+                      (set session.last-prompt-text txt)
+                      (set session.prompt-update-dirty true)
+                      (set session.prompt-last-change-ms now)
+                      (when (not force)
+                        ;; Hard block forced updates during active user input window.
+                        (set session.prompt-force-block-until (+ now (math.max 0 (prompt-update-delay-ms session)))))
+                      (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
+                      ;; Keep empty :Meta! startup lightweight; only bootstrap full
+                      ;; project sources once there is an active prompt query.
+                      (when (and session.project-mode
+                                 (not session.project-bootstrapped)
+                                 (prompt-has-active-query? session))
+                        ;; User started typing: expedite bootstrap instead of waiting
+                        ;; for any longer idle startup timeout.
+                        (schedule-project-bootstrap! session M.project-bootstrap-delay-ms))
+                      ;; Avoid double post-typing updates in project mode while bootstrap is
+                      ;; still pending; we'll schedule exactly one refresh once bootstrap ends.
+                      (when (or (not session.project-mode) session.project-bootstrapped)
+                        (if (and force session.prompt-update-pending)
+                            ;; A trailing user-typing update is already queued; do not
+                            ;; re-arm timers for forced/lazy refreshes.
+                            nil
+                            (let [delay (prompt-update-delay-ms session)]
                               (if (and force
-                               (> (math.max 0 (or M.prompt-update-idle-ms 0)) 0)
-                               (< (- (now-ms) (or session.prompt-last-change-ms 0))
-                                  (math.max 0 (or M.prompt-update-idle-ms 0))))
-                                  ;; During active typing, defer forced refreshes to idle.
-                                  (schedule-prompt-update! session (math.max delay M.prompt-update-idle-ms))
-                                  (schedule-prompt-update! session delay)))))))))))))
+                                       (= txt (or session.prompt-last-applied-text ""))
+                                       (> (math.max 0 (or M.prompt-forced-coalesce-ms 0)) 0)
+                                       (< (- (now-ms) (or session.prompt-last-apply-ms 0))
+                                          (math.max 0 (or M.prompt-forced-coalesce-ms 0))))
+                                  ;; Skip near-immediate forced refresh after a just-applied
+                                  ;; identical prompt state (for example rapid backspace).
+                                  nil
+                                  (if (and force
+                                           ;; Also block forced updates while prompt
+                                           ;; input is still considered "active".
+                                           (< (- (now-ms) (or session.prompt-last-change-ms 0))
+                                              (math.max
+                                                (math.max 0 (or M.prompt-update-idle-ms 0))
+                                                (math.max 0 (or M.prompt-forced-coalesce-ms 0)))))
+                                      nil
+                                      (if (and force
+                                               (> (math.max 0 (or M.prompt-update-idle-ms 0)) 0)
+                                               (< (- (now-ms) (or session.prompt-last-change-ms 0))
+                                                  (math.max 0 (or M.prompt-update-idle-ms 0))))
+                                          ;; During active typing, defer forced refreshes to idle.
+                                          (schedule-prompt-update! session (math.max delay M.prompt-update-idle-ms))
+                                          (schedule-prompt-update! session delay)))))))))))))))
 
 (fn finish-accept [session]
   (local curr session.meta)
@@ -1892,14 +1914,14 @@
   ;; Some environments/plugins do not reliably emit TextChangedI for this
   ;; scratch prompt buffer; keep a low-level line-change hook as a fallback.
   (vim.api.nvim_buf_attach session.prompt-buf false
-    {:on_lines (fn [_ _ _ _ _ _ _ _]
+    {:on_lines (fn [_ _ changedtick _ _ _ _ _]
                  ;; on_lines can fire before insert-state buffer text is fully
                  ;; visible; defer one tick so we observe the committed prompt.
                  (vim.schedule
                    (fn []
                      (when (and session.prompt-buf
                                 (= (. M.active-by-prompt session.prompt-buf) session))
-                       (M.on-prompt-changed session.prompt-buf)))))
+                       (M.on-prompt-changed session.prompt-buf false changedtick)))))
      :on_detach (fn []
                   (when session.prompt-buf
                     (set (. M.active-by-prompt session.prompt-buf) nil)))})
@@ -1909,7 +1931,10 @@
     {:group aug
      :buffer session.prompt-buf
      :callback (fn [_]
-                 (M.on-prompt-changed session.prompt-buf))})
+                 (M.on-prompt-changed
+                   session.prompt-buf
+                   false
+                   (vim.api.nvim_buf_get_changedtick session.prompt-buf)))})
   ;; Re-assert prompt maps when entering insert mode; this wins over late
   ;; plugin mappings (for example completion plugins).
   (vim.api.nvim_create_autocmd "InsertEnter"
