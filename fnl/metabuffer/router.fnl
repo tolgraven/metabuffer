@@ -125,6 +125,16 @@
     (set session.prompt-update-token (+ 1 (or session.prompt-update-token 0)))
     (set session.prompt-update-dirty false)
     (cancel-prompt-update! session)
+    ;; Invalidate any queued preview updates immediately.
+    (set session.preview-update-token (+ 1 (or session.preview-update-token 0)))
+    (when session.preview-update-timer
+      (let [timer session.preview-update-timer
+            stopf (. timer :stop)
+            closef (. timer :close)]
+        (when stopf (pcall stopf timer))
+        (when closef (pcall closef timer))
+        (set session.preview-update-timer nil)))
+    (set session.preview-update-pending false)
     ;; Drop pending lazy refresh/syntax refresh work.
     (set session.lazy-refresh-dirty false)
     (set session.lazy-refresh-pending false)
@@ -1113,6 +1123,13 @@
 (fn cancel-preview-update! [session]
   (when session
     (set session.preview-update-token (+ 1 (or session.preview-update-token 0)))
+    (when session.preview-update-timer
+      (let [timer session.preview-update-timer
+            stopf (. timer :stop)
+            closef (. timer :close)]
+        (when stopf (pcall stopf timer))
+        (when closef (pcall closef timer))
+        (set session.preview-update-timer nil)))
     (set session.preview-update-pending false)))
 
 (fn schedule-preview-update! [session wait-ms]
@@ -1121,18 +1138,29 @@
     (set session.preview-update-pending true)
     (set session.preview-update-token (+ 1 (or session.preview-update-token 0)))
     (let [token session.preview-update-token
-          target-path (selected-preview-path session)]
-      (vim.defer_fn
-        (fn []
-          (when (= token session.preview-update-token)
-            (set session.preview-update-pending false))
-          (when (and session
-                     (= token session.preview-update-token)
-                     session.prompt-buf
-                     (= (. M.active-by-prompt session.prompt-buf) session)
-                     (= target-path (selected-preview-path session)))
-            (pcall update-preview-window! session)))
-        (math.max 0 (or wait-ms 0))))))
+          target-path (selected-preview-path session)
+          timer (vim.loop.new_timer)]
+      (set session.preview-update-timer timer)
+      ((. timer :start)
+       timer
+       (math.max 0 (or wait-ms 0))
+       0
+       (vim.schedule_wrap
+         (fn []
+           (when (and session.preview-update-timer
+                      (= session.preview-update-timer timer))
+             (let [stopf (. timer :stop)
+                   closef (. timer :close)]
+               (when stopf (pcall stopf timer))
+               (when closef (pcall closef timer))
+               (set session.preview-update-timer nil)
+               (set session.preview-update-pending false)))
+           (when (and session
+                      (= token session.preview-update-token)
+                      session.prompt-buf
+                      (= (. M.active-by-prompt session.prompt-buf) session)
+                      (= target-path (selected-preview-path session)))
+             (pcall update-preview-window! session))))))))
 
 (fn maybe-update-preview-for-selection! [session]
   (let [target-path (selected-preview-path session)
