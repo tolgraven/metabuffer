@@ -115,6 +115,19 @@
       (set session.prompt-update-timer nil)
       (set session.prompt-update-pending false))))
 
+(fn begin-session-close! [session]
+  (when session
+    (set session.closing true)
+    ;; Invalidate any queued prompt updates immediately.
+    (set session.prompt-update-token (+ 1 (or session.prompt-update-token 0)))
+    (set session.prompt-update-dirty false)
+    (cancel-prompt-update! session)
+    ;; Drop pending lazy refresh/syntax refresh work.
+    (set session.lazy-refresh-dirty false)
+    (set session.lazy-refresh-pending false)
+    (set session.syntax-refresh-dirty false)
+    (set session.syntax-refresh-pending false)))
+
 (fn schedule-prompt-update! [session wait-ms]
   (when session
     (cancel-prompt-update! session)
@@ -596,7 +609,7 @@
         all-groups)))
 
 (fn schedule-lazy-refresh! [session]
-  (when (and session (session-active? session))
+  (when (and session (session-active? session) (not session.closing))
     (set session.lazy-refresh-dirty true)
     (when (not session.lazy-refresh-pending)
       (set session.lazy-refresh-pending true)
@@ -1459,7 +1472,7 @@
       (set (. M.active-by-prompt session.prompt-buf) nil))))
 
 (set apply-prompt-lines (fn [session]
-  (when (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
+  (when (and session (not session.closing) (vim.api.nvim_buf_is_valid session.prompt-buf))
     (let [lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
       (set session.last-prompt-text (table.concat lines "\n"))
       (let [parsed (if session.project-mode
@@ -1530,7 +1543,7 @@
 
 (fn M.on-prompt-changed [prompt-buf force]
   (let [session (. M.active-by-prompt prompt-buf)]
-    (when session
+    (when (and session (not session.closing))
       (let [txt (prompt-text session)]
         (if (and (not force) (= txt (or session.prompt-last-event-text "")))
             nil
@@ -1558,6 +1571,7 @@
   (set session.last-prompt-text (prompt-text session))
   (push-history! session.last-prompt-text)
   (apply-prompt-lines session)
+  (begin-session-close! session)
   (pcall vim.cmd "stopinsert")
   (let [matcher (curr.matcher)]
     (when matcher
@@ -1596,6 +1610,7 @@
 
 (fn finish-cancel [session]
   (local curr session.meta)
+  (begin-session-close! session)
   (set session.last-prompt-text (prompt-text session))
   (push-history! session.last-prompt-text)
   (pcall vim.cmd "stopinsert")
