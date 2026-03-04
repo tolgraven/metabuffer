@@ -1716,7 +1716,13 @@
   ;; scratch prompt buffer; keep a low-level line-change hook as a fallback.
   (vim.api.nvim_buf_attach session.prompt-buf false
     {:on_lines (fn [_ _ _ _ _ _ _ _]
-                 (M.on-prompt-changed session.prompt-buf))
+                 ;; on_lines can fire before insert-state buffer text is fully
+                 ;; visible; defer one tick so we observe the committed prompt.
+                 (vim.schedule
+                   (fn []
+                     (when (and session.prompt-buf
+                                (= (. M.active-by-prompt session.prompt-buf) session))
+                       (M.on-prompt-changed session.prompt-buf)))))
      :on_detach (fn []
                   (when session.prompt-buf
                     (set (. M.active-by-prompt session.prompt-buf) nil)))})
