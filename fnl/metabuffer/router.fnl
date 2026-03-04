@@ -1419,16 +1419,14 @@
 (fn M.on-prompt-changed [prompt-buf]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
-      ;; Buffer change callbacks run under textlock; adaptive rate limit:
-      ;; apply immediately when due, otherwise wait only the remaining delay.
-      (set session.prompt-update-dirty true)
-      (when (not session.prompt-update-pending)
-        (let [delay (prompt-update-delay-ms session)
-              now (now-ms)
-              last (or session.prompt-last-apply-ms 0)
-              since (- now last)
-              wait (if (>= since delay) 0 (- delay since))]
-          (schedule-prompt-update! session wait))))))
+      ;; Buffer change callbacks run under textlock; schedule on next tick so
+      ;; rendering/window mutations are allowed. Correctness over throttling.
+      (vim.schedule
+        (fn []
+          (when (and session
+                     session.prompt-buf
+                     (= (. M.active-by-prompt session.prompt-buf) session))
+            (apply-prompt-lines session)))))))
 
 (fn finish-accept [session]
   (local curr session.meta)
