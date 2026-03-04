@@ -724,6 +724,39 @@
   (set meta.selected_index (math.max 0 (math.min meta.selected_index (math.max 0 (- (# meta.buf.indices) 1)))))
   (set meta._prev_text ""))
 
+(fn apply-minimal-source-set! [session]
+  (local meta session.meta)
+  (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
+  (set session.lazy-stream-done true)
+  (set meta.buf.content (vim.deepcopy session.single-content))
+  (set meta.buf.source-refs (vim.deepcopy session.single-refs))
+  (set meta.buf.show-source-prefix false)
+  (set meta.buf.show-source-separators session.project-mode)
+  (set meta.buf.all-indices [])
+  (for [i 1 (# meta.buf.content)]
+    (table.insert meta.buf.all-indices i))
+  (set meta.buf.indices (vim.deepcopy meta.buf.all-indices))
+  (set meta.selected_index (math.max 0 (math.min meta.selected_index (math.max 0 (- (# meta.buf.indices) 1)))))
+  (set meta._prev_text ""))
+
+(fn schedule-project-bootstrap! [session]
+  (when (and session
+             session.project-mode
+             (not session.project-bootstrap-pending)
+             (not session.project-bootstrapped))
+    (set session.project-bootstrap-pending true)
+    (vim.schedule
+      (fn []
+        (set session.project-bootstrap-pending false)
+        (when (and session
+                   session.project-mode
+                   session.prompt-buf
+                   (= (. M.active-by-prompt session.prompt-buf) session)
+                   (not session.project-bootstrapped))
+          (apply-source-set! session)
+          (set session.project-bootstrapped true)
+          (M.on-prompt-changed session.prompt-buf))))))
+
 (fn ensure-info-window! [session]
   (when (not (and session.info-win (vim.api.nvim_win_is_valid session.info-win)))
     (let [buf (vim.api.nvim_create_buf false true)
@@ -1750,6 +1783,8 @@
                    :effective-include-hidden start-hidden
                    :effective-include-ignored start-ignored
                    :effective-include-deps start-deps
+                   :project-bootstrap-pending false
+                   :project-bootstrapped (not (or project-mode false))
                    :prefilter-mode start-prefilter
                    :lazy-mode start-lazy
                    :last-parsed-query {:lines (if (and query (~= query ""))
@@ -1763,7 +1798,9 @@
                    :single-content (vim.deepcopy curr.buf.content)
                    :single-refs (vim.deepcopy (or curr.buf.source-refs []))
                    :meta curr}]
-      (apply-source-set! session)
+      (if session.project-mode
+          (apply-minimal-source-set! session)
+          (apply-source-set! session))
       (set curr.status-win (meta_window_mod.new vim prompt-win.window))
       ;; Statusline info should live in prompt window, not result split.
       (curr.win.set-statusline "")
@@ -1778,6 +1815,8 @@
       (restore-meta-view! curr source-view)
       (vim.api.nvim_set_current_win prompt-win.window)
       (vim.cmd "startinsert")
+      (when session.project-mode
+        (schedule-project-bootstrap! session))
       (set (. M.instances source-buf) curr)
       curr))))
 
