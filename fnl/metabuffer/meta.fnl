@@ -2,7 +2,6 @@
 (local prompt_action_mod (require :metabuffer.prompt.action))
 (local modeindexer (require :metabuffer.modeindexer))
 (local state (require :metabuffer.core.state))
-(local action (require :metabuffer.action))
 (local all_matcher (require :metabuffer.matcher.all))
 (local fuzzy_matcher (require :metabuffer.matcher.fuzzy))
 (local regex_matcher (require :metabuffer.matcher.regex))
@@ -22,6 +21,25 @@
                       "[No Name]")]
     (.. base-name " • Metabuffer")))
 
+(fn project-display-name []
+  "Metabuffer")
+
+(fn nerd-font-enabled? []
+  (or (= (. vim.g "meta#nerd_font") true)
+      (= (. vim.g "meta#nerd_font") 1)
+      (= vim.g.have_nerd_font true)
+      (= vim.g.have_nerd_font 1)
+      (= vim.g.nerd_font true)
+      (= vim.g.nerd_font 1)))
+
+(fn statusline-mode-state []
+  (let [m (or (. (vim.api.nvim_get_mode) :mode) "")]
+    (if (vim.startswith m "R")
+        {:group "Replace" :label (if (nerd-font-enabled?) "R" "Replace")}
+        (vim.startswith m "i")
+        {:group "Insert" :label (if (nerd-font-enabled?) "𝐈" "Insert")}
+        {:group "Normal" :label (if (nerd-font-enabled?) "𝗡" "Normal")})))
+
 (fn M.new [nvim condition]
   (local cond (or condition (state.default-condition "")))
   (local self (prompt_mod.new nvim))
@@ -35,10 +53,6 @@
   (set self.query-lines [])
 
   (set self.action prompt_action_mod.DEFAULT_ACTION)
-  (self.action.register_from_rules action.DEFAULT_ACTION_RULES)
-  (self.keymap.register_from_rules nvim action.DEFAULT_ACTION_KEYMAP)
-  (when (= (type (. vim.g "meta#custom_mappings")) "table")
-    (self.keymap.register_from_rules nvim (. vim.g "meta#custom_mappings")))
 
   (set self.win (meta_window_mod.new nvim (vim.api.nvim_get_current_win)))
   (set self.status-win self.win)
@@ -59,7 +73,7 @@
         :syntax (modeindexer.new state.syntax-types (or cond.syntax-index 1)
                                  {:on-active (fn [idx]
                                                (self.buf.apply-syntax
-                                                (if (= (idx.current) "meta") "meta" nil)))})})
+                                                (if (= (idx.current) "meta") "meta" "buffer")))})})
 
   (set self.text (or cond.text ""))
   (when (~= self.text "")
@@ -110,11 +124,11 @@
         (.. caseprefix pat)))))
 
   (fn self.refresh_statusline []
-    (local mode_suffix (if (= self.insert-mode prompt_mod.INSERT_MODE_REPLACE) "Replace" "Insert"))
+    (local mode-state (statusline-mode-state))
     (local hl_prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer"))
     (self.status-win.set-statusline-state
-      mode_suffix
-      "# " self.text
+      (. mode-state :group)
+      (. mode-state :label)
       self.buf.name
       (# self.buf.indices)
       (self.buf.line-count)
@@ -127,7 +141,9 @@
     (vim.cmd "redrawstatus"))
 
   (fn self.on-init []
-    (self.buf.set-name (metabuffer-display-name self.buf.model))
+    (self.buf.set-name (if self.project-mode
+                           (project-display-name)
+                           (metabuffer-display-name self.buf.model)))
     (local init-syntax (or (. vim.g "meta#syntax_on_init") "buffer"))
     (self.buf.apply-syntax (if (= init-syntax "meta") "meta" "buffer"))
     (clear-all-highlights)

@@ -3,6 +3,7 @@
 (local action_mod (require :metabuffer.prompt.action))
 (local keymap_mod (require :metabuffer.prompt.keymap))
 (local util (require :metabuffer.prompt.util))
+(local debug (require :metabuffer.debug))
 
 (local M {})
 
@@ -17,15 +18,8 @@
 
 (set M.DEFAULT_HARVEST_INTERVAL 0.033)
 
-(fn debug-enabled? []
-  (or (= (. vim.g "meta#debug") 1)
-      (= (. vim.g "meta#debug") true)))
-
 (fn debug-log [msg]
-  (when (debug-enabled?)
-    (let [path (or (. vim.g "meta#debug_log") "/tmp/metabuffer-debug.log")
-          line (.. (os.date "%Y-%m-%d %H:%M:%S") " " msg)]
-      (pcall vim.fn.writefile [line] path "a"))))
+  (debug.log "prompt" msg))
 
 (fn is_action_keystroke [s]
   (and (= (type s) "string")

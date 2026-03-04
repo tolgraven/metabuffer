@@ -33,6 +33,12 @@ Utility scripts:
 
 # One-shot project compile via headless Neovim + embedded nfnl
 ./scripts/compile-fennel.sh
+
+# Continuous Fennel lint watch (fast syntax/parens feedback)
+./scripts/watch-fennel.sh
+
+# Lint + full compile watch (heavier, end-to-end)
+./scripts/watch-fennel.sh --compile
 ```
 
 Repository hygiene (aligned with nfnl recommendations):
@@ -42,12 +48,16 @@ Repository hygiene (aligned with nfnl recommendations):
 
 ## Commands
 
-- `:Meta[!] [query]`
+- `:Meta[!] [query]` (`!` starts repo-wide source mode)
 - `:MetaResume [query]`
 - `:MetaCursorWord`
 - `:MetaResumeCursorWord`
 - `:MetaSync [query]`
 - `:MetaPush`
+
+Runtime toggles while Meta is active:
+
+- `<C-b>` toggle repo-wide source mode (shows floating source info window on the right)
 
 ## Module Structure
 
