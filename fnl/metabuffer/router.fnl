@@ -442,8 +442,8 @@
                   all0 (. cache ref.path)
                   all (if (= (type all0) "table")
                           all0
-                          (let [[ok lines] [(pcall vim.fn.readfile ref.path)]]
-                            (if (and ok (= (type lines) "table"))
+                          (let [lines (read-file-lines-cached ref.path)]
+                            (if (= (type lines) "table")
                                 (do
                                   (set (. cache ref.path) lines)
                                   lines)
@@ -473,8 +473,8 @@
                 cached (. cache ref.path)]
             (if (and cached (vim.api.nvim_buf_is_valid cached))
                 cached
-                (let [[ok lines] [(pcall vim.fn.readfile ref.path)]]
-                  (if (and ok (= (type lines) "table"))
+                (let [lines (read-file-lines-cached ref.path)]
+                  (if (= (type lines) "table")
                         (let [buf (vim.api.nvim_create_buf false true)
                               ft (filetype-for-ref ref)]
                         (mark-preview-buffer! buf)
