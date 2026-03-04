@@ -24,7 +24,7 @@
 (set M.info-max-lines (or vim.g.meta_info_max_lines 10000))
 (set M.info-min-width (or vim.g.meta_info_width 28))
 (set M.info-max-width (or vim.g.meta_info_max_width 52))
-(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 120))
+(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 100))
 (set M.prompt-update-idle-ms (or vim.g.meta_prompt_update_idle_ms 90))
 (set M.project-file-cache {})
 (set M.project-lazy-enabled (if (= vim.g.meta_project_lazy_enabled nil) true vim.g.meta_project_lazy_enabled))
