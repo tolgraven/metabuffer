@@ -177,19 +177,20 @@
 
   (fn self.on-update [status]
     (let [queries (self.active-queries)
-          prev_text self._prev_text
-          prev_hits self.buf.indices
-          prev_line (line_of_index self.buf self.selected_index)
+          prev-text self._prev_text
+          prev-hits self.buf.indices
+          prev-line (line_of_index self.buf self.selected_index)
           matcher-name (. (self.matcher) :name)
           ignorecase (self.ignorecase)
           line-count (# self.buf.content)
-          _cache-reset? (~= self._filter-cache-line-count line-count)
-          _cache-key (.. matcher-name "|" (if ignorecase "1" "0") "|" (table.concat queries "\n"))
-          _reset_if (or (= prev_text "")
-                        (not (vim.startswith self.text prev_text))
-                        (~= self._prev-ignorecase ignorecase)
-                        (~= self._prev-matcher matcher-name))]
-      (when _cache-reset?
+          cache-reset? (~= self._filter-cache-line-count line-count)
+          cache-key (.. matcher-name "|" (if ignorecase "1" "0") "|" (table.concat queries "\n"))
+          reset? (or (= prev-text "")
+                     (not (vim.startswith self.text prev-text))
+                     cache-reset?
+                     (~= self._prev-ignorecase ignorecase)
+                     (~= self._prev-matcher matcher-name))]
+      (when cache-reset?
         (set self._filter-cache {})
         (set self._filter-cache-line-count line-count))
       (set self._prev_text self.text)
@@ -200,38 +201,42 @@
           (do
             (self.buf.reset-filter)
             (clear-all-highlights))
-          (let [cached (. self._filter-cache _cache-key)
+          (let [cached (. self._filter-cache cache-key)
                 matcher (self.matcher)]
             (if cached
+                ;; Copy cached indices so future incremental updates cannot
+                ;; accidentally mutate cache entries by reference.
+                (set self.buf.indices (vim.deepcopy cached))
                 (do
-                  (set self.buf.indices cached)
-                  (if (< (# self.buf.indices) 1000)
-                      (matcher.highlight matcher self.text ignorecase self.win.window)
-                      (matcher.remove-highlight matcher)))
-                (do
-                  (var first _reset_if)
+                  (var first reset?)
                   (each [_ q (ipairs queries)]
                     (self.buf.run-filter matcher q ignorecase first self.win.window)
                     (set first false))
-                  (set (. self._filter-cache _cache-key) self.buf.indices)))))
-      (local hits-changed (if (= prev_hits self.buf.indices)
+                  (set (. self._filter-cache cache-key) (vim.deepcopy self.buf.indices))))))
+      (local hits-changed (if (= prev-hits self.buf.indices)
                               false
-                              (if (~= (# prev_hits) (# self.buf.indices))
+                              (if (~= (# prev-hits) (# self.buf.indices))
                                   true
-                                  (not (vim.deep_equal prev_hits self.buf.indices)))))
+                                  (not (vim.deep_equal prev-hits self.buf.indices)))))
       (when hits-changed
         (self.buf.render))
       (when hits-changed
         (var idx nil)
         (each [i src (ipairs self.buf.indices)]
-          (when (and (not idx) (= src prev_line))
+          (when (and (not idx) (= src prev-line))
             (set idx i)))
         (when (not idx)
-          (set idx (self.buf.closest-index prev_line)))
+          (set idx (self.buf.closest-index prev-line)))
         (when idx
           (set self.selected_index (- idx 1))
           (when (vim.api.nvim_win_is_valid self.win.window)
-            (vim.api.nvim_win_set_cursor self.win.window [idx 0])))))
+            (vim.api.nvim_win_set_cursor self.win.window [idx 0]))))
+      ;; Render can refresh/clear syntax regions; re-apply match highlights
+      ;; afterward so visible hit highlighting remains stable.
+      (let [matcher (self.matcher)]
+        (if (or (= (# queries) 0) (>= (# self.buf.indices) 1000))
+            (matcher.remove-highlight matcher)
+            (matcher.highlight matcher self.text ignorecase self.win.window))))
     status)
 
   (fn self.on-term [status]

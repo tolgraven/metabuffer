@@ -1419,14 +1419,16 @@
 (fn M.on-prompt-changed [prompt-buf]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
-      ;; Buffer change callbacks run under textlock; schedule on next tick so
-      ;; rendering/window mutations are allowed. Correctness over throttling.
-      (vim.schedule
-        (fn []
-          (when (and session
-                     session.prompt-buf
-                     (= (. M.active-by-prompt session.prompt-buf) session))
-            (apply-prompt-lines session)))))))
+      ;; Keep prompt updates trailing-edge debounced so heavy filter/render work
+      ;; cannot leave input state one keystroke behind under load.
+      (set session.prompt-update-dirty true)
+      (set session.prompt-last-change-ms (now-ms))
+      (when (not session.prompt-update-pending)
+        (set session.prompt-last-apply-ms (or session.prompt-last-apply-ms 0))
+        (let [elapsed (- (now-ms) session.prompt-last-apply-ms)
+              delay (math.max 0 (prompt-update-delay-ms session))
+              wait (math.max 0 (- delay elapsed))]
+          (schedule-prompt-update! session wait))))))
 
 (fn finish-accept [session]
   (local curr session.meta)
@@ -1710,15 +1712,8 @@
         [["n" "i"] "<C-t>" (fn [] (M.toggle-project-mode session.prompt-buf))] ]))
   (local aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true}))
   (set session.augroup aug)
-  ;; Low-level buffer attach catches edits reliably across Insert/Normal modes
-  ;; and user configs where TextChangedI autocmds may not fire as expected.
-  (vim.api.nvim_buf_attach session.prompt-buf false
-    {:on_lines (fn [_ _ _ _ _ _ _ _]
-                 (M.on-prompt-changed session.prompt-buf))
-     :on_detach (fn []
-                  (when session.prompt-buf
-                    (set (. M.active-by-prompt session.prompt-buf) nil)))})
-  ;; Keep autocmd hooks as a fallback.
+  ;; Prompt text updates: rely on post-change autocmds to avoid pre-edit race
+  ;; behavior that can leave matcher one character behind while typing.
   (vim.api.nvim_create_autocmd ["TextChanged" "TextChangedI"]
     {:group aug
      :buffer session.prompt-buf
