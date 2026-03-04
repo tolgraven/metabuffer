@@ -5,6 +5,6 @@
 - 2 [] prompt window scratch buffer should also be renamed so looks better when navigating away from tmux split
 - 3 [] rework all files per guidelines in AGENTS.md, especially around function definitions (separate line, small docstr).
 - 4 [x] change the keymaps to use builder functions rather than tons of redundant repetition.
-- 5 [] lazy hits in general. stream results if Meta! init > 200ms, don't wait for them all. (additional debounce for each incoming chunk)
+- 5 [x] MOVED TO FEATURE: lazy hits in general. stream results if Meta! init > 100ms, don't wait for them all. (additional debounce for each incoming chunk)
 - 6 [] inspect entire Fennel codebase (exception nfnl/) for mutability and similar. Rework so that things are pure if that is feasible, only mutate when absolutely necessary (due to performance or otherwise).
 - 7 [] closing bang mode incurs a noticable delay. We should unload buffers async and in background, and only after closing our windows etc.
