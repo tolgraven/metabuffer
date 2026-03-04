@@ -20,6 +20,7 @@
 (set M.info-max-lines (or vim.g.meta_info_max_lines 10000))
 (set M.info-min-width (or vim.g.meta_info_width 28))
 (set M.info-max-width (or vim.g.meta_info_max_width 52))
+(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 40))
 (set M.project-file-cache {})
 (set M.project-lazy-enabled (if (= vim.g.meta_project_lazy_enabled nil) true vim.g.meta_project_lazy_enabled))
 (set M.project-lazy-disable-headless (if (= vim.g.meta_project_lazy_disable_headless nil) true vim.g.meta_project_lazy_disable_headless))
@@ -60,6 +61,17 @@
   (.. (string.rep " " (math.max 0 (- width (+ (# lnum) 1))))
       lnum
       " "))
+
+(fn numeric-max [vals default]
+  (let [fallback (or default 0)]
+    (if (or (not vals) (= (# vals) 0))
+        fallback
+        (let [m0 (or (. vals 1) fallback)]
+          (var m m0)
+          (for [i 2 (# vals)]
+            (when (> (. vals i) m)
+              (set m (. vals i))))
+          m))))
 
 (fn mark-preview-buffer! [buf]
   (when (and buf (vim.api.nvim_buf_is_valid buf))
@@ -722,7 +734,9 @@
     (table.insert meta.buf.all-indices i))
   (set meta.buf.indices (vim.deepcopy meta.buf.all-indices))
   (set meta.selected_index (math.max 0 (math.min meta.selected_index (math.max 0 (- (# meta.buf.indices) 1)))))
-  (set meta._prev_text ""))
+  (set meta._prev_text "")
+  (set meta._filter-cache {})
+  (set meta._filter-cache-line-count (# meta.buf.content)))
 
 (fn apply-minimal-source-set! [session]
   (local meta session.meta)
@@ -737,7 +751,9 @@
     (table.insert meta.buf.all-indices i))
   (set meta.buf.indices (vim.deepcopy meta.buf.all-indices))
   (set meta.selected_index (math.max 0 (math.min meta.selected_index (math.max 0 (- (# meta.buf.indices) 1)))))
-  (set meta._prev_text ""))
+  (set meta._prev_text "")
+  (set meta._filter-cache {})
+  (set meta._filter-cache-line-count (# meta.buf.content)))
 
 (fn schedule-project-bootstrap! [session]
   (when (and session
@@ -921,8 +937,7 @@
 (fn fit-info-width! [session lines]
   (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
     (let [widths (vim.tbl_map (fn [line] (# line)) (or lines []))
-          unpack-fn (or table.unpack unpack)
-          max-len (if (and (> (# widths) 0) unpack-fn) (math.max (unpack-fn widths)) 0)
+          max-len (numeric-max widths 0)
           needed max-len
           max-available (math.max M.info-min-width (math.floor (* vim.o.columns 0.34)))
           upper (math.min M.info-max-width max-available)
@@ -1077,10 +1092,7 @@
                                                     ref (. refs src-idx)
                                                     lnum (tostring (or (and ref ref.lnum) src-idx))]
                                                 (table.insert lens (# lnum))))
-                                            (let [unpack-fn (or table.unpack unpack)]
-                                              (if (and unpack-fn (> (# lens) 0))
-                                                  (math.max (unpack-fn lens))
-                                                  1)))
+                                            (numeric-max lens 1))
                                           1)]
                      (lnum-width-from-max-len max-lnum-len))
         path-width (math.max 1 (- target-width lnum-width))
@@ -1370,10 +1382,26 @@
 (fn M.on-prompt-changed [prompt-buf]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
-      ;; Buffer change callbacks run under textlock; schedule updates so
-      ;; rendering and window mutations are allowed.
-      (vim.schedule (fn []
-                      (apply-prompt-lines session))))))
+      ;; Buffer change callbacks run under textlock; debounce updates so we
+      ;; don't rerender on every raw on_lines notification while typing.
+      (set session.prompt-update-dirty true)
+      (when (not session.prompt-update-pending)
+        (set session.prompt-update-pending true)
+        (vim.defer_fn
+          (fn []
+            (set session.prompt-update-pending false)
+            (when (and session
+                       session.prompt-buf
+                       (= (. M.active-by-prompt session.prompt-buf) session)
+                       session.prompt-update-dirty)
+              (set session.prompt-update-dirty false)
+              (apply-prompt-lines session))
+            (when (and session
+                       session.prompt-buf
+                       (= (. M.active-by-prompt session.prompt-buf) session)
+                       session.prompt-update-dirty)
+              (M.on-prompt-changed session.prompt-buf)))
+          (math.max 0 M.prompt-update-debounce-ms))))))
 
 (fn finish-accept [session]
   (local curr session.meta)
@@ -1776,6 +1804,8 @@
                    :last-prompt-text (table.concat initial-lines "\n")
                    :last-history-text ""
                    :history-index 0
+                   :prompt-update-pending false
+                   :prompt-update-dirty false
                    :project-mode (or project-mode false)
                    :include-hidden start-hidden
                    :include-ignored start-ignored

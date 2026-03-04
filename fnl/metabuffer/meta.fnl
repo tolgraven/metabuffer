@@ -51,12 +51,16 @@
   (set self.debug_out "")
   (set self.prefix "# ")
   (set self.query-lines [])
+  (set self._prev-ignorecase nil)
+  (set self._prev-matcher nil)
 
   (set self.action prompt_action_mod.DEFAULT_ACTION)
 
   (set self.win (meta_window_mod.new nvim (vim.api.nvim_get_current_win)))
   (set self.status-win self.win)
   (set self.buf (meta_buffer_mod.new nvim (vim.api.nvim_get_current_buf)))
+  (set self._filter-cache {})
+  (set self._filter-cache-line-count (# self.buf.content))
   (local prompt-on-term self.on-term)
   (fn clear-all-highlights []
     (let [matcher-mode (. self.mode :matcher)]
@@ -174,22 +178,50 @@
   (fn self.on-update [status]
     (let [queries (self.active-queries)
           prev_text self._prev_text
-          prev_hits (util.deepcopy self.buf.indices)
+          prev_hits self.buf.indices
           prev_line (line_of_index self.buf self.selected_index)
-          _reset_if (or (= prev_text "") (not (vim.startswith self.text prev_text)))]
+          matcher-name (. (self.matcher) :name)
+          ignorecase (self.ignorecase)
+          line-count (# self.buf.content)
+          _cache-reset? (~= self._filter-cache-line-count line-count)
+          _cache-key (.. matcher-name "|" (if ignorecase "1" "0") "|" (table.concat queries "\n"))
+          _reset_if (or (= prev_text "")
+                        (not (vim.startswith self.text prev_text))
+                        (~= self._prev-ignorecase ignorecase)
+                        (~= self._prev-matcher matcher-name))]
+      (when _cache-reset?
+        (set self._filter-cache {})
+        (set self._filter-cache-line-count line-count))
       (set self._prev_text self.text)
+      (set self._prev-ignorecase ignorecase)
+      (set self._prev-matcher matcher-name)
       (set self.updates (+ self.updates 1))
       (if (= (# queries) 0)
           (do
             (self.buf.reset-filter)
             (clear-all-highlights))
-          (do
-            (var first true)
-            (each [_ q (ipairs queries)]
-              (self.buf.run-filter (self.matcher) q (self.ignorecase) first self.win.window)
-              (set first false))))
-      (self.buf.render)
-      (when (not (vim.deep_equal prev_hits self.buf.indices))
+          (let [cached (. self._filter-cache _cache-key)
+                matcher (self.matcher)]
+            (if cached
+                (do
+                  (set self.buf.indices cached)
+                  (if (< (# self.buf.indices) 1000)
+                      (matcher.highlight matcher self.text ignorecase self.win.window)
+                      (matcher.remove-highlight matcher)))
+                (do
+                  (var first _reset_if)
+                  (each [_ q (ipairs queries)]
+                    (self.buf.run-filter matcher q ignorecase first self.win.window)
+                    (set first false))
+                  (set (. self._filter-cache _cache-key) self.buf.indices)))))
+      (local hits-changed (if (= prev_hits self.buf.indices)
+                              false
+                              (if (~= (# prev_hits) (# self.buf.indices))
+                                  true
+                                  (not (vim.deep_equal prev_hits self.buf.indices)))))
+      (when hits-changed
+        (self.buf.render))
+      (when hits-changed
         (var idx nil)
         (each [i src (ipairs self.buf.indices)]
           (when (and (not idx) (= src prev_line))
