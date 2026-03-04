@@ -597,7 +597,7 @@
           (set session.lazy-refresh-pending false)
           (when (and session (session-active? session) session.lazy-refresh-dirty)
             (set session.lazy-refresh-dirty false)
-            (M.on-prompt-changed session.prompt-buf))
+            (M.on-prompt-changed session.prompt-buf true))
           (when (and session (session-active? session) session.lazy-refresh-dirty)
             (schedule-lazy-refresh! session)))
         (math.max 20 (or M.project-lazy-refresh-debounce-ms 80))))))
@@ -885,7 +885,18 @@
           ;; Avoid a bootstrap-triggered filter/view update for plain `:Meta!`
           ;; with empty prompt; defer filtering until the user types.
           (when (prompt-has-active-query? session)
-            (M.on-prompt-changed session.prompt-buf))))
+            (M.on-prompt-changed session.prompt-buf true))
+          ;; Keep selection/view stable even when no prompt filter is applied.
+          (when (not (prompt-has-active-query? session))
+            (pcall session.meta.buf.render)
+            (let [max-lines (math.max 1 (# session.meta.buf.indices))
+                  row (math.max 1
+                                (math.min (+ (math.max 0 (or session.meta.selected_index 0)) 1)
+                                          max-lines))]
+              (when (vim.api.nvim_win_is_valid session.meta.win.window)
+                (pcall vim.api.nvim_win_set_cursor session.meta.win.window [row 0])))
+            (pcall session.meta.refresh_statusline)
+            (pcall update-info-window session))))
       (math.max 0 (or M.project-bootstrap-delay-ms 120)))))
 
 (fn ensure-info-window! [session]
@@ -1494,19 +1505,24 @@
                                 (pcall update-info-window session)))
                             1))))))))
 
-(fn M.on-prompt-changed [prompt-buf]
+(fn M.on-prompt-changed [prompt-buf force]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
-      ;; Prompt display state is independent; matcher query state updates only
-      ;; in deferred apply-prompt-lines.
-      (set session.last-prompt-text (prompt-text session))
-      (set session.prompt-update-dirty true)
-      (set session.prompt-last-change-ms (now-ms))
-      (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
-      ;; Avoid double post-typing updates in project mode while bootstrap is
-      ;; still pending; we'll schedule exactly one refresh once bootstrap ends.
-      (when (or (not session.project-mode) session.project-bootstrapped)
-        (schedule-prompt-update! session (prompt-update-delay-ms session))))))
+      (let [txt (prompt-text session)]
+        (if (and (not force) (= txt (or session.prompt-last-event-text "")))
+            nil
+            (do
+              ;; Prompt display state is independent; matcher query state updates only
+              ;; in deferred apply-prompt-lines.
+              (set session.prompt-last-event-text txt)
+              (set session.last-prompt-text txt)
+              (set session.prompt-update-dirty true)
+              (set session.prompt-last-change-ms (now-ms))
+              (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
+              ;; Avoid double post-typing updates in project mode while bootstrap is
+              ;; still pending; we'll schedule exactly one refresh once bootstrap ends.
+              (when (or (not session.project-mode) session.project-bootstrapped)
+                (schedule-prompt-update! session (prompt-update-delay-ms session)))))))))
 
 (fn finish-accept [session]
   (local curr session.meta)
@@ -1671,6 +1687,7 @@
   (when (and session
              (vim.api.nvim_win_is_valid session.meta.win.window)
              (vim.api.nvim_buf_is_valid session.prompt-buf)
+             (= (vim.api.nvim_get_current_win) session.meta.win.window)
              (= (. M.active-by-prompt session.prompt-buf) session))
     (let [before session.meta.selected_index]
       (sync-selected-from-main-cursor! session)
@@ -1921,6 +1938,7 @@
                    :prompt-update-dirty false
                    :prompt-change-seq 0
                    :prompt-last-apply-ms 0
+                   :prompt-last-event-text (table.concat initial-lines "\n")
                    :project-mode (or project-mode false)
                    :include-hidden start-hidden
                    :include-ignored start-ignored
