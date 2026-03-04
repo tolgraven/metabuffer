@@ -1486,7 +1486,10 @@
       (set session.prompt-update-dirty true)
       (set session.prompt-last-change-ms (now-ms))
       (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
-      (schedule-prompt-update! session (prompt-update-delay-ms session)))))
+      ;; Avoid double post-typing updates in project mode while bootstrap is
+      ;; still pending; we'll schedule exactly one refresh once bootstrap ends.
+      (when (or (not session.project-mode) session.project-bootstrapped)
+        (schedule-prompt-update! session (prompt-update-delay-ms session))))))
 
 (fn finish-accept [session]
   (local curr session.meta)
