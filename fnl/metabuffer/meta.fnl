@@ -183,15 +183,22 @@
           matcher-name (. (self.matcher) :name)
           ignorecase (self.ignorecase)
           line-count (# self.buf.content)
-          cache-reset? (~= self._filter-cache-line-count line-count)
+          cache-grew? (> line-count self._filter-cache-line-count)
+          cache-shrank? (< line-count self._filter-cache-line-count)
+          cache-reset? cache-shrank?
           cache-key (.. matcher-name "|" (if ignorecase "1" "0") "|" (table.concat queries "\n"))
           reset? (or (= prev-text "")
                      (not (vim.startswith self.text prev-text))
+                     ;; When backing cache is stale and we cannot reuse a cached
+                     ;; query entry, recompute from full set to include new lines.
+                     cache-grew?
                      cache-reset?
                      (~= self._prev-ignorecase ignorecase)
                      (~= self._prev-matcher matcher-name))]
       (when cache-reset?
         (set self._filter-cache {})
+        (set self._filter-cache-line-count line-count))
+      (when cache-grew?
         (set self._filter-cache-line-count line-count))
       (set self._prev_text self.text)
       (set self._prev-ignorecase ignorecase)
@@ -201,18 +208,45 @@
           (do
             (self.buf.reset-filter)
             (clear-all-highlights))
-          (let [cached (. self._filter-cache cache-key)
+          (let [cached0 (. self._filter-cache cache-key)
+                cached-obj? (and (= (type cached0) "table")
+                                 (= (type (. cached0 :indices)) "table"))
+                cached (if cached-obj?
+                           (. cached0 :indices)
+                           (if (= (type cached0) "table") cached0 nil))
+                cached-line-count0 (if cached-obj?
+                                       (or (. cached0 :line-count) line-count)
+                                       self._filter-cache-line-count)
                 matcher (self.matcher)]
             (if cached
-                ;; Copy cached indices so future incremental updates cannot
-                ;; accidentally mutate cache entries by reference.
-                (set self.buf.indices (vim.deepcopy cached))
+                (do
+                  (var cached-line-count cached-line-count0)
+                  ;; Extend cached results incrementally when project streaming
+                  ;; appended lines since this cache entry was materialized.
+                  (local next (vim.deepcopy cached))
+                  (when (< cached-line-count line-count)
+                    (let [added0 []]
+                      (var added added0)
+                      (for [i (+ cached-line-count 1) line-count]
+                        (table.insert added i))
+                      (each [_ q (ipairs queries)]
+                        (set added (matcher.filter matcher q added self.buf.content ignorecase)))
+                      (each [_ idx (ipairs added)]
+                        (table.insert next idx))
+                      (set cached-line-count line-count)))
+                  ;; Copy cached indices so future incremental updates cannot
+                  ;; accidentally mutate cache entries by reference.
+                  (set self.buf.indices (vim.deepcopy next))
+                  (set (. self._filter-cache cache-key)
+                       {:indices (vim.deepcopy next) :line-count line-count}))
                 (do
                   (var first reset?)
                   (each [_ q (ipairs queries)]
                     (self.buf.run-filter matcher q ignorecase first self.win.window)
                     (set first false))
-                  (set (. self._filter-cache cache-key) (vim.deepcopy self.buf.indices))))))
+                  (set (. self._filter-cache cache-key)
+                       {:indices (vim.deepcopy self.buf.indices)
+                        :line-count line-count})))))
       (local hits-changed (if (= prev-hits self.buf.indices)
                               false
                               (if (~= (# prev-hits) (# self.buf.indices))
