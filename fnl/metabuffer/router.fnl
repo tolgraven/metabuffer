@@ -13,6 +13,7 @@
 (var update-info-window nil)
 (var apply-prompt-lines nil)
 (var prompt-lines nil)
+(var parse-query-lines nil)
 (set M.history-max 100)
 (set M.project-max-file-bytes (or vim.g.meta_project_max_file_bytes (* 1024 1024)))
 (set M.project-max-total-lines (or vim.g.meta_project_max_total_lines 200000))
@@ -233,7 +234,7 @@
                                     [:lazy true]
                                     nil))))))))))))
 
-(fn parse-query-lines [lines]
+(set parse-query-lines (fn [lines]
   (var include-hidden nil)
   (var include-ignored nil)
   (var include-deps nil)
@@ -268,7 +269,7 @@
    :include-ignored include-ignored
    :include-deps include-deps
    :prefilter prefilter
-   :lazy lazy})
+   :lazy lazy}))
 
 (fn parse-query-text [query]
   (if (not (and (= (type query) "string") (~= query "")))
