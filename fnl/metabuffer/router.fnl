@@ -20,7 +20,7 @@
 (set M.info-max-lines (or vim.g.meta_info_max_lines 10000))
 (set M.info-min-width (or vim.g.meta_info_width 28))
 (set M.info-max-width (or vim.g.meta_info_max_width 52))
-(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 40))
+(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 16))
 (set M.project-file-cache {})
 (set M.project-lazy-enabled (if (= vim.g.meta_project_lazy_enabled nil) true vim.g.meta_project_lazy_enabled))
 (set M.project-lazy-disable-headless (if (= vim.g.meta_project_lazy_disable_headless nil) true vim.g.meta_project_lazy_disable_headless))
@@ -50,6 +50,42 @@
             p-row (. p-row-col 1)]
         (math.max 7 (- p-row 2)))
       (math.max 7 (- vim.o.lines (+ (prompt-height) 4)))))
+
+(fn now-ms []
+  (/ (vim.loop.hrtime) 1000000))
+
+(fn prompt-update-delay-ms [session]
+  (let [base (math.max 0 M.prompt-update-debounce-ms)
+        n (if (and session session.meta session.meta.buf session.meta.buf.indices)
+              (# session.meta.buf.indices)
+              0)
+        scale (if (< n 2000)
+                  0
+                  (if (< n 10000)
+                      6
+                      (if (< n 50000) 14 24)))
+        extra (if (and session session.project-mode (not session.lazy-stream-done)) 6 0)]
+    (+ base scale extra)))
+
+(fn schedule-prompt-update! [session wait-ms]
+  (when (and session (not session.prompt-update-pending))
+    (set session.prompt-update-pending true)
+    (vim.defer_fn
+      (fn []
+        (set session.prompt-update-pending false)
+        (when (and session
+                   session.prompt-buf
+                   (= (. M.active-by-prompt session.prompt-buf) session)
+                   session.prompt-update-dirty)
+          (set session.prompt-update-dirty false)
+          (set session.prompt-last-apply-ms (now-ms))
+          (apply-prompt-lines session))
+        (when (and session
+                   session.prompt-buf
+                   (= (. M.active-by-prompt session.prompt-buf) session)
+                   session.prompt-update-dirty)
+          (M.on-prompt-changed session.prompt-buf)))
+      (math.max 0 wait-ms))))
 
 (fn lnum-width-from-max-len [max-len]
   (+ (math.max 2 (or max-len 1)) 1))
@@ -1382,26 +1418,16 @@
 (fn M.on-prompt-changed [prompt-buf]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
-      ;; Buffer change callbacks run under textlock; debounce updates so we
-      ;; don't rerender on every raw on_lines notification while typing.
+      ;; Buffer change callbacks run under textlock; adaptive rate limit:
+      ;; apply immediately when due, otherwise wait only the remaining delay.
       (set session.prompt-update-dirty true)
       (when (not session.prompt-update-pending)
-        (set session.prompt-update-pending true)
-        (vim.defer_fn
-          (fn []
-            (set session.prompt-update-pending false)
-            (when (and session
-                       session.prompt-buf
-                       (= (. M.active-by-prompt session.prompt-buf) session)
-                       session.prompt-update-dirty)
-              (set session.prompt-update-dirty false)
-              (apply-prompt-lines session))
-            (when (and session
-                       session.prompt-buf
-                       (= (. M.active-by-prompt session.prompt-buf) session)
-                       session.prompt-update-dirty)
-              (M.on-prompt-changed session.prompt-buf)))
-          (math.max 0 M.prompt-update-debounce-ms))))))
+        (let [delay (prompt-update-delay-ms session)
+              now (now-ms)
+              last (or session.prompt-last-apply-ms 0)
+              since (- now last)
+              wait (if (>= since delay) 0 (- delay since))]
+          (schedule-prompt-update! session wait))))))
 
 (fn finish-accept [session]
   (local curr session.meta)
@@ -1806,6 +1832,7 @@
                    :history-index 0
                    :prompt-update-pending false
                    :prompt-update-dirty false
+                   :prompt-last-apply-ms 0
                    :project-mode (or project-mode false)
                    :include-hidden start-hidden
                    :include-ignored start-ignored
