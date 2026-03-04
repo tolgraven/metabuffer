@@ -1959,6 +1959,7 @@
                    :prompt-change-seq 0
                    :prompt-last-apply-ms 0
                    :prompt-last-event-text (table.concat initial-lines "\n")
+                   :initial-query-active (query-lines-has-active? (. parsed-query :lines))
                    :project-mode (or project-mode false)
                    :include-hidden start-hidden
                    :include-ignored start-ignored
@@ -1981,7 +1982,7 @@
                    :single-content (vim.deepcopy curr.buf.content)
                    :single-refs (vim.deepcopy (or curr.buf.source-refs []))
                    :meta curr}]
-      (local initial-query-active (query-lines-has-active? (. session.last-parsed-query :lines)))
+      (local initial-query-active session.initial-query-active)
       (if session.project-mode
           (if initial-query-active
               (apply-minimal-source-set! session)
@@ -2003,6 +2004,10 @@
       (set (. M.active-by-source source-buf) session)
       (set (. M.active-by-prompt prompt-buf) session)
       (apply-prompt-lines session)
+      ;; Ensure the results window cursor/view reflects selected_index after
+      ;; startup updates; preview may already be correct while main view lags.
+      (when (and session.project-mode (not initial-query-active))
+        (restore-meta-view! curr session.source-view))
       (vim.api.nvim_set_current_win prompt-win.window)
       (vim.cmd "startinsert")
       (when (and session.project-mode (not session.project-bootstrapped))
