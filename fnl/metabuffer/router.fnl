@@ -878,7 +878,9 @@
   (set meta.buf.content (vim.deepcopy session.single-content))
   (set meta.buf.source-refs (vim.deepcopy session.single-refs))
   (set meta.buf.show-source-prefix false)
-  (set meta.buf.show-source-separators session.project-mode)
+  ;; Keep startup lightweight for empty project mode; separators/syntax blocks
+  ;; become useful only after expanding to multi-file sources.
+  (set meta.buf.show-source-separators false)
   (set meta.buf.all-indices [])
   (for [i 1 (# meta.buf.content)]
     (table.insert meta.buf.all-indices i))
@@ -904,14 +906,15 @@
                    session.prompt-buf
                    (= (. M.active-by-prompt session.prompt-buf) session)
                    (not session.project-bootstrapped))
+          (local has-query (prompt-has-active-query? session))
           (apply-source-set! session)
           (set session.project-bootstrapped true)
           ;; Avoid a bootstrap-triggered filter/view update for plain `:Meta!`
           ;; with empty prompt; defer filtering until the user types.
-          (when (prompt-has-active-query? session)
+          (when has-query
             (M.on-prompt-changed session.prompt-buf true))
           ;; Keep selection/view stable even when no prompt filter is applied.
-          (when (not (prompt-has-active-query? session))
+          (when (not has-query)
             (pcall session.meta.buf.render)
             (restore-meta-view! session.meta session.source-view)
             (pcall session.meta.refresh_statusline)
@@ -2009,10 +2012,21 @@
       (register-prompt-hooks session)
       (set (. M.active-by-source source-buf) session)
       (set (. M.active-by-prompt prompt-buf) session)
-      (apply-prompt-lines session)
+      (if (and session.project-mode (not initial-query-active))
+          ;; Empty-query startup already has the right source set; avoid
+          ;; immediate on-update/filter pipeline work here.
+          nil
+          (apply-prompt-lines session))
       (vim.api.nvim_set_current_win prompt-win.window)
       (vim.cmd "startinsert")
       (vim.schedule (fn [] (set session.startup-initializing false)))
+      (when (and session.project-mode (not initial-query-active))
+        ;; Keep startup critical path lean; refresh auxiliary UI right after.
+        (vim.schedule
+          (fn []
+            (when (= (. M.active-by-prompt session.prompt-buf) session)
+              (pcall curr.refresh_statusline)
+              (pcall update-info-window session)))))
       (when (and session.project-mode initial-query-active)
         (schedule-project-bootstrap! session))
       (set (. M.instances source-buf) curr)
