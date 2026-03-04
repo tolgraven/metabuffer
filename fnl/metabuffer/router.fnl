@@ -23,7 +23,8 @@
 (set M.info-max-lines (or vim.g.meta_info_max_lines 10000))
 (set M.info-min-width (or vim.g.meta_info_width 28))
 (set M.info-max-width (or vim.g.meta_info_max_width 52))
-(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 24))
+(set M.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 60))
+(set M.prompt-update-idle-ms (or vim.g.meta_prompt_update_idle_ms 90))
 (set M.project-file-cache {})
 (set M.project-lazy-enabled (if (= vim.g.meta_project_lazy_enabled nil) true vim.g.meta_project_lazy_enabled))
 (set M.project-lazy-disable-headless (if (= vim.g.meta_project_lazy_disable_headless nil) true vim.g.meta_project_lazy_disable_headless))
@@ -77,10 +78,21 @@
       (vim.defer_fn
         (fn []
           (set session.prompt-update-pending false)
+          (let [idle-ms (math.max 0 (or M.prompt-update-idle-ms 0))
+                quiet-for (- (now-ms) (or session.prompt-last-change-ms 0))]
+            (when (and session
+                       session.prompt-buf
+                       (= (. M.active-by-prompt session.prompt-buf) session)
+                       session.prompt-update-dirty
+                       (< quiet-for idle-ms))
+              ;; User is still actively typing; keep deferring heavy work.
+              (schedule-prompt-update! session (- idle-ms quiet-for))))
           (when (and session
                      session.prompt-buf
                      (= (. M.active-by-prompt session.prompt-buf) session)
                      session.prompt-update-dirty
+                     (>= (- (now-ms) (or session.prompt-last-change-ms 0))
+                         (math.max 0 (or M.prompt-update-idle-ms 0)))
                      (= seq (or session.prompt-change-seq 0)))
             (set session.prompt-update-dirty false)
             (set session.prompt-last-apply-ms (now-ms))
