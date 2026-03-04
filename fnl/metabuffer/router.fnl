@@ -14,6 +14,7 @@
 (var apply-prompt-lines nil)
 (var prompt-lines nil)
 (var parse-query-lines nil)
+(var restore-meta-view! nil)
 (set M.history-max 100)
 (set M.project-max-file-bytes (or vim.g.meta_project_max_file_bytes (* 1024 1024)))
 (set M.project-max-total-lines (or vim.g.meta_project_max_total_lines 200000))
@@ -1379,25 +1380,26 @@
           (set ctx.source-view source-view))
         ctx)))
 
-(fn restore-meta-view! [meta source-view]
-  (when (and meta (vim.api.nvim_win_is_valid meta.win.window))
-    (let [line-count (vim.api.nvim_buf_line_count meta.buf.buffer)
-          line (math.max 1 (math.min (meta.selected_line) line-count))
-          src-view (or source-view {})
-          src-lnum (or (. src-view :lnum) line)
-          src-topline (or (. src-view :topline) src-lnum)
-          offset (math.max 0 (- src-lnum src-topline))
-          topline (math.max 1 (math.min (- line offset) line-count))]
-      (vim.api.nvim_win_call meta.win.window
-        (fn []
-          (local view (vim.fn.winsaveview))
-          (set (. view :lnum) line)
-          (set (. view :topline) topline)
-          (when (~= (. src-view :leftcol) nil)
-            (set (. view :leftcol) (. src-view :leftcol)))
-          (when (~= (. src-view :col) nil)
-            (set (. view :col) (. src-view :col)))
-          (vim.fn.winrestview view))))))
+(set restore-meta-view!
+  (fn [meta source-view]
+    (when (and meta (vim.api.nvim_win_is_valid meta.win.window))
+      (let [line-count (vim.api.nvim_buf_line_count meta.buf.buffer)
+            line (math.max 1 (math.min (meta.selected_line) line-count))
+            src-view (or source-view {})
+            src-lnum (or (. src-view :lnum) line)
+            src-topline (or (. src-view :topline) src-lnum)
+            offset (math.max 0 (- src-lnum src-topline))
+            topline (math.max 1 (math.min (- line offset) line-count))]
+        (vim.api.nvim_win_call meta.win.window
+          (fn []
+            (local view (vim.fn.winsaveview))
+            (set (. view :lnum) line)
+            (set (. view :topline) topline)
+            (when (~= (. src-view :leftcol) nil)
+              (set (. view :leftcol) (. src-view :leftcol)))
+            (when (~= (. src-view :col) nil)
+              (set (. view :col) (. src-view :col)))
+            (vim.fn.winrestview view)))))))
 
 (fn M._store_vars [meta]
   (set vim.b._meta_context (meta.store))
