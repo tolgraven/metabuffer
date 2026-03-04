@@ -778,6 +778,10 @@
 
 (fn apply-source-set! [session]
   (local meta session.meta)
+  (local old-ref (if session.project-mode (selected-ref meta) nil))
+  (local old-line (if (not session.project-mode)
+                      (math.max 1 (meta.selected_line))
+                      nil))
   (if session.project-mode
       (let [prefilter-active (and (truthy? M.project-lazy-prefilter-enabled)
                                   (~= session.prefilter-mode false))
@@ -806,13 +810,31 @@
   (for [i 1 (# meta.buf.content)]
     (table.insert meta.buf.all-indices i))
   (set meta.buf.indices (vim.deepcopy meta.buf.all-indices))
-  (set meta.selected_index (math.max 0 (math.min meta.selected_index (math.max 0 (- (# meta.buf.indices) 1)))))
+  (if session.project-mode
+      (do
+        (var match-idx nil)
+        (when (and old-ref old-ref.path old-ref.lnum meta.buf.source-refs)
+          (for [i 1 (# meta.buf.source-refs)]
+            (let [r (. meta.buf.source-refs i)]
+              (when (and (not match-idx)
+                         r
+                         (= (or r.path "") (or old-ref.path ""))
+                         (= (or r.lnum 0) (or old-ref.lnum 0)))
+                (set match-idx i)))))
+        (set meta.selected_index
+             (math.max 0
+                       (math.min (if match-idx (- match-idx 1) meta.selected_index)
+                                 (math.max 0 (- (# meta.buf.indices) 1))))))
+      (set meta.selected_index
+           (math.max 0
+                     (- (meta.buf.closest-index old-line) 1))))
   (set meta._prev_text "")
   (set meta._filter-cache {})
   (set meta._filter-cache-line-count (# meta.buf.content)))
 
 (fn apply-minimal-source-set! [session]
   (local meta session.meta)
+  (local old-line (math.max 1 (meta.selected_line)))
   (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
   (set session.lazy-stream-done true)
   (set meta.buf.content (vim.deepcopy session.single-content))
@@ -823,7 +845,9 @@
   (for [i 1 (# meta.buf.content)]
     (table.insert meta.buf.all-indices i))
   (set meta.buf.indices (vim.deepcopy meta.buf.all-indices))
-  (set meta.selected_index (math.max 0 (math.min meta.selected_index (math.max 0 (- (# meta.buf.indices) 1)))))
+  (set meta.selected_index
+       (math.max 0
+                 (- (meta.buf.closest-index old-line) 1)))
   (set meta._prev_text "")
   (set meta._filter-cache {})
   (set meta._filter-cache-line-count (# meta.buf.content)))
@@ -1456,20 +1480,9 @@
 (fn M.on-prompt-changed [prompt-buf]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
-      ;; Keep prompt state instant, but debounce expensive filter/render work.
-      (let [lines (prompt-lines session)
-            parsed (if session.project-mode
-                       (parse-query-lines lines)
-                       {:lines lines
-                        :include-hidden nil
-                        :include-ignored nil
-                        :include-deps nil
-                        :prefilter nil
-                        :lazy nil})]
-        (set session.last-prompt-text (table.concat lines "\n"))
-        (set session.last-parsed-query parsed)
-        (session.meta.set-query-lines (. parsed :lines))
-        (pcall session.meta.refresh_statusline))
+      ;; Prompt display state is independent; matcher query state updates only
+      ;; in deferred apply-prompt-lines.
+      (set session.last-prompt-text (prompt-text session))
       (set session.prompt-update-dirty true)
       (set session.prompt-last-change-ms (now-ms))
       (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
