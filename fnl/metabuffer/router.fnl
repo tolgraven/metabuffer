@@ -11,6 +11,7 @@
 (set M.active-by-source {})
 (set M.active-by-prompt {})
 (var update-info-window nil)
+(var apply-prompt-lines nil)
 (set M.history-max 100)
 (set M.project-max-file-bytes (or vim.g.meta_project_max_file_bytes (* 1024 1024)))
 (set M.project-max-total-lines (or vim.g.meta_project_max_total_lines 200000))
@@ -1345,7 +1346,7 @@
     (when session.prompt-buf
       (set (. M.active-by-prompt session.prompt-buf) nil))))
 
-(fn apply-prompt-lines [session]
+(set apply-prompt-lines (fn [session]
   (when (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
     (let [lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
       (set session.last-prompt-text (table.concat lines "\n"))
@@ -1413,7 +1414,7 @@
                                 (pcall session.meta.on-update 0)
                                 (pcall session.meta.refresh_statusline)
                                 (pcall update-info-window session)))
-                            1)))))))
+                            1))))))))
 
 (fn M.on-prompt-changed [prompt-buf]
   (let [session (. M.active-by-prompt prompt-buf)]
