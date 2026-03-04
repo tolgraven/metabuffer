@@ -466,7 +466,7 @@
                         lines)
                       nil)))))))
 
-(fn parse-prefilter-terms [query-lines]
+(fn parse-prefilter-terms [query-lines ignorecase]
   (local groups [])
   (each [_ line (ipairs (or query-lines []))]
     (let [trimmed (vim.trim (or line ""))]
@@ -474,7 +474,7 @@
         (local toks [])
         (each [_ tok (ipairs (vim.split trimmed "%s+"))]
           (when (~= tok "")
-            (table.insert toks tok)))
+            (table.insert toks (if ignorecase (string.lower tok) tok))))
         (when (> (# toks) 0)
           (table.insert groups toks)))))
   groups)
@@ -487,10 +487,9 @@
         (var all-groups true)
         (each [_ grp (ipairs spec.groups)]
           (var grp-ok true)
-          (each [_ tok0 (ipairs grp)]
-            (let [tok (if spec.ignorecase (string.lower tok0) tok0)]
-              (when (and grp-ok (not (string.find probe tok 1 true)))
-                (set grp-ok false))))
+          (each [_ tok (ipairs grp)]
+            (when (and grp-ok (not (string.find probe tok 1 true)))
+              (set grp-ok false)))
           (when (and all-groups (not grp-ok))
             (set all-groups false)))
         all-groups)))
@@ -524,18 +523,31 @@
   (if (or (not lines) (= (type lines) "nil"))
       0
       (let [meta session.meta
-            take (math.max 0 (- M.project-max-total-lines (# meta.buf.content)))]
+            content meta.buf.content
+            refs meta.buf.source-refs
+            start-n (# content)
+            take (math.max 0 (- M.project-max-total-lines start-n))
+            has-prefilter (and prefilter prefilter.groups (> (# prefilter.groups) 0))]
         (if (<= take 0)
             0
-            (let [added-lines []
-                  added-refs []]
-              (each [lnum line (ipairs lines)]
-                (when (and (< (# added-lines) take)
-                           (line-matches-prefilter? line prefilter))
-                  (table.insert added-lines line)
-                  (table.insert added-refs {:path path :lnum lnum :line line})))
-              (append-lines! session added-lines added-refs)
-              (# added-lines))))))
+            (do
+              (var added 0)
+              (if has-prefilter
+                  (each [lnum line (ipairs lines)]
+                    (when (and (< added take)
+                               (line-matches-prefilter? line prefilter))
+                      (table.insert content line)
+                      (table.insert refs {:path path :lnum lnum :line line})
+                      (set added (+ added 1))))
+                  (each [lnum line (ipairs lines)]
+                    (when (< added take)
+                      (table.insert content line)
+                      (table.insert refs {:path path :lnum lnum :line line})
+                      (set added (+ added 1)))))
+              (when (> added 0)
+                (for [i (+ start-n 1) (# content)]
+                  (table.insert meta.buf.all-indices i)))
+              added)))))
 
 (fn open-project-buffer-paths [session root include-hidden include-deps]
   (local out [])
@@ -685,7 +697,8 @@
       (let [prefilter-active (and (truthy? M.project-lazy-prefilter-enabled)
                                   (~= session.prefilter-mode false))
             prefilter (if prefilter-active
-                          {:groups (parse-prefilter-terms (or (. session.last-parsed-query :lines) []))
+                          {:groups (parse-prefilter-terms (or (. session.last-parsed-query :lines) [])
+                                                          (session.meta.ignorecase))
                            :ignorecase (session.meta.ignorecase)}
                           nil)
             init (init-project-pool! session prefilter)]
