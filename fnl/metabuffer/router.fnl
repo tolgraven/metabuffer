@@ -89,6 +89,14 @@
         extra (if (and session session.project-mode (not session.lazy-stream-done)) 2 0)]
     (+ base short-extra scale extra)))
 
+(fn prompt-has-active-query? [session]
+  (let [parsed (parse-query-lines (prompt-lines session))]
+    (var has false)
+    (each [_ line (ipairs (or (. parsed :lines) []))]
+      (when (and (not has) (~= (vim.trim (or line "")) ""))
+        (set has true)))
+    has))
+
 (fn cancel-prompt-update! [session]
   (when (and session session.prompt-update-timer)
     (let [timer session.prompt-update-timer
@@ -779,9 +787,11 @@
 (fn apply-source-set! [session]
   (local meta session.meta)
   (local old-ref (if session.project-mode (selected-ref meta) nil))
-  (local old-line (if (not session.project-mode)
+  (local old-line (if (and meta.selected_index
+                           (>= meta.selected_index 0)
+                           (<= (+ meta.selected_index 1) (# meta.buf.indices)))
                       (math.max 1 (meta.selected_line))
-                      nil))
+                      (math.max 1 (or session.initial-source-line 1))))
   (if session.project-mode
       (let [prefilter-active (and (truthy? M.project-lazy-prefilter-enabled)
                                   (~= session.prefilter-mode false))
@@ -834,7 +844,11 @@
 
 (fn apply-minimal-source-set! [session]
   (local meta session.meta)
-  (local old-line (math.max 1 (meta.selected_line)))
+  (local old-line (if (and meta.selected_index
+                           (>= meta.selected_index 0)
+                           (<= (+ meta.selected_index 1) (# meta.buf.indices)))
+                      (math.max 1 (meta.selected_line))
+                      (math.max 1 (or session.initial-source-line 1))))
   (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
   (set session.lazy-stream-done true)
   (set meta.buf.content (vim.deepcopy session.single-content))
@@ -868,7 +882,10 @@
                    (not session.project-bootstrapped))
           (apply-source-set! session)
           (set session.project-bootstrapped true)
-          (M.on-prompt-changed session.prompt-buf)))
+          ;; Avoid a bootstrap-triggered filter/view update for plain `:Meta!`
+          ;; with empty prompt; defer filtering until the user types.
+          (when (prompt-has-active-query? session)
+            (M.on-prompt-changed session.prompt-buf))))
       (math.max 0 (or M.project-bootstrap-delay-ms 120)))))
 
 (fn ensure-info-window! [session]
@@ -1892,6 +1909,8 @@
           session {:source-buf source-buf
                    :origin-win origin-win
                    :origin-buf origin-buf
+                   :source-view source-view
+                   :initial-source-line (math.max 1 (or (. source-view :lnum) (+ (or condition.selected-index 0) 1)))
                    :prompt-win prompt-win.window
                    :prompt-buf prompt-buf
                    :initial-prompt-text (table.concat initial-lines "\n")
