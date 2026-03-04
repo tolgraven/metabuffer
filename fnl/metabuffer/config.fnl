@@ -10,7 +10,7 @@
   (set router.info-max-lines (or vim.g.meta_info_max_lines 10000))
   (set router.info-min-width (or vim.g.meta_info_width 28))
   (set router.info-max-width (or vim.g.meta_info_max_width 52))
-  (set router.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 100))
+  (set router.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 170))
   (set router.prompt-update-idle-ms (or vim.g.meta_prompt_update_idle_ms 90))
   (set router.project-file-cache {})
   (set router.project-lazy-enabled (if (= vim.g.meta_project_lazy_enabled nil) true vim.g.meta_project_lazy_enabled))
