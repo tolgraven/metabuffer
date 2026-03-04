@@ -34,6 +34,7 @@
 (set M.project-lazy-refresh-debounce-ms (or vim.g.meta_project_lazy_refresh_debounce_ms 80))
 (set M.project-lazy-prefilter-enabled (if (= vim.g.meta_project_lazy_prefilter_enabled nil) true vim.g.meta_project_lazy_prefilter_enabled))
 (set M.project-bootstrap-delay-ms (or vim.g.meta_project_bootstrap_delay_ms 120))
+(set M.project-bootstrap-idle-delay-ms (or vim.g.meta_project_bootstrap_idle_delay_ms 700))
 
 (fn debug-log [msg]
   (debug.log "router" msg))
@@ -905,16 +906,17 @@
   (set meta._filter-cache {})
   (set meta._filter-cache-line-count (# meta.buf.content)))
 
-(fn schedule-project-bootstrap! [session]
-  (when (and session
-             session.project-mode
-             (not session.project-bootstrap-pending)
-             (not session.project-bootstrapped))
+(fn schedule-project-bootstrap! [session wait-ms]
+  (when (and session session.project-mode (not session.project-bootstrapped))
+    (set session.project-bootstrap-token (+ 1 (or session.project-bootstrap-token 0)))
+    (local token session.project-bootstrap-token)
     (set session.project-bootstrap-pending true)
     (vim.defer_fn
       (fn []
-        (set session.project-bootstrap-pending false)
+        (when (and session (= token session.project-bootstrap-token))
+          (set session.project-bootstrap-pending false))
         (when (and session
+                   (= token session.project-bootstrap-token)
                    session.project-mode
                    session.prompt-buf
                    (= (. M.active-by-prompt session.prompt-buf) session)
@@ -932,7 +934,7 @@
             (restore-meta-view! session.meta session.source-view)
             (pcall session.meta.refresh_statusline)
             (pcall update-info-window session))))
-      (math.max 0 (or M.project-bootstrap-delay-ms 120)))))
+      (math.max 0 (or wait-ms session.project-bootstrap-delay-ms M.project-bootstrap-delay-ms 120)))))
 
 (fn ensure-info-window! [session]
   (when (not (and session.info-win (vim.api.nvim_win_is_valid session.info-win)))
@@ -1560,7 +1562,9 @@
               (when (and session.project-mode
                          (not session.project-bootstrapped)
                          (prompt-has-active-query? session))
-                (schedule-project-bootstrap! session))
+                ;; User started typing: expedite bootstrap instead of waiting
+                ;; for any longer idle startup timeout.
+                (schedule-project-bootstrap! session M.project-bootstrap-delay-ms))
               ;; Avoid double post-typing updates in project mode while bootstrap is
               ;; still pending; we'll schedule exactly one refresh once bootstrap ends.
               (when (or (not session.project-mode) session.project-bootstrapped)
@@ -1994,6 +1998,10 @@
                    :effective-include-ignored start-ignored
                    :effective-include-deps start-deps
                    :project-bootstrap-pending false
+                   :project-bootstrap-token 0
+                   :project-bootstrap-delay-ms (if (query-lines-has-active? (. parsed-query :lines))
+                                                   M.project-bootstrap-delay-ms
+                                                   M.project-bootstrap-idle-delay-ms)
                    :project-bootstrapped (not (or project-mode false))
                    :prefilter-mode start-prefilter
                    :lazy-mode start-lazy
@@ -2042,8 +2050,8 @@
             (when (= (. M.active-by-prompt session.prompt-buf) session)
               (pcall curr.refresh_statusline)
               (pcall update-info-window session)))))
-      (when (and session.project-mode initial-query-active)
-        (schedule-project-bootstrap! session))
+      (when (and session.project-mode (not session.project-bootstrapped))
+        (schedule-project-bootstrap! session session.project-bootstrap-delay-ms))
       (set (. M.instances source-buf) curr)
       curr))))
 
