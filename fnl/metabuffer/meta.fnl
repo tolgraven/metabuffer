@@ -213,7 +213,7 @@
                                  (= (type (. cached0 :indices)) "table"))
                 cached (if cached-obj?
                            (. cached0 :indices)
-                           (if (= (type cached0) "table") cached0 nil))
+                           (when (= (type cached0) "table") cached0))
                 cached-line-count0 (if cached-obj?
                                        (or (. cached0 :line-count) line-count)
                                        self._filter-cache-line-count)

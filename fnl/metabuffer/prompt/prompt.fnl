@@ -97,7 +97,7 @@
             ;; Only numeric return values are treated as prompt statuses.
             ;; Side-effect actions may return ""/other truthy values (from vim.cmd),
             ;; which must not terminate the prompt loop.
-            (if (= (type ret) "number") ret nil)))
+            (when (= (type ret) "number") ret)))
         (self.update-text s)))
 
   (fn self.on-term [status]
@@ -115,7 +115,7 @@
   (fn self.start []
     (var status (or (self.on-init) M.STATUS_PROGRESS))
     (debug-log (.. "[prompt] start status=" (tostring status)))
-    (local timeoutlen (if vim.o.timeout (/ vim.o.timeoutlen 1000.0) nil))
+    (local timeoutlen (when vim.o.timeout (/ vim.o.timeoutlen 1000.0)))
     (let [[ok err] [(pcall
                       (fn []
                         (set status (or (self.on-update status) M.STATUS_PROGRESS))

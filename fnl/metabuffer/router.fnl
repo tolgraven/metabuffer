@@ -586,7 +586,7 @@
 
 (fn apply-source-set! [session]
   (local meta session.meta)
-  (local old-ref (if session.project-mode (selected-ref meta) nil))
+  (local old-ref (and session.project-mode (selected-ref meta)))
   (local old-line (if (and meta.selected_index
                            (>= meta.selected_index 0)
                            (<= (+ meta.selected_index 1) (# meta.buf.indices)))
