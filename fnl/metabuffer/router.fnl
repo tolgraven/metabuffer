@@ -1568,7 +1568,18 @@
               ;; Avoid double post-typing updates in project mode while bootstrap is
               ;; still pending; we'll schedule exactly one refresh once bootstrap ends.
               (when (or (not session.project-mode) session.project-bootstrapped)
-                (schedule-prompt-update! session (prompt-update-delay-ms session)))))))))
+                (if (and force session.prompt-update-pending)
+                    ;; A trailing user-typing update is already queued; do not
+                    ;; re-arm timers for forced/lazy refreshes.
+                    nil
+                    (let [delay (prompt-update-delay-ms session)]
+                      (if (and force
+                               (> (math.max 0 (or M.prompt-update-idle-ms 0)) 0)
+                               (< (- (now-ms) (or session.prompt-last-change-ms 0))
+                                  (math.max 0 (or M.prompt-update-idle-ms 0))))
+                          ;; During active typing, defer forced refreshes to idle.
+                          (schedule-prompt-update! session (math.max delay M.prompt-update-idle-ms))
+                          (schedule-prompt-update! session delay)))))))))))
 
 (fn finish-accept [session]
   (local curr session.meta)
