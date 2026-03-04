@@ -1711,6 +1711,7 @@
 
 (fn maybe-sync-from-main! [session force-refresh]
   (when (and session
+             (not session.startup-initializing)
              (vim.api.nvim_win_is_valid session.meta.win.window)
              (vim.api.nvim_buf_is_valid session.prompt-buf)
              (= (vim.api.nvim_get_current_win) session.meta.win.window)
@@ -1966,6 +1967,7 @@
                    :prompt-last-apply-ms 0
                    :prompt-last-event-text (table.concat initial-lines "\n")
                    :initial-query-active (query-lines-has-active? (. parsed-query :lines))
+                   :startup-initializing true
                    :project-mode (or project-mode false)
                    :include-hidden start-hidden
                    :include-ignored start-ignored
@@ -1998,6 +2000,10 @@
       ;; Initialize/render after prompt split exists so we avoid an extra
       ;; post-split view correction pass that can visually "flash" scroll.
       (curr.on-init)
+      ;; Ensure initial selection/view is anchored before attaching prompt
+      ;; hooks that may sync from main-window cursor events.
+      (when session.project-mode
+        (restore-meta-view! curr session.source-view))
       (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
       (mark-prompt-buffer! prompt-buf)
       (register-prompt-hooks session)
@@ -2006,6 +2012,7 @@
       (apply-prompt-lines session)
       (vim.api.nvim_set_current_win prompt-win.window)
       (vim.cmd "startinsert")
+      (vim.schedule (fn [] (set session.startup-initializing false)))
       (when (and session.project-mode initial-query-active)
         (schedule-project-bootstrap! session))
       (set (. M.instances source-buf) curr)
