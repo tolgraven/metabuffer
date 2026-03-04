@@ -67,6 +67,7 @@
 - Mirror Clojure best practices as close as possible.
 - Function arguments always on separate line (unless entire thing oneliner).
 - Write (brief) docstrings for functions and keep them up to date. Include expected output.
+- Beware of tendency to try to call locally defined functions globally (through vim dispatch), ensure no __fnl_global__ related errors by using vars in these instances. Forward declaration issue due to Lua transpilation.
 
 ## Self-improvement
 
