@@ -1712,6 +1712,14 @@
         [["n" "i"] "<C-t>" (fn [] (M.toggle-project-mode session.prompt-buf))] ]))
   (local aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true}))
   (set session.augroup aug)
+  ;; Some environments/plugins do not reliably emit TextChangedI for this
+  ;; scratch prompt buffer; keep a low-level line-change hook as a fallback.
+  (vim.api.nvim_buf_attach session.prompt-buf false
+    {:on_lines (fn [_ _ _ _ _ _ _ _]
+                 (M.on-prompt-changed session.prompt-buf))
+     :on_detach (fn []
+                  (when session.prompt-buf
+                    (set (. M.active-by-prompt session.prompt-buf) nil)))})
   ;; Prompt text updates: rely on post-change autocmds to avoid pre-edit race
   ;; behavior that can leave matcher one character behind while typing.
   (vim.api.nvim_create_autocmd ["TextChanged" "TextChangedI"]
