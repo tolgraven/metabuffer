@@ -1,3 +1,4 @@
+(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 {:prompt (require :metabuffer.prompt.prompt)
  :action (require :metabuffer.prompt.action)
  :keymap (require :metabuffer.prompt.keymap)

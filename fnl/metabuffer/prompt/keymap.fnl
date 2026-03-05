@@ -1,3 +1,4 @@
+(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local key_mod (require :metabuffer.prompt.key))
 (local ks_mod (require :metabuffer.prompt.keystroke))
 (local util (require :metabuffer.prompt.util))

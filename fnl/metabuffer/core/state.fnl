@@ -1,3 +1,4 @@
+(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
 (set M.cases ["smart" "ignore" "normal"])

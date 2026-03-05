@@ -1,3 +1,4 @@
+(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local handle (require :metabuffer.handle))
 (local util (require :metabuffer.util))
 

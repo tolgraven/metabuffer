@@ -10,6 +10,12 @@ This repository follows the `nfnl` plugin pattern:
 - Generated runtime output: `lua/` and `plugin/`
 - nfnl config: `.nfnl.fnl`
 
+Cljlib integration for Clojure-style macros:
+
+- Macro entrypoint vendored at `fnl/io/gitlab/andreyorst/cljlib/core/init.fnlm`
+- Project modules import selected cljlib macros (for example `when-let` / `if-let`) via:
+  `(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)`
+
 Key entrypoints:
 
 - Source module: `fnl/metabuffer/init.fnl`

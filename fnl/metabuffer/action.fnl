@@ -1,3 +1,4 @@
+(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
 (fn _sync-selected-from-cursor [meta]

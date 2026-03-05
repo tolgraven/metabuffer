@@ -1,3 +1,4 @@
+(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local meta_mod (require :metabuffer.meta))
 (local prompt_window_mod (require :metabuffer.window.prompt))
 (local meta_window_mod (require :metabuffer.window.metawindow))

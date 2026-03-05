@@ -1,3 +1,4 @@
+(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local caret_mod (require :metabuffer.prompt.caret))
 (local history_mod (require :metabuffer.prompt.history))
 (local action_mod (require :metabuffer.prompt.action))

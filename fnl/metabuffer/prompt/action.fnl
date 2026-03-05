@@ -1,3 +1,4 @@
+(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local digraph_mod (require :metabuffer.prompt.digraph))
 (local util (require :metabuffer.prompt.util))
 

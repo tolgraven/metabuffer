@@ -1,3 +1,4 @@
+(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (if (= vim.g.loaded_metabuffer 1)
     nil
     (do
