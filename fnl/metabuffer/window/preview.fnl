@@ -16,12 +16,12 @@
     out))
 
 (fn M.new [opts]
-  (local floating-window-mod (. opts :floating-window-mod))
-  (local selected-ref (. opts :selected-ref))
-  (local read-file-lines-cached (. opts :read-file-lines-cached))
-  (local is-active-session (. opts :is-active-session))
-  (local debug-log (. opts :debug-log))
-  (local source-switch-debounce-ms (. opts :source-switch-debounce-ms))
+  (let [{:floating-window-mod floating-window-mod
+         :selected-ref selected-ref
+         :read-file-lines-cached read-file-lines-cached
+         :is-active-session is-active-session
+         :debug-log debug-log
+         :source-switch-debounce-ms source-switch-debounce-ms} opts]
 
   (fn mark-preview-buffer! [buf]
     (when (and buf (vim.api.nvim_buf_is_valid buf))
@@ -276,6 +276,6 @@
 
   {:close-window! close-preview-window!
    :maybe-update-for-selection! maybe-update-preview-for-selection!
-   :cancel-update! cancel-preview-update!})
+   :cancel-update! cancel-preview-update!}))
 
 M

@@ -118,13 +118,13 @@
         out)))
 
 (fn M.new [opts]
-  (local floating-window-mod (. opts :floating-window-mod))
-  (local info-min-width (. opts :info-min-width))
-  (local info-max-width (. opts :info-max-width))
-  (local info-max-lines (. opts :info-max-lines))
-  (local info-height (. opts :info-height))
-  (local debug-log (. opts :debug-log))
-  (local update-preview (. opts :update-preview))
+  (let [{:floating-window-mod floating-window-mod
+         :info-min-width info-min-width
+         :info-max-width info-max-width
+         :info-max-lines info-max-lines
+         :info-height info-height
+         :debug-log debug-log
+         :update-preview update-preview} opts]
 
   (fn ensure-info-window! [session]
     (when (not (and session.info-win (vim.api.nvim_win_is_valid session.info-win)))
@@ -339,6 +339,6 @@
               (let [refresh-lines (if (= refresh-lines nil) true refresh-lines)]
                 (if session.project-mode
                     (update-project! session refresh-lines)
-                    (update-regular! session))))})
+                    (update-regular! session))))}))
 
 M

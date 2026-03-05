@@ -38,16 +38,17 @@
 
   (fn self.next-match []
     (if (= self.index 0)
-      self.cached
-      (do
-        (var i self.index)
-        (var out nil)
-        (while (not out)
-          (local c (self.next))
-          (if (or (= self.index i) (vim.startswith c self.backward))
-              (set out c)
-              (set i self.index)))
-        out)))
+        self.cached
+        (> self.index 0)
+        (do
+          (var i self.index)
+          (var out nil)
+          (while (not out)
+            (local c (self.next))
+            (if (or (= self.index i) (vim.startswith c self.backward))
+                (set out c)
+                (set i self.index)))
+          out)))
 
   self)
 
