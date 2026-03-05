@@ -1137,43 +1137,41 @@
     (local opts {:buffer session.prompt-buf :silent true :noremap true :nowait true})
     (fn map! [m lhs rhs]
       (vim.keymap.set m lhs rhs opts))
+    (fn resolve-map-action [action arg]
+      (if (= action "accept")
+          (fn [] (M.finish "accept" session.prompt-buf))
+          (if (= action "cancel")
+              (fn [] (M.finish "cancel" session.prompt-buf))
+              (if (= action "move-selection")
+                  (fn [] (M.move-selection session.prompt-buf arg))
+                  (if (= action "history-or-move")
+                      (fn [] (M.history-or-move session.prompt-buf arg))
+                      (if (= action "switch-mode")
+                          (fn [] (switch-mode arg))
+                          (if (= action "toggle-scan-option")
+                              (fn [] (M.toggle-scan-option session.prompt-buf arg))
+                              (if (= action "scroll-main")
+                                  (fn [] (M.scroll-main session.prompt-buf arg))
+                                  (if (= action "toggle-project-mode")
+                                      (fn [] (M.toggle-project-mode session.prompt-buf))
+                                      nil)))))))))
     (fn map-rules! [rules]
       (each [_ r (ipairs rules)]
-        (map! (. r 1) (. r 2) (. r 3))))
-    (map-rules!
-      [ [["n" "i"] "<CR>" (fn [] (M.finish "accept" session.prompt-buf))]
-        ;; In insert mode, <Esc> should only leave insert mode.
-        ;; Cancel/close only from normal mode.
-        ["n" "<Esc>" (fn [] (M.finish "cancel" session.prompt-buf))]
-        ["n" "<C-p>" (fn [] (M.move-selection session.prompt-buf -1))]
-        ["n" "<C-n>" (fn [] (M.move-selection session.prompt-buf 1))]
-        ["i" "<C-p>" (fn [] (M.move-selection session.prompt-buf -1))]
-        ["i" "<C-n>" (fn [] (M.move-selection session.prompt-buf 1))]
-        ["n" "<C-k>" (fn [] (M.move-selection session.prompt-buf -1))]
-        ["n" "<C-j>" (fn [] (M.move-selection session.prompt-buf 1))]
-        ["i" "<C-k>" (fn [] (M.move-selection session.prompt-buf -1))]
-        ["i" "<C-j>" (fn [] (M.move-selection session.prompt-buf 1))]
-        ["i" "<Up>" (fn [] (M.history-or-move session.prompt-buf 1))]
-        ["i" "<Down>" (fn [] (M.history-or-move session.prompt-buf -1))]
-        ["n" "<Up>" (fn [] (M.history-or-move session.prompt-buf 1))]
-        ["n" "<Down>" (fn [] (M.history-or-move session.prompt-buf -1))]
-        ;; Statusline keys: C^ (matcher), C_ (case), Cs (syntax)
-        [["n" "i"] "<C-^>" (fn [] (switch-mode "matcher"))]
-        [["n" "i"] "<C-6>" (fn [] (switch-mode "matcher"))]
-        [["n" "i"] "<C-_>" (fn [] (switch-mode "case"))]
-        [["n" "i"] "<C-/>" (fn [] (switch-mode "case"))]
-        [["n" "i"] "<C-?>" (fn [] (switch-mode "case"))]
-        [["n" "i"] "<C-->" (fn [] (switch-mode "case"))]
-        [["n" "i"] "<C-o>" (fn [] (switch-mode "case"))]
-        [["n" "i"] "<C-s>" (fn [] (switch-mode "syntax"))]
-        ["n" "<C-g>" (fn [] (M.toggle-scan-option session.prompt-buf "ignored"))]
-        ["n" "<C-l>" (fn [] (M.toggle-scan-option session.prompt-buf "deps"))]
-        [["n" "i"] "<C-d>" (fn [] (M.scroll-main session.prompt-buf "half-down"))]
-        [["n" "i"] "<C-u>" (fn [] (M.scroll-main session.prompt-buf "half-up"))]
-        [["n" "i"] "<C-f>" (fn [] (M.scroll-main session.prompt-buf "page-down"))]
-        [["n" "i"] "<C-b>" (fn [] (M.scroll-main session.prompt-buf "page-up"))]
-        ;; keep project toggle available without conflicting with scroll/page keys
-        [["n" "i"] "<C-t>" (fn [] (M.toggle-project-mode session.prompt-buf))] ]))
+        (let [mode (. r 1)
+              lhs (. r 2)
+              action (. r 3)
+              arg (. r 4)
+              rhs (resolve-map-action action arg)]
+          (if rhs
+              (map! mode lhs rhs)
+              (vim.notify
+                (.. "metabuffer: unknown prompt keymap action '" (tostring action) "' for " (tostring lhs))
+                vim.log.levels.WARN)))))
+    (local rules
+      (if (= (type vim.g.meta_prompt_keymaps) "table")
+          vim.g.meta_prompt_keymaps
+          M.default-prompt-keymaps))
+    (map-rules! rules))
   (local aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true}))
   (set session.augroup aug)
   ;; Some environments/plugins do not reliably emit TextChangedI for this
