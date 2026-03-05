@@ -49,10 +49,10 @@
   [session text]
   (when (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
     (set session.last-prompt-text (or text ""))
-    (local lines (if (= text "") [""] (vim.split text "\n" {:plain true})))
-    (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false lines)
-    (let [row (# lines)
+    (let [lines (if (= text "") [""] (vim.split text "\n" {:plain true}))
+          row (# lines)
           col (# (. lines row))]
+      (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false lines)
       (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col]))))
 
 (fn M.current-buffer-path

@@ -176,72 +176,72 @@
 
 (fn finish-accept
   [session]
-  (local curr session.meta)
-  (set session.last-prompt-text (router_util_mod.prompt-text session))
-  (push-history! session.last-prompt-text)
-  (apply-prompt-lines session)
-  (router_prompt_mod.begin-session-close!
-    session
-    router_prompt_mod.cancel-prompt-update!)
-  (pcall vim.cmd "stopinsert")
-  (let [matcher (curr.matcher)]
-    (when matcher
-      (pcall matcher.remove-highlight matcher)))
-  (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
-  (when (and (vim.api.nvim_win_is_valid session.origin-win)
-             (vim.api.nvim_buf_is_valid session.origin-buf))
-    (pcall vim.api.nvim_set_current_win session.origin-win)
-    (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
-  (if session.project-mode
-      (let [ref (router_util_mod.selected-ref curr)]
-        (when (and ref ref.path)
-          (vim.cmd (.. "edit " (vim.fn.fnameescape ref.path)))
-          (vim.api.nvim_win_set_cursor 0 [(math.max 1 (or ref.lnum 1)) 0])))
-      (do
-        (base_buffer.switch-buf curr.buf.model)
-        (let [row (curr.selected_line)]
-          (curr.win.set-row row true)
-          (let [vq (curr.vim_query)]
-            (when (~= vq "")
-              (vim.api.nvim_win_set_cursor 0 [row 0])
-              (let [pos (vim.fn.searchpos vq "cnW" row)
-                    hit-row (. pos 1)
-                    hit-col (. pos 2)]
-                (when (and (= hit-row row) (> hit-col 0))
-                  (vim.api.nvim_win_set_cursor 0 [row hit-col]))))))))
-  (vim.cmd "normal! zv")
-  (let [vq (curr.vim_query)]
-    (when (~= vq "")
-      (vim.fn.setreg "/" vq)
-      (set vim.o.hlsearch true)))
-  (session_view.wipe-temp-buffers curr)
-  (remove-session session)
-  (M._wrapup curr)
-  curr)
+  (let [curr session.meta]
+    (set session.last-prompt-text (router_util_mod.prompt-text session))
+    (push-history! session.last-prompt-text)
+    (apply-prompt-lines session)
+    (router_prompt_mod.begin-session-close!
+      session
+      router_prompt_mod.cancel-prompt-update!)
+    (pcall vim.cmd "stopinsert")
+    (let [matcher (curr.matcher)]
+      (when matcher
+        (pcall matcher.remove-highlight matcher)))
+    (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
+    (when (and (vim.api.nvim_win_is_valid session.origin-win)
+               (vim.api.nvim_buf_is_valid session.origin-buf))
+      (pcall vim.api.nvim_set_current_win session.origin-win)
+      (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
+    (if session.project-mode
+        (let [ref (router_util_mod.selected-ref curr)]
+          (when (and ref ref.path)
+            (vim.cmd (.. "edit " (vim.fn.fnameescape ref.path)))
+            (vim.api.nvim_win_set_cursor 0 [(math.max 1 (or ref.lnum 1)) 0])))
+        (do
+          (base_buffer.switch-buf curr.buf.model)
+          (let [row (curr.selected_line)]
+            (curr.win.set-row row true)
+            (let [vq (curr.vim_query)]
+              (when (~= vq "")
+                (vim.api.nvim_win_set_cursor 0 [row 0])
+                (let [pos (vim.fn.searchpos vq "cnW" row)
+                      hit-row (. pos 1)
+                      hit-col (. pos 2)]
+                  (when (and (= hit-row row) (> hit-col 0))
+                    (vim.api.nvim_win_set_cursor 0 [row hit-col]))))))))
+    (vim.cmd "normal! zv")
+    (let [vq (curr.vim_query)]
+      (when (~= vq "")
+        (vim.fn.setreg "/" vq)
+        (set vim.o.hlsearch true)))
+    (session_view.wipe-temp-buffers curr)
+    (remove-session session)
+    (M._wrapup curr)
+    curr))
 
 (fn finish-cancel
   [session]
-  (local curr session.meta)
-  (router_prompt_mod.begin-session-close!
-    session
-    router_prompt_mod.cancel-prompt-update!)
-  (set session.last-prompt-text (router_util_mod.prompt-text session))
-  (push-history! session.last-prompt-text)
-  (pcall vim.cmd "stopinsert")
-  (let [matcher (curr.matcher)]
-    (when matcher
-      (pcall matcher.remove-highlight matcher)))
-  (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
-  (vim.cmd "silent! nohlsearch")
-  (when (and (vim.api.nvim_win_is_valid session.origin-win)
-             (vim.api.nvim_buf_is_valid session.origin-buf))
-    (pcall vim.api.nvim_set_current_win session.origin-win)
-    (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
-  (base_buffer.switch-buf curr.buf.model)
-  (session_view.wipe-temp-buffers curr)
-  (remove-session session)
-  (M._wrapup curr)
-  curr)
+  (let [curr session.meta]
+    (router_prompt_mod.begin-session-close!
+      session
+      router_prompt_mod.cancel-prompt-update!)
+    (set session.last-prompt-text (router_util_mod.prompt-text session))
+    (push-history! session.last-prompt-text)
+    (pcall vim.cmd "stopinsert")
+    (let [matcher (curr.matcher)]
+      (when matcher
+        (pcall matcher.remove-highlight matcher)))
+    (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
+    (vim.cmd "silent! nohlsearch")
+    (when (and (vim.api.nvim_win_is_valid session.origin-win)
+               (vim.api.nvim_buf_is_valid session.origin-buf))
+      (pcall vim.api.nvim_set_current_win session.origin-win)
+      (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
+    (base_buffer.switch-buf curr.buf.model)
+    (session_view.wipe-temp-buffers curr)
+    (remove-session session)
+    (M._wrapup curr)
+    curr))
 
 (fn M.finish
   [kind prompt-buf]
@@ -440,15 +440,15 @@
                            v
                            (query_mod.truthy? M.project-lazy-enabled))
         query query0]
-  (local source-buf (vim.api.nvim_get_current_buf))
-  (when (. M.active-by-source source-buf)
-    (remove-session (. M.active-by-source source-buf)))
-  (let [origin-win (vim.api.nvim_get_current_win)
-        origin-buf source-buf
-        source-view (vim.fn.winsaveview)
-        _ (set (. source-view :_meta_win_height) (vim.api.nvim_win_get_height origin-win))
-        condition (session_view.setup-state query mode source-view)
-        curr (meta_mod.new vim condition)]
+  (let [source-buf (vim.api.nvim_get_current_buf)]
+    (when (. M.active-by-source source-buf)
+      (remove-session (. M.active-by-source source-buf)))
+    (let [origin-win (vim.api.nvim_get_current_win)
+          origin-buf source-buf
+          source-view (vim.fn.winsaveview)
+          _ (set (. source-view :_meta_win_height) (vim.api.nvim_win_get_height origin-win))
+          condition (session_view.setup-state query mode source-view)
+          curr (meta_mod.new vim condition)]
     (set curr.project-mode (or project-mode false))
     (base_buffer.switch-buf curr.buf.buffer)
     (router_util_mod.ensure-source-refs! curr)
@@ -501,41 +501,41 @@
                    :single-content (vim.deepcopy curr.buf.content)
                    :single-refs (vim.deepcopy (or curr.buf.source-refs []))
                    :meta curr}]
-      (local initial-query-active session.initial-query-active)
-      (if session.project-mode
-          (project-source.apply-minimal-source-set! session)
-          (project-source.apply-source-set! session))
-      (set curr.status-win (meta_window_mod.new vim prompt-win.window))
-      ;; Statusline info should live in prompt window, not result split.
-      (curr.win.set-statusline "")
-      ;; Initialize/render after prompt split exists so we avoid an extra
-      ;; post-split view correction pass that can visually "flash" scroll.
-      (curr.on-init)
-      ;; Ensure initial selection/view is anchored before attaching prompt
-      ;; hooks that may sync from main-window cursor events.
-      (when session.project-mode
-        (session_view.restore-meta-view! curr session.source-view))
-      (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
-      (router_util_mod.mark-prompt-buffer! prompt-buf)
-      (register-prompt-hooks session)
-      (set (. M.active-by-source source-buf) session)
-      (set (. M.active-by-prompt prompt-buf) session)
-      (when (not (and session.project-mode (not initial-query-active)))
-        (apply-prompt-lines session))
-      (vim.api.nvim_set_current_win prompt-win.window)
-      (vim.cmd "startinsert")
-      (vim.schedule (fn [] (set session.startup-initializing false)))
-      (when (and session.project-mode (not initial-query-active))
-        ;; Keep startup critical path lean; refresh auxiliary UI right after.
-        (vim.schedule
-          (fn []
-            (when (= (. M.active-by-prompt session.prompt-buf) session)
-              (pcall curr.refresh_statusline)
-              (pcall update-info-window session)))))
-      (when (and session.project-mode (not session.project-bootstrapped))
-        (project-source.schedule-project-bootstrap! session session.project-bootstrap-delay-ms))
-      (set (. M.instances source-buf) curr)
-      curr))))
+      (let [initial-query-active session.initial-query-active]
+        (if session.project-mode
+            (project-source.apply-minimal-source-set! session)
+            (project-source.apply-source-set! session))
+        (set curr.status-win (meta_window_mod.new vim prompt-win.window))
+        ;; Statusline info should live in prompt window, not result split.
+        (curr.win.set-statusline "")
+        ;; Initialize/render after prompt split exists so we avoid an extra
+        ;; post-split view correction pass that can visually "flash" scroll.
+        (curr.on-init)
+        ;; Ensure initial selection/view is anchored before attaching prompt
+        ;; hooks that may sync from main-window cursor events.
+        (when session.project-mode
+          (session_view.restore-meta-view! curr session.source-view))
+        (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
+        (router_util_mod.mark-prompt-buffer! prompt-buf)
+        (register-prompt-hooks session)
+        (set (. M.active-by-source source-buf) session)
+        (set (. M.active-by-prompt prompt-buf) session)
+        (when (not (and session.project-mode (not initial-query-active)))
+          (apply-prompt-lines session))
+        (vim.api.nvim_set_current_win prompt-win.window)
+        (vim.cmd "startinsert")
+        (vim.schedule (fn [] (set session.startup-initializing false)))
+        (when (and session.project-mode (not initial-query-active))
+          ;; Keep startup critical path lean; refresh auxiliary UI right after.
+          (vim.schedule
+            (fn []
+              (when (= (. M.active-by-prompt session.prompt-buf) session)
+                (pcall curr.refresh_statusline)
+                (pcall update-info-window session)))))
+        (when (and session.project-mode (not session.project-bootstrapped))
+          (project-source.schedule-project-bootstrap! session session.project-bootstrap-delay-ms))
+        (set (. M.instances source-buf) curr)
+        curr))))))
 
 (fn M.sync
   [meta query]
@@ -570,21 +570,21 @@
 (fn M.entry_sync
   [query]
   "Public API: M.entry_sync."
-  (local key (vim.api.nvim_get_current_buf))
-  (M.sync (. M.instances key) query))
+  (let [key (vim.api.nvim_get_current_buf)]
+    (M.sync (. M.instances key) query)))
 
 (fn M.entry_push
   []
   "Public API: M.entry_push."
-  (local key (vim.api.nvim_get_current_buf))
-  (M.push (. M.instances key)))
+  (let [key (vim.api.nvim_get_current_buf)]
+    (M.push (. M.instances key))))
 
 (fn M.entry_cursor_word
   [resume]
   "Public API: M.entry_cursor_word."
-  (local w (vim.fn.expand "<cword>"))
-  (if resume
-      (M.entry_resume w)
-      (M.entry_start w false)))
+  (let [w (vim.fn.expand "<cword>")]
+    (if resume
+        (M.entry_resume w)
+        (M.entry_start w false))))
 
 M
