@@ -5,4 +5,7 @@ Run a pass applying these rules:
 - Avoid using `set` unless necessary (such as when interacting with nvim api etc)
 - Ensure files aren't overly long (router.fnl is over 1900 lines as of this writing). Refactor as needed to get sub-600 or at the very least sub-1000 line files.
 - Avoid massive `(if x (do ...)` blocks, break apart such functions instead.
+  - Especially avoid `(if x y nil)` and `(if x nil y)`, use `(when)`
+  - Don't use nested `if` clauses if Fennel's `cond` equivalent for `if` can be used.
 - Ensure defaults and configs are kept separate from main code.
+- Unless performance critical, prefer `symbol'` (new declaration with updated data) over repeat `set` on a symbol.
