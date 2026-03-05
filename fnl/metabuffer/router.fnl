@@ -352,13 +352,7 @@
 
 (local project-source
   (project_source_mod.new
-    {:settings {:project-max-file-bytes M.project-max-file-bytes
-                :project-max-total-lines M.project-max-total-lines
-                :project-lazy-refresh-debounce-ms M.project-lazy-refresh-debounce-ms
-                :project-lazy-chunk-size M.project-lazy-chunk-size
-                :project-lazy-min-estimated-lines M.project-lazy-min-estimated-lines
-                :project-lazy-prefilter-enabled M.project-lazy-prefilter-enabled
-                :project-bootstrap-delay-ms M.project-bootstrap-delay-ms}
+    {:settings M
      :truthy? truthy?
      :selected-ref selected-ref
      :canonical-path canonical-path
