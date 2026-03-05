@@ -5,5 +5,6 @@
  :keystroke (require :metabuffer.prompt.keystroke)
  :caret (require :metabuffer.prompt.caret)
  :history (require :metabuffer.prompt.history)
+ :hooks (require :metabuffer.prompt.hooks)
  :digraph (require :metabuffer.prompt.digraph)
  :util (require :metabuffer.prompt.util)}
