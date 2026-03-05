@@ -9,7 +9,7 @@
 (local session_view (require :metabuffer.session.view))
 (local debug (require :metabuffer.debug))
 (local config (require :metabuffer.config))
-(local query (require :metabuffer.query))
+(local query_mod (require :metabuffer.query))
 (local history_store (require :metabuffer.history_store))
 (local prompt_hooks_mod (require :metabuffer.prompt.hooks))
 
@@ -23,17 +23,8 @@
 (var preview-window nil)
 (var info-window nil)
 (config.apply-router-defaults M vim)
-(local truthy? query.truthy?)
-(local parse-query-lines query.parse-query-lines)
-(local parse-query-text query.parse-query-text)
-(local query-lines-has-active? query.query-lines-has-active?)
-(local history-list history_store.list)
 (local push-history! (fn [text]
                        (history_store.push! text M.history-max)))
-(local history-entry history_store.entry)
-(local wipe-temp-buffers session_view.wipe-temp-buffers)
-(local setup-state session_view.setup-state)
-(local restore-meta-view! session_view.restore-meta-view!)
 
 (fn debug-log [msg]
   (debug.log "router" msg))
@@ -70,7 +61,7 @@
         size-extra (or M.prompt-size-scale-extra [0 2 6 10])
         qlen (let [lines (prompt-lines session)
                    parsed (if session.project-mode
-                              (parse-query-lines lines)
+                              (query_mod.parse-query-lines lines)
                               {:lines lines})
                    last-active (do
                                  (var s "")
@@ -96,7 +87,7 @@
     (+ base short-extra scale extra)))
 
 (fn prompt-has-active-query? [session]
-  (let [parsed (parse-query-lines (prompt-lines session))]
+  (let [parsed (query_mod.parse-query-lines (prompt-lines session))]
     (var has false)
     (each [_ line (ipairs (or (. parsed :lines) []))]
       (when (and (not has) (~= (vim.trim (or line "")) ""))
@@ -285,8 +276,8 @@
 (fn lazy-streaming-allowed? [session]
   (and session
        session.project-mode
-       (truthy? M.project-lazy-enabled)
-       (or (not (truthy? M.project-lazy-disable-headless))
+       (query_mod.truthy? M.project-lazy-enabled)
+       (or (not (query_mod.truthy? M.project-lazy-disable-headless))
            (ui-attached?))))
 
 (fn session-active? [session]
@@ -353,7 +344,7 @@
 (local project-source
   (project_source_mod.new
     {:settings M
-     :truthy? truthy?
+     :truthy? query_mod.truthy?
      :selected-ref selected-ref
      :canonical-path canonical-path
      :current-buffer-path current-buffer-path
@@ -369,7 +360,7 @@
      :now-ms now-ms
      :prompt-update-delay-ms prompt-update-delay-ms
      :schedule-prompt-update! schedule-prompt-update!
-     :restore-meta-view! restore-meta-view!
+     :restore-meta-view! session_view.restore-meta-view!
      :update-info-window update-info-window}))
 
 (fn M._store_vars [meta]
@@ -409,7 +400,7 @@
       (set session.last-prompt-text (table.concat lines "\n"))
       (set session.prompt-last-applied-text session.last-prompt-text)
       (let [parsed (if session.project-mode
-                       (parse-query-lines lines)
+                       (query_mod.parse-query-lines lines)
                        {:lines lines
                         :include-hidden nil
                         :include-ignored nil
@@ -583,7 +574,7 @@
     (when (~= vq "")
       (vim.fn.setreg "/" vq)
       (set vim.o.hlsearch true)))
-  (wipe-temp-buffers curr)
+  (session_view.wipe-temp-buffers curr)
   (remove-session session)
   (M._wrapup curr)
   curr)
@@ -604,7 +595,7 @@
     (pcall vim.api.nvim_set_current_win session.origin-win)
     (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
   (base_buffer.switch-buf curr.buf.model)
-  (wipe-temp-buffers curr)
+  (session_view.wipe-temp-buffers curr)
   (remove-session session)
   (M._wrapup curr)
   curr)
@@ -739,7 +730,7 @@
                             (= txt session.initial-prompt-text)
                             (= txt session.last-history-text))]
         (if can-history
-            (let [h (history-list)
+            (let [h (history_store.list)
                   n (# h)]
               (when (> n 0)
                 (set session.history-index (math.max 0 (math.min (+ session.history-index delta) n)))
@@ -747,7 +738,7 @@
                     (do
                       (set session.last-history-text "")
                       (set-prompt-text! session session.initial-prompt-text))
-                    (let [entry (history-entry session session.history-index)]
+                    (let [entry (history_store.entry session session.history-index)]
                       (when entry
                         (set session.last-history-text entry)
                         (set-prompt-text! session entry))))))
@@ -792,22 +783,22 @@
     (hooks.register! M session)))
 
 (fn M.start [query mode _meta project-mode]
-  (let [parsed-query (parse-query-text query)
+  (let [parsed-query (query_mod.parse-query-text query)
         query0 (. parsed-query :query)
         start-hidden (if (= (. parsed-query :include-hidden) nil)
-                         (truthy? M.default-include-hidden)
+                         (query_mod.truthy? M.default-include-hidden)
                          (. parsed-query :include-hidden))
         start-ignored (if (= (. parsed-query :include-ignored) nil)
-                          (truthy? M.default-include-ignored)
+                          (query_mod.truthy? M.default-include-ignored)
                           (. parsed-query :include-ignored))
         start-deps (if (= (. parsed-query :include-deps) nil)
-                       (truthy? M.default-include-deps)
+                       (query_mod.truthy? M.default-include-deps)
                        (. parsed-query :include-deps))
         start-prefilter (if (= (. parsed-query :prefilter) nil)
-                            (truthy? M.project-lazy-prefilter-enabled)
+                            (query_mod.truthy? M.project-lazy-prefilter-enabled)
                             (. parsed-query :prefilter))
         start-lazy (if (= (. parsed-query :lazy) nil)
-                       (truthy? M.project-lazy-enabled)
+                       (query_mod.truthy? M.project-lazy-enabled)
                        (. parsed-query :lazy))
         query query0]
   (local source-buf (vim.api.nvim_get_current_buf))
@@ -817,7 +808,7 @@
         origin-buf source-buf
         source-view (vim.fn.winsaveview)
         _ (set (. source-view :_meta_win_height) (vim.api.nvim_win_get_height origin-win))
-        condition (setup-state query mode source-view)
+        condition (session_view.setup-state query mode source-view)
         curr (meta_mod.new vim condition)]
     (set curr.project-mode (or project-mode false))
     (base_buffer.switch-buf curr.buf.buffer)
@@ -843,7 +834,7 @@
                    :prompt-change-seq 0
                    :prompt-last-apply-ms 0
                    :prompt-last-event-text (table.concat initial-lines "\n")
-                   :initial-query-active (query-lines-has-active? (. parsed-query :lines))
+                   :initial-query-active (query_mod.query-lines-has-active? (. parsed-query :lines))
                    :startup-initializing true
                    :project-mode (or project-mode false)
                    :include-hidden start-hidden
@@ -854,7 +845,7 @@
                    :effective-include-deps start-deps
                    :project-bootstrap-pending false
                    :project-bootstrap-token 0
-                   :project-bootstrap-delay-ms (if (query-lines-has-active? (. parsed-query :lines))
+                   :project-bootstrap-delay-ms (if (query_mod.query-lines-has-active? (. parsed-query :lines))
                                                    M.project-bootstrap-delay-ms
                                                    M.project-bootstrap-idle-delay-ms)
                    :project-bootstrapped (not (or project-mode false))
@@ -884,7 +875,7 @@
       ;; Ensure initial selection/view is anchored before attaching prompt
       ;; hooks that may sync from main-window cursor events.
       (when session.project-mode
-        (restore-meta-view! curr session.source-view))
+        (session_view.restore-meta-view! curr session.source-view))
       (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
       (mark-prompt-buffer! prompt-buf)
       (register-prompt-hooks session)
