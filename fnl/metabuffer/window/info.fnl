@@ -1,14 +1,16 @@
 (import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
-(fn ext-from-path [path]
+(fn ext-from-path
+  [path]
   (let [file (vim.fn.fnamemodify (or path "") ":t")
         dot (string.match file ".*()%.")]
     (if (and dot (> dot 0) (< dot (# file)))
         (string.sub file (+ dot 1))
         "")))
 
-(fn devicon-for-path [path fallback-hl]
+(fn devicon-for-path
+  [path fallback-hl]
   (let [file (vim.fn.fnamemodify (or path "") ":t")
         ext (ext-from-path path)
         [ok-web web] [(pcall require :nvim-web-devicons)]]
@@ -25,13 +27,15 @@
                :file-hl fallback-hl})
             {:icon "" :icon-hl fallback-hl :file-hl fallback-hl}))))
 
-(fn icon-field [icon]
+(fn icon-field
+  [icon]
   (if (and (= (type icon) "string") (~= icon ""))
       (let [text (.. icon " ")]
         {:text text :width (vim.fn.strdisplaywidth text)})
       {:text "" :width 0}))
 
-(fn compact-dir [dir]
+(fn compact-dir
+  [dir]
   (if (or (= dir "") (= dir "."))
       ""
       (let [parts (vim.split dir "/" {:plain true})
@@ -43,7 +47,8 @@
             ""
             (.. (table.concat out "/") "/")))))
 
-(fn compact-dir-keep-last [dir]
+(fn compact-dir-keep-last
+  [dir]
   (if (or (= dir "") (= dir "."))
       ""
       (let [parts0 (vim.split dir "/" {:plain true})
@@ -62,7 +67,9 @@
                     (table.insert out (. parts n))
                     (.. (table.concat out "/") "/"))))))))
 
-(fn fit-path-into-width [path path-width]
+(fn fit-path-into-width
+  [path path-width]
+  "Shrink directory segments so file path fits the info window width budget."
   (let [dir0 (vim.fn.fnamemodify path ":h")
         dir (if (or (= dir0 ".") (= dir0 "")) "" (.. dir0 "/"))
         file (vim.fn.fnamemodify path ":t")
@@ -90,7 +97,8 @@
                                                 (string.sub cdir (+ (- (# cdir) dir-budget) 1))))]
                           [short-dir file])))))))))
 
-(fn info-range [selected-index total cap]
+(fn info-range
+  [selected-index total cap]
   (if (or (<= total 0) (<= cap 0))
       [1 0]
       (if (<= total cap)
@@ -101,14 +109,17 @@
                 stop (math.min total (+ start cap -1))]
             [start stop]))))
 
-(fn lnum-width-from-max-len [max-len]
+(fn lnum-width-from-max-len
+  [max-len]
   (math.max 2 (# (tostring (math.max 1 (or max-len 1))))))
 
-(fn lnum-cell [lnum width]
+(fn lnum-cell
+  [lnum width]
   (let [s (tostring lnum)]
     (.. (string.rep " " (math.max 0 (- width (# s)))) s " ")))
 
-(fn numeric-max [vals default]
+(fn numeric-max
+  [vals default]
   (if (or (not vals) (= (# vals) 0))
       default
       (let [m (or (. vals 1) default)]
@@ -118,11 +129,14 @@
             (set out v)))
         out)))
 
-(fn M.new [opts]
+(fn M.new
+  [opts]
+  "Create right-side info window renderer/synchronizer."
   (let [{: floating-window-mod : info-min-width : info-max-width
          : info-max-lines : info-height : debug-log : update-preview} opts]
 
-  (fn ensure-info-window! [session]
+  (fn ensure-info-window!
+    [session]
     (when (not (and session.info-win (vim.api.nvim_win_is_valid session.info-win)))
       (let [buf (vim.api.nvim_create_buf false true)
             width info-min-width
@@ -139,13 +153,15 @@
           (set (. bo :modifiable) false)
           (set (. bo :filetype) "metabuffer")))))
 
-  (fn close-info-window! [session]
+  (fn close-info-window!
+    [session]
     (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
       (pcall vim.api.nvim_win_close session.info-win true))
     (set session.info-win nil)
     (set session.info-buf nil))
 
-  (fn fit-info-width! [session lines]
+  (fn fit-info-width!
+    [session lines]
     (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
       (let [widths (vim.tbl_map (fn [line] (# line)) (or lines []))
             max-len (numeric-max widths 0)
@@ -162,11 +178,13 @@
                  :height height}]
         (pcall vim.api.nvim_win_set_config session.info-win cfg))))
 
-  (fn info-max-width-now []
+  (fn info-max-width-now
+    []
     (let [max-available (math.max info-min-width (math.floor (* vim.o.columns 0.34)))]
       (math.min info-max-width max-available)))
 
-  (fn info-visible-range [session meta total cap]
+  (fn info-visible-range
+    [session meta total cap]
     (if (or (<= total 0) (<= cap 0))
         [1 0]
         (if (and session
@@ -183,7 +201,8 @@
                   [top (+ top cap -1)]))
             (info-range meta.selected_index total cap))))
 
-  (fn build-info-lines [meta refs idxs target-width start-index stop-index]
+  (fn build-info-lines
+    [meta refs idxs target-width start-index stop-index]
     (let [line-hl "LineNr"
           dir-hl (if (= 1 (vim.fn.hlexists "NERDTreeDir"))
                      "NERDTreeDir"
@@ -244,7 +263,8 @@
                 (table.insert highlights [row this-file-hl file-start (+ file-start (# file0))])))))
       {:lines lines :highlights highlights}))
 
-  (fn render-info-lines! [session meta start-index stop-index]
+  (fn render-info-lines!
+    [session meta start-index stop-index]
     (let [refs (or meta.buf.source-refs [])
           idxs (or meta.buf.indices [])
           _ (set session.info-start-index start-index)
@@ -270,7 +290,8 @@
       (let [bo (. vim.bo session.info-buf)]
         (set (. bo :modifiable) false))))
 
-  (fn sync-info-cursor! [session meta]
+  (fn sync-info-cursor!
+    [session meta]
     (when (vim.api.nvim_win_is_valid session.info-win)
       (let [idxs (or meta.buf.indices [])
             info-lines (vim.api.nvim_buf_line_count session.info-buf)
@@ -289,11 +310,13 @@
             (when (not ok-cur)
               (debug-log (.. "info set_cursor failed: " (tostring err-cur)))))))))
 
-  (fn update-regular! [session]
+  (fn update-regular!
+    [session]
     (close-info-window! session)
     (update-preview session))
 
-  (fn update-project! [session refresh-lines]
+  (fn update-project!
+    [session refresh-lines]
     (ensure-info-window! session)
     (debug-log (.. "info enter refresh=" (tostring refresh-lines)
                    " selected=" (tostring session.meta.selected_index)

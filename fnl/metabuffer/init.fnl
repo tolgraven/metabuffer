@@ -3,7 +3,8 @@
 
 (local M {})
 
-(fn rgb-luma [n]
+(fn rgb-luma
+  [n]
   (if (not n)
       nil
       (let [r (math.floor (/ n 0x10000))
@@ -11,7 +12,8 @@
             b (% n 0x100)]
         (+ (* 0.2126 r) (* 0.7152 g) (* 0.0722 b)))))
 
-(fn statusline-color-from [group]
+(fn statusline-color-from
+  [group]
   (let [opts {:reverse false :cterm {:reverse false}}
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
         [nok normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
@@ -41,7 +43,8 @@
         (set (. opts :ctermfg) 15))
     opts))
 
-(fn undercurl-from [group]
+(fn undercurl-from
+  [group]
   (let [opts {:default true :undercurl true}
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
     (when (and ok (= (type hl) "table"))
@@ -51,7 +54,8 @@
         (set (. opts :sp) (. hl :fg))))
     opts))
 
-(fn hit-hl [main-group curl-group]
+(fn hit-hl
+  [main-group curl-group]
   (let [opts {:default true :undercurl true}
         [ok-main main] [(pcall vim.api.nvim_get_hl 0 {:name main-group :link false})]
         [ok-curl curl] [(pcall vim.api.nvim_get_hl 0 {:name curl-group :link false})]]
@@ -66,7 +70,8 @@
           (when (. curl :fg) (set (. opts :sp) (. curl :fg)))))
     opts))
 
-(fn thin-underline-from [group]
+(fn thin-underline-from
+  [group]
   (let [opts {:default true :underdotted true :nocombine true}
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
     (when (and ok (= (type hl) "table"))
@@ -77,7 +82,8 @@
               (set (. opts :sp) 0xFF0000))))
     opts))
 
-(fn plain-hl-from [group]
+(fn plain-hl-from
+  [group]
   (let [opts {:default true}
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
     (when (and ok (= (type hl) "table"))
@@ -91,7 +97,8 @@
         (set (. opts :ctermbg) (. hl :ctermbg))))
     opts))
 
-(fn darken-rgb [n factor]
+(fn darken-rgb
+  [n factor]
   (if (not n)
       nil
       (let [r (math.floor (/ n 0x10000))
@@ -103,12 +110,14 @@
             db (math.max 0 (math.min 255 (math.floor (* b (- 1 f)))))]
         (+ (* dr 0x10000) (* dg 0x100) db))))
 
-(fn hl-bg [group]
+(fn hl-bg
+  [group]
   (let [[ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
     (when (and ok (= (type hl) "table"))
       (. hl :bg))))
 
-(fn alt-bg-from [group]
+(fn alt-bg-from
+  [group]
   (let [opts {}
         base-bg (or (hl-bg group)
                     (hl-bg "Normal")
@@ -121,7 +130,8 @@
       (set (. opts :bg) bg))
     opts))
 
-(fn ensure-defaults-and-highlights! []
+(fn ensure-defaults-and-highlights!
+  []
   (set (. vim.g "meta#custom_mappings") (or (. vim.g "meta#custom_mappings") {}))
   (set (. vim.g "meta#highlight_groups") (or (. vim.g "meta#highlight_groups") {:All "Title" :Fuzzy "Number" :Regex "Special"}))
   (set (. vim.g "meta#syntax_on_init") (or (. vim.g "meta#syntax_on_init") "buffer"))
@@ -159,34 +169,40 @@
       (hi 0 "MetaSourceFile" {:default true :link "NetrwPlain"})
       (hi 0 "MetaSourceFile" {:default true :link "Normal"})))
 
-(fn ensure-command [name callback opts]
+(fn ensure-command
+  [name callback opts]
   (pcall vim.api.nvim_del_user_command name)
   (vim.api.nvim_create_user_command name callback opts))
 
-(fn plugin-root []
+(fn plugin-root
+  []
   (let [src (. (debug.getinfo 1 "S") :source)
         path (if (vim.startswith src "@") (string.sub src 2) src)]
     ;; .../lua/metabuffer/init.lua -> plugin root
     (vim.fn.fnamemodify path ":p:h:h:h")))
 
-(fn clear-module-cache []
+(fn clear-module-cache
+  []
   (each [k _ (pairs package.loaded)]
     (when (or (= k "metabuffer") (vim.startswith k "metabuffer."))
       (set (. package.loaded k) nil))))
 
-(fn clear-plugin-loaded-flags! []
+(fn clear-plugin-loaded-flags!
+  []
   ;; Keep compatibility with older bootstrap guards.
   (set vim.g.loaded_metabuffer nil)
   (set vim.g.meta_loaded nil))
 
-(fn source-plugin-bootstrap! []
+(fn source-plugin-bootstrap!
+  []
   (let [root (plugin-root)
         file (.. root "/plugin/metabuffer.lua")]
     (if (= 1 (vim.fn.filereadable file))
         (vim.cmd (.. "silent source " (vim.fn.fnameescape file)))
         (error (.. "plugin bootstrap not found: " file)))))
 
-(fn maybe-compile! []
+(fn maybe-compile!
+  []
   (let [root (plugin-root)
         script (.. root "/scripts/compile-fennel.sh")]
     (if (= 1 (vim.fn.filereadable script))
@@ -196,7 +212,8 @@
               (error (.. "compile failed:\n" out))))
         (error (.. "compile script not found: " script)))))
 
-(fn M.reload [opts]
+(fn M.reload
+  [opts]
   (let [cfg (or opts {})
         do-compile (and cfg.compile true)]
     (when do-compile
@@ -207,7 +224,8 @@
     (vim.notify (if do-compile "[metabuffer] reloaded (compiled)" "[metabuffer] reloaded") vim.log.levels.INFO)
     true))
 
-(fn M.setup []
+(fn M.setup
+  []
   (ensure-defaults-and-highlights!)
   (ensure-command "Meta"
     (fn [args] (router.entry_start args.args args.bang))

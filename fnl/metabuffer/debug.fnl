@@ -1,11 +1,13 @@
 (import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
-(fn M.enabled? []
+(fn M.enabled?
+  []
   (or (= (. vim.g "meta#debug") 1)
       (= (. vim.g "meta#debug") true)))
 
-(fn M.log [scope msg]
+(fn M.log
+  [scope msg]
   (when (M.enabled?)
     (let [path (or (. vim.g "meta#debug_log") "/tmp/metabuffer-debug.log")
           prefix (if (and (= (type scope) "string") (~= scope ""))

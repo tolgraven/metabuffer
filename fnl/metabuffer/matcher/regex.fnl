@@ -4,7 +4,8 @@
 
 (local M {})
 
-(fn M.new []
+(fn M.new
+  []
   (base.new "regex"
     {:get-highlight-pattern (fn [_ query] (util.convert2regex-pattern query))
      :filter

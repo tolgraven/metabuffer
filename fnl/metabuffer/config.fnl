@@ -1,7 +1,8 @@
 (import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
-(fn M.apply-router-defaults [router vim]
+(fn M.apply-router-defaults
+  [router vim]
   (local default-prompt-keymaps
     [ [["n" "i"] "<CR>" "accept"]
       ;; In insert mode, <Esc> should only leave insert mode.

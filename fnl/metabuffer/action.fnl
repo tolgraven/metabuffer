@@ -1,7 +1,8 @@
 (import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
-(fn _sync-selected-from-cursor [meta]
+(fn _sync-selected-from-cursor
+  [meta]
   (local max (# meta.buf.indices))
   (if (<= max 0)
       (set meta.selected_index 0)
@@ -13,22 +14,26 @@
           (vim.api.nvim_win_set_cursor 0 [clamped col]))
         (set meta.selected_index (- clamped 1)))))
 
-(fn _change-line [meta offset]
+(fn _change-line
+  [meta offset]
   (let [c (vim.api.nvim_win_get_cursor 0)
         max (math.max 1 (# meta.buf.indices))
         row (math.max 1 (math.min (+ (. c 1) offset) max))]
     (vim.api.nvim_win_set_cursor 0 [row (. c 2)])
     (_sync-selected-from-cursor meta)))
 
-(fn _select-next [meta _]
+(fn _select-next
+  [meta _]
   (_change-line meta 1)
   (meta.refresh_statusline))
 
-(fn _select-prev [meta _]
+(fn _select-prev
+  [meta _]
   (_change-line meta -1)
   (meta.refresh_statusline))
 
-(fn _select-clicked [meta _]
+(fn _select-clicked
+  [meta _]
   (let [mp (vim.fn.getmousepos)
         winid (. mp :winid)
         lnum (. mp :line)
@@ -42,19 +47,24 @@
   (_sync-selected-from-cursor meta)
   (meta.refresh_statusline))
 
-(fn _ignore [meta _]
+(fn _ignore
+  [meta _]
   (meta.refresh_statusline))
 
-(fn _switch-matcher [meta _]
+(fn _switch-matcher
+  [meta _]
   (meta.switch_mode "matcher"))
 
-(fn _switch-case [meta _]
+(fn _switch-case
+  [meta _]
   (meta.switch_mode "case"))
 
-(fn _switch-highlight [meta _]
+(fn _switch-highlight
+  [meta _]
   (meta.switch_mode "syntax"))
 
-(fn _pause [_ _]
+(fn _pause
+  [_ _]
   4)
 
 (set M.DEFAULT_ACTION_RULES

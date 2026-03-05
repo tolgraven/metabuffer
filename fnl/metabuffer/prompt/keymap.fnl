@@ -6,10 +6,12 @@
 
 (local M {})
 
-(fn debug-log [msg]
+(fn debug-log
+  [msg]
   (debug.log "keymap" msg))
 
-(fn parse_flags [flags]
+(fn parse_flags
+  [flags]
   (local out {:noremap false :nowait false :expr false})
   (each [_ flag (ipairs (vim.split (or flags "") " " {:trimempty true}))]
     (if (= flag "noremap")
@@ -21,7 +23,8 @@
                 (error (.. "Unknown flag \"" flag "\" has specified."))))))
   out)
 
-(fn parse_definition [nvim rule]
+(fn parse_definition
+  [nvim rule]
   (let [lhs (. rule 1)
         rhs (. rule 2)
         flags (. rule 3)
@@ -32,7 +35,8 @@
      :nowait opts.nowait
      :expr opts.expr}))
 
-(fn _getcode [timeoutlen callback interval]
+(fn _getcode
+  [timeoutlen callback interval]
   ;; Use blocking getcharstr() so Neovim decodes terminal/tmux escape
   ;; sequences into full key tokens before we resolve mappings.
   (when callback (callback))
@@ -43,23 +47,29 @@
         (debug-log (.. "[keymap] raw=" (tostring (vim.fn.keytrans code))))
         code))))
 
-(fn M.new []
+(fn M.new
+  []
   (local self {:registry {}})
 
-  (fn self.clear []
+  (fn self.clear
+  []
     (set self.registry {}))
 
-  (fn self.register [definition]
+  (fn self.register
+  [definition]
     (set (. self.registry (tostring definition.lhs)) definition))
 
-  (fn self.register_from_rule [nvim rule]
+  (fn self.register_from_rule
+  [nvim rule]
     (self.register (parse_definition nvim rule)))
 
-  (fn self.register_from_rules [nvim rules]
+  (fn self.register_from_rules
+  [nvim rules]
     (each [_ rule (ipairs rules)]
       (self.register_from_rule nvim rule)))
 
-  (fn self.filter [lhs]
+  (fn self.filter
+  [lhs]
     (local out [])
     (local probe (tostring lhs))
     (each [_ def (pairs self.registry)]
@@ -68,13 +78,15 @@
     (table.sort out (fn [a b] (< (tostring a.lhs) (tostring b.lhs))))
     out)
 
-  (fn self._resolve [nvim definition]
+  (fn self._resolve
+  [nvim definition]
     (local rhs (if definition.expr
                    (ks_mod.parse nvim (vim.fn.eval definition.rhs))
                    definition.rhs))
     (if definition.noremap rhs (self.resolve nvim rhs true)))
 
-  (fn self.resolve [nvim lhs nowait]
+  (fn self.resolve
+  [nvim lhs nowait]
     (local candidates (self.filter lhs))
     (local n (# candidates))
     (if (= n 0)
@@ -91,10 +103,12 @@
                   (when (and d.nowait (= (tostring d.lhs) (tostring lhs)))
                     (self._resolve nvim d)))))))
 
-  (fn self.harvest [nvim timeoutlen callback interval]
+  (fn self.harvest
+  [nvim timeoutlen callback interval]
     (var previous nil)
     (var resolved nil)
-    (fn feed-key [k]
+    (fn feed-key
+  [k]
       (set previous (if previous
                         (ks_mod.concat previous [k])
                         (ks_mod.parse nvim [k])))
@@ -120,7 +134,8 @@
 
   self)
 
-(fn M.from_rules [nvim rules]
+(fn M.from_rules
+  [nvim rules]
   (local km (M.new))
   (km.register_from_rules nvim rules)
   km)

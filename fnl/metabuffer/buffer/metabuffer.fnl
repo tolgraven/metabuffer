@@ -6,7 +6,8 @@
 
 (set M.default-opts {:buflisted false :bufhidden "hide" :buftype "nofile"})
 
-(fn split-source-path [path]
+(fn split-source-path
+  [path]
   (let [p (or path "")
         rel (if (~= p "") (vim.fn.fnamemodify p ":~:.") "[Current Buffer]")
         dir (vim.fn.fnamemodify rel ":h")
@@ -14,7 +15,8 @@
         dir-part (if (and dir (~= dir ".") (~= dir "")) (.. dir "/") "")]
     {:dir dir-part :file file}))
 
-(fn source-prefix [ref]
+(fn source-prefix
+  [ref]
   (let [lnum (or ref.lnum 0)
         parts (split-source-path ref.path)
         lnum-str (string.format "%6d" lnum)
@@ -27,12 +29,14 @@
      :file-start (+ (+ (# lnum-str) 2) (# dir))
      :file-end (+ (+ (+ (# lnum-str) 2) (# dir)) (# file))}))
 
-(fn sanitize-syntax-id [s]
+(fn sanitize-syntax-id
+  [s]
   (let [base (or s "text")
         cleaned (string.gsub base "[^%w_]" "_")]
     (if (= cleaned "") "text" cleaned)))
 
-(fn syntax-files-for-ft [ft]
+(fn syntax-files-for-ft
+  [ft]
   (let [files []
         base (vim.api.nvim_get_runtime_file (.. "syntax/" ft ".vim") true)
         after (vim.api.nvim_get_runtime_file (.. "after/syntax/" ft ".vim") true)]
@@ -42,7 +46,8 @@
       (table.insert files f))
     files))
 
-(fn M.new [nvim model]
+(fn M.new
+  [nvim model]
   (local self (base.new nvim {:model model :name "meta" :default-opts M.default-opts}))
   (set self.syntax-type "buffer")
   (set self.indexbuf (ui.new nvim self "indexes"))
@@ -53,10 +58,12 @@
   (set self.source-alt-ns (vim.api.nvim_create_namespace "metabuffer_source_alt"))
   (set self.source-syntax-groups [])
 
-  (fn self.model-valid? []
+  (fn self.model-valid?
+  []
     (and self.model (vim.api.nvim_buf_is_valid self.model)))
 
-  (fn self.ref-filetype [ref]
+  (fn self.ref-filetype
+  [ref]
     (let [path (and ref ref.path)
           ft (when (and (= (type path) "string") (~= path ""))
                (or (vim.filetype.match {:filename (vim.fn.fnamemodify path ":t")})
@@ -65,7 +72,8 @@
           ft
           "text")))
 
-  (fn self.clear-source-syntax []
+  (fn self.clear-source-syntax
+  []
     (when (and self.source-syntax-groups (> (# self.source-syntax-groups) 0))
       (vim.api.nvim_buf_call self.buffer
         (fn []
@@ -73,7 +81,8 @@
             (vim.cmd (.. "silent! syntax clear " g))))))
     (set self.source-syntax-groups []))
 
-  (fn self.apply-source-syntax-regions []
+  (fn self.apply-source-syntax-regions
+  []
     (if (not (and self.show-source-separators
                   (= self.syntax-type "buffer")
                   self.source-refs
@@ -90,7 +99,8 @@
               ;; highlighting accurate while avoiding stale cross-file syntax.
               (vim.cmd "silent! syntax clear")
               (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
-              (fn add-block [start stop ft]
+              (fn add-block
+  [start stop ft]
                 (when (and ft (~= ft "") (<= start stop))
                   (let [cluster (.. "MetaSrcFt_" (sanitize-syntax-id ft))
                           group (string.format "MetaSrcBlock_%d_%d" start stop)
@@ -131,12 +141,14 @@
               (vim.cmd "silent! syntax sync fromstart")))
           (set self.source-syntax-groups groups))))
 
-  (fn self.syntax []
+  (fn self.syntax
+  []
     (if (and (= self.syntax-type "buffer") (self.model-valid?))
         (. (. vim.bo self.model) :syntax)
         "metabuffer"))
 
-  (fn self.apply-syntax [syntax-type]
+  (fn self.apply-syntax
+  [syntax-type]
     (when syntax-type
       (set self.syntax-type syntax-type))
     (let [bo (. vim.bo self.buffer)]
@@ -156,10 +168,12 @@
             (set (. bo :filetype) "metabuffer")
             (set (. bo :syntax) "metabuffer")))))
 
-  (fn self.update []
+  (fn self.update
+  []
     (self.render))
 
-  (fn self.render []
+  (fn self.render
+  []
     (local win-views {})
     (each [_ win (ipairs (vim.fn.win_findbuf self.buffer))]
       (when (vim.api.nvim_win_is_valid win)
@@ -248,7 +262,8 @@
             (pcall vim.fn.winrestview view)))))
     (self.indexbuf.update))
 
-  (fn self.push-visible-lines [visible]
+  (fn self.push-visible-lines
+  [visible]
     (when (self.model-valid?)
       (local n (math.min (# visible) (# self.indices)))
       (for [i 1 n]

@@ -4,7 +4,8 @@
 
 (local M {})
 
-(fn M.new []
+(fn M.new
+  []
   (base.new "all"
     {:get-highlight-pattern
       (fn [_ query]

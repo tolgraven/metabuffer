@@ -1,34 +1,40 @@
 (import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
-(fn M.new [opts]
+(fn M.new
+  [opts]
   (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
          : on-prompt-changed : update-info-window : maybe-sync-from-main!
          : schedule-scroll-sync!} opts]
-    (fn disable-cmp [session]
+    (fn disable-cmp
+  [session]
       (mark-prompt-buffer! session.prompt-buf)
       (let [[ok cmp] [(pcall require :cmp)]]
         (when ok
           (pcall cmp.setup.buffer {:enabled false})
           (pcall cmp.abort))))
 
-    (fn switch-mode [session which]
+    (fn switch-mode
+  [session which]
       (let [meta session.meta]
         (meta.switch_mode which)
         (pcall meta.refresh_statusline)))
 
-    (fn session-prompt-valid? [session]
+    (fn session-prompt-valid?
+  [session]
       (and session.meta
            session.prompt-buf
            (vim.api.nvim_buf_is_valid session.prompt-buf)))
 
-    (fn schedule-when-valid [session f]
+    (fn schedule-when-valid
+  [session f]
       (vim.schedule
         (fn []
           (when (session-prompt-valid? session)
             (f)))))
 
-    (fn resolve-map-action [router session action arg]
+    (fn resolve-map-action
+  [router session action arg]
       (if
         (= action "accept")
         (fn [] (router.finish "accept" session.prompt-buf))
@@ -48,11 +54,14 @@
         (fn [] (router.toggle-project-mode session.prompt-buf))
         nil))
 
-    (fn apply-keymaps [router session]
+    (fn apply-keymaps
+  [router session]
       (local opts {:buffer session.prompt-buf :silent true :noremap true :nowait true})
-      (fn map! [m lhs rhs]
+      (fn map!
+  [m lhs rhs]
         (vim.keymap.set m lhs rhs opts))
-      (fn map-rules! [rules]
+      (fn map-rules!
+  [rules]
         (each [_ r (ipairs rules)]
           (let [mode (. r 1)
                 lhs (. r 2)
@@ -70,7 +79,8 @@
             default-prompt-keymaps))
       (map-rules! rules))
 
-    (fn register! [router session]
+    (fn register!
+  [router session]
       (local aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true}))
       (set session.augroup aug)
       ;; Some environments/plugins do not reliably emit TextChangedI for this

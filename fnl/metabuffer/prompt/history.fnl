@@ -1,15 +1,18 @@
 (import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
-(fn M.new [prompt]
+(fn M.new
+  [prompt]
   (local self {:prompt prompt :index 0 :cached prompt.text :backward "" :threshold 0})
 
-  (fn self.current []
+  (fn self.current
+  []
     (if (= self.index 0)
       self.cached
       (vim.fn.histget "input" (- 0 self.index))))
 
-  (fn self.previous []
+  (fn self.previous
+  []
     (when (= self.index 0)
       (set self.cached self.prompt.text)
       (set self.threshold (vim.fn.histnr "input")))
@@ -17,7 +20,8 @@
       (set self.index (+ self.index 1)))
     (self.current))
 
-  (fn self.next []
+  (fn self.next
+  []
     (when (= self.index 0)
       (set self.cached self.prompt.text)
       (set self.threshold (vim.fn.histnr "input")))
@@ -25,7 +29,8 @@
       (set self.index (- self.index 1)))
     (self.current))
 
-  (fn self.previous-match []
+  (fn self.previous-match
+  []
     (when (= self.index 0)
       (set self.backward (self.prompt.caret.get-backward-text)))
     (var i self.index)
@@ -37,7 +42,8 @@
           (set i self.index)))
     out)
 
-  (fn self.next-match []
+  (fn self.next-match
+  []
     (if (= self.index 0)
         self.cached
         (do

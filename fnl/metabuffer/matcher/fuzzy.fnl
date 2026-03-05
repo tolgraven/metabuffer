@@ -3,7 +3,8 @@
 
 (local M {})
 
-(fn mkpat [fmt esc q]
+(fn mkpat
+  [fmt esc q]
   (local chars (vim.fn.split (or q "") "\\zs"))
   (local out [])
   (each [_ ch (ipairs chars)]
@@ -11,7 +12,8 @@
     (table.insert out (string.format fmt e e)))
   (table.concat out ""))
 
-(fn M.new []
+(fn M.new
+  []
   (base.new "fuzzy"
     {:also-highlight-per-char true
      :get-highlight-pattern (fn [_ query] (mkpat "%s[^%s]\\{-}" base.escape-vim-patterns query))

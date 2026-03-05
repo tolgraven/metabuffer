@@ -12,20 +12,24 @@
 
 (local M {})
 
-(fn line_of_index [buf idx]
+(fn line_of_index
+  [buf idx]
   (or (. buf.indices (+ idx 1)) 1))
 
-(fn metabuffer-display-name [model-buf]
+(fn metabuffer-display-name
+  [model-buf]
   (let [original-name (vim.api.nvim_buf_get_name model-buf)
         base-name (if (and (= (type original-name) "string") (~= original-name ""))
                       (vim.fn.fnamemodify original-name ":t")
                       "[No Name]")]
     (.. base-name " • Metabuffer")))
 
-(fn project-display-name []
+(fn project-display-name
+  []
   "Metabuffer")
 
-(fn nerd-font-enabled? []
+(fn nerd-font-enabled?
+  []
   (or (= (. vim.g "meta#nerd_font") true)
       (= (. vim.g "meta#nerd_font") 1)
       (= vim.g.have_nerd_font true)
@@ -33,7 +37,8 @@
       (= vim.g.nerd_font true)
       (= vim.g.nerd_font 1)))
 
-(fn statusline-mode-state []
+(fn statusline-mode-state
+  []
   (let [m (or (. (vim.api.nvim_get_mode) :mode) "")]
     (if (vim.startswith m "R")
         {:group "Replace" :label (if (nerd-font-enabled?) "R" "Replace")}
@@ -41,7 +46,9 @@
         {:group "Insert" :label (if (nerd-font-enabled?) "𝐈" "Insert")}
         {:group "Normal" :label (if (nerd-font-enabled?) "𝗡" "Normal")})))
 
-(fn M.new [nvim condition]
+(fn M.new
+  [nvim condition]
+  "Construct Meta state and bind matcher/query/buffer runtime."
   (local cond (or condition (state.default-condition "")))
   (local self (prompt_mod.new nvim))
 
@@ -63,7 +70,8 @@
   (set self._filter-cache {})
   (set self._filter-cache-line-count (# self.buf.content))
   (local prompt-on-term self.on-term)
-  (fn clear-all-highlights []
+  (fn clear-all-highlights
+    []
     (let [matcher-mode (. self.mode :matcher)]
       (when matcher-mode
         (each [_ m (ipairs matcher-mode.candidates)]
@@ -85,40 +93,49 @@
     (set self.query-lines [self.text]))
   (self.caret.set-locus (or cond.caret-locus (# self.text)))
 
-  (fn self.matcher []
+  (fn self.matcher
+    []
     ((. (. self.mode :matcher) :current)))
 
-  (fn self.case []
+  (fn self.case
+    []
     ((. (. self.mode :case) :current)))
 
-  (fn self.syntax []
+  (fn self.syntax
+    []
     ((. (. self.mode :syntax) :current)))
 
-  (fn self.ignorecase []
+  (fn self.ignorecase
+    []
     (state.ignorecase (self.case) self.text))
 
-  (fn self.active-queries []
+  (fn self.active-queries
+    []
     (local out [])
     (each [_ line (ipairs (or self.query-lines []))]
       (when (and (= (type line) "string") (~= (vim.trim line) ""))
         (table.insert out (vim.trim line))))
     out)
 
-  (fn self.set-query-lines [lines]
+  (fn self.set-query-lines
+    [lines]
     (set self.query-lines (or lines []))
     (local active (self.active-queries))
     (set self.text (table.concat active " && ")))
 
-  (fn self.selected_line []
+  (fn self.selected_line
+    []
     (line_of_index self.buf self.selected_index))
 
-  (fn self.switch_mode [which]
+  (fn self.switch_mode
+    [which]
     (let [mode_obj (. self.mode which)]
       (mode_obj.next)
       (set self._prev_text "")
       (self.on-update prompt_mod.STATUS_PROGRESS)))
 
-  (fn self.vim_query []
+  (fn self.vim_query
+    []
     (let [active (self.active-queries)
           q (. active (# active))]
       (if (or (not q) (= q ""))
@@ -128,7 +145,8 @@
             pat (matcher_obj.get-highlight-pattern matcher_obj q)]
         (.. caseprefix pat)))))
 
-  (fn self.refresh_statusline []
+  (fn self.refresh_statusline
+    []
     (local mode-state (statusline-mode-state))
     (local hl_prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer"))
     (self.status-win.set-statusline-state
@@ -145,7 +163,8 @@
       (self.syntax))
     (vim.cmd "redrawstatus"))
 
-  (fn self.on-init []
+  (fn self.on-init
+    []
     (self.buf.set-name (if self.project-mode
                            (project-display-name)
                            (metabuffer-display-name self.buf.model)))
@@ -171,12 +190,14 @@
           (vim.fn.winrestview view))))
     prompt_mod.STATUS_PROGRESS)
 
-  (fn self.on-redraw []
+  (fn self.on-redraw
+    []
     (self.refresh_statusline)
     (self.redraw-prompt)
     prompt_mod.STATUS_PROGRESS)
 
-  (fn self.on-update [status]
+  (fn self.on-update
+    [status]
     (let [queries (self.active-queries)
           prev-text self._prev_text
           prev-hits self.buf.indices
@@ -274,7 +295,8 @@
             (matcher.highlight matcher self.text ignorecase self.win.window))))
     status)
 
-  (fn self.on-term [status]
+  (fn self.on-term
+    [status]
     (clear-all-highlights)
     (prompt-on-term status))
 
@@ -283,7 +305,8 @@
   (set self.on_redraw self.on-redraw)
   (set self.on_update self.on-update)
 
-  (fn self.store []
+  (fn self.store
+    []
     {:text self.text
      :caret-locus (self.caret.get-locus)
      :selected-index self.selected_index

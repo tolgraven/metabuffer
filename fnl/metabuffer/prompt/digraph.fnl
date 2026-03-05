@@ -4,7 +4,8 @@
 (local M {})
 (var _instance nil)
 
-(fn parse_digraph_output [output]
+(fn parse_digraph_output
+  [output]
   (local registry {})
   (each [_ line (ipairs (vim.split (or output "") "\n" {:trimempty true}))]
     (let [k (string.match line "(%S%S)%s+%S+%s+%d+")
@@ -13,20 +14,23 @@
         (set (. registry k) v))))
   registry)
 
-(fn M.new []
+(fn M.new
+  []
   (if _instance
       _instance
       (do
         (set _instance {:registry nil})
 
-        (fn _instance.find [_ ch1 ch2]
+        (fn _instance.find
+  [_ ch1 ch2]
           (when (not _instance.registry)
             (set _instance.registry (parse_digraph_output (vim.fn.execute "digraphs"))))
           (or (. _instance.registry (.. ch1 ch2))
               (. _instance.registry (.. ch2 ch1))
               ch2))
 
-        (fn _instance.retrieve [_]
+        (fn _instance.retrieve
+  [_]
           (local code1 (util.getchar))
           (if (and (= (type code1) "string") (vim.startswith code1 "<"))
               code1

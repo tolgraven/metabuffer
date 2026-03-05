@@ -19,16 +19,19 @@
 
 (set M.DEFAULT_HARVEST_INTERVAL 0.033)
 
-(fn debug-log [msg]
+(fn debug-log
+  [msg]
   (debug.log "prompt" msg))
 
-(fn is_action_keystroke [s]
+(fn is_action_keystroke
+  [s]
   (and (= (type s) "string")
        (vim.startswith s "<")
        (vim.endswith s ">")
        (string.match (string.sub s 2 (- (# s) 1)) "^%w+:%w+.*$")))
 
-(fn M.new [nvim]
+(fn M.new
+  [nvim]
   (local self {:nvim nvim
                :text ""
                :prefix ""
@@ -44,7 +47,8 @@
   (set self.action action_mod.DEFAULT_ACTION)
   (set self.keymap (keymap_mod.from_rules nvim keymap_mod.DEFAULT_KEYMAP_RULES))
 
-  (fn self.insert-text [txt]
+  (fn self.insert-text
+  [txt]
     (local locus (self.caret.get-locus))
     (set self.text (.. (self.caret.get-backward-text)
                        txt
@@ -52,19 +56,22 @@
                        (self.caret.get-forward-text)))
     (self.caret.set-locus (+ locus (# txt))))
 
-  (fn self.replace-text [txt]
+  (fn self.replace-text
+  [txt]
     (local locus (self.caret.get-locus))
     (set self.text (.. (self.caret.get-backward-text)
                        txt
                        (string.sub (self.caret.get-forward-text) (# txt))))
     (self.caret.set-locus (+ locus (# txt))))
 
-  (fn self.update-text [txt]
+  (fn self.update-text
+  [txt]
     (if (= self.insert-mode M.INSERT_MODE_INSERT)
         (self.insert-text txt)
         (self.replace-text txt)))
 
-  (fn self.redraw-prompt []
+  (fn self.redraw-prompt
+  []
     (local backward (self.caret.get-backward-text))
     (local selected (self.caret.get-selected-text))
     (local forward (self.caret.get-forward-text))
@@ -79,18 +86,23 @@
     (when self.is-macvim
       (vim.cmd "redraw")))
 
-  (fn self.on-init []
+  (fn self.on-init
+  []
     (vim.fn.inputsave))
 
-  (fn self.on-update [status]
+  (fn self.on-update
+  [status]
     status)
 
-  (fn self.on-redraw []
+  (fn self.on-redraw
+  []
     (self.redraw-prompt))
 
-  (fn self.on-harvest [] nil)
+  (fn self.on-harvest
+  [] nil)
 
-  (fn self.on-keypress [keystroke]
+  (fn self.on-keypress
+  [keystroke]
     (local s (tostring keystroke))
     (if (is_action_keystroke s)
         (let [action (string.sub s 2 (- (# s) 1))]
@@ -101,19 +113,23 @@
             (when (= (type ret) "number") ret)))
         (self.update-text s)))
 
-  (fn self.on-term [status]
+  (fn self.on-term
+  [status]
     (vim.fn.inputrestore)
     status)
 
-  (fn self.store []
+  (fn self.store
+  []
     {:text self.text
      :caret-locus (self.caret.get-locus)})
 
-  (fn self.restore [condition]
+  (fn self.restore
+  [condition]
     (set self.text condition.text)
     (self.caret.set-locus condition.caret-locus))
 
-  (fn self.start []
+  (fn self.start
+  []
     (var status (or (self.on-init) M.STATUS_PROGRESS))
     (debug-log (.. "[prompt] start status=" (tostring status)))
     (local timeoutlen (when vim.o.timeout (/ vim.o.timeoutlen 1000.0)))

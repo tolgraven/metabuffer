@@ -6,7 +6,8 @@
 (set M.default-hi-char "MetaSearchHitFuzzyBetween")
 (set M.default-match-priority (or vim.g.meta_search_match_priority 220))
 
-(fn M.new [name opts]
+(fn M.new
+  [name opts]
   (local self {:name name
                :also-highlight-per-char (and opts opts.also-highlight-per-char)
                :match-id nil
@@ -15,13 +16,15 @@
                :get-highlight-pattern (or (and opts opts.get-highlight-pattern) (fn [_ _] ""))
                :filter (or (and opts opts.filter) (fn [_ _ _ _] []))})
 
-  (fn delete-match [id win]
+  (fn delete-match
+  [id win]
     (if (and win (vim.api.nvim_win_is_valid win))
         (or (pcall vim.fn.matchdelete id win)
             (pcall vim.api.nvim_win_call win (fn [] (vim.fn.matchdelete id))))
         (pcall vim.fn.matchdelete id)))
 
-  (fn self.remove-highlight []
+  (fn self.remove-highlight
+  []
     (when self.match-id
       (delete-match self.match-id self.match-win)
       (set self.match-id nil))
@@ -30,7 +33,8 @@
       (set self.char-match-id nil))
     (set self.match-win nil))
 
-  (fn matchadd-in-window [group pattern win]
+  (fn matchadd-in-window
+  [group pattern win]
     (var id nil)
     (if (and win (vim.api.nvim_win_is_valid win))
         (let [[ok win-id] [(pcall vim.fn.matchadd group pattern M.default-match-priority -1 {:window win})]]
@@ -43,7 +47,8 @@
 
   ;; Keep method signature compatible with callers using
   ;; `matcher.highlight(matcher, query, ...)`.
-  (fn self.highlight [_ query ignorecase target-win]
+  (fn self.highlight
+  [_ query ignorecase target-win]
     (self.remove-highlight)
     (when (and query (~= query ""))
       (let [pat (self.get-highlight-pattern self query)
@@ -58,7 +63,8 @@
 
   self)
 
-(fn M.escape-vim-patterns [text]
+(fn M.escape-vim-patterns
+  [text]
   (util.escape-vim-pattern text))
 
 M

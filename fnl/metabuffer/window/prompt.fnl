@@ -2,7 +2,9 @@
 (local base (require :metabuffer.window.base))
 (local M {})
 
-(fn M.new [nvim opts]
+(fn M.new
+  [nvim opts]
+  "Create the bottom prompt window used by Meta interactive input."
   (let [cfg (or opts {})
         height (or cfg.height 3)]
     (vim.cmd (.. "botright " (tostring height) "new"))

@@ -35,7 +35,8 @@
    "<ScrollWheelUp>"
    "<ScrollWheelDown>"])
 
-(fn canonical-token [s]
+(fn canonical-token
+  [s]
   (if (and (= (type s) "string")
            (vim.startswith s "<")
            (vim.endswith s ">"))
@@ -45,7 +46,8 @@
             (.. "<" (string.upper inner) ">")))
       s))
 
-(fn ensure-reverse-termcodes []
+(fn ensure-reverse-termcodes
+  []
   (when (not reverse-termcodes)
     (set reverse-termcodes {})
     (let [tokens []]
@@ -61,11 +63,13 @@
           (set (. reverse-termcodes trans) canonical)))))
   reverse-termcodes)
 
-(fn decode-special-string [s]
+(fn decode-special-string
+  [s]
   (when (= (type s) "string")
     (. (ensure-reverse-termcodes) s)))
 
-(fn normalize [expr]
+(fn normalize
+  [expr]
   (if (= (type expr) "number")
       (canonical-token (vim.fn.keytrans (util.int2char expr)))
       (= (type expr) "string")
@@ -77,14 +81,16 @@
                     (canonical-token trans)))))
       (tostring expr)))
 
-(fn M.represent [_ code]
+(fn M.represent
+  [_ code]
   (if (= (type code) "number")
       (canonical-token (vim.fn.keytrans (util.int2char code)))
       (= (type code) "string")
       code
       (tostring code)))
 
-(fn M.parse [_ expr]
+(fn M.parse
+  [_ expr]
   (local k (normalize expr))
   (if (. cache k)
       (. cache k)

@@ -3,7 +3,9 @@
 
 (local M {})
 
-(fn M.new [nvim buf opts]
+(fn M.new
+  [nvim buf opts]
+  "Create a minimal floating window wrapper for auxiliary Meta UI."
   (local lines (- vim.o.lines 2))
   (local winblend (or vim.g.meta_float_winblend 13))
   (local cfg {:relative "editor"

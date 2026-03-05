@@ -1,7 +1,9 @@
 (import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
-(fn M.new [opts]
+(fn M.new
+  [opts]
+  "Build project-source orchestrator for eager/lazy pool construction."
   (let [{: settings : truthy? : selected-ref : canonical-path
          : current-buffer-path : path-under-root? : allow-project-path?
          : project-file-list : read-file-lines-cached : session-active?
@@ -9,7 +11,8 @@
          : prompt-has-active-query? : now-ms : prompt-update-delay-ms
          : schedule-prompt-update! : restore-meta-view! : update-info-window} opts]
 
-  (fn parse-prefilter-terms [query-lines ignorecase]
+  (fn parse-prefilter-terms
+    [query-lines ignorecase]
     (local groups [])
     (each [_ line (ipairs (or query-lines []))]
       (let [trimmed (vim.trim (or line ""))]
@@ -22,7 +25,8 @@
             (table.insert groups toks)))))
     groups)
 
-  (fn line-matches-prefilter? [line spec]
+  (fn line-matches-prefilter?
+    [line spec]
     (if (or (not spec) (not spec.groups) (= (# spec.groups) 0))
         true
         (let [probe0 (or line "")
@@ -37,14 +41,16 @@
               (set all-groups false)))
           all-groups)))
 
-  (fn reset-meta-indices! [meta]
+  (fn reset-meta-indices!
+    [meta]
     (local all-indices [])
     (for [i 1 (# meta.buf.content)]
       (table.insert all-indices i))
     (set meta.buf.all-indices all-indices)
     (set meta.buf.indices (vim.deepcopy all-indices)))
 
-  (fn set-single-source-content! [session show-separators]
+  (fn set-single-source-content!
+    [session show-separators]
     (let [meta session.meta]
       (set meta.buf.content (vim.deepcopy session.single-content))
       (set meta.buf.source-refs (vim.deepcopy session.single-refs))
@@ -52,7 +58,8 @@
       (set meta.buf.show-source-separators show-separators)
       (reset-meta-indices! meta)))
 
-  (fn best-project-selection-index [session old-ref old-line]
+  (fn best-project-selection-index
+    [session old-ref old-line]
     (let [meta session.meta
           refs (or meta.buf.source-refs [])
           old-ref-path (canonical-path (and old-ref old-ref.path))
@@ -85,7 +92,8 @@
                 (math.min (if match-idx (- match-idx 1) fallback-idx)
                           (math.max 0 (- (# meta.buf.indices) 1))))))
 
-  (fn schedule-lazy-refresh! [session]
+  (fn schedule-lazy-refresh!
+    [session]
     (when (and session (session-active? session) (not session.closing))
       (set session.lazy-refresh-dirty true)
       (when (not session.lazy-refresh-pending)
@@ -100,7 +108,8 @@
               (schedule-lazy-refresh! session)))
           (math.max 20 (or settings.project-lazy-refresh-debounce-ms 80))))))
 
-  (fn push-file-into-pool! [session path lines prefilter]
+  (fn push-file-into-pool!
+    [session path lines prefilter]
     (if (or (not lines) (= (type lines) "nil"))
         0
         (let [meta session.meta
@@ -130,7 +139,8 @@
                     (table.insert meta.buf.all-indices i)))
                 added)))))
 
-  (fn open-project-buffer-paths [session root include-hidden include-deps]
+  (fn open-project-buffer-paths
+    [session root include-hidden include-deps]
     (local out [])
     (local seen {})
     (local current (canonical-path (current-buffer-path session.source-buf)))
@@ -150,7 +160,8 @@
                 (table.insert out name)))))))
     out)
 
-  (fn estimate-lines-from-files [paths]
+  (fn estimate-lines-from-files
+    [paths]
     (var bytes 0)
     (each [_ path (ipairs (or paths []))]
       (let [size (vim.fn.getfsize path)]
@@ -158,7 +169,8 @@
           (set bytes (+ bytes size)))))
     (math.floor (/ bytes 80)))
 
-  (fn collect-project-sources [session include-hidden include-ignored include-deps]
+  (fn collect-project-sources
+    [session include-hidden include-ignored include-deps]
     (let [root (vim.fn.getcwd)
           current-path (current-buffer-path session.source-buf)
           file-cache (or session.preview-file-cache {})
@@ -191,7 +203,8 @@
                         (push-line! path lnum line))))))))))
       {:content content :refs refs}))
 
-  (fn init-project-pool! [session prefilter]
+  (fn init-project-pool!
+    [session prefilter]
     (set-single-source-content! session session.project-mode)
     (let [root (vim.fn.getcwd)
           include-hidden session.effective-include-hidden
@@ -217,13 +230,15 @@
             (table.insert deferred p))))
       {:deferred-paths deferred :estimated-lines (estimate-lines-from-files deferred)}))
 
-  (fn lazy-preferred? [session estimated-lines]
+  (fn lazy-preferred?
+    [session estimated-lines]
     (and (lazy-streaming-allowed? session)
          (truthy? session.lazy-mode)
          (or (<= settings.project-lazy-min-estimated-lines 0)
              (>= estimated-lines settings.project-lazy-min-estimated-lines))))
 
-  (fn start-project-stream! [session prefilter init]
+  (fn start-project-stream!
+    [session prefilter init]
     (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
     (set session.lazy-stream-done false)
     (set session.lazy-stream-next 1)
@@ -231,7 +246,8 @@
     (set session.lazy-stream-total (# session.lazy-stream-paths))
     (set session.lazy-prefilter prefilter)
     (local stream-id session.lazy-stream-id)
-    (fn run-batch []
+    (fn run-batch
+      []
       (when (and (session-active? session)
                  (= stream-id session.lazy-stream-id)
                  (not session.lazy-stream-done))
@@ -263,7 +279,9 @@
             (vim.defer_fn run-batch 0)))))
     (vim.defer_fn run-batch 0))
 
-  (fn apply-source-set! [session]
+  (fn apply-source-set!
+    [session]
+    "Apply full single/project source set based on current session flags."
     (local meta session.meta)
     (local old-ref (and session.project-mode (selected-ref meta)))
     (local old-line (if (and meta.selected_index
@@ -303,7 +321,9 @@
     (set meta._filter-cache {})
     (set meta._filter-cache-line-count (# meta.buf.content)))
 
-  (fn apply-minimal-source-set! [session]
+  (fn apply-minimal-source-set!
+    [session]
+    "Apply minimal startup source set for empty project prompt."
     (local meta session.meta)
     (local old-line (if (and meta.selected_index
                              (>= meta.selected_index 0)
@@ -322,7 +342,9 @@
     (set meta._filter-cache {})
     (set meta._filter-cache-line-count (# meta.buf.content)))
 
-  (fn schedule-project-bootstrap! [session wait-ms]
+  (fn schedule-project-bootstrap!
+    [session wait-ms]
+    "Defer full project source expansion until startup/input conditions allow."
     (when (and session session.project-mode (not session.project-bootstrapped))
       (set session.project-bootstrap-token (+ 1 (or session.project-bootstrap-token 0)))
       (local token session.project-bootstrap-token)

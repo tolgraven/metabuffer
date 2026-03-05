@@ -27,32 +27,38 @@
 (local push-history! (fn [text]
                        (history_store.push! text M.history-max)))
 
-(fn debug-log [msg]
+(fn debug-log
+  [msg]
   (debug.log "router" msg))
 
-(fn prompt-height []
+(fn prompt-height
+  []
   (or (tonumber vim.g.meta_prompt_height)
       (tonumber (. vim.g "meta#prompt_height"))
       7))
 
-(fn persist-prompt-height! [session]
+(fn persist-prompt-height!
+  [session]
   (when (and session session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
     (let [[ok h] [(pcall vim.api.nvim_win_get_height session.prompt-win)]]
       (when (and ok h (> h 0))
         (set vim.g.meta_prompt_height h)
         (set (. vim.g "meta#prompt_height") h)))))
 
-(fn info-height [session]
+(fn info-height
+  [session]
   (if (and session session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
       (let [p-row-col (vim.api.nvim_win_get_position session.prompt-win)
             p-row (. p-row-col 1)]
         (math.max 7 (- p-row 2)))
       (math.max 7 (- vim.o.lines (+ (prompt-height) 4)))))
 
-(fn now-ms []
+(fn now-ms
+  []
   (/ (vim.loop.hrtime) 1000000))
 
-(fn prompt-update-delay-ms [session]
+(fn prompt-update-delay-ms
+  [session]
   (let [base (math.max 0 M.prompt-update-debounce-ms)
         n (if (and session session.meta session.meta.buf session.meta.buf.indices)
               (# session.meta.buf.indices)
@@ -87,7 +93,8 @@
         extra (if (and session session.project-mode (not session.lazy-stream-done)) 2 0)]
     (+ base short-extra scale extra)))
 
-(fn prompt-has-active-query? [session]
+(fn prompt-has-active-query?
+  [session]
   (let [parsed (query_mod.parse-query-lines (prompt-lines session))]
     (var has false)
     (each [_ line (ipairs (or (. parsed :lines) []))]
@@ -95,7 +102,8 @@
         (set has true)))
     has))
 
-(fn cancel-prompt-update! [session]
+(fn cancel-prompt-update!
+  [session]
   (when (and session session.prompt-update-timer)
     (let [timer session.prompt-update-timer
           stopf (. timer :stop)
@@ -105,7 +113,9 @@
       (set session.prompt-update-timer nil)
       (set session.prompt-update-pending false))))
 
-(fn begin-session-close! [session]
+(fn begin-session-close!
+  [session]
+  "Cancel all queued/async session work before window teardown."
   (when session
     (set session.closing true)
     ;; Invalidate any queued prompt updates immediately.
@@ -128,7 +138,9 @@
     (set session.syntax-refresh-dirty false)
     (set session.syntax-refresh-pending false)))
 
-(fn schedule-prompt-update! [session wait-ms]
+(fn schedule-prompt-update!
+  [session wait-ms]
+  "Schedule trailing-edge prompt application and coalesce rapid edits."
   (when session
     (cancel-prompt-update! session)
     (set session.prompt-update-pending true)
@@ -166,10 +178,12 @@
       (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)
       [])))
 
-(fn prompt-text [session]
+(fn prompt-text
+  [session]
   (table.concat (prompt-lines session) "\n"))
 
-(fn mark-prompt-buffer! [buf]
+(fn mark-prompt-buffer!
+  [buf]
   (when (and buf (vim.api.nvim_buf_is_valid buf))
     ;; Best-effort disables for common auto-pairs/completion helpers.
     (pcall vim.api.nvim_buf_set_var buf "autopairs_enabled" false)
@@ -180,7 +194,8 @@
     (pcall vim.api.nvim_buf_set_var buf "cmp_enabled" false)
     (pcall vim.api.nvim_buf_set_var buf "meta_prompt" true)))
 
-(fn set-prompt-text! [session text]
+(fn set-prompt-text!
+  [session text]
   (when (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
     (set session.last-prompt-text (or text ""))
     (local lines (if (= text "") [""] (vim.split text "\n" {:plain true})))
@@ -189,14 +204,16 @@
           col (# (. lines row))]
       (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col]))))
 
-(fn current-buffer-path [buf]
+(fn current-buffer-path
+  [buf]
   (and buf
        (vim.api.nvim_buf_is_valid buf)
        (let [[ok name] [(pcall vim.api.nvim_buf_get_name buf)]]
          (when (and ok (= (type name) "string") (~= name ""))
            name))))
 
-(fn meta-buffer-name [session]
+(fn meta-buffer-name
+  [session]
   (if session.project-mode
       "Metabuffer"
       (let [original-name (current-buffer-path session.source-buf)
@@ -205,7 +222,8 @@
                           "[No Name]")]
         (.. base-name " • Metabuffer"))))
 
-(fn ensure-source-refs! [meta]
+(fn ensure-source-refs!
+  [meta]
   (when (not meta.buf.source-refs)
     (set meta.buf.source-refs []))
   (when (< (# meta.buf.source-refs) (# meta.buf.content))
@@ -217,12 +235,14 @@
         (table.insert meta.buf.source-refs {:path path :lnum i :buf model-buf :line (. meta.buf.content i)}))))
   meta.buf.source-refs)
 
-(fn selected-ref [meta]
+(fn selected-ref
+  [meta]
   (let [src-idx (. meta.buf.indices (+ meta.selected_index 1))
         refs (or meta.buf.source-refs [])]
     (and src-idx (. refs src-idx))))
 
-(fn hidden-path? [path]
+(fn hidden-path?
+  [path]
   (let [parts (vim.split path "/" {:plain true})]
     (var hidden false)
     (each [_ p (ipairs parts)]
@@ -230,7 +250,8 @@
         (set hidden true)))
     hidden))
 
-(fn dep-path? [path]
+(fn dep-path?
+  [path]
   (let [parts (vim.split path "/" {:plain true})]
     (var dep false)
     (each [_ p (ipairs parts)]
@@ -238,7 +259,8 @@
         (set dep true)))
     dep))
 
-(fn allow-project-path? [rel include-hidden include-deps]
+(fn allow-project-path?
+  [rel include-hidden include-deps]
   (let [s (or rel "")]
     (if (or (= s "") (= s "."))
         false
@@ -250,7 +272,9 @@
                     false
                     true))))))
 
-(fn project-file-list [root include-hidden include-ignored include-deps]
+(fn project-file-list
+  [root include-hidden include-ignored include-deps]
+  "Collect project file paths using rg (or glob fallback)."
   (let [rg-bin (or M.project-rg-bin "rg")]
     (if (= 1 (vim.fn.executable rg-bin))
         (let [cmd [rg-bin]
@@ -271,31 +295,37 @@
             (or rel [])))
         (vim.fn.globpath root (or M.project-fallback-glob-pattern "**/*") true true))))
 
-(fn ui-attached? []
+(fn ui-attached?
+  []
   (> (# (vim.api.nvim_list_uis)) 0))
 
-(fn lazy-streaming-allowed? [session]
+(fn lazy-streaming-allowed?
+  [session]
   (and session
        session.project-mode
        (query_mod.truthy? M.project-lazy-enabled)
        (or (not (query_mod.truthy? M.project-lazy-disable-headless))
            (ui-attached?))))
 
-(fn session-active? [session]
+(fn session-active?
+  [session]
   (and session
        session.prompt-buf
        (= (. M.active-by-prompt session.prompt-buf) session)))
 
-(fn canonical-path [path]
+(fn canonical-path
+  [path]
   (when (and (= (type path) "string") (~= path ""))
     (vim.fn.fnamemodify path ":p")))
 
-(fn path-under-root? [path root]
+(fn path-under-root?
+  [path root]
   (let [p (canonical-path path)
         r (canonical-path root)]
     (and p r (vim.startswith p r))))
 
-(fn read-file-lines-cached [path]
+(fn read-file-lines-cached
+  [path]
   (if (or (not path) (= 0 (vim.fn.filereadable path)))
       nil
       (let [size (vim.fn.getfsize path)
@@ -364,18 +394,21 @@
      :restore-meta-view! session_view.restore-meta-view!
      :update-info-window update-info-window}))
 
-(fn M._store_vars [meta]
+(fn M._store_vars
+  [meta]
   (set vim.b._meta_context (meta.store))
   (set vim.b._meta_indexes meta.buf.indices)
   (set vim.b._meta_updates meta.updates)
   (set vim.b._meta_source_bufnr meta.buf.model)
   meta)
 
-(fn M._wrapup [meta]
+(fn M._wrapup
+  [meta]
   (vim.cmd "redraw|redrawstatus")
   (M._store_vars meta))
 
-(fn remove-session [session]
+(fn remove-session
+  [session]
   (when session
     (push-history! (or session.last-prompt-text
                        (if (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
@@ -466,7 +499,9 @@
                                 (pcall update-info-window session)))
                             1))))))))
 
-(fn M.on-prompt-changed [prompt-buf force event-tick]
+(fn M.on-prompt-changed
+  [prompt-buf force event-tick]
+  "Entry point for prompt edits; keeps typing fast by deferring matcher work."
   (let [session (. M.active-by-prompt prompt-buf)]
     (when (and session (not session.closing))
       (if (and (not force)
@@ -538,7 +573,8 @@
                                           (schedule-prompt-update! session (math.max delay M.prompt-update-idle-ms))
                                           (schedule-prompt-update! session delay)))))))))))))))
 
-(fn finish-accept [session]
+(fn finish-accept
+  [session]
   (local curr session.meta)
   (set session.last-prompt-text (prompt-text session))
   (push-history! session.last-prompt-text)
@@ -580,7 +616,8 @@
   (M._wrapup curr)
   curr)
 
-(fn finish-cancel [session]
+(fn finish-cancel
+  [session]
   (local curr session.meta)
   (begin-session-close! session)
   (set session.last-prompt-text (prompt-text session))
@@ -601,14 +638,16 @@
   (M._wrapup curr)
   curr)
 
-(fn M.finish [kind prompt-buf]
+(fn M.finish
+  [kind prompt-buf]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
       (if (= kind "accept")
           (finish-accept session)
           (finish-cancel session)))))
 
-(fn M.move-selection [prompt-buf delta]
+(fn M.move-selection
+  [prompt-buf delta]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
       (let [runner (fn []
@@ -626,7 +665,8 @@
             (vim.schedule runner)
             (runner))))))
 
-(fn sync-selected-from-main-cursor! [session]
+(fn sync-selected-from-main-cursor!
+  [session]
   (let [meta session.meta
         max (# meta.buf.indices)]
     (if (<= max 0)
@@ -639,7 +679,8 @@
               (pcall vim.api.nvim_win_set_cursor meta.win.window [clamped (. c 2)]))
             (set meta.selected_index (- clamped 1)))))))
 
-(fn can-refresh-source-syntax? [session]
+(fn can-refresh-source-syntax?
+  [session]
   (let [buf (and session session.meta session.meta.buf)]
     (and session
          session.project-mode
@@ -647,7 +688,8 @@
          buf.show-source-separators
          (= buf.syntax-type "buffer"))))
 
-(fn schedule-source-syntax-refresh! [session]
+(fn schedule-source-syntax-refresh!
+  [session]
   (when (can-refresh-source-syntax? session)
     (set session.syntax-refresh-dirty true)
     (when (not session.syntax-refresh-pending)
@@ -667,7 +709,8 @@
               (schedule-source-syntax-refresh! session))))
         (or M.source-syntax-refresh-debounce-ms 80)))))
 
-(fn M.scroll-main [prompt-buf action]
+(fn M.scroll-main
+  [prompt-buf action]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
       (let [runner (fn []
@@ -699,7 +742,8 @@
             (vim.schedule runner)
             (runner))))))
 
-(fn maybe-sync-from-main! [session force-refresh]
+(fn maybe-sync-from-main!
+  [session force-refresh]
   (when (and session
              (not session.startup-initializing)
              (vim.api.nvim_win_is_valid session.meta.win.window)
@@ -714,7 +758,8 @@
         (pcall session.meta.refresh_statusline)
         (pcall update-info-window session false)))))
 
-(fn schedule-scroll-sync! [session]
+(fn schedule-scroll-sync!
+  [session]
   (when (and session (not session.scroll-sync-pending))
     (set session.scroll-sync-pending true)
     (vim.defer_fn
@@ -723,7 +768,8 @@
         (maybe-sync-from-main! session true))
       (or M.scroll-sync-debounce-ms 20))))
 
-(fn M.history-or-move [prompt-buf delta]
+(fn M.history-or-move
+  [prompt-buf delta]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
       (let [txt (prompt-text session)
@@ -745,7 +791,8 @@
                         (set-prompt-text! session entry))))))
             (M.move-selection prompt-buf delta))))))
 
-  (fn M.toggle-scan-option [prompt-buf which]
+  (fn M.toggle-scan-option
+    [prompt-buf which]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
       (if
@@ -762,7 +809,8 @@
         (project-source.apply-source-set! session))
       (apply-prompt-lines session))))
 
-(fn M.toggle-project-mode [prompt-buf]
+(fn M.toggle-project-mode
+  [prompt-buf]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
       (set session.project-mode (not session.project-mode))
@@ -771,7 +819,8 @@
       (project-source.apply-source-set! session)
       (apply-prompt-lines session))))
 
-(fn register-prompt-hooks [session]
+(fn register-prompt-hooks
+  [session]
   (let [hooks
         (prompt_hooks_mod.new
           {:mark-prompt-buffer! mark-prompt-buffer!
@@ -783,7 +832,9 @@
            :schedule-scroll-sync! schedule-scroll-sync!})]
     (hooks.register! M session)))
 
-(fn M.start [query mode _meta project-mode]
+(fn M.start
+  [query mode _meta project-mode]
+  "Create a Meta session and wire prompt/result/project orchestration."
   (let [parsed-query (query_mod.parse-query-text query)
         query0 (. parsed-query :query)
         start-hidden (if (= (. parsed-query :include-hidden) nil)
@@ -899,7 +950,8 @@
       (set (. M.instances source-buf) curr)
       curr))))
 
-(fn M.sync [meta query]
+(fn M.sync
+  [meta query]
   (when (not meta)
     (vim.notify "No Meta instance" vim.log.levels.WARN))
   (when meta
@@ -908,27 +960,33 @@
     (M._store_vars meta)
     meta))
 
-(fn M.push [meta]
+(fn M.push
+  [meta]
   (if (not meta)
       (vim.notify "No Meta instance" vim.log.levels.WARN)
       (let [lines (vim.api.nvim_buf_get_lines meta.buf.buffer 0 -1 false)]
         (meta.buf.push-visible-lines lines))))
 
-(fn M.entry_start [query _bang]
+(fn M.entry_start
+  [query _bang]
   (M.start query "start" nil _bang))
 
-(fn M.entry_resume [query]
+(fn M.entry_resume
+  [query]
   (M.start query "resume" nil))
 
-(fn M.entry_sync [query]
+(fn M.entry_sync
+  [query]
   (local key (vim.api.nvim_get_current_buf))
   (M.sync (. M.instances key) query))
 
-(fn M.entry_push []
+(fn M.entry_push
+  []
   (local key (vim.api.nvim_get_current_buf))
   (M.push (. M.instances key)))
 
-(fn M.entry_cursor_word [resume]
+(fn M.entry_cursor_word
+  [resume]
   (local w (vim.fn.expand "<cword>"))
   (if resume
       (M.entry_resume w)

@@ -9,15 +9,19 @@
 (set M.statusline
   "%%#MetaStatuslineMode%s# %s%%#MetaStatuslineIndicator# %d/%d%s%%#MetaStatuslineMiddle#%%=%%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s ")
 
-(fn title-case [s]
+(fn title-case
+  [s]
   (if (and (= (type s) "string") (> (# s) 0))
       (.. (string.upper (string.sub s 1 1)) (string.lower (string.sub s 2)))
       ""))
 
-(fn M.new [nvim win]
+(fn M.new
+  [nvim win]
+  "Create the main Meta results window wrapper and statusline renderer."
   (local self (base.new nvim (or win (vim.api.nvim_get_current_win)) M.opts-to-stash M.default-opts))
 
-  (fn self.set-statusline-state [mode-group mode-label name num-hits num-lines line-nr debug-out matcher case-mode hl-prefix syntax]
+  (fn self.set-statusline-state
+    [mode-group mode-label name num-hits num-lines line-nr debug-out matcher case-mode hl-prefix syntax]
     (local matcher-suffix (title-case matcher))
     (local case-suffix (title-case case-mode))
     (local text (string.format M.statusline

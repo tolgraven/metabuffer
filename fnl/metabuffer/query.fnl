@@ -1,16 +1,19 @@
 (import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
-(fn M.truthy? [v]
+(fn M.truthy?
+  [v]
   (or (= v true) (= v 1) (= v "1") (= v "true")))
 
-(fn option-prefix []
+(fn option-prefix
+  []
   (let [p (. vim.g "meta#prefix")]
     (if (and (= (type p) "string") (~= p ""))
         p
         "#")))
 
-(fn parse-option-token [tok]
+(fn parse-option-token
+  [tok]
   (let [prefix (option-prefix)
         hidden-on (or (= tok "#hidden") (= tok "+hidden") (= tok (.. prefix "hidden")))
         hidden-off (or (= tok "#nohidden") (= tok "-hidden") (= tok (.. prefix "nohidden")))
@@ -43,7 +46,8 @@
                                         (when lazy-on
                                           [:lazy true]))))))))))))
 
-(fn M.parse-query-lines [lines]
+(fn M.parse-query-lines
+  [lines]
   (var include-hidden nil)
   (var include-ignored nil)
   (var include-deps nil)
@@ -80,7 +84,8 @@
    :prefilter prefilter
    :lazy lazy})
 
-(fn M.parse-query-text [query]
+(fn M.parse-query-text
+  [query]
   (if (not (and (= (type query) "string") (~= query "")))
       {:query query :include-hidden nil :include-ignored nil :include-deps nil :prefilter nil :lazy nil}
       (let [lines (vim.split query "\n" {:plain true})
@@ -92,7 +97,8 @@
          :prefilter (. parsed :prefilter)
          :lazy (. parsed :lazy)})))
 
-(fn M.query-lines-has-active? [lines]
+(fn M.query-lines-has-active?
+  [lines]
   (var has false)
   (each [_ line (ipairs (or lines []))]
     (when (and (not has) (~= (vim.trim (or line "")) ""))
