@@ -1,3 +1,4 @@
 .nvimlog
-deps/
+deps/*
+!deps/fennel-cljlib/
 lua/metabuffer/
