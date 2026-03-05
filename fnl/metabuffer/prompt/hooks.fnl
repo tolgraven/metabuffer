@@ -20,6 +20,17 @@
         (meta.switch_mode which)
         (pcall meta.refresh_statusline)))
 
+    (fn session-prompt-valid? [session]
+      (and session.meta
+           session.prompt-buf
+           (vim.api.nvim_buf_is_valid session.prompt-buf)))
+
+    (fn schedule-when-valid [session f]
+      (vim.schedule
+        (fn []
+          (when (session-prompt-valid? session)
+            (f)))))
+
     (fn resolve-map-action [router session action arg]
       (if (= action "accept")
           (fn [] (router.finish "accept" session.prompt-buf))
@@ -94,7 +105,8 @@
         {:group aug
          :buffer session.prompt-buf
          :callback (fn [_]
-                     (vim.schedule
+                     (schedule-when-valid
+                       session
                        (fn []
                          (disable-cmp session)
                          (apply-keymaps router session))))})
@@ -105,37 +117,31 @@
         {:group aug
          :buffer session.prompt-buf
          :callback (fn [_]
-                     (vim.schedule
+                     (schedule-when-valid session
                        (fn []
-                         (when (and session.meta
-                                    (vim.api.nvim_buf_is_valid session.prompt-buf))
-                           (pcall session.meta.refresh_statusline)))))})
+                         (pcall session.meta.refresh_statusline))))})
       ;; Refresh mode segment when switching Insert/Normal/Replace in the prompt.
       (vim.api.nvim_create_autocmd ["ModeChanged" "InsertEnter" "InsertLeave"]
         {:group aug
          :buffer session.prompt-buf
          :callback (fn [_]
-                     (vim.schedule
+                     (schedule-when-valid session
                        (fn []
-                         (when (and session.meta
-                                    (vim.api.nvim_buf_is_valid session.prompt-buf))
-                           (pcall session.meta.refresh_statusline)))))})
+                         (pcall session.meta.refresh_statusline))))})
       ;; Recompute floating info rendering/width when editor windows resize.
       (vim.api.nvim_create_autocmd ["VimResized" "WinResized"]
         {:group aug
          :callback (fn [_]
-                     (vim.schedule
+                     (schedule-when-valid session
                        (fn []
-                         (when (and session.meta
-                                    (vim.api.nvim_buf_is_valid session.prompt-buf))
-                           (pcall update-info-window session)))))})
+                         (pcall update-info-window session))))})
       ;; Keep selection/status/info synced when user scrolls or moves in the
       ;; main meta window with regular motions/mouse while prompt is open.
       (vim.api.nvim_create_autocmd ["CursorMoved" "CursorMovedI"]
         {:group aug
          :buffer session.meta.buf.buffer
          :callback (fn [_]
-                     (vim.schedule
+                     (schedule-when-valid session
                        (fn []
                          (maybe-sync-from-main! session))))})
       (vim.api.nvim_create_autocmd "WinScrolled"

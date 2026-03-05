@@ -48,6 +48,54 @@
               (set all-groups false)))
           all-groups)))
 
+  (fn reset-meta-indices! [meta]
+    (local all-indices [])
+    (for [i 1 (# meta.buf.content)]
+      (table.insert all-indices i))
+    (set meta.buf.all-indices all-indices)
+    (set meta.buf.indices (vim.deepcopy all-indices)))
+
+  (fn set-single-source-content! [session show-separators]
+    (let [meta session.meta]
+      (set meta.buf.content (vim.deepcopy session.single-content))
+      (set meta.buf.source-refs (vim.deepcopy session.single-refs))
+      (set meta.buf.show-source-prefix false)
+      (set meta.buf.show-source-separators show-separators)
+      (reset-meta-indices! meta)))
+
+  (fn best-project-selection-index [session old-ref old-line]
+    (let [meta session.meta
+          refs (or meta.buf.source-refs [])
+          old-ref-path (canonical-path (and old-ref old-ref.path))
+          target-path (or old-ref-path (canonical-path (current-buffer-path session.source-buf)))
+          target-lnum (or (and old-ref old-ref.lnum) old-line)
+          fallback-idx (math.max 0 (- (meta.buf.closest-index old-line) 1))]
+      (var match-idx nil)
+      (when (and old-ref old-ref.path old-ref.lnum refs)
+        (for [i 1 (# refs)]
+          (let [r (. refs i)]
+            (when (and (not match-idx)
+                       r
+                       (= (or (canonical-path r.path) "") (or old-ref-path ""))
+                       (= (or r.lnum 0) (or old-ref.lnum 0)))
+              (set match-idx i)))))
+      ;; If exact ref misses, keep line continuity in current file.
+      (when (and (not match-idx) target-path refs)
+        (var best-idx nil)
+        (var best-dist math.huge)
+        (for [i 1 (# refs)]
+          (let [r (. refs i)
+                r-path (and r (canonical-path r.path))]
+            (when (and r-path (= r-path target-path))
+              (let [dist (math.abs (- (or r.lnum 1) (or target-lnum 1)))]
+                (when (< dist best-dist)
+                  (set best-dist dist)
+                  (set best-idx i))))))
+        (set match-idx best-idx))
+      (math.max 0
+                (math.min (if match-idx (- match-idx 1) fallback-idx)
+                          (math.max 0 (- (# meta.buf.indices) 1))))))
+
   (fn schedule-lazy-refresh! [session]
     (when (and session (session-active? session) (not session.closing))
       (set session.lazy-refresh-dirty true)
@@ -155,15 +203,7 @@
       {:content content :refs refs}))
 
   (fn init-project-pool! [session prefilter]
-    (local meta session.meta)
-    (set meta.buf.content (vim.deepcopy session.single-content))
-    (set meta.buf.source-refs (vim.deepcopy session.single-refs))
-    (set meta.buf.show-source-prefix false)
-    (set meta.buf.show-source-separators session.project-mode)
-    (set meta.buf.all-indices [])
-    (for [i 1 (# meta.buf.content)]
-      (table.insert meta.buf.all-indices i))
-    (set meta.buf.indices (vim.deepcopy meta.buf.all-indices))
+    (set-single-source-content! session session.project-mode)
     (let [root (vim.fn.getcwd)
           include-hidden session.effective-include-hidden
           include-ignored session.effective-include-ignored
@@ -259,47 +299,14 @@
         (do
           (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
           (set session.lazy-stream-done true)
-          (set meta.buf.content (vim.deepcopy session.single-content))
-          (set meta.buf.source-refs (vim.deepcopy session.single-refs))))
+          (set-single-source-content! session false)))
     ;; Keep main results buffer as pure content lines; source context is shown
     ;; in the right floating info window.
     (set meta.buf.show-source-prefix false)
     (set meta.buf.show-source-separators session.project-mode)
-    (set meta.buf.all-indices [])
-    (for [i 1 (# meta.buf.content)]
-      (table.insert meta.buf.all-indices i))
-    (set meta.buf.indices (vim.deepcopy meta.buf.all-indices))
+    (reset-meta-indices! meta)
     (if session.project-mode
-        (do
-          (var match-idx nil)
-          (local old-ref-path (canonical-path (and old-ref old-ref.path)))
-          (local target-path (or old-ref-path (canonical-path (current-buffer-path session.source-buf))))
-          (local target-lnum (or (and old-ref old-ref.lnum) old-line))
-          (when (and old-ref old-ref.path old-ref.lnum meta.buf.source-refs)
-            (for [i 1 (# meta.buf.source-refs)]
-              (let [r (. meta.buf.source-refs i)]
-                (when (and (not match-idx)
-                           r
-                           (= (or (canonical-path r.path) "") (or old-ref-path ""))
-                           (= (or r.lnum 0) (or old-ref.lnum 0)))
-                  (set match-idx i)))))
-          ;; If exact ref misses, keep line continuity in current file.
-          (when (and (not match-idx) target-path meta.buf.source-refs)
-            (var best-idx nil)
-            (var best-dist math.huge)
-            (for [i 1 (# meta.buf.source-refs)]
-              (let [r (. meta.buf.source-refs i)
-                    r-path (and r (canonical-path r.path))]
-                (when (and r-path (= r-path target-path))
-                  (let [dist (math.abs (- (or r.lnum 1) (or target-lnum 1)))]
-                    (when (< dist best-dist)
-                      (set best-dist dist)
-                      (set best-idx i))))))
-            (set match-idx best-idx))
-          (set meta.selected_index
-               (math.max 0
-                         (math.min (if match-idx (- match-idx 1) (- (meta.buf.closest-index old-line) 1))
-                                   (math.max 0 (- (# meta.buf.indices) 1))))))
+        (set meta.selected_index (best-project-selection-index session old-ref old-line))
         (set meta.selected_index
              (math.max 0
                        (- (meta.buf.closest-index old-line) 1))))
@@ -316,16 +323,9 @@
                         (math.max 1 (or session.initial-source-line 1))))
     (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
     (set session.lazy-stream-done true)
-    (set meta.buf.content (vim.deepcopy session.single-content))
-    (set meta.buf.source-refs (vim.deepcopy session.single-refs))
-    (set meta.buf.show-source-prefix false)
     ;; Keep startup lightweight for empty project mode; separators/syntax blocks
     ;; become useful only after expanding to multi-file sources.
-    (set meta.buf.show-source-separators false)
-    (set meta.buf.all-indices [])
-    (for [i 1 (# meta.buf.content)]
-      (table.insert meta.buf.all-indices i))
-    (set meta.buf.indices (vim.deepcopy meta.buf.all-indices))
+    (set-single-source-content! session false)
     (set meta.selected_index
          (math.max 0
                    (- (meta.buf.closest-index old-line) 1)))
