@@ -71,10 +71,10 @@
 (fn M.maybe-sync-from-main!
   [session force-refresh opts]
   "Sync selection and UI state from main window cursor when session is active."
-  (let [opts (or opts {})
-        active-by-prompt (. opts :active-by-prompt)
-        schedule-source-syntax-refresh! (. opts :schedule-source-syntax-refresh!)
-        update-info-window (. opts :update-info-window)]
+  (let [{: active-by-prompt
+         : schedule-source-syntax-refresh!
+         : update-info-window}
+        (or opts {})]
     (when (and session
                (not session.startup-initializing)
                (vim.api.nvim_win_is_valid session.meta.win.window)
@@ -92,9 +92,9 @@
 (fn M.schedule-scroll-sync!
   [session opts]
   "Coalesce high-frequency scroll updates into one trailing sync run."
-  (let [opts (or opts {})
-        maybe-sync-from-main! (. opts :maybe-sync-from-main!)
-        scroll-sync-debounce-ms (. opts :scroll-sync-debounce-ms)]
+  (let [{: maybe-sync-from-main!
+         : scroll-sync-debounce-ms}
+        (or opts {})]
     (when (and session (not session.scroll-sync-pending))
       (set session.scroll-sync-pending true)
       (vim.defer_fn
