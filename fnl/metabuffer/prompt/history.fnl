@@ -39,7 +39,6 @@
   (fn self.next-match []
     (if (= self.index 0)
         self.cached
-        (> self.index 0)
         (do
           (var i self.index)
           (var out nil)
