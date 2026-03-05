@@ -5,7 +5,7 @@
 
 (fn choose-current-when-nil
   [value current]
-  (if (= value nil) current value))
+  (if-some [v value] v current))
 
 (fn prompt-delay-ms
   [settings query-mod session]
@@ -48,6 +48,44 @@
   (and (> (math.max 0 (or settings.prompt-update-idle-ms 0)) 0)
        (< (- now (or session.prompt-last-change-ms 0))
           (math.max 0 (or settings.prompt-update-idle-ms 0)))))
+
+(fn queue-update-after-edit!
+  [settings prompt-scheduler-ctx session force txt now delay]
+  (when (or (not session.project-mode) session.project-bootstrapped)
+    (when (not (and force session.prompt-update-pending))
+      (let [skip-identical? (and force
+                                 (recent-identical-forced-refresh? settings session txt now))
+            skip-active-input? (and force
+                                    (force-blocked-by-active-input? settings session now))]
+        (when (not (or skip-identical? skip-active-input?))
+          (if (and force (force-within-idle-window? settings session now))
+              (schedule-update!
+                prompt-scheduler-ctx
+                session
+                (math.max delay settings.prompt-update-idle-ms))
+              (schedule-update! prompt-scheduler-ctx session delay)))))))
+
+(fn apply-fresh-prompt-event!
+  [query-mod project-source settings prompt-scheduler-ctx session force txt now delay]
+  (set session.prompt-last-event-text txt)
+  (set session.last-prompt-text txt)
+  (set session.prompt-update-dirty true)
+  (set session.prompt-last-change-ms now)
+  (when (not force)
+    (set session.prompt-force-block-until (+ now (math.max 0 delay))))
+  (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
+  (when (and session.project-mode
+             (not session.project-bootstrapped)
+             (prompt-has-active-query? query-mod session))
+    (project-source.schedule-project-bootstrap! session settings.project-bootstrap-delay-ms))
+  (queue-update-after-edit! settings prompt-scheduler-ctx session force txt now delay))
+
+(fn apply-duplicate-text-event!
+  [prompt-scheduler-ctx session now delay]
+  (when session.prompt-update-pending
+    (set session.prompt-last-change-ms now)
+    (set session.prompt-force-block-until (+ now (math.max 0 delay)))
+    (schedule-update! prompt-scheduler-ctx session delay)))
 
 (fn M.apply-prompt-lines!
   [deps session]
@@ -139,35 +177,18 @@
             (when (not (and force (< now (or session.prompt-force-block-until 0))))
               (let [duplicate-text? (and (not force)
                                          (= txt (or session.prompt-last-event-text "")))]
-                (if duplicate-text?
-                    (when session.prompt-update-pending
-                      (set session.prompt-last-change-ms now)
-                      (set session.prompt-force-block-until (+ now (math.max 0 delay)))
-                      (schedule-update! prompt-scheduler-ctx session delay))
-                    (do
-                      (set session.prompt-last-event-text txt)
-                      (set session.last-prompt-text txt)
-                      (set session.prompt-update-dirty true)
-                      (set session.prompt-last-change-ms now)
-                      (when (not force)
-                        (set session.prompt-force-block-until (+ now (math.max 0 delay))))
-                      (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
-                      (when (and session.project-mode
-                                 (not session.project-bootstrapped)
-                                 (prompt-has-active-query? query-mod session))
-                        (project-source.schedule-project-bootstrap! session settings.project-bootstrap-delay-ms))
-                      (when (or (not session.project-mode) session.project-bootstrapped)
-                        (when (not (and force session.prompt-update-pending))
-                          (let [skip-identical? (and force
-                                                     (recent-identical-forced-refresh? settings session txt now))
-                                skip-active-input? (and force
-                                                        (force-blocked-by-active-input? settings session now))]
-                            (when (not (or skip-identical? skip-active-input?))
-                              (if (and force (force-within-idle-window? settings session now))
-                                  (schedule-update!
-                                    prompt-scheduler-ctx
-                                    session
-                                    (math.max delay settings.prompt-update-idle-ms))
-                                  (schedule-update! prompt-scheduler-ctx session delay))))))))))))))))
+                (when duplicate-text?
+                  (apply-duplicate-text-event! prompt-scheduler-ctx session now delay))
+                (when (not duplicate-text?)
+                  (apply-fresh-prompt-event!
+                    query-mod
+                    project-source
+                    settings
+                    prompt-scheduler-ctx
+                    session
+                    force
+                    txt
+                    now
+                    delay))))))))))
 
 M

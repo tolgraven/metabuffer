@@ -424,21 +424,21 @@
   "Create a Meta session and wire prompt/result/project orchestration."
   (let [parsed-query (query_mod.parse-query-text query)
         query0 (. parsed-query :query)
-        start-hidden (if (= (. parsed-query :include-hidden) nil)
-                         (query_mod.truthy? M.default-include-hidden)
-                         (. parsed-query :include-hidden))
-        start-ignored (if (= (. parsed-query :include-ignored) nil)
-                          (query_mod.truthy? M.default-include-ignored)
-                          (. parsed-query :include-ignored))
-        start-deps (if (= (. parsed-query :include-deps) nil)
-                       (query_mod.truthy? M.default-include-deps)
-                       (. parsed-query :include-deps))
-        start-prefilter (if (= (. parsed-query :prefilter) nil)
-                            (query_mod.truthy? M.project-lazy-prefilter-enabled)
-                            (. parsed-query :prefilter))
-        start-lazy (if (= (. parsed-query :lazy) nil)
-                       (query_mod.truthy? M.project-lazy-enabled)
-                       (. parsed-query :lazy))
+        start-hidden (if-some [v (. parsed-query :include-hidden)]
+                             v
+                             (query_mod.truthy? M.default-include-hidden))
+        start-ignored (if-some [v (. parsed-query :include-ignored)]
+                              v
+                              (query_mod.truthy? M.default-include-ignored))
+        start-deps (if-some [v (. parsed-query :include-deps)]
+                           v
+                           (query_mod.truthy? M.default-include-deps))
+        start-prefilter (if-some [v (. parsed-query :prefilter)]
+                                v
+                                (query_mod.truthy? M.project-lazy-prefilter-enabled))
+        start-lazy (if-some [v (. parsed-query :lazy)]
+                           v
+                           (query_mod.truthy? M.project-lazy-enabled))
         query query0]
   (local source-buf (vim.api.nvim_get_current_buf))
   (when (. M.active-by-source source-buf)
@@ -551,10 +551,11 @@
 (fn M.push
   [meta]
   "Public API: M.push."
-  (if (not meta)
-      (vim.notify "No Meta instance" vim.log.levels.WARN)
-      (let [lines (vim.api.nvim_buf_get_lines meta.buf.buffer 0 -1 false)]
-        (meta.buf.push-visible-lines lines))))
+  (when (not meta)
+    (vim.notify "No Meta instance" vim.log.levels.WARN))
+  (when meta
+    (let [lines (vim.api.nvim_buf_get_lines meta.buf.buffer 0 -1 false)]
+      (meta.buf.push-visible-lines lines))))
 
 (fn M.entry_start
   [query _bang]
