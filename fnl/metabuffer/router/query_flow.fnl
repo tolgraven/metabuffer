@@ -1,0 +1,173 @@
+(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(local router_util_mod (require :metabuffer.router.util))
+(local router_prompt_mod (require :metabuffer.router.prompt))
+(local M {})
+
+(fn choose-current-when-nil
+  [value current]
+  (if (= value nil) current value))
+
+(fn prompt-delay-ms
+  [settings query-mod session]
+  (router_prompt_mod.prompt-update-delay-ms
+    settings
+    query-mod
+    router_util_mod.prompt-lines
+    session))
+
+(fn prompt-has-active-query?
+  [query-mod session]
+  (router_prompt_mod.prompt-has-active-query?
+    query-mod
+    router_util_mod.prompt-lines
+    session))
+
+(fn schedule-update!
+  [prompt-scheduler-ctx session delay]
+  (router_prompt_mod.schedule-prompt-update!
+    prompt-scheduler-ctx
+    session
+    delay))
+
+(fn recent-identical-forced-refresh?
+  [settings session txt now]
+  (and (= txt (or session.prompt-last-applied-text ""))
+       (> (math.max 0 (or settings.prompt-forced-coalesce-ms 0)) 0)
+       (< (- now (or session.prompt-last-apply-ms 0))
+          (math.max 0 (or settings.prompt-forced-coalesce-ms 0)))))
+
+(fn force-blocked-by-active-input?
+  [settings session now]
+  (< (- now (or session.prompt-last-change-ms 0))
+     (math.max
+       (math.max 0 (or settings.prompt-update-idle-ms 0))
+       (math.max 0 (or settings.prompt-forced-coalesce-ms 0)))))
+
+(fn force-within-idle-window?
+  [settings session now]
+  (and (> (math.max 0 (or settings.prompt-update-idle-ms 0)) 0)
+       (< (- now (or session.prompt-last-change-ms 0))
+          (math.max 0 (or settings.prompt-update-idle-ms 0)))))
+
+(fn M.apply-prompt-lines!
+  [deps session]
+  (let [{: query-mod
+         : project-source
+         : update-info-window}
+        deps]
+    (when (and session (not session.closing) (vim.api.nvim_buf_is_valid session.prompt-buf))
+      (let [lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
+        (set session.last-prompt-text (table.concat lines "\n"))
+        (set session.prompt-last-applied-text session.last-prompt-text)
+        (let [parsed (if session.project-mode
+                         (query-mod.parse-query-lines lines)
+                         {:lines lines
+                          :include-hidden nil
+                          :include-ignored nil
+                          :include-deps nil
+                          :prefilter nil
+                          :lazy nil})
+              next-hidden (choose-current-when-nil (. parsed :include-hidden) session.include-hidden)
+              next-ignored (choose-current-when-nil (. parsed :include-ignored) session.include-ignored)
+              next-deps (choose-current-when-nil (. parsed :include-deps) session.include-deps)
+              next-prefilter (choose-current-when-nil (. parsed :prefilter) session.prefilter-mode)
+              next-lazy (choose-current-when-nil (. parsed :lazy) session.lazy-mode)
+              changed (or (~= next-hidden session.effective-include-hidden)
+                          (~= next-ignored session.effective-include-ignored)
+                          (~= next-deps session.effective-include-deps)
+                          (~= next-prefilter session.prefilter-mode)
+                          (~= next-lazy session.lazy-mode))]
+          (set session.effective-include-hidden next-hidden)
+          (set session.effective-include-ignored next-ignored)
+          (set session.effective-include-deps next-deps)
+          (set session.prefilter-mode next-prefilter)
+          (set session.lazy-mode next-lazy)
+          (set session.last-parsed-query parsed)
+          (set session.meta.debug_out
+            (if session.project-mode
+                (.. " ["
+                    (if session.effective-include-hidden "+hidden" "-hidden")
+                    " "
+                    (if session.effective-include-ignored "+ignored" "-ignored")
+                    " "
+                    (if session.effective-include-deps "+deps" "-deps")
+                    " "
+                    (if session.prefilter-mode "+prefilter" "-prefilter")
+                    " "
+                    (if session.lazy-mode "+lazy" "-lazy")
+                    "]")
+                ""))
+          (when (and session.project-mode changed)
+            (project-source.apply-source-set! session))
+          (session.meta.set-query-lines (. parsed :lines)))
+        (let [[ok err] [(pcall session.meta.on-update 0)]]
+          (if ok
+              (do
+                (session.meta.refresh_statusline)
+                (update-info-window session))
+              (when (string.find (tostring err) "E565")
+                ;; Textlock race: retry right after current input cycle.
+                (vim.defer_fn
+                  (fn []
+                    (when (and session.meta
+                               (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+                      (pcall session.meta.on-update 0)
+                      (pcall session.meta.refresh_statusline)
+                      (pcall update-info-window session)))
+                  1))))))))
+
+(fn M.on-prompt-changed!
+  [deps prompt-buf force event-tick]
+  "Entry point for prompt edits; keeps typing fast by deferring matcher work."
+  (let [{: active-by-prompt
+         : query-mod
+         : project-source
+         : settings
+         : prompt-scheduler-ctx}
+        deps
+        session (. active-by-prompt prompt-buf)]
+    (when (and session (not session.closing))
+      (let [duplicate-event? (and (not force)
+                                  event-tick
+                                  (= event-tick (or session.prompt-last-event-tick -1)))]
+        (when (not duplicate-event?)
+          (let [txt (router_util_mod.prompt-text session)
+                now (router_prompt_mod.now-ms)
+                delay (prompt-delay-ms settings query-mod session)]
+            (when (and (not force) event-tick)
+              (set session.prompt-last-event-tick event-tick))
+            (when (not (and force (< now (or session.prompt-force-block-until 0))))
+              (let [duplicate-text? (and (not force)
+                                         (= txt (or session.prompt-last-event-text "")))]
+                (if duplicate-text?
+                    (when session.prompt-update-pending
+                      (set session.prompt-last-change-ms now)
+                      (set session.prompt-force-block-until (+ now (math.max 0 delay)))
+                      (schedule-update! prompt-scheduler-ctx session delay))
+                    (do
+                      (set session.prompt-last-event-text txt)
+                      (set session.last-prompt-text txt)
+                      (set session.prompt-update-dirty true)
+                      (set session.prompt-last-change-ms now)
+                      (when (not force)
+                        (set session.prompt-force-block-until (+ now (math.max 0 delay))))
+                      (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
+                      (when (and session.project-mode
+                                 (not session.project-bootstrapped)
+                                 (prompt-has-active-query? query-mod session))
+                        (project-source.schedule-project-bootstrap! session settings.project-bootstrap-delay-ms))
+                      (when (or (not session.project-mode) session.project-bootstrapped)
+                        (when (not (and force session.prompt-update-pending))
+                          (let [skip-identical? (and force
+                                                     (recent-identical-forced-refresh? settings session txt now))
+                                skip-active-input? (and force
+                                                        (force-blocked-by-active-input? settings session now))]
+                            (when (not (or skip-identical? skip-active-input?))
+                              (if (and force (force-within-idle-window? settings session now))
+                                  (schedule-update!
+                                    prompt-scheduler-ctx
+                                    session
+                                    (math.max delay settings.prompt-update-idle-ms))
+                                  (schedule-update! prompt-scheduler-ctx session delay))))))))))))))))
+
+M
