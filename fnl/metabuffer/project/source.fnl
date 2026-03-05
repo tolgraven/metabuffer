@@ -1,24 +1,12 @@
 (local M {})
 
 (fn M.new [opts]
-  (let [{:settings settings
-         :truthy? truthy?
-         :selected-ref selected-ref
-         :canonical-path canonical-path
-         :current-buffer-path current-buffer-path
-         :path-under-root? path-under-root?
-         :allow-project-path? allow-project-path?
-         :project-file-list project-file-list
-         :read-file-lines-cached read-file-lines-cached
-         :session-active? session-active?
-         :lazy-streaming-allowed? lazy-streaming-allowed?
-         :on-prompt-changed on-prompt-changed
-         :prompt-has-active-query? prompt-has-active-query?
-         :now-ms now-ms
-         :prompt-update-delay-ms prompt-update-delay-ms
-         :schedule-prompt-update! schedule-prompt-update!
-         :restore-meta-view! restore-meta-view!
-         :update-info-window update-info-window} opts]
+  (let [{: settings : truthy? : selected-ref : canonical-path
+         : current-buffer-path : path-under-root? : allow-project-path?
+         : project-file-list : read-file-lines-cached : session-active?
+         : lazy-streaming-allowed? : on-prompt-changed
+         : prompt-has-active-query? : now-ms : prompt-update-delay-ms
+         : schedule-prompt-update! : restore-meta-view! : update-info-window} opts]
 
   (fn parse-prefilter-terms [query-lines ignorecase]
     (local groups [])

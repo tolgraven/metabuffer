@@ -16,12 +16,8 @@
     out))
 
 (fn M.new [opts]
-  (let [{:floating-window-mod floating-window-mod
-         :selected-ref selected-ref
-         :read-file-lines-cached read-file-lines-cached
-         :is-active-session is-active-session
-         :debug-log debug-log
-         :source-switch-debounce-ms source-switch-debounce-ms} opts]
+  (let [{: floating-window-mod : selected-ref : read-file-lines-cached
+         : is-active-session : debug-log : source-switch-debounce-ms} opts]
 
   (fn mark-preview-buffer! [buf]
     (when (and buf (vim.api.nvim_buf_is_valid buf))

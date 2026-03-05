@@ -1,13 +1,9 @@
 (local M {})
 
 (fn M.new [opts]
-  (let [{:mark-prompt-buffer! mark-prompt-buffer!
-         :default-prompt-keymaps default-prompt-keymaps
-         :active-by-prompt active-by-prompt
-         :on-prompt-changed on-prompt-changed
-         :update-info-window update-info-window
-         :maybe-sync-from-main! maybe-sync-from-main!
-         :schedule-scroll-sync! schedule-scroll-sync!} opts]
+  (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
+         : on-prompt-changed : update-info-window : maybe-sync-from-main!
+         : schedule-scroll-sync!} opts]
     (fn disable-cmp [session]
       (mark-prompt-buffer! session.prompt-buf)
       (let [[ok cmp] [(pcall require :cmp)]]

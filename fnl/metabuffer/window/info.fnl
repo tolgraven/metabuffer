@@ -118,13 +118,8 @@
         out)))
 
 (fn M.new [opts]
-  (let [{:floating-window-mod floating-window-mod
-         :info-min-width info-min-width
-         :info-max-width info-max-width
-         :info-max-lines info-max-lines
-         :info-height info-height
-         :debug-log debug-log
-         :update-preview update-preview} opts]
+  (let [{: floating-window-mod : info-min-width : info-max-width
+         : info-max-lines : info-height : debug-log : update-preview} opts]
 
   (fn ensure-info-window! [session]
     (when (not (and session.info-win (vim.api.nvim_win_is_valid session.info-win)))
