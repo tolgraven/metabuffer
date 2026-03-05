@@ -763,15 +763,16 @@
                         (set-prompt-text! session entry))))))
             (M.move-selection prompt-buf delta))))))
 
-(fn M.toggle-scan-option [prompt-buf which]
+  (fn M.toggle-scan-option [prompt-buf which]
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
-      (if (= which "ignored")
-          (set session.include-ignored (not session.include-ignored))
-          (= which "deps")
-          (set session.include-deps (not session.include-deps))
-          (= which "hidden")
-          (set session.include-hidden (not session.include-hidden)))
+      (if
+        (= which "ignored")
+        (set session.include-ignored (not session.include-ignored))
+        (= which "deps")
+        (set session.include-deps (not session.include-deps))
+        (= which "hidden")
+        (set session.include-hidden (not session.include-hidden)))
       (set session.effective-include-hidden session.include-hidden)
       (set session.effective-include-ignored session.include-ignored)
       (set session.effective-include-deps session.include-deps)
