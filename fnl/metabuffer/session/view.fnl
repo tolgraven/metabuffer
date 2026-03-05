@@ -53,4 +53,54 @@
             (set (. view :col) (. src-view :col)))
           (vim.fn.winrestview view))))))
 
+(fn M.sync-selected-from-main-cursor!
+  [session]
+  "Sync selected index from current cursor row in the main results window."
+  (let [meta session.meta
+        max (# meta.buf.indices)]
+    (if (<= max 0)
+        (set meta.selected_index 0)
+        (when (vim.api.nvim_win_is_valid meta.win.window)
+          (let [c (vim.api.nvim_win_get_cursor meta.win.window)
+                row (. c 1)
+                clamped (math.max 1 (math.min row max))]
+            (when (~= row clamped)
+              (pcall vim.api.nvim_win_set_cursor meta.win.window [clamped (. c 2)]))
+            (set meta.selected_index (- clamped 1)))))))
+
+(fn M.maybe-sync-from-main!
+  [session force-refresh opts]
+  "Sync selection and UI state from main window cursor when session is active."
+  (let [opts (or opts {})
+        active-by-prompt (. opts :active-by-prompt)
+        schedule-source-syntax-refresh! (. opts :schedule-source-syntax-refresh!)
+        update-info-window (. opts :update-info-window)]
+    (when (and session
+               (not session.startup-initializing)
+               (vim.api.nvim_win_is_valid session.meta.win.window)
+               (vim.api.nvim_buf_is_valid session.prompt-buf)
+               (= (vim.api.nvim_get_current_win) session.meta.win.window)
+               (= (. active-by-prompt session.prompt-buf) session))
+      (let [before session.meta.selected_index]
+        (M.sync-selected-from-main-cursor! session)
+        (when force-refresh
+          (schedule-source-syntax-refresh! session))
+        (when (or force-refresh (~= before session.meta.selected_index))
+          (pcall session.meta.refresh_statusline)
+          (pcall update-info-window session false))))))
+
+(fn M.schedule-scroll-sync!
+  [session opts]
+  "Coalesce high-frequency scroll updates into one trailing sync run."
+  (let [opts (or opts {})
+        maybe-sync-from-main! (. opts :maybe-sync-from-main!)
+        scroll-sync-debounce-ms (. opts :scroll-sync-debounce-ms)]
+    (when (and session (not session.scroll-sync-pending))
+      (set session.scroll-sync-pending true)
+      (vim.defer_fn
+        (fn []
+          (set session.scroll-sync-pending false)
+          (maybe-sync-from-main! session true))
+        (or scroll-sync-debounce-ms 20)))))
+
 M

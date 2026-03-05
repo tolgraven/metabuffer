@@ -669,20 +669,6 @@
             (vim.schedule runner)
             (runner))))))
 
-(fn sync-selected-from-main-cursor!
-  [session]
-  (let [meta session.meta
-        max (# meta.buf.indices)]
-    (if (<= max 0)
-        (set meta.selected_index 0)
-        (when (vim.api.nvim_win_is_valid meta.win.window)
-          (let [c (vim.api.nvim_win_get_cursor meta.win.window)
-                row (. c 1)
-                clamped (math.max 1 (math.min row max))]
-            (when (~= row clamped)
-              (pcall vim.api.nvim_win_set_cursor meta.win.window [clamped (. c 2)]))
-            (set meta.selected_index (- clamped 1)))))))
-
 (fn can-refresh-source-syntax?
   [session]
   (let [buf (and session session.meta session.meta.buf)]
@@ -739,7 +725,7 @@
                            (set (. view :lnum) new-lnum)
                            (set (. view :col) old-col)
                            (vim.fn.winrestview view))))
-                     (sync-selected-from-main-cursor! session)
+                     (session_view.sync-selected-from-main-cursor! session)
                      (pcall session.meta.refresh_statusline)
                      (pcall update-info-window session false))
             mode (. (vim.api.nvim_get_mode) :mode)]
@@ -749,29 +735,19 @@
 
 (fn maybe-sync-from-main!
   [session force-refresh]
-  (when (and session
-             (not session.startup-initializing)
-             (vim.api.nvim_win_is_valid session.meta.win.window)
-             (vim.api.nvim_buf_is_valid session.prompt-buf)
-             (= (vim.api.nvim_get_current_win) session.meta.win.window)
-             (= (. M.active-by-prompt session.prompt-buf) session))
-    (let [before session.meta.selected_index]
-      (sync-selected-from-main-cursor! session)
-      (when force-refresh
-        (schedule-source-syntax-refresh! session))
-      (when (or force-refresh (~= before session.meta.selected_index))
-        (pcall session.meta.refresh_statusline)
-        (pcall update-info-window session false)))))
+  (session_view.maybe-sync-from-main!
+    session
+    force-refresh
+    {:active-by-prompt M.active-by-prompt
+     :schedule-source-syntax-refresh! schedule-source-syntax-refresh!
+     :update-info-window update-info-window}))
 
 (fn schedule-scroll-sync!
   [session]
-  (when (and session (not session.scroll-sync-pending))
-    (set session.scroll-sync-pending true)
-    (vim.defer_fn
-      (fn []
-        (set session.scroll-sync-pending false)
-        (maybe-sync-from-main! session true))
-      (or M.scroll-sync-debounce-ms 20))))
+  (session_view.schedule-scroll-sync!
+    session
+    {:scroll-sync-debounce-ms M.scroll-sync-debounce-ms
+     :maybe-sync-from-main! maybe-sync-from-main!}))
 
 (fn M.history-or-move
   [prompt-buf delta]
@@ -797,9 +773,9 @@
                         (set-prompt-text! session entry))))))
             (M.move-selection prompt-buf delta))))))
 
-  (fn M.toggle-scan-option
-    [prompt-buf which]
-  "Public API: M.toggle-scan-option."
+(fn M.toggle-scan-option
+  [prompt-buf which]
+  "Toggle include-hidden/include-ignored/include-deps scan flags."
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
       (if
