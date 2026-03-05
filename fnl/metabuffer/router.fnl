@@ -65,6 +65,9 @@
         n (if (and session session.meta session.meta.buf session.meta.buf.indices)
               (# session.meta.buf.indices)
               0)
+        short-extra-ms (or M.prompt-short-query-extra-ms [180 120 70])
+        size-thresholds (or M.prompt-size-scale-thresholds [2000 10000 50000])
+        size-extra (or M.prompt-size-scale-extra [0 2 6 10])
         qlen (let [lines (prompt-lines session)
                    parsed (if session.project-mode
                               (parse-query-lines lines)
@@ -78,15 +81,17 @@
                                  s)]
                (# (or last-active "")))
         short-extra (if (<= qlen 1)
-                        180
+                        (or (. short-extra-ms 1) 180)
                         (if (<= qlen 2)
-                            120
-                            (if (<= qlen 3) 70 0)))
-        scale (if (< n 2000)
-                  0
-                  (if (< n 10000)
-                      2
-                      (if (< n 50000) 6 10)))
+                            (or (. short-extra-ms 2) 120)
+                            (if (<= qlen 3) (or (. short-extra-ms 3) 70) 0)))
+        scale (if (< n (or (. size-thresholds 1) 2000))
+                  (or (. size-extra 1) 0)
+                  (if (< n (or (. size-thresholds 2) 10000))
+                      (or (. size-extra 2) 2)
+                      (if (< n (or (. size-thresholds 3) 50000))
+                          (or (. size-extra 3) 6)
+                          (or (. size-extra 4) 10))))
         extra (if (and session session.project-mode (not session.lazy-stream-done)) 2 0)]
     (+ base short-extra scale extra)))
 
@@ -254,34 +259,25 @@
                     true))))))
 
 (fn project-file-list [root include-hidden include-ignored include-deps]
-  (if (= 1 (vim.fn.executable "rg"))
-      (let [cmd ["rg" "--files" "--glob" "!.git"]
-            _ (when include-hidden
-                (table.insert cmd "--hidden"))
-            _ (when include-ignored
-                (table.insert cmd "--no-ignore")
-                (table.insert cmd "--no-ignore-vcs")
-                (table.insert cmd "--no-ignore-parent"))
-            _ (when (not include-deps)
-                (table.insert cmd "--glob")
-                (table.insert cmd "!node_modules/**")
-                (table.insert cmd "--glob")
-                (table.insert cmd "!vendor/**")
-                (table.insert cmd "--glob")
-                (table.insert cmd "!.venv/**")
-                (table.insert cmd "--glob")
-                (table.insert cmd "!venv/**")
-                (table.insert cmd "--glob")
-                (table.insert cmd "!dist/**")
-                (table.insert cmd "--glob")
-                (table.insert cmd "!build/**")
-                (table.insert cmd "--glob")
-                (table.insert cmd "!target/**"))
+  (let [rg-bin (or M.project-rg-bin "rg")]
+    (if (= 1 (vim.fn.executable rg-bin))
+        (let [cmd [rg-bin]
+              _ (each [_ arg (ipairs (or M.project-rg-base-args []))]
+                  (table.insert cmd arg))
+              _ (when include-hidden
+                  (table.insert cmd "--hidden"))
+              _ (when include-ignored
+                  (each [_ arg (ipairs (or M.project-rg-include-ignored-args []))]
+                    (table.insert cmd arg)))
+              _ (when (not include-deps)
+                  (each [_ glob (ipairs (or M.project-rg-deps-exclude-globs []))]
+                    (table.insert cmd "--glob")
+                    (table.insert cmd glob)))
             rel (vim.fn.systemlist cmd)]
-        (vim.tbl_map
-          (fn [p] (vim.fn.fnamemodify (.. root "/" p) ":p"))
-          (or rel [])))
-      (vim.fn.globpath root "**/*" true true)))
+          (vim.tbl_map
+            (fn [p] (vim.fn.fnamemodify (.. root "/" p) ":p"))
+            (or rel [])))
+        (vim.fn.globpath root (or M.project-fallback-glob-pattern "**/*") true true))))
 
 (fn ui-attached? []
   (> (# (vim.api.nvim_list_uis)) 0))
@@ -683,7 +679,7 @@
             ;; run one trailing update.
             (when session.syntax-refresh-dirty
               (schedule-source-syntax-refresh! session))))
-        80))))
+        (or M.source-syntax-refresh-debounce-ms 80)))))
 
 (fn M.scroll-main [prompt-buf action]
   (let [session (. M.active-by-prompt prompt-buf)]
@@ -739,7 +735,7 @@
       (fn []
         (set session.scroll-sync-pending false)
         (maybe-sync-from-main! session true))
-      20)))
+      (or M.scroll-sync-debounce-ms 20))))
 
 (fn M.history-or-move [prompt-buf delta]
   (let [session (. M.active-by-prompt prompt-buf)]

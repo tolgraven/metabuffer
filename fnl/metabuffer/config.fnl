@@ -41,11 +41,28 @@
   (set router.default-include-hidden (or vim.g.meta_project_include_hidden false))
   (set router.default-include-ignored (or vim.g.meta_project_include_ignored false))
   (set router.default-include-deps (or vim.g.meta_project_include_deps false))
+  (set router.project-rg-bin (or vim.g.meta_project_rg_bin "rg"))
+  (set router.project-rg-base-args
+    (or vim.g.meta_project_rg_base_args ["--files" "--glob" "!.git"]))
+  (set router.project-rg-include-ignored-args
+    (or vim.g.meta_project_rg_include_ignored_args
+        ["--no-ignore" "--no-ignore-vcs" "--no-ignore-parent"]))
+  (set router.project-rg-deps-exclude-globs
+    (or vim.g.meta_project_rg_deps_exclude_globs
+        ["!node_modules/**" "!vendor/**" "!.venv/**" "!venv/**" "!dist/**" "!build/**" "!target/**"]))
+  (set router.project-fallback-glob-pattern
+    (or vim.g.meta_project_fallback_glob_pattern "**/*"))
   (set router.info-max-lines (or vim.g.meta_info_max_lines 10000))
   (set router.info-min-width (or vim.g.meta_info_width 28))
   (set router.info-max-width (or vim.g.meta_info_max_width 52))
   (set router.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 170))
   (set router.prompt-update-idle-ms (or vim.g.meta_prompt_update_idle_ms 90))
+  (set router.prompt-short-query-extra-ms
+    (or vim.g.meta_prompt_short_query_extra_ms [180 120 70]))
+  (set router.prompt-size-scale-thresholds
+    (or vim.g.meta_prompt_size_scale_thresholds [2000 10000 50000]))
+  (set router.prompt-size-scale-extra
+    (or vim.g.meta_prompt_size_scale_extra [0 2 6 10]))
   (set router.project-file-cache {})
   (set router.project-lazy-enabled (if (= vim.g.meta_project_lazy_enabled nil) true vim.g.meta_project_lazy_enabled))
   (set router.project-lazy-disable-headless (if (= vim.g.meta_project_lazy_disable_headless nil) true vim.g.meta_project_lazy_disable_headless))
@@ -57,6 +74,8 @@
   (set router.project-bootstrap-idle-delay-ms (or vim.g.meta_project_bootstrap_idle_delay_ms 700))
   (set router.prompt-forced-coalesce-ms (or vim.g.meta_prompt_forced_coalesce_ms 700))
   (set router.preview-source-switch-debounce-ms (or vim.g.meta_preview_source_switch_debounce_ms 60))
+  (set router.source-syntax-refresh-debounce-ms (or vim.g.meta_source_syntax_refresh_debounce_ms 80))
+  (set router.scroll-sync-debounce-ms (or vim.g.meta_scroll_sync_debounce_ms 20))
   (set router.default-prompt-keymaps default-prompt-keymaps)
   (when (= vim.g.meta_prompt_keymaps nil)
     (set vim.g.meta_prompt_keymaps (vim.deepcopy default-prompt-keymaps)))
