@@ -3,6 +3,7 @@
 
 (fn M.truthy?
   [v]
+  "Public API: M.truthy?."
   (or (= v true) (= v 1) (= v "1") (= v "true")))
 
 (fn option-prefix
@@ -48,6 +49,7 @@
 
 (fn M.parse-query-lines
   [lines]
+  "Public API: M.parse-query-lines."
   (var include-hidden nil)
   (var include-ignored nil)
   (var include-deps nil)
@@ -86,6 +88,7 @@
 
 (fn M.parse-query-text
   [query]
+  "Public API: M.parse-query-text."
   (if (not (and (= (type query) "string") (~= query "")))
       {:query query :include-hidden nil :include-ignored nil :include-deps nil :prefilter nil :lazy nil}
       (let [lines (vim.split query "\n" {:plain true})
@@ -99,6 +102,7 @@
 
 (fn M.query-lines-has-active?
   [lines]
+  "Public API: M.query-lines-has-active?."
   (var has false)
   (each [_ line (ipairs (or lines []))]
     (when (and (not has) (~= (vim.trim (or line "")) ""))

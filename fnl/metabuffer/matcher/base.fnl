@@ -8,6 +8,7 @@
 
 (fn M.new
   [name opts]
+  "Public API: M.new."
   (local self {:name name
                :also-highlight-per-char (and opts opts.also-highlight-per-char)
                :match-id nil
@@ -65,6 +66,7 @@
 
 (fn M.escape-vim-patterns
   [text]
+  "Public API: M.escape-vim-patterns."
   (util.escape-vim-pattern text))
 
 M

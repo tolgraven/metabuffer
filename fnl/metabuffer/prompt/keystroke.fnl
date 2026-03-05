@@ -40,6 +40,7 @@
 
 (fn M.startswith
   [lhs rhs]
+  "Public API: M.startswith."
   (if (< (# lhs) (# rhs))
       false
       (do
@@ -51,6 +52,7 @@
 
 (fn M.parse
   [nvim expr]
+  "Public API: M.parse."
   (if (= (type expr) "table")
       (setmetatable expr mt)
       (let [tokens (tokenise expr)
@@ -61,6 +63,7 @@
 
 (fn M.concat
   [a b]
+  "Public API: M.concat."
   (local out [])
   (each [_ x (ipairs a)] (table.insert out x))
   (each [_ x (ipairs b)] (table.insert out x))

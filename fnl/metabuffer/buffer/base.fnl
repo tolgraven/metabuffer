@@ -6,16 +6,19 @@
 
 (fn M.new-buffer
   []
+  "Public API: M.new-buffer."
   (vim.api.nvim_create_buf false false))
 
 (fn M.switch-buf
   [buf]
+  "Public API: M.switch-buf."
   (when (and buf (vim.api.nvim_buf_is_valid buf))
     (vim.cmd (.. "noautocmd keepjumps buffer " buf)))
   (vim.api.nvim_get_current_buf))
 
 (fn M.new
   [nvim opts]
+  "Public API: M.new."
   (local model (or (. opts :model) (vim.api.nvim_get_current_buf)))
   (local target (or (. opts :buffer) (M.new-buffer)))
   (local base (handle.new nvim target model [] (or (. opts :default-opts) {})))

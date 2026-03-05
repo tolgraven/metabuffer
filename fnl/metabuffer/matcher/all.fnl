@@ -6,6 +6,7 @@
 
 (fn M.new
   []
+  "Public API: M.new."
   (base.new "all"
     {:get-highlight-pattern
       (fn [_ query]

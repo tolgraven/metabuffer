@@ -3,6 +3,7 @@
 
 (fn M.apply-router-defaults
   [router vim]
+  "Public API: M.apply-router-defaults."
   (local default-prompt-keymaps
     [ [["n" "i"] "<CR>" "accept"]
       ;; In insert mode, <Esc> should only leave insert mode.

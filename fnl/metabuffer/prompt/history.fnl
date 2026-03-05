@@ -3,6 +3,7 @@
 
 (fn M.new
   [prompt]
+  "Public API: M.new."
   (local self {:prompt prompt :index 0 :cached prompt.text :backward "" :threshold 0})
 
   (fn self.current

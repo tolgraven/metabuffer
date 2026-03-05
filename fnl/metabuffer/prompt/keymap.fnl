@@ -49,6 +49,7 @@
 
 (fn M.new
   []
+  "Public API: M.new."
   (local self {:registry {}})
 
   (fn self.clear
@@ -136,6 +137,7 @@
 
 (fn M.from_rules
   [nvim rules]
+  "Public API: M.from_rules."
   (local km (M.new))
   (km.register_from_rules nvim rules)
   km)

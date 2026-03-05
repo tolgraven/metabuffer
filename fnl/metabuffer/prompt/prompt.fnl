@@ -32,6 +32,7 @@
 
 (fn M.new
   [nvim]
+  "Public API: M.new."
   (local self {:nvim nvim
                :text ""
                :prefix ""

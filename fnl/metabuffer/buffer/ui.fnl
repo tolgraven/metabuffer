@@ -5,6 +5,7 @@
 
 (fn M.new
   [nvim parent role]
+  "Public API: M.new."
   (local self (base.new nvim {:model parent.buffer :name (or role "ui")
                               :default-opts {:buflisted false :bufhidden "hide" :buftype "nofile"}}))
   (set self.parent parent)

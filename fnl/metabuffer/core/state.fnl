@@ -6,6 +6,7 @@
 
 (fn M.default-condition
   [query]
+  "Public API: M.default-condition."
   (local c (vim.api.nvim_win_get_cursor 0))
   {:text (or query "")
    :caret-locus (# (or query ""))
@@ -17,6 +18,7 @@
 
 (fn M.ignorecase
   [case-mode query]
+  "Public API: M.ignorecase."
   (if (= case-mode "ignore")
       true
       (if (= case-mode "normal")

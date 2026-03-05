@@ -3,11 +3,13 @@
 
 (fn M.enabled?
   []
+  "Public API: M.enabled?."
   (or (= (. vim.g "meta#debug") 1)
       (= (. vim.g "meta#debug") true)))
 
 (fn M.log
   [scope msg]
+  "Public API: M.log."
   (when (M.enabled?)
     (let [path (or (. vim.g "meta#debug_log") "/tmp/metabuffer-debug.log")
           prefix (if (and (= (type scope) "string") (~= scope ""))

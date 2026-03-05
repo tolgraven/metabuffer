@@ -16,6 +16,7 @@
 
 (fn M.new
   []
+  "Public API: M.new."
   (if _instance
       _instance
       (do

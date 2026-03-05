@@ -4,6 +4,7 @@
 
 (fn M.new
   []
+  "Public API: M.new."
   (base.new "textobj"
     {:get-highlight-pattern (fn [_ query] query)
      :filter (fn [_ _ indices _ _] indices)}))

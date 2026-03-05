@@ -214,6 +214,7 @@
 
 (fn M.reload
   [opts]
+  "Public API: M.reload."
   (let [cfg (or opts {})
         do-compile (and cfg.compile true)]
     (when do-compile
@@ -226,6 +227,7 @@
 
 (fn M.setup
   []
+  "Public API: M.setup."
   (ensure-defaults-and-highlights!)
   (ensure-command "Meta"
     (fn [args] (router.entry_start args.args args.bang))

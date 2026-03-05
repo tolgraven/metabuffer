@@ -3,6 +3,7 @@
 
 (fn M.list
   []
+  "Public API: M.list."
   (if (= (type vim.g.metabuffer_prompt_history) "table")
       vim.g.metabuffer_prompt_history
       (do
@@ -11,6 +12,7 @@
 
 (fn M.push!
   [text max-items]
+  "Public API: M.push!."
   (when (and (= (type text) "string") (~= (vim.trim text) ""))
     ;; vim.g table values are copied on read; write back after mutation.
     (local h (vim.deepcopy (M.list)))
@@ -22,6 +24,7 @@
 
 (fn M.entry
   [idx]
+  "Public API: M.entry."
   (let [h (M.list)
         n (# h)]
     (when (and (> idx 0) (<= idx n))

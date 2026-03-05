@@ -396,6 +396,7 @@
 
 (fn M._store_vars
   [meta]
+  "Public API: M._store_vars."
   (set vim.b._meta_context (meta.store))
   (set vim.b._meta_indexes meta.buf.indices)
   (set vim.b._meta_updates meta.updates)
@@ -404,6 +405,7 @@
 
 (fn M._wrapup
   [meta]
+  "Public API: M._wrapup."
   (vim.cmd "redraw|redrawstatus")
   (M._store_vars meta))
 
@@ -640,6 +642,7 @@
 
 (fn M.finish
   [kind prompt-buf]
+  "Public API: M.finish."
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
       (if (= kind "accept")
@@ -648,6 +651,7 @@
 
 (fn M.move-selection
   [prompt-buf delta]
+  "Public API: M.move-selection."
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
       (let [runner (fn []
@@ -711,6 +715,7 @@
 
 (fn M.scroll-main
   [prompt-buf action]
+  "Public API: M.scroll-main."
   (let [session (. M.active-by-prompt prompt-buf)]
     (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
       (let [runner (fn []
@@ -770,6 +775,7 @@
 
 (fn M.history-or-move
   [prompt-buf delta]
+  "Public API: M.history-or-move."
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
       (let [txt (prompt-text session)
@@ -793,6 +799,7 @@
 
   (fn M.toggle-scan-option
     [prompt-buf which]
+  "Public API: M.toggle-scan-option."
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
       (if
@@ -811,6 +818,7 @@
 
 (fn M.toggle-project-mode
   [prompt-buf]
+  "Public API: M.toggle-project-mode."
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
       (set session.project-mode (not session.project-mode))
@@ -952,6 +960,7 @@
 
 (fn M.sync
   [meta query]
+  "Public API: M.sync."
   (when (not meta)
     (vim.notify "No Meta instance" vim.log.levels.WARN))
   (when meta
@@ -962,6 +971,7 @@
 
 (fn M.push
   [meta]
+  "Public API: M.push."
   (if (not meta)
       (vim.notify "No Meta instance" vim.log.levels.WARN)
       (let [lines (vim.api.nvim_buf_get_lines meta.buf.buffer 0 -1 false)]
@@ -969,24 +979,29 @@
 
 (fn M.entry_start
   [query _bang]
+  "Public API: M.entry_start."
   (M.start query "start" nil _bang))
 
 (fn M.entry_resume
   [query]
+  "Public API: M.entry_resume."
   (M.start query "resume" nil))
 
 (fn M.entry_sync
   [query]
+  "Public API: M.entry_sync."
   (local key (vim.api.nvim_get_current_buf))
   (M.sync (. M.instances key) query))
 
 (fn M.entry_push
   []
+  "Public API: M.entry_push."
   (local key (vim.api.nvim_get_current_buf))
   (M.push (. M.instances key)))
 
 (fn M.entry_cursor_word
   [resume]
+  "Public API: M.entry_cursor_word."
   (local w (vim.fn.expand "<cword>"))
   (if resume
       (M.entry_resume w)

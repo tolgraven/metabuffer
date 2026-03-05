@@ -6,6 +6,7 @@
 
 (fn M.new
   []
+  "Public API: M.new."
   (base.new "regex"
     {:get-highlight-pattern (fn [_ query] (util.convert2regex-pattern query))
      :filter

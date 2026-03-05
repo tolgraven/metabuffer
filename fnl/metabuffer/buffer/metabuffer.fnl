@@ -48,6 +48,7 @@
 
 (fn M.new
   [nvim model]
+  "Public API: M.new."
   (local self (base.new nvim {:model model :name "meta" :default-opts M.default-opts}))
   (set self.syntax-type "buffer")
   (set self.indexbuf (ui.new nvim self "indexes"))

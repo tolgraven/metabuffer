@@ -4,6 +4,7 @@
 
 (fn M.new
   [nvim win opts-to-stash opts]
+  "Public API: M.new."
   (local self (handle.new nvim win win opts-to-stash opts))
   (set self.window win)
 

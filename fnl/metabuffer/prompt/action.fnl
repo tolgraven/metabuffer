@@ -7,6 +7,7 @@
 
 (fn M.new
   []
+  "Public API: M.new."
   (local self {:registry {}})
 
   (fn self.clear

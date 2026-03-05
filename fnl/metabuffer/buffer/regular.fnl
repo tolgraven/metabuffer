@@ -4,6 +4,7 @@
 
 (fn M.new
   [nvim opts]
+  "Public API: M.new."
   (base.new nvim (or opts {:name "buffer"})))
 
 M

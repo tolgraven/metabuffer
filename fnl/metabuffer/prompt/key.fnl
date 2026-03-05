@@ -83,6 +83,7 @@
 
 (fn M.represent
   [_ code]
+  "Public API: M.represent."
   (if (= (type code) "number")
       (canonical-token (vim.fn.keytrans (util.int2char code)))
       (= (type code) "string")
@@ -91,6 +92,7 @@
 
 (fn M.parse
   [_ expr]
+  "Public API: M.parse."
   (local k (normalize expr))
   (if (. cache k)
       (. cache k)

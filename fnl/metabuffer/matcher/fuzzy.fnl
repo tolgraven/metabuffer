@@ -14,6 +14,7 @@
 
 (fn M.new
   []
+  "Public API: M.new."
   (base.new "fuzzy"
     {:also-highlight-per-char true
      :get-highlight-pattern (fn [_ query] (mkpat "%s[^%s]\\{-}" base.escape-vim-patterns query))

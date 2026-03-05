@@ -3,6 +3,7 @@
 
 (fn M.new
   [prompt locus]
+  "Public API: M.new."
   (local self {:prompt prompt :_locus (or locus 0)})
 
   (fn self.head
