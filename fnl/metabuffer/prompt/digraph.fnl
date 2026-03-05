@@ -6,13 +6,13 @@
 
 (fn parse_digraph_output
   [output]
-  (local registry {})
-  (each [_ line (ipairs (vim.split (or output "") "\n" {:trimempty true}))]
-    (let [k (string.match line "(%S%S)%s+%S+%s+%d+")
-          v (string.match line "%S%S%s+(%S+)%s+%d+")]
-      (when (and k v)
-        (set (. registry k) v))))
-  registry)
+  (let [registry {}]
+    (each [_ line (ipairs (vim.split (or output "") "\n" {:trimempty true}))]
+      (let [k (string.match line "(%S%S)%s+%S+%s+%d+")
+            v (string.match line "%S%S%s+(%S+)%s+%d+")]
+        (when (and k v)
+          (set (. registry k) v))))
+    registry))
 
 (fn M.new
   []
@@ -32,15 +32,15 @@
 
         (fn _instance.retrieve
   [_]
-          (local code1 (util.getchar))
-          (if (and (= (type code1) "string") (vim.startswith code1 "<"))
-              code1
-              (let [code2 (util.getchar)]
-                (if (and (= (type code2) "string") (vim.startswith code2 "<"))
-                    code2
-                    (let [ch1 (if (= (type code1) "number") (util.int2char code1) (tostring code1))
-                          ch2 (if (= (type code2) "number") (util.int2char code2) (tostring code2))]
-                      (_instance.find _instance ch1 ch2))))))
+          (let [code1 (util.getchar)]
+            (if (and (= (type code1) "string") (vim.startswith code1 "<"))
+                code1
+                (let [code2 (util.getchar)]
+                  (if (and (= (type code2) "string") (vim.startswith code2 "<"))
+                      code2
+                      (let [ch1 (if (= (type code1) "number") (util.int2char code1) (tostring code1))
+                            ch2 (if (= (type code2) "number") (util.int2char code2) (tostring code2))]
+                        (_instance.find _instance ch1 ch2)))))))
 
         _instance)))
 

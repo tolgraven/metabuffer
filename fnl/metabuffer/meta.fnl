@@ -49,8 +49,8 @@
 (fn M.new
   [nvim condition]
   "Construct Meta state and bind matcher/query/buffer runtime."
-  (local cond (or condition (state.default-condition "")))
-  (local self (prompt_mod.new nvim))
+  (let [cond (or condition (state.default-condition ""))
+        self (prompt_mod.new nvim)]
 
   (set self.condition cond)
   (set self.selected_index (or cond.selected-index 0))
@@ -69,14 +69,14 @@
   (set self.buf (meta_buffer_mod.new nvim (vim.api.nvim_get_current_buf)))
   (set self._filter-cache {})
   (set self._filter-cache-line-count (# self.buf.content))
-  (local prompt-on-term self.on-term)
-  (fn clear-all-highlights
-    []
-    (let [matcher-mode (. self.mode :matcher)]
-      (when matcher-mode
-        (each [_ m (ipairs matcher-mode.candidates)]
-          (when m
-            (pcall m.remove-highlight m))))))
+    (let [prompt-on-term self.on-term]
+      (fn clear-all-highlights
+        []
+        (let [matcher-mode (. self.mode :matcher)]
+          (when matcher-mode
+            (each [_ m (ipairs matcher-mode.candidates)]
+              (when m
+                (pcall m.remove-highlight m))))))
 
   (set self.mode
        {:matcher (modeindexer.new [(all_matcher.new) (fuzzy_matcher.new) (regex_matcher.new)]
@@ -109,19 +109,19 @@
     []
     (state.ignorecase (self.case) self.text))
 
-  (fn self.active-queries
-    []
-    (local out [])
-    (each [_ line (ipairs (or self.query-lines []))]
-      (when (and (= (type line) "string") (~= (vim.trim line) ""))
-        (table.insert out (vim.trim line))))
-    out)
+      (fn self.active-queries
+        []
+        (let [out []]
+          (each [_ line (ipairs (or self.query-lines []))]
+            (when (and (= (type line) "string") (~= (vim.trim line) ""))
+              (table.insert out (vim.trim line))))
+          out))
 
-  (fn self.set-query-lines
-    [lines]
-    (set self.query-lines (or lines []))
-    (local active (self.active-queries))
-    (set self.text (table.concat active " && ")))
+      (fn self.set-query-lines
+        [lines]
+        (set self.query-lines (or lines []))
+        (let [active (self.active-queries)]
+          (set self.text (table.concat active " && "))))
 
   (fn self.selected_line
     []
@@ -145,31 +145,31 @@
             pat (matcher_obj.get-highlight-pattern matcher_obj q)]
         (.. caseprefix pat)))))
 
-  (fn self.refresh_statusline
-    []
-    (local mode-state (statusline-mode-state))
-    (local hl_prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer"))
-    (self.status-win.set-statusline-state
-      (. mode-state :group)
-      (. mode-state :label)
-      self.buf.name
-      (# self.buf.indices)
-      (self.buf.line-count)
-      (self.selected_line)
-      self.debug_out
-      (. (self.matcher) :name)
-      (self.case)
-      hl_prefix
-      (self.syntax))
-    (vim.cmd "redrawstatus"))
+      (fn self.refresh_statusline
+        []
+        (let [mode-state (statusline-mode-state)
+              hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")]
+          (self.status-win.set-statusline-state
+            (. mode-state :group)
+            (. mode-state :label)
+            self.buf.name
+            (# self.buf.indices)
+            (self.buf.line-count)
+            (self.selected_line)
+            self.debug_out
+            (. (self.matcher) :name)
+            (self.case)
+            hl-prefix
+            (self.syntax))
+          (vim.cmd "redrawstatus")))
 
-  (fn self.on-init
-    []
-    (self.buf.set-name (if self.project-mode
-                           (project-display-name)
-                           (metabuffer-display-name self.buf.model)))
-    (local init-syntax (or (. vim.g "meta#syntax_on_init") "buffer"))
-    (self.buf.apply-syntax (if (= init-syntax "meta") "meta" "buffer"))
+      (fn self.on-init
+        []
+        (self.buf.set-name (if self.project-mode
+                               (project-display-name)
+                               (metabuffer-display-name self.buf.model)))
+        (let [init-syntax (or (. vim.g "meta#syntax_on_init") "buffer")]
+          (self.buf.apply-syntax (if (= init-syntax "meta") "meta" "buffer")))
     (clear-all-highlights)
     (self.buf.render)
     (let [line-count (vim.api.nvim_buf_line_count self.buf.buffer)
@@ -188,7 +188,7 @@
           (when (~= (. source-view :col) nil)
             (set (. view :col) (. source-view :col)))
           (vim.fn.winrestview view))))
-    prompt_mod.STATUS_PROGRESS)
+        prompt_mod.STATUS_PROGRESS)
 
   (fn self.on-redraw
     []
@@ -245,7 +245,8 @@
                   (var cached-line-count cached-line-count0)
                   ;; Extend cached results incrementally when project streaming
                   ;; appended lines since this cache entry was materialized.
-                  (local next (vim.deepcopy cached))
+                  (let [next0 (vim.deepcopy cached)]
+                    (var next next0)
                   (when (< cached-line-count line-count)
                     (let [added0 []]
                       (var added added0)
@@ -260,7 +261,7 @@
                   ;; accidentally mutate cache entries by reference.
                   (set self.buf.indices (vim.deepcopy next))
                   (set (. self._filter-cache cache-key)
-                       {:indices (vim.deepcopy next) :line-count line-count}))
+                       {:indices (vim.deepcopy next) :line-count line-count})))
                 (do
                   (var first reset?)
                   (each [_ q (ipairs queries)]
@@ -269,11 +270,11 @@
                   (set (. self._filter-cache cache-key)
                        {:indices (vim.deepcopy self.buf.indices)
                         :line-count line-count})))))
-      (local hits-changed (if (= prev-hits self.buf.indices)
-                              false
-                              (if (~= (# prev-hits) (# self.buf.indices))
-                                  true
-                                  (not (vim.deep_equal prev-hits self.buf.indices)))))
+      (let [hits-changed (if (= prev-hits self.buf.indices)
+                             false
+                             (if (~= (# prev-hits) (# self.buf.indices))
+                                 true
+                                 (not (vim.deep_equal prev-hits self.buf.indices))))]
       (when hits-changed
         (self.buf.render))
       (when hits-changed
@@ -292,7 +293,7 @@
       (let [matcher (self.matcher)]
         (if (or (= (# queries) 0) (>= (# self.buf.indices) 1000))
             (matcher.remove-highlight matcher)
-            (matcher.highlight matcher self.text ignorecase self.win.window))))
+            (matcher.highlight matcher self.text ignorecase self.win.window)))))
     status)
 
   (fn self.on-term
@@ -315,6 +316,6 @@
      :syntax-index (. (. self.mode :syntax) :index)
      :restored true})
 
-  self)
+    self)))
 
 M

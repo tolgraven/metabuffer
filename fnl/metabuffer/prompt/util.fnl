@@ -54,8 +54,8 @@
 (fn M.build_echon_expr
   [text hl]
   "Public API: M.build_echon_expr."
-  (local safe (string.gsub (string.gsub (or text "") "\\\\" "\\\\\\\\") "\"" "\\\\\""))
-  (string.format "echohl %s|echon \"%s\"" (or hl "None") safe))
+  (let [safe (string.gsub (string.gsub (or text "") "\\\\" "\\\\\\\\") "\"" "\\\\\"")]
+    (string.format "echohl %s|echon \"%s\"" (or hl "None") safe)))
 
 (fn M.build_keyword_pattern_set
   [_]

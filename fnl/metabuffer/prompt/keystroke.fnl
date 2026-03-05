@@ -6,10 +6,10 @@
 (local mt {})
 (fn mt.__tostring
   [self]
-  (local out [])
-  (each [_ k (ipairs self)]
-    (table.insert out (or k.char "")))
-  (table.concat out ""))
+  (let [out []]
+    (each [_ k (ipairs self)]
+      (table.insert out (or k.char "")))
+    (table.concat out "")))
 
 (fn tokenise
   [expr]
@@ -64,9 +64,9 @@
 (fn M.concat
   [a b]
   "Public API: M.concat."
-  (local out [])
-  (each [_ x (ipairs a)] (table.insert out x))
-  (each [_ x (ipairs b)] (table.insert out x))
-  (setmetatable out mt))
+  (let [out []]
+    (each [_ x (ipairs a)] (table.insert out x))
+    (each [_ x (ipairs b)] (table.insert out x))
+    (setmetatable out mt)))
 
 M

@@ -9,13 +9,13 @@
 (fn M.new
   [name opts]
   "Public API: M.new."
-  (local self {:name name
-               :also-highlight-per-char (and opts opts.also-highlight-per-char)
-               :match-id nil
-               :char-match-id nil
-               :match-win nil
-               :get-highlight-pattern (or (and opts opts.get-highlight-pattern) (fn [_ _] ""))
-               :filter (or (and opts opts.filter) (fn [_ _ _ _] []))})
+  (let [self {:name name
+              :also-highlight-per-char (and opts opts.also-highlight-per-char)
+              :match-id nil
+              :char-match-id nil
+              :match-win nil
+              :get-highlight-pattern (or (and opts opts.get-highlight-pattern) (fn [_ _] ""))
+              :filter (or (and opts opts.filter) (fn [_ _ _ _] []))}]
 
   (fn delete-match
   [id win]
@@ -62,7 +62,7 @@
           (set self.char-match-id
             (matchadd-in-window M.default-hi-char (table.concat (vim.split query "") "\\|") win))))))
 
-  self)
+  self))
 
 (fn M.escape-vim-patterns
   [text]

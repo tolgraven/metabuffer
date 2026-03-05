@@ -7,14 +7,14 @@
 (fn M.default-condition
   [query]
   "Public API: M.default-condition."
-  (local c (vim.api.nvim_win_get_cursor 0))
-  {:text (or query "")
-   :caret-locus (# (or query ""))
-   :selected-index (- (. c 1) 1)
-   :matcher-index 1
-   :case-index 1
-   :syntax-index 1
-   :restored false})
+  (let [c (vim.api.nvim_win_get_cursor 0)]
+    {:text (or query "")
+     :caret-locus (# (or query ""))
+     :selected-index (- (. c 1) 1)
+     :matcher-index 1
+     :case-index 1
+     :syntax-index 1
+     :restored false}))
 
 (fn M.ignorecase
   [case-mode query]

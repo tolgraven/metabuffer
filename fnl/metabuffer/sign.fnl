@@ -4,8 +4,8 @@
 (fn M.buf-has-signs?
   [buf]
   "Public API: M.buf-has-signs?."
-  (local out (vim.fn.execute (.. "sign place group=* buffer=" buf)))
-  (> (# out) 2))
+  (let [out (vim.fn.execute (.. "sign place group=* buffer=" buf))]
+    (> (# out) 2)))
 
 (fn M.refresh-dummy
   [buf]

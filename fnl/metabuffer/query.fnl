@@ -55,36 +55,36 @@
   (var include-deps nil)
   (var prefilter nil)
   (var lazy nil)
-  (local cleaned [])
-  (each [_ line (ipairs (or lines []))]
-    (local trimmed (vim.trim (or line "")))
-    (if (= trimmed "")
-        (table.insert cleaned "")
-        (let [parts (vim.split trimmed "%s+")
-              keep []]
-          (each [_ tok (ipairs (or parts []))]
-            (let [parsed (parse-option-token tok)]
-              (if parsed
-                  (let [k (. parsed 1)
-                        v (. parsed 2)]
-                    (if (= k :hidden)
-                        (set include-hidden v)
-                        (if (= k :ignored)
-                            (set include-ignored v)
-                            (if (= k :deps)
-                                (set include-deps v)
-                                (if (= k :prefilter)
-                                    (set prefilter v)
-                                    (when (= k :lazy)
-                                      (set lazy v)))))))
-                  (table.insert keep tok))))
-          (table.insert cleaned (table.concat keep " ")))))
-  {:lines cleaned
-   :include-hidden include-hidden
-   :include-ignored include-ignored
-   :include-deps include-deps
-   :prefilter prefilter
-   :lazy lazy})
+  (let [cleaned []]
+    (each [_ line (ipairs (or lines []))]
+      (let [trimmed (vim.trim (or line ""))]
+        (if (= trimmed "")
+            (table.insert cleaned "")
+            (let [parts (vim.split trimmed "%s+")
+                  keep []]
+              (each [_ tok (ipairs (or parts []))]
+                (let [parsed (parse-option-token tok)]
+                  (if parsed
+                      (let [k (. parsed 1)
+                            v (. parsed 2)]
+                        (if (= k :hidden)
+                            (set include-hidden v)
+                            (if (= k :ignored)
+                                (set include-ignored v)
+                                (if (= k :deps)
+                                    (set include-deps v)
+                                    (if (= k :prefilter)
+                                        (set prefilter v)
+                                        (when (= k :lazy)
+                                          (set lazy v)))))))
+                      (table.insert keep tok))))
+              (table.insert cleaned (table.concat keep " "))))))
+    {:lines cleaned
+     :include-hidden include-hidden
+     :include-ignored include-ignored
+     :include-deps include-deps
+     :prefilter prefilter
+     :lazy lazy}))
 
 (fn M.parse-query-text
   [query]

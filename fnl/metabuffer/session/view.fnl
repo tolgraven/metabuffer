@@ -44,14 +44,14 @@
           topline (math.max 1 (math.min (- line offset) line-count))]
       (vim.api.nvim_win_call meta.win.window
         (fn []
-          (local view (vim.fn.winsaveview))
-          (set (. view :lnum) line)
-          (set (. view :topline) topline)
-          (when (~= (. src-view :leftcol) nil)
-            (set (. view :leftcol) (. src-view :leftcol)))
-          (when (~= (. src-view :col) nil)
-            (set (. view :col) (. src-view :col)))
-          (vim.fn.winrestview view))))))
+          (let [view (vim.fn.winsaveview)]
+            (set (. view :lnum) line)
+            (set (. view :topline) topline)
+            (when (~= (. src-view :leftcol) nil)
+              (set (. view :leftcol) (. src-view :leftcol)))
+            (when (~= (. src-view :col) nil)
+              (set (. view :col) (. src-view :col)))
+            (vim.fn.winrestview view)))))))
 
 (fn M.sync-selected-from-main-cursor!
   [session]

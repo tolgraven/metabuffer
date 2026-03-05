@@ -4,10 +4,10 @@
 (fn M.new
   [candidates index opts]
   "Create cyclic indexer over mode candidates with optional leave/active hooks."
-  (local self {:candidates candidates
-               :index (or index 1)
-               :on-leave (and opts opts.on-leave)
-               :on-active (and opts opts.on-active)})
+  (let [self {:candidates candidates
+              :index (or index 1)
+              :on-leave (and opts opts.on-leave)
+              :on-active (and opts opts.on-active)}]
 
   (fn self.current
     []
@@ -39,6 +39,6 @@
     (self.set-index (- self.index (or offset 1)))
     (self.current))
 
-  self)
+  self))
 
 M

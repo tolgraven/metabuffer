@@ -47,45 +47,44 @@
 (fn M.new
   [nvim target model opts-from-model opts]
   "Create a handle that stores/restores window or buffer local options."
-  (local self {:nvim nvim
-               :target target
-               :model (or model target)
-               :saved-opts {}
-               :terminated false})
+  (let [self {:nvim nvim
+              :target target
+              :model (or model target)
+              :saved-opts {}
+              :terminated false}]
+    (fn self.store-opts
+      [names _origin]
+      (each [_ name (ipairs (or names []))]
+        (set (. self.saved-opts name) (get-local-opt name _origin))))
 
-  (fn self.store-opts
-    [names _origin]
-    (each [_ name (ipairs (or names []))]
-      (set (. self.saved-opts name) (get-local-opt name _origin))))
+    (fn self.apply-opts
+      [tbl]
+      (each [k v (pairs (or tbl {}))]
+        (set-local-opt k v self.target)))
 
-  (fn self.apply-opts
-    [tbl]
-    (each [k v (pairs (or tbl {}))]
-      (set-local-opt k v self.target)))
+    (fn self.push-opt
+      [name value]
+      (set (. self.saved-opts name) (get-local-opt name self.target))
+      (set-local-opt name value self.target))
 
-  (fn self.push-opt
-    [name value]
-    (set (. self.saved-opts name) (get-local-opt name self.target))
-    (set-local-opt name value self.target))
+    (fn self.pop-opt
+      [name]
+      (let [v (. self.saved-opts name)]
+        (when (~= v nil)
+          (set-local-opt name v self.target))))
 
-  (fn self.pop-opt
-    [name]
-    (let [v (. self.saved-opts name)]
-      (when (~= v nil)
-        (set-local-opt name v self.target))))
+    (fn self.restore-opts
+      []
+      (self.apply-opts self.saved-opts))
 
-  (fn self.restore-opts
-    []
-    (self.apply-opts self.saved-opts))
+    (fn self.destroy
+      []
+      (when (not self.terminated)
+        (self.restore-opts)
+        (set self.terminated true)))
 
-  (fn self.destroy
-    []
-    (when (not self.terminated)
-      (self.restore-opts)
-      (set self.terminated true)))
-
-  (self.store-opts opts-from-model model)
-  (self.apply-opts opts)
-  self)
+    (self.store-opts opts-from-model model)
+    (self.apply-opts opts)
+    self))
 
 M

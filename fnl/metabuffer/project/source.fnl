@@ -13,17 +13,17 @@
 
   (fn parse-prefilter-terms
     [query-lines ignorecase]
-    (local groups [])
-    (each [_ line (ipairs (or query-lines []))]
-      (let [trimmed (vim.trim (or line ""))]
-        (when (~= trimmed "")
-          (local toks [])
-          (each [_ tok (ipairs (vim.split trimmed "%s+"))]
-            (when (~= tok "")
-              (table.insert toks (if ignorecase (string.lower tok) tok))))
-          (when (> (# toks) 0)
-            (table.insert groups toks)))))
-    groups)
+    (let [groups []]
+      (each [_ line (ipairs (or query-lines []))]
+        (let [trimmed (vim.trim (or line ""))]
+          (when (~= trimmed "")
+            (let [toks []]
+              (each [_ tok (ipairs (vim.split trimmed "%s+"))]
+                (when (~= tok "")
+                  (table.insert toks (if ignorecase (string.lower tok) tok))))
+              (when (> (# toks) 0)
+                (table.insert groups toks))))))
+      groups))
 
   (fn line-matches-prefilter?
     [line spec]
@@ -43,11 +43,11 @@
 
   (fn reset-meta-indices!
     [meta]
-    (local all-indices [])
-    (for [i 1 (# meta.buf.content)]
-      (table.insert all-indices i))
-    (set meta.buf.all-indices all-indices)
-    (set meta.buf.indices (vim.deepcopy all-indices)))
+    (let [all-indices []]
+      (for [i 1 (# meta.buf.content)]
+        (table.insert all-indices i))
+      (set meta.buf.all-indices all-indices)
+      (set meta.buf.indices (vim.deepcopy all-indices))))
 
   (fn set-single-source-content!
     [session show-separators]
@@ -141,24 +141,24 @@
 
   (fn open-project-buffer-paths
     [session root include-hidden include-deps]
-    (local out [])
-    (local seen {})
-    (local current (canonical-path (current-buffer-path session.source-buf)))
-    (each [_ buf (ipairs (vim.api.nvim_list_bufs))]
-      (when (and (vim.api.nvim_buf_is_valid buf)
-                 (= (. (. vim.bo buf) :buftype) "")
-                 (truthy? (. (. vim.bo buf) :buflisted)))
-        (let [name (canonical-path (vim.api.nvim_buf_get_name buf))]
-          (when (and name
-                     (or (not current) (~= name current))
-                     (not (. seen name))
-                     (= 1 (vim.fn.filereadable name))
-                     (path-under-root? name root))
-            (let [rel (vim.fn.fnamemodify name ":.")]
-              (when (allow-project-path? rel include-hidden include-deps)
-                (set (. seen name) true)
-                (table.insert out name)))))))
-    out)
+    (let [out []
+          seen {}
+          current (canonical-path (current-buffer-path session.source-buf))]
+      (each [_ buf (ipairs (vim.api.nvim_list_bufs))]
+        (when (and (vim.api.nvim_buf_is_valid buf)
+                   (= (. (. vim.bo buf) :buftype) "")
+                   (truthy? (. (. vim.bo buf) :buflisted)))
+          (let [name (canonical-path (vim.api.nvim_buf_get_name buf))]
+            (when (and name
+                       (or (not current) (~= name current))
+                       (not (. seen name))
+                       (= 1 (vim.fn.filereadable name))
+                       (path-under-root? name root))
+              (let [rel (vim.fn.fnamemodify name ":.")]
+                (when (allow-project-path? rel include-hidden include-deps)
+                  (set (. seen name) true)
+                  (table.insert out name)))))))
+      out))
 
   (fn estimate-lines-from-files
     [paths]
@@ -178,10 +178,10 @@
           content []
           refs []]
       (var total-lines 0)
-      (local push-line! (fn [path lnum line]
-                          (table.insert content line)
-                          (table.insert refs {:path path :lnum lnum :line line})
-                          (set total-lines (+ total-lines 1))))
+      (let [push-line! (fn [path lnum line]
+                         (table.insert content line)
+                         (table.insert refs {:path path :lnum lnum :line line})
+                         (set total-lines (+ total-lines 1)))]
       ;; Include current buffer first.
       (each [i line (ipairs (or session.single-content []))]
         (push-line! (or current-path "[Current Buffer]") i line))
@@ -201,7 +201,7 @@
                     (each [lnum line (ipairs lines)]
                       (when (< total-lines settings.project-max-total-lines)
                         (push-line! path lnum line))))))))))
-      {:content content :refs refs}))
+        {:content content :refs refs})))
 
   (fn init-project-pool!
     [session prefilter]
@@ -245,7 +245,7 @@
     (set session.lazy-stream-paths (or (. init :deferred-paths) []))
     (set session.lazy-stream-total (# session.lazy-stream-paths))
     (set session.lazy-prefilter prefilter)
-    (local stream-id session.lazy-stream-id)
+    (let [stream-id session.lazy-stream-id]
     (fn run-batch
       []
       (when (and (session-active? session)
@@ -277,18 +277,18 @@
                      (= stream-id session.lazy-stream-id)
                      (session-active? session))
             (vim.defer_fn run-batch 0)))))
-    (vim.defer_fn run-batch 0))
+      (vim.defer_fn run-batch 0)))
 
   (fn apply-source-set!
     [session]
     "Apply full single/project source set based on current session flags."
-    (local meta session.meta)
-    (local old-ref (and session.project-mode (selected-ref meta)))
-    (local old-line (if (and meta.selected_index
-                             (>= meta.selected_index 0)
-                             (<= (+ meta.selected_index 1) (# meta.buf.indices)))
-                        (math.max 1 (meta.selected_line))
-                        (math.max 1 (or session.initial-source-line 1))))
+    (let [meta session.meta
+          old-ref (and session.project-mode (selected-ref meta))
+          old-line (if (and meta.selected_index
+                            (>= meta.selected_index 0)
+                            (<= (+ meta.selected_index 1) (# meta.buf.indices)))
+                       (math.max 1 (meta.selected_line))
+                       (math.max 1 (or session.initial-source-line 1)))]
     (if session.project-mode
         (let [prefilter-active (and (truthy? settings.project-lazy-prefilter-enabled)
                                     (~= session.prefilter-mode false))
@@ -317,72 +317,72 @@
         (set meta.selected_index
              (math.max 0
                        (- (meta.buf.closest-index old-line) 1))))
-    (set meta._prev_text "")
-    (set meta._filter-cache {})
-    (set meta._filter-cache-line-count (# meta.buf.content)))
+      (set meta._prev_text "")
+      (set meta._filter-cache {})
+      (set meta._filter-cache-line-count (# meta.buf.content))))
 
   (fn apply-minimal-source-set!
     [session]
     "Apply minimal startup source set for empty project prompt."
-    (local meta session.meta)
-    (local old-line (if (and meta.selected_index
+    (let [meta session.meta
+          old-line (if (and meta.selected_index
                              (>= meta.selected_index 0)
                              (<= (+ meta.selected_index 1) (# meta.buf.indices)))
                         (math.max 1 (meta.selected_line))
-                        (math.max 1 (or session.initial-source-line 1))))
-    (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
-    (set session.lazy-stream-done true)
+                        (math.max 1 (or session.initial-source-line 1)))]
+      (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
+      (set session.lazy-stream-done true)
     ;; Keep startup lightweight for empty project mode; separators/syntax blocks
     ;; become useful only after expanding to multi-file sources.
     (set-single-source-content! session false)
-    (set meta.selected_index
-         (math.max 0
-                   (- (meta.buf.closest-index old-line) 1)))
-    (set meta._prev_text "")
-    (set meta._filter-cache {})
-    (set meta._filter-cache-line-count (# meta.buf.content)))
+      (set meta.selected_index
+           (math.max 0
+                     (- (meta.buf.closest-index old-line) 1)))
+      (set meta._prev_text "")
+      (set meta._filter-cache {})
+      (set meta._filter-cache-line-count (# meta.buf.content))))
 
   (fn schedule-project-bootstrap!
     [session wait-ms]
     "Defer full project source expansion until startup/input conditions allow."
     (when (and session session.project-mode (not session.project-bootstrapped))
       (set session.project-bootstrap-token (+ 1 (or session.project-bootstrap-token 0)))
-      (local token session.project-bootstrap-token)
-      (set session.project-bootstrap-pending true)
-      (vim.defer_fn
-        (fn []
-          (when (and session (= token session.project-bootstrap-token))
-            (set session.project-bootstrap-pending false))
-          (when (and session
-                     (= token session.project-bootstrap-token)
-                     session.project-mode
-                     session.prompt-buf
-                     (session-active? session)
-                     (not session.project-bootstrapped))
-            (local has-query (prompt-has-active-query? session))
-            (apply-source-set! session)
-            (set session.project-bootstrapped true)
-            ;; Avoid a bootstrap-triggered filter/view update for plain `:Meta!`
-            ;; with empty prompt; defer filtering until the user types.
-            (when has-query
-              ;; If user typed while bootstrap was pending, force-path guards can
-              ;; suppress the immediate refresh and leave results stale.
-              ;; Drive the pending prompt apply directly through the trailing-edge
-              ;; timer path so early keystrokes are always honored.
-              (set session.prompt-update-dirty true)
-              (let [now (now-ms)
-                    quiet-for (- now (or session.prompt-last-change-ms 0))
-                    need-quiet (math.max 0 (prompt-update-delay-ms session))]
-                (if (< quiet-for need-quiet)
-                    (schedule-prompt-update! session (math.max 1 (- need-quiet quiet-for)))
-                    (schedule-prompt-update! session 0))))
-            ;; Keep selection/view stable even when no prompt filter is applied.
-            (when (not has-query)
-              (pcall session.meta.buf.render)
-              (restore-meta-view! session.meta session.source-view)
-              (pcall session.meta.refresh_statusline)
-              (pcall update-info-window session))))
-        (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms 120)))))
+      (let [token session.project-bootstrap-token]
+        (set session.project-bootstrap-pending true)
+        (vim.defer_fn
+          (fn []
+            (when (and session (= token session.project-bootstrap-token))
+              (set session.project-bootstrap-pending false))
+            (when (and session
+                       (= token session.project-bootstrap-token)
+                       session.project-mode
+                       session.prompt-buf
+                       (session-active? session)
+                       (not session.project-bootstrapped))
+              (let [has-query (prompt-has-active-query? session)]
+                (apply-source-set! session)
+                (set session.project-bootstrapped true)
+                ;; Avoid a bootstrap-triggered filter/view update for plain `:Meta!`
+                ;; with empty prompt; defer filtering until the user types.
+                (when has-query
+                  ;; If user typed while bootstrap was pending, force-path guards can
+                  ;; suppress the immediate refresh and leave results stale.
+                  ;; Drive the pending prompt apply directly through the trailing-edge
+                  ;; timer path so early keystrokes are always honored.
+                  (set session.prompt-update-dirty true)
+                  (let [now (now-ms)
+                        quiet-for (- now (or session.prompt-last-change-ms 0))
+                        need-quiet (math.max 0 (prompt-update-delay-ms session))]
+                    (if (< quiet-for need-quiet)
+                        (schedule-prompt-update! session (math.max 1 (- need-quiet quiet-for)))
+                        (schedule-prompt-update! session 0))))
+                ;; Keep selection/view stable even when no prompt filter is applied.
+                (when (not has-query)
+                  (pcall session.meta.buf.render)
+                  (restore-meta-view! session.meta session.source-view)
+                  (pcall session.meta.refresh_statusline)
+                  (pcall update-info-window session)))))
+          (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms 120))))))
 
   {:schedule-lazy-refresh! schedule-lazy-refresh!
    :apply-source-set! apply-source-set!

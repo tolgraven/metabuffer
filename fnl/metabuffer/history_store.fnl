@@ -15,12 +15,12 @@
   "Public API: M.push!."
   (when (and (= (type text) "string") (~= (vim.trim text) ""))
     ;; vim.g table values are copied on read; write back after mutation.
-    (local h (vim.deepcopy (M.list)))
-    (if (or (= (# h) 0) (~= (. h (# h)) text))
+    (let [h (vim.deepcopy (M.list))]
+      (when (or (= (# h) 0) (~= (. h (# h)) text))
         (table.insert h text))
-    (while (> (# h) (or max-items 100))
-      (table.remove h 1))
-    (set vim.g.metabuffer_prompt_history h)))
+      (while (> (# h) (or max-items 100))
+        (table.remove h 1))
+      (set vim.g.metabuffer_prompt_history h))))
 
 (fn M.entry
   [idx]

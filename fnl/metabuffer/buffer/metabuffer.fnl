@@ -49,15 +49,15 @@
 (fn M.new
   [nvim model]
   "Public API: M.new."
-  (local self (base.new nvim {:model model :name "meta" :default-opts M.default-opts}))
-  (set self.syntax-type "buffer")
-  (set self.indexbuf (ui.new nvim self "indexes"))
-  (set self.show-source-prefix false)
-  (set self.show-source-separators false)
-  (set self.source-hl-ns (vim.api.nvim_create_namespace "metabuffer_source"))
-  (set self.source-sep-ns (vim.api.nvim_create_namespace "metabuffer_source_separator"))
-  (set self.source-alt-ns (vim.api.nvim_create_namespace "metabuffer_source_alt"))
-  (set self.source-syntax-groups [])
+  (let [self (base.new nvim {:model model :name "meta" :default-opts M.default-opts})]
+    (set self.syntax-type "buffer")
+    (set self.indexbuf (ui.new nvim self "indexes"))
+    (set self.show-source-prefix false)
+    (set self.show-source-separators false)
+    (set self.source-hl-ns (vim.api.nvim_create_namespace "metabuffer_source"))
+    (set self.source-sep-ns (vim.api.nvim_create_namespace "metabuffer_source_separator"))
+    (set self.source-alt-ns (vim.api.nvim_create_namespace "metabuffer_source_alt"))
+    (set self.source-syntax-groups [])
 
   (fn self.model-valid?
   []
@@ -175,107 +175,107 @@
 
   (fn self.render
   []
-    (local win-views {})
-    (each [_ win (ipairs (vim.fn.win_findbuf self.buffer))]
-      (when (vim.api.nvim_win_is_valid win)
-        (set (. win-views win)
-             (vim.api.nvim_win_call win (fn [] (vim.fn.winsaveview))))))
-    (let [bo (. vim.bo self.buffer)]
-      (set (. bo :modifiable) true))
-    (local out [])
-    (local ranges [])
-    (each [_ idx (ipairs self.indices)]
-      (let [line (. self.content idx)]
-        (if (and self.show-source-prefix self.source-refs (. self.source-refs idx))
-            (let [ref (. self.source-refs idx)
-                  pfx (source-prefix ref)
-                  row (+ (# out) 1)]
-              (table.insert out (.. pfx.text line))
-              (table.insert ranges {:row row
-                                    :lnum-end pfx.lnum-end
-                                    :dir-start pfx.dir-start
-                                    :dir-end pfx.dir-end
-                                    :file-start pfx.file-start
-                                    :file-end pfx.file-end}))
-            (table.insert out line))))
-    (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
-    (vim.api.nvim_buf_clear_namespace self.buffer self.source-hl-ns 0 -1)
-    (vim.api.nvim_buf_clear_namespace self.buffer self.source-sep-ns 0 -1)
-    (vim.api.nvim_buf_clear_namespace self.buffer self.source-alt-ns 0 -1)
-    (when self.show-source-prefix
-      (each [_ r (ipairs ranges)]
-        (let [row0 (- r.row 1)]
-          (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns "MetaSourceLineNr" row0 0 r.lnum-end)
-          (when (> (- r.dir-end r.dir-start) 0)
-            (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns "MetaSourceDir" row0 r.dir-start r.dir-end))
-          (when (> (- r.file-end r.file-start) 0)
-            (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns "MetaSourceFile" row0 r.file-start r.file-end)))))
-    (when (and self.show-source-separators self.source-refs)
-      (let [n (# self.indices)]
-        (var alt false)
-        (var prev-path nil)
-        (for [i 1 n]
-          (let [idx (. self.indices i)
-                ref (and idx (. self.source-refs idx))
-                path (or (and ref ref.path) "")]
-            (when (= prev-path nil)
-              (set prev-path path))
-            (when (~= path prev-path)
-              (set alt (not alt))
-              (set prev-path path))
-            (when alt
-              (vim.api.nvim_buf_set_extmark
-                self.buffer
-                self.source-alt-ns
-                (- i 1)
-                0
-                {:end_row i
-                 :end_col 0
-                 :hl_group "MetaSourceAltBg"
-                 :hl_eol true
-                 ;; Keep this below syntax priority so syntax colors remain.
-                 :priority 1}))))
-        (for [i 1 (- n 1)]
-          (let [cur-idx (. self.indices i)
-                next-idx (. self.indices (+ i 1))
-                cur-ref (and cur-idx (. self.source-refs cur-idx))
-                next-ref (and next-idx (. self.source-refs next-idx))
-                cur-path (and cur-ref cur-ref.path)
-                next-path (and next-ref next-ref.path)]
-            (when (~= (or cur-path "") (or next-path ""))
-              (vim.api.nvim_buf_set_extmark
-                self.buffer
-                self.source-sep-ns
-                (- i 1)
-                0
-                {:end_row i
-                 :end_col 0
-                 :hl_group "MetaSourceBoundary"
-                 :hl_eol true
-                 :priority 120}))))))
-    (self.apply-source-syntax-regions)
-    (let [bo (. vim.bo self.buffer)]
-      (set (. bo :modifiable) false))
-    (each [win view (pairs win-views)]
-      (when (vim.api.nvim_win_is_valid win)
-        (vim.api.nvim_win_call win
-          (fn []
-            (pcall vim.fn.winrestview view)))))
-    (self.indexbuf.update))
+    (let [win-views {}
+          out []
+          ranges []]
+      (each [_ win (ipairs (vim.fn.win_findbuf self.buffer))]
+        (when (vim.api.nvim_win_is_valid win)
+          (set (. win-views win)
+               (vim.api.nvim_win_call win (fn [] (vim.fn.winsaveview))))))
+      (let [bo (. vim.bo self.buffer)]
+        (set (. bo :modifiable) true))
+      (each [_ idx (ipairs self.indices)]
+        (let [line (. self.content idx)]
+          (if (and self.show-source-prefix self.source-refs (. self.source-refs idx))
+              (let [ref (. self.source-refs idx)
+                    pfx (source-prefix ref)
+                    row (+ (# out) 1)]
+                (table.insert out (.. pfx.text line))
+                (table.insert ranges {:row row
+                                      :lnum-end pfx.lnum-end
+                                      :dir-start pfx.dir-start
+                                      :dir-end pfx.dir-end
+                                      :file-start pfx.file-start
+                                      :file-end pfx.file-end}))
+              (table.insert out line))))
+      (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
+      (vim.api.nvim_buf_clear_namespace self.buffer self.source-hl-ns 0 -1)
+      (vim.api.nvim_buf_clear_namespace self.buffer self.source-sep-ns 0 -1)
+      (vim.api.nvim_buf_clear_namespace self.buffer self.source-alt-ns 0 -1)
+      (when self.show-source-prefix
+        (each [_ r (ipairs ranges)]
+          (let [row0 (- r.row 1)]
+            (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns "MetaSourceLineNr" row0 0 r.lnum-end)
+            (when (> (- r.dir-end r.dir-start) 0)
+              (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns "MetaSourceDir" row0 r.dir-start r.dir-end))
+            (when (> (- r.file-end r.file-start) 0)
+              (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns "MetaSourceFile" row0 r.file-start r.file-end)))))
+      (when (and self.show-source-separators self.source-refs)
+        (let [n (# self.indices)]
+          (var alt false)
+          (var prev-path nil)
+          (for [i 1 n]
+            (let [idx (. self.indices i)
+                  ref (and idx (. self.source-refs idx))
+                  path (or (and ref ref.path) "")]
+              (when (= prev-path nil)
+                (set prev-path path))
+              (when (~= path prev-path)
+                (set alt (not alt))
+                (set prev-path path))
+              (when alt
+                (vim.api.nvim_buf_set_extmark
+                  self.buffer
+                  self.source-alt-ns
+                  (- i 1)
+                  0
+                  {:end_row i
+                   :end_col 0
+                   :hl_group "MetaSourceAltBg"
+                   :hl_eol true
+                   ;; Keep this below syntax priority so syntax colors remain.
+                   :priority 1}))))
+          (for [i 1 (- n 1)]
+            (let [cur-idx (. self.indices i)
+                  next-idx (. self.indices (+ i 1))
+                  cur-ref (and cur-idx (. self.source-refs cur-idx))
+                  next-ref (and next-idx (. self.source-refs next-idx))
+                  cur-path (and cur-ref cur-ref.path)
+                  next-path (and next-ref next-ref.path)]
+              (when (~= (or cur-path "") (or next-path ""))
+                (vim.api.nvim_buf_set_extmark
+                  self.buffer
+                  self.source-sep-ns
+                  (- i 1)
+                  0
+                  {:end_row i
+                   :end_col 0
+                   :hl_group "MetaSourceBoundary"
+                   :hl_eol true
+                   :priority 120}))))))
+      (self.apply-source-syntax-regions)
+      (let [bo (. vim.bo self.buffer)]
+        (set (. bo :modifiable) false))
+      (each [win view (pairs win-views)]
+        (when (vim.api.nvim_win_is_valid win)
+          (vim.api.nvim_win_call win
+            (fn []
+              (pcall vim.fn.winrestview view)))))
+      (self.indexbuf.update)))
 
   (fn self.push-visible-lines
   [visible]
     (when (self.model-valid?)
-      (local n (math.min (# visible) (# self.indices)))
-      (for [i 1 n]
-        (let [src (. self.indices i)
-              old (vim.api.nvim_buf_get_lines self.model (- src 1) src false)
-              old-line (. old 1)
-              new-line (. visible i)]
-          (when (~= old-line new-line)
-            (vim.api.nvim_buf_set_lines self.model (- src 1) src false [new-line])
-            (set (. self.content src) new-line))))))
+      (let [n (math.min (# visible) (# self.indices))]
+        (for [i 1 n]
+          (let [src (. self.indices i)
+                old (vim.api.nvim_buf_get_lines self.model (- src 1) src false)
+                old-line (. old 1)
+                new-line (. visible i)]
+            (when (~= old-line new-line)
+              (vim.api.nvim_buf_set_lines self.model (- src 1) src false [new-line])
+              (set (. self.content src) new-line)))))))
 
-  self)
+    self))
 
 M

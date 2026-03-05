@@ -5,12 +5,12 @@
 
 (fn mkpat
   [fmt esc q]
-  (local chars (vim.fn.split (or q "") "\\zs"))
-  (local out [])
-  (each [_ ch (ipairs chars)]
-    (local e (esc ch))
-    (table.insert out (string.format fmt e e)))
-  (table.concat out ""))
+  (let [chars (vim.fn.split (or q "") "\\zs")
+        out []]
+    (each [_ ch (ipairs chars)]
+      (let [e (esc ch)]
+        (table.insert out (string.format fmt e e))))
+    (table.concat out "")))
 
 (fn M.new
   []
@@ -20,15 +20,15 @@
      :get-highlight-pattern (fn [_ query] (mkpat "%s[^%s]\\{-}" base.escape-vim-patterns query))
      :filter
       (fn [_ query indices candidates ignorecase]
-        (local pat (mkpat "%s[^%s]*" vim.pesc query))
-        (local out [])
-        (each [_ idx (ipairs indices)]
-          (local line (. candidates idx))
-          (local line1 (if ignorecase (string.lower line) line))
-          (local pat1 (if ignorecase (string.lower pat) pat))
-          (local ok (pcall string.find line1 pat1))
-          (when (and ok (string.find line1 pat1))
-            (table.insert out idx)))
-        out)}))
+        (let [pat (mkpat "%s[^%s]*" vim.pesc query)
+              out []]
+          (each [_ idx (ipairs indices)]
+            (let [line (. candidates idx)
+                  line1 (if ignorecase (string.lower line) line)
+                  pat1 (if ignorecase (string.lower pat) pat)
+                  ok (pcall string.find line1 pat1)]
+              (when (and ok (string.find line1 pat1))
+                (table.insert out idx))))
+          out))}))
 
 M

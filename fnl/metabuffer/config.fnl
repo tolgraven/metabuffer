@@ -4,40 +4,40 @@
 (fn M.apply-router-defaults
   [router vim]
   "Public API: M.apply-router-defaults."
-  (local default-prompt-keymaps
-    [ [["n" "i"] "<CR>" "accept"]
-      ;; In insert mode, <Esc> should only leave insert mode.
-      ;; Cancel/close only from normal mode.
-      ["n" "<Esc>" "cancel"]
-      ["n" "<C-p>" "move-selection" -1]
-      ["n" "<C-n>" "move-selection" 1]
-      ["i" "<C-p>" "move-selection" -1]
-      ["i" "<C-n>" "move-selection" 1]
-      ["n" "<C-k>" "move-selection" -1]
-      ["n" "<C-j>" "move-selection" 1]
-      ["i" "<C-k>" "move-selection" -1]
-      ["i" "<C-j>" "move-selection" 1]
-      ["i" "<Up>" "history-or-move" 1]
-      ["i" "<Down>" "history-or-move" -1]
-      ["n" "<Up>" "history-or-move" 1]
-      ["n" "<Down>" "history-or-move" -1]
-      ;; Statusline keys: C^ (matcher), C_ (case), Cs (syntax)
-      [["n" "i"] "<C-^>" "switch-mode" "matcher"]
-      [["n" "i"] "<C-6>" "switch-mode" "matcher"]
-      [["n" "i"] "<C-_>" "switch-mode" "case"]
-      [["n" "i"] "<C-/>" "switch-mode" "case"]
-      [["n" "i"] "<C-?>" "switch-mode" "case"]
-      [["n" "i"] "<C-->" "switch-mode" "case"]
-      [["n" "i"] "<C-o>" "switch-mode" "case"]
-      [["n" "i"] "<C-s>" "switch-mode" "syntax"]
-      ["n" "<C-g>" "toggle-scan-option" "ignored"]
-      ["n" "<C-l>" "toggle-scan-option" "deps"]
-      [["n" "i"] "<C-d>" "scroll-main" "half-down"]
-      [["n" "i"] "<C-u>" "scroll-main" "half-up"]
-      [["n" "i"] "<C-f>" "scroll-main" "page-down"]
-      [["n" "i"] "<C-b>" "scroll-main" "page-up"]
-      ;; keep project toggle available without conflicting with scroll/page keys
-      [["n" "i"] "<C-t>" "toggle-project-mode"]])
+  (let [default-prompt-keymaps
+        [ [["n" "i"] "<CR>" "accept"]
+          ;; In insert mode, <Esc> should only leave insert mode.
+          ;; Cancel/close only from normal mode.
+          ["n" "<Esc>" "cancel"]
+          ["n" "<C-p>" "move-selection" -1]
+          ["n" "<C-n>" "move-selection" 1]
+          ["i" "<C-p>" "move-selection" -1]
+          ["i" "<C-n>" "move-selection" 1]
+          ["n" "<C-k>" "move-selection" -1]
+          ["n" "<C-j>" "move-selection" 1]
+          ["i" "<C-k>" "move-selection" -1]
+          ["i" "<C-j>" "move-selection" 1]
+          ["i" "<Up>" "history-or-move" 1]
+          ["i" "<Down>" "history-or-move" -1]
+          ["n" "<Up>" "history-or-move" 1]
+          ["n" "<Down>" "history-or-move" -1]
+          ;; Statusline keys: C^ (matcher), C_ (case), Cs (syntax)
+          [["n" "i"] "<C-^>" "switch-mode" "matcher"]
+          [["n" "i"] "<C-6>" "switch-mode" "matcher"]
+          [["n" "i"] "<C-_>" "switch-mode" "case"]
+          [["n" "i"] "<C-/>" "switch-mode" "case"]
+          [["n" "i"] "<C-?>" "switch-mode" "case"]
+          [["n" "i"] "<C-->" "switch-mode" "case"]
+          [["n" "i"] "<C-o>" "switch-mode" "case"]
+          [["n" "i"] "<C-s>" "switch-mode" "syntax"]
+          ["n" "<C-g>" "toggle-scan-option" "ignored"]
+          ["n" "<C-l>" "toggle-scan-option" "deps"]
+          [["n" "i"] "<C-d>" "scroll-main" "half-down"]
+          [["n" "i"] "<C-u>" "scroll-main" "half-up"]
+          [["n" "i"] "<C-f>" "scroll-main" "page-down"]
+          [["n" "i"] "<C-b>" "scroll-main" "page-up"]
+          ;; keep project toggle available without conflicting with scroll/page keys
+          [["n" "i"] "<C-t>" "toggle-project-mode"]]]
   (set router.history-max 100)
   (set router.project-max-file-bytes (or vim.g.meta_project_max_file_bytes (* 1024 1024)))
   (set router.project-max-total-lines (or vim.g.meta_project_max_total_lines 200000))
@@ -97,6 +97,6 @@
      ".next" true
      ".nuxt" true
      ".yarn" true
-     ".pnpm-store" true}))
+     ".pnpm-store" true})))
 
 M

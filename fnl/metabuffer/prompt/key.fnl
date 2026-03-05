@@ -93,12 +93,12 @@
 (fn M.parse
   [_ expr]
   "Public API: M.parse."
-  (local k (normalize expr))
-  (if (. cache k)
-      (. cache k)
-      (let [char (M.represent nil k)
-            obj {:code k :char char}]
-        (set (. cache k) obj)
-        obj)))
+  (let [k (normalize expr)]
+    (if (. cache k)
+        (. cache k)
+        (let [char (M.represent nil k)
+              obj {:code k :char char}]
+          (set (. cache k) obj)
+          obj))))
 
 M

@@ -17,13 +17,13 @@
 (fn M.assign-content
   [buf lines]
   "Public API: M.assign-content."
-  (local view (vim.fn.winsaveview))
-  (let [bo (. vim.bo buf)]
-    (set (. bo :modifiable) true))
-  (vim.api.nvim_buf_set_lines buf 0 -1 false lines)
-  (let [bo (. vim.bo buf)]
-    (set (. bo :modifiable) false))
-  (vim.fn.winrestview view))
+  (let [view (vim.fn.winsaveview)]
+    (let [bo (. vim.bo buf)]
+      (set (. bo :modifiable) true))
+    (vim.api.nvim_buf_set_lines buf 0 -1 false lines)
+    (let [bo (. vim.bo buf)]
+      (set (. bo :modifiable) false))
+    (vim.fn.winrestview view)))
 
 (fn M.escape-vim-pattern
   [text]

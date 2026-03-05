@@ -12,16 +12,16 @@
 
 (fn parse_flags
   [flags]
-  (local out {:noremap false :nowait false :expr false})
-  (each [_ flag (ipairs (vim.split (or flags "") " " {:trimempty true}))]
-    (if (= flag "noremap")
-        (set out.noremap true)
-        (if (= flag "nowait")
-            (set out.nowait true)
-            (if (= flag "expr")
-                (set out.expr true)
-                (error (.. "Unknown flag \"" flag "\" has specified."))))))
-  out)
+  (let [out {:noremap false :nowait false :expr false}]
+    (each [_ flag (ipairs (vim.split (or flags "") " " {:trimempty true}))]
+      (if (= flag "noremap")
+          (set out.noremap true)
+          (if (= flag "nowait")
+              (set out.nowait true)
+              (if (= flag "expr")
+                  (set out.expr true)
+                  (error (.. "Unknown flag \"" flag "\" has specified."))))))
+    out))
 
 (fn parse_definition
   [nvim rule]
@@ -50,7 +50,7 @@
 (fn M.new
   []
   "Public API: M.new."
-  (local self {:registry {}})
+  (let [self {:registry {}}]
 
   (fn self.clear
   []
@@ -71,38 +71,38 @@
 
   (fn self.filter
   [lhs]
-    (local out [])
-    (local probe (tostring lhs))
-    (each [_ def (pairs self.registry)]
-      (when (vim.startswith (tostring def.lhs) probe)
-        (table.insert out def)))
-    (table.sort out (fn [a b] (< (tostring a.lhs) (tostring b.lhs))))
-    out)
+    (let [out []
+          probe (tostring lhs)]
+      (each [_ def (pairs self.registry)]
+        (when (vim.startswith (tostring def.lhs) probe)
+          (table.insert out def)))
+      (table.sort out (fn [a b] (< (tostring a.lhs) (tostring b.lhs))))
+      out))
 
   (fn self._resolve
   [nvim definition]
-    (local rhs (if definition.expr
-                   (ks_mod.parse nvim (vim.fn.eval definition.rhs))
-                   definition.rhs))
-    (if definition.noremap rhs (self.resolve nvim rhs true)))
+    (let [rhs (if definition.expr
+                  (ks_mod.parse nvim (vim.fn.eval definition.rhs))
+                  definition.rhs)]
+      (if definition.noremap rhs (self.resolve nvim rhs true))))
 
   (fn self.resolve
   [nvim lhs nowait]
-    (local candidates (self.filter lhs))
-    (local n (# candidates))
-    (if (= n 0)
-        lhs
-        (if (= n 1)
-            (let [d (. candidates 1)]
-              (when (= (tostring d.lhs) (tostring lhs))
-                (self._resolve nvim d)))
-            (if nowait
-                (let [d (. candidates 1)]
-                  (when (= (tostring d.lhs) (tostring lhs))
-                    (self._resolve nvim d)))
-                (let [d (. candidates 1)]
-                  (when (and d.nowait (= (tostring d.lhs) (tostring lhs)))
-                    (self._resolve nvim d)))))))
+    (let [candidates (self.filter lhs)
+          n (# candidates)]
+      (if (= n 0)
+          lhs
+          (if (= n 1)
+              (let [d (. candidates 1)]
+                (when (= (tostring d.lhs) (tostring lhs))
+                  (self._resolve nvim d)))
+              (if nowait
+                  (let [d (. candidates 1)]
+                    (when (= (tostring d.lhs) (tostring lhs))
+                      (self._resolve nvim d)))
+                  (let [d (. candidates 1)]
+                    (when (and d.nowait (= (tostring d.lhs) (tostring lhs)))
+                      (self._resolve nvim d))))))))
 
   (fn self.harvest
   [nvim timeoutlen callback interval]
@@ -113,34 +113,34 @@
       (set previous (if previous
                         (ks_mod.concat previous [k])
                         (ks_mod.parse nvim [k])))
-      (local ks (self.resolve nvim previous false))
-      (when ks
-        (set resolved ks)))
+      (let [ks (self.resolve nvim previous false)]
+        (when ks
+          (set resolved ks))))
     (while (not resolved)
-      (local code (_getcode timeoutlen callback interval))
-      (if (= code nil)
-          (when previous
-            (set resolved (or (self.resolve nvim previous true) previous)))
-          (let [chunk (if (= (type code) "string")
-                          (if (string.find code "\128" 1 true)
-                              ;; Internal keycode bytes (e.g. <80>kP) must be parsed as one key.
-                              [(key_mod.parse nvim code)]
-                              (ks_mod.parse nvim code))
-                          [(key_mod.parse nvim code)])]
-            (each [_ k (ipairs chunk)]
-              (when (not resolved)
-                (feed-key k))))))
+      (let [code (_getcode timeoutlen callback interval)]
+        (if (= code nil)
+            (when previous
+              (set resolved (or (self.resolve nvim previous true) previous)))
+            (let [chunk (if (= (type code) "string")
+                            (if (string.find code "\128" 1 true)
+                                ;; Internal keycode bytes (e.g. <80>kP) must be parsed as one key.
+                                [(key_mod.parse nvim code)]
+                                (ks_mod.parse nvim code))
+                            [(key_mod.parse nvim code)])]
+              (each [_ k (ipairs chunk)]
+                (when (not resolved)
+                  (feed-key k)))))))
     (debug-log (.. "[keymap] resolved=" (tostring resolved)))
     resolved)
 
-  self)
+  self))
 
 (fn M.from_rules
   [nvim rules]
   "Public API: M.from_rules."
-  (local km (M.new))
-  (km.register_from_rules nvim rules)
-  km)
+  (let [km (M.new)]
+    (km.register_from_rules nvim rules)
+    km))
 
 (set M.DEFAULT_KEYMAP_RULES
   [ ["<C-B>" "<prompt:move_caret_to_head>" "noremap"]

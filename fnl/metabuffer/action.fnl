@@ -3,16 +3,16 @@
 
 (fn _sync-selected-from-cursor
   [meta]
-  (local max (# meta.buf.indices))
-  (if (<= max 0)
-      (set meta.selected_index 0)
-      (let [c (vim.api.nvim_win_get_cursor 0)
-            row (. c 1)
-            col (. c 2)
-            clamped (math.max 1 (math.min row max))]
-        (when (~= row clamped)
-          (vim.api.nvim_win_set_cursor 0 [clamped col]))
-        (set meta.selected_index (- clamped 1)))))
+  (let [max (# meta.buf.indices)]
+    (if (<= max 0)
+        (set meta.selected_index 0)
+        (let [c (vim.api.nvim_win_get_cursor 0)
+              row (. c 1)
+              col (. c 2)
+              clamped (math.max 1 (math.min row max))]
+          (when (~= row clamped)
+            (vim.api.nvim_win_set_cursor 0 [clamped col]))
+          (set meta.selected_index (- clamped 1))))))
 
 (fn _change-line
   [meta offset]
