@@ -100,15 +100,29 @@
                 stop (math.min total (+ start cap -1))]
             [start stop]))))
 
+(fn lnum-width-from-max-len [max-len]
+  (math.max 2 (# (tostring (math.max 1 (or max-len 1))))))
+
+(fn lnum-cell [lnum width]
+  (let [s (tostring lnum)]
+    (.. (string.rep " " (math.max 0 (- width (# s)))) s " ")))
+
+(fn numeric-max [vals default]
+  (if (or (not vals) (= (# vals) 0))
+      default
+      (let [m (or (. vals 1) default)]
+        (var out m)
+        (each [_ v (ipairs vals)]
+          (when (> v out)
+            (set out v)))
+        out)))
+
 (fn M.new [opts]
   (local floating-window-mod (. opts :floating-window-mod))
   (local info-min-width (. opts :info-min-width))
   (local info-max-width (. opts :info-max-width))
   (local info-max-lines (. opts :info-max-lines))
   (local info-height (. opts :info-height))
-  (local numeric-max (. opts :numeric-max))
-  (local lnum-width-from-max-len (. opts :lnum-width-from-max-len))
-  (local lnum-cell (. opts :lnum-cell))
   (local debug-log (. opts :debug-log))
   (local update-preview (. opts :update-preview))
 

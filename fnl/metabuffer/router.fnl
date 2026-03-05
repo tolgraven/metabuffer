@@ -162,28 +162,6 @@
                      (set session.prompt-last-apply-ms now)
                      (apply-prompt-lines session)))))))))))
 
-(fn lnum-width-from-max-len [max-len]
-  (+ (math.max 2 (or max-len 1)) 1))
-
-(fn lnum-width-from-max-value [max-value]
-  (lnum-width-from-max-len (# (tostring (math.max 1 (or max-value 1))))))
-
-(fn lnum-cell [lnum width]
-  (.. (string.rep " " (math.max 0 (- width (+ (# lnum) 1))))
-      lnum
-      " "))
-
-(fn numeric-max [vals default]
-  (let [fallback (or default 0)]
-    (if (or (not vals) (= (# vals) 0))
-        fallback
-        (let [m0 (or (. vals 1) fallback)]
-          (var m m0)
-          (for [i 2 (# vals)]
-            (when (> (. vals i) m)
-              (set m (. vals i))))
-          m))))
-
 (set prompt-lines (fn [session]
   (if (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
       (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)
@@ -366,9 +344,6 @@
      :info-max-width M.info-max-width
      :info-max-lines M.info-max-lines
      :info-height info-height
-     :numeric-max numeric-max
-     :lnum-width-from-max-len lnum-width-from-max-len
-     :lnum-cell lnum-cell
      :debug-log debug-log
      :update-preview (fn [session]
                        (preview-window.maybe-update-for-selection! session))}))
