@@ -35,13 +35,20 @@
         (if (. term :regex)
             (let [[ok s _] [(pcall string.find line needle 1)]]
               (and ok s))
-        (if (. term :anchor-start)
-            (if (. term :anchor-end)
-                (= line needle)
-                (vim.startswith line needle))
-            (if (. term :anchor-end)
-                (vim.endswith line needle)
-                (not (not (string.find line needle 1 true)))))))))
+            (if (and (. term :negated)
+                     (not (. term :anchor-start))
+                     (not (. term :anchor-end))
+                     (not (. term :regex))
+                     (not (not (string.match needle "^[%w_]+$"))))
+                ;; Negation is more useful as a token exclusion than raw substring.
+                (not (not (string.find line (.. "%f[%w_]" needle "%f[^%w_]"))))
+                (if (. term :anchor-start)
+                    (if (. term :anchor-end)
+                        (= line needle)
+                        (vim.startswith line needle))
+                    (if (. term :anchor-end)
+                        (vim.endswith line needle)
+                        (not (not (string.find line needle 1 true))))))))))
 
 (fn term-highlight-pattern
   [term]
