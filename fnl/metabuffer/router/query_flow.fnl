@@ -101,9 +101,22 @@
       (let [raw-lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
         (let [parsed (query-mod.parse-query-lines raw-lines)
               lines (. parsed :lines)
+              consume-controls? (or (~= (. parsed :include-hidden) nil)
+                                    (~= (. parsed :include-ignored) nil)
+                                    (~= (. parsed :include-deps) nil)
+                                    (~= (. parsed :prefilter) nil)
+                                    (~= (. parsed :lazy) nil)
+                                    (. parsed :history)
+                                    (. parsed :saved-browser)
+                                    (and (= (type (. parsed :save-tag)) "string")
+                                         (~= (vim.trim (. parsed :save-tag)) ""))
+                                    (and (= (type (. parsed :saved-tag)) "string")
+                                         (~= (vim.trim (. parsed :saved-tag)) "")))
+              effective-lines (if consume-controls? lines raw-lines)
+              effective-text (table.concat effective-lines "\n")
               prompt-text (table.concat lines "\n")
               raw-text (table.concat raw-lines "\n")
-              stripped? (~= prompt-text raw-text)
+              stripped? (and consume-controls? (~= prompt-text raw-text))
               _ (when stripped?
                   (let [cursor (if (and session.prompt-win
                                         (vim.api.nvim_win_is_valid session.prompt-win))
@@ -111,9 +124,9 @@
                                    [1 0])
                         row (. cursor 1)
                         col (. cursor 2)]
-                    (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false lines)
+                    (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false effective-lines)
                     (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
-                      (let [line (or (. lines row) "")
+                      (let [line (or (. effective-lines row) "")
                             max-col (# line)]
                         (pcall vim.api.nvim_win_set_cursor session.prompt-win [row (math.min col max-col)])))))
               _ (when (and (. parsed :history) merge-history-into-session!)
@@ -145,8 +158,8 @@
           (set session.prefilter-mode next-prefilter)
           (set session.lazy-mode next-lazy)
           (set session.last-parsed-query parsed)
-          (set session.last-prompt-text prompt-text)
-          (set session.prompt-last-applied-text prompt-text)
+          (set session.last-prompt-text effective-text)
+          (set session.prompt-last-applied-text effective-text)
           (set session.meta.debug_out
             (if session.project-mode
                 (.. " ["
@@ -163,7 +176,7 @@
                 ""))
           (when (and session.project-mode changed)
             (project-source.apply-source-set! session))
-          (session.meta.set-query-lines (. parsed :lines)))
+          (session.meta.set-query-lines effective-lines))
         (let [[ok err] [(pcall session.meta.on-update 0)]]
           (if ok
               (do

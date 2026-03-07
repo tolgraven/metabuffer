@@ -8,7 +8,9 @@
   [token]
   (and (= (type token) "string")
        (~= token "")
-       (not (not (string.find token "[\\%[%]%(%)%+%*%?%|]")))))
+       (not (not (string.find token "[\\%[%]%(%)%+%*%?%|]")))
+       (let [[ok] [(pcall string.find "" token 1)]]
+         ok)))
 
 (fn parse-term
   [raw]
