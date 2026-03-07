@@ -13,6 +13,40 @@
 
   (fn parse-prefilter-terms
     [query-lines ignorecase]
+    (fn unclosed-pattern-delims?
+      [token]
+      (let [s (or token "")
+            n (# s)]
+        (var i 1)
+        (var paren 0)
+        (var bracket 0)
+        (while (<= i n)
+          (let [ch (string.sub s i i)]
+            (if (= ch "%")
+                (set i (+ i 2))
+                (do
+                  (if (= ch "(")
+                      (set paren (+ paren 1))
+                      (= ch ")")
+                      (set paren (math.max 0 (- paren 1))))
+                  (if (= ch "[")
+                      (set bracket (+ bracket 1))
+                      (= ch "]")
+                      (set bracket (math.max 0 (- bracket 1))))
+                  (set i (+ i 1))))))
+        (or (> paren 0) (> bracket 0))))
+
+    (fn regex-token?
+      [token]
+      (and (= (type token) "string")
+           (~= token "")
+           ;; keep single metachar tokens literal in all-mode/prefilter
+           (not (string.match token "^[%?%*%+%|%.]$"))
+           (not (unclosed-pattern-delims? token))
+           (not (not (string.find token "[\\%[%]%(%)%+%*%?%|%.]")))
+           (let [[ok] [(pcall vim.regex (.. "\\C" token))]]
+             ok)))
+
     (fn prefilter-safe-token
       [tok]
       (let [raw (or tok "")
@@ -38,9 +72,10 @@
                           (string.gsub "\\%$" "$"))]
         (if negated?
             nil
-            ;; Prefilter must not create false negatives. Skip regex-like terms:
-            ;; exact matcher will handle them later.
-            (if (not (not (string.find unescaped "[\\%[%]%(%)%+%*%?%|]")))
+            ;; Prefilter must not create false negatives. Skip only tokens that
+            ;; are true regex terms in all-mode; keep incomplete delimiter forms
+            ;; like "(let" as safe literals.
+            (if (regex-token? unescaped)
                 nil
                 (if (~= unescaped "") unescaped nil)))))
     (let [groups []]

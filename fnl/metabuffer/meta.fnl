@@ -114,6 +114,31 @@
                                    (not (vim.startswith prev-tok "\\!")))]
           (and same-token? unescaped-bang?)))))
 
+(fn unescaped-negated-token?
+  [tok]
+  (let [t (or tok "")]
+    (and (> (# t) 1)
+         (= (string.sub t 1 1) "!")
+         (not (vim.startswith t "\\!")))))
+
+(fn deletion-broadens?
+  [prev next]
+  (let [prev0 (or prev "")
+        next0 (or next "")]
+    (if (or (= next0 "")
+            (not (vim.startswith prev0 next0))
+            (>= (# next0) (# prev0)))
+        true
+        (let [prev-tok (or (last-token prev0) "")
+              next-tok (or (last-token next0) "")
+              same-token? (and (~= prev-tok "")
+                               (~= next-tok "")
+                               (vim.startswith prev-tok next-tok))
+              negation-shrink? (and same-token?
+                                    (unescaped-negated-token? prev-tok)
+                                    (unescaped-negated-token? next-tok))]
+          (not negation-shrink?)))))
+
 (fn M.new
   [nvim condition]
   "Construct Meta state and bind matcher/query/buffer runtime."
@@ -299,7 +324,11 @@
                              (> (# prev-text) 0)
                              (> (# self.text) (# prev-text))
                              (<= (# prev-hits) narrow-reuse-threshold))
-          reset? (and reset0? (not narrow-reuse?))]
+          shortened? (< (# self.text) (# prev-text))
+          reset? (and reset0?
+                      (not narrow-reuse?)
+                      (or (not shortened?)
+                          (deletion-broadens? prev-text self.text)))]
       (when cache-reset?
         (set self._filter-cache {})
         (set self._filter-cache-line-count line-count))
@@ -316,9 +345,10 @@
           (let [cached0 (. self._filter-cache cache-key)
                 cached-obj? (and (= (type cached0) "table")
                                  (= (type (. cached0 :indices)) "table"))
+                cached-full? (and cached-obj? (= (. cached0 :full) true))
                 cached (if cached-obj?
-                           (. cached0 :indices)
-                           (when (= (type cached0) "table") cached0))
+                           (when cached-full? (. cached0 :indices))
+                           nil)
                 cached-line-count0 (if cached-obj?
                                        (or (. cached0 :line-count) line-count)
                                        self._filter-cache-line-count)
@@ -344,15 +374,19 @@
                   ;; accidentally mutate cache entries by reference.
                   (set self.buf.indices (vim.deepcopy next))
                   (set (. self._filter-cache cache-key)
-                       {:indices (vim.deepcopy next) :line-count line-count})))
+                       {:indices (vim.deepcopy next)
+                        :line-count line-count
+                        :full true})))
                 (do
                   (var first reset?)
                   (each [_ q (ipairs queries)]
                     (self.buf.run-filter matcher q ignorecase first self.win.window)
                     (set first false))
-                  (set (. self._filter-cache cache-key)
-                       {:indices (vim.deepcopy self.buf.indices)
-                        :line-count line-count})))))
+                  (when reset?
+                    (set (. self._filter-cache cache-key)
+                         {:indices (vim.deepcopy self.buf.indices)
+                          :line-count line-count
+                          :full true}))))))
       (let [hits-changed (if (= prev-hits self.buf.indices)
                              false
                              (if (~= (# prev-hits) (# self.buf.indices))

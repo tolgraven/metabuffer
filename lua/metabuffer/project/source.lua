@@ -20,6 +20,42 @@ M.new = function(opts)
   local restore_meta_view_21 = opts["restore-meta-view!"]
   local update_info_window = opts["update-info-window"]
   local function parse_prefilter_terms(query_lines, ignorecase)
+    local function unclosed_pattern_delims_3f(token)
+      local s = (token or "")
+      local n = #s
+      local i = 1
+      local paren = 0
+      local bracket = 0
+      while (i <= n) do
+        local ch = string.sub(s, i, i)
+        if (ch == "%") then
+          i = (i + 2)
+        else
+          if (ch == "(") then
+            paren = (paren + 1)
+          elseif (ch == ")") then
+            paren = math.max(0, (paren - 1))
+          else
+          end
+          if (ch == "[") then
+            bracket = (bracket + 1)
+          elseif (ch == "]") then
+            bracket = math.max(0, (bracket - 1))
+          else
+          end
+          i = (i + 1)
+        end
+      end
+      return ((paren > 0) or (bracket > 0))
+    end
+    local function regex_token_3f(token)
+      local and_4_ = (type(token) == "string") and (token ~= "") and not string.match(token, "^[%?%*%+%|%.]$") and not unclosed_pattern_delims_3f(token) and not not string.find(token, "[\\%[%]%(%)%+%*%?%|%.]")
+      if and_4_ then
+        local ok = pcall(vim.regex, ("\\C" .. token))
+        and_4_ = ok
+      end
+      return and_4_
+    end
     local function prefilter_safe_token(tok)
       local raw = (tok or "")
       local escaped_neg_3f = vim.startswith(raw, "\\!")
@@ -50,7 +86,7 @@ M.new = function(opts)
       if negated_3f then
         return nil
       else
-        if not not string.find(unescaped, "[\\%[%]%(%)%+%*%?%|]") then
+        if regex_token_3f(unescaped) then
           return nil
         else
           if (unescaped ~= "") then
@@ -70,14 +106,14 @@ M.new = function(opts)
           local val_110_auto = prefilter_safe_token(tok)
           if val_110_auto then
             local needle = val_110_auto
-            local function _7_()
+            local function _12_()
               if ignorecase then
                 return string.lower(needle)
               else
                 return needle
               end
             end
-            table.insert(toks, _7_())
+            table.insert(toks, _12_())
           else
           end
         end
@@ -172,20 +208,20 @@ M.new = function(opts)
       match_idx = best_idx
     else
     end
-    local _20_
+    local _25_
     if match_idx then
-      _20_ = (match_idx - 1)
+      _25_ = (match_idx - 1)
     else
-      _20_ = fallback_idx
+      _25_ = fallback_idx
     end
-    return math.max(0, math.min(_20_, math.max(0, (#meta.buf.indices - 1))))
+    return math.max(0, math.min(_25_, math.max(0, (#meta.buf.indices - 1))))
   end
   local function schedule_lazy_refresh_21(session)
     if (session and session_active_3f(session) and not session.closing) then
       session["lazy-refresh-dirty"] = true
       if not session["lazy-refresh-pending"] then
         session["lazy-refresh-pending"] = true
-        local function _22_()
+        local function _27_()
           session["lazy-refresh-pending"] = false
           if (session and session_active_3f(session) and session["lazy-refresh-dirty"]) then
             session["lazy-refresh-dirty"] = false
@@ -198,7 +234,7 @@ M.new = function(opts)
             return nil
           end
         end
-        return vim.defer_fn(_22_, math.max(20, (settings["project-lazy-refresh-debounce-ms"] or 80)))
+        return vim.defer_fn(_27_, math.max(20, (settings["project-lazy-refresh-debounce-ms"] or 80)))
       else
         return nil
       end
@@ -292,13 +328,13 @@ M.new = function(opts)
     local refs = {}
     local total_lines = 0
     local push_line_21
-    local function _37_(path, lnum, line)
+    local function _42_(path, lnum, line)
       table.insert(content, line)
       table.insert(refs, {path = path, lnum = lnum, line = line})
       total_lines = (total_lines + 1)
       return nil
     end
-    push_line_21 = _37_
+    push_line_21 = _42_
     for i, line in ipairs((session["single-content"] or {})) do
       push_line_21((current_path or "[Current Buffer]"), i, line)
     end
@@ -476,7 +512,7 @@ M.new = function(opts)
       session["project-bootstrap-token"] = (1 + (session["project-bootstrap-token"] or 0))
       local token = session["project-bootstrap-token"]
       session["project-bootstrap-pending"] = true
-      local function _57_()
+      local function _62_()
         if (session and (token == session["project-bootstrap-token"])) then
           session["project-bootstrap-pending"] = false
         else
@@ -509,7 +545,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_57_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"] or 120)))
+      return vim.defer_fn(_62_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"] or 120)))
     else
       return nil
     end

@@ -127,6 +127,23 @@ local function negation_growth_broadens_3f(prev, next)
     return (same_token_3f and unescaped_bang_3f)
   end
 end
+local function unescaped_negated_token_3f(tok)
+  local t = (tok or "")
+  return ((#t > 1) and (string.sub(t, 1, 1) == "!") and not vim.startswith(t, "\\!"))
+end
+local function deletion_broadens_3f(prev, next)
+  local prev0 = (prev or "")
+  local next0 = (next or "")
+  if ((next0 == "") or not vim.startswith(prev0, next0) or (#next0 >= #prev0)) then
+    return true
+  else
+    local prev_tok = (last_token(prev0) or "")
+    local next_tok = (last_token(next0) or "")
+    local same_token_3f = ((prev_tok ~= "") and (next_tok ~= "") and vim.startswith(prev_tok, next_tok))
+    local negation_shrink_3f = (same_token_3f and unescaped_negated_token_3f(prev_tok) and unescaped_negated_token_3f(next_tok))
+    return not negation_shrink_3f
+  end
+end
 M.new = function(nvim, condition)
   local cond = (condition or state["default-condition"](""))
   local self = prompt_mod.new(nvim)
@@ -160,17 +177,17 @@ M.new = function(nvim, condition)
       return nil
     end
   end
-  local function _20_(idx)
-    local function _21_()
+  local function _21_(idx)
+    local function _22_()
       if (idx.current() == "meta") then
         return "meta"
       else
         return "buffer"
       end
     end
-    return self.buf["apply-syntax"](_21_())
+    return self.buf["apply-syntax"](_22_())
   end
-  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state.cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state["syntax-types"], (cond["syntax-index"] or 1), {["on-active"] = _20_})}
+  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state.cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state["syntax-types"], (cond["syntax-index"] or 1), {["on-active"] = _21_})}
   self.text = (cond.text or "")
   if (self.text ~= "") then
     self["query-lines"] = {self.text}
@@ -248,24 +265,24 @@ M.new = function(nvim, condition)
     return vim.cmd("redrawstatus")
   end
   self["on-init"] = function()
-    local function _28_()
+    local function _29_()
       if self["project-mode"] then
         return project_display_name()
       else
         return metabuffer_display_name(self.buf.model)
       end
     end
-    self.buf["set-name"](_28_())
+    self.buf["set-name"](_29_())
     do
       local init_syntax = (vim.g["meta#syntax_on_init"] or "buffer")
-      local function _29_()
+      local function _30_()
         if (init_syntax == "meta") then
           return "meta"
         else
           return "buffer"
         end
       end
-      self.buf["apply-syntax"](_29_())
+      self.buf["apply-syntax"](_30_())
     end
     clear_all_highlights()
     self.buf.render()
@@ -313,17 +330,18 @@ M.new = function(nvim, condition)
       local cache_shrank_3f = (line_count < self["_filter-cache-line-count"])
       local cache_reset_3f = cache_shrank_3f
       local cache_key
-      local _33_
+      local _34_
       if ignorecase then
-        _33_ = "1"
+        _34_ = "1"
       else
-        _33_ = "0"
+        _34_ = "0"
       end
-      cache_key = (matcher_name .. "|" .. _33_ .. "|" .. table.concat(queries, "\n"))
+      cache_key = (matcher_name .. "|" .. _34_ .. "|" .. table.concat(queries, "\n"))
       local reset0_3f = ((prev_text == "") or not vim.startswith(self.text, prev_text) or bang_token_completed_3f(prev_text, self.text) or cache_grew_3f or cache_reset_3f or (self["_prev-ignorecase"] ~= ignorecase) or (self["_prev-matcher"] ~= matcher_name))
       local narrow_reuse_threshold = (vim.g.meta_narrow_reuse_threshold or 400)
       local narrow_reuse_3f = (reset0_3f and (matcher_name == "all") and not negation_growth_broadens_3f(prev_text, self.text) and (#prev_text > 0) and (#self.text > #prev_text) and (#prev_hits <= narrow_reuse_threshold))
-      local reset_3f = (reset0_3f and not narrow_reuse_3f)
+      local shortened_3f = (#self.text < #prev_text)
+      local reset_3f = (reset0_3f and not narrow_reuse_3f and (not shortened_3f or deletion_broadens_3f(prev_text, self.text)))
       if cache_reset_3f then
         self["_filter-cache"] = {}
         self["_filter-cache-line-count"] = line_count
@@ -343,15 +361,16 @@ M.new = function(nvim, condition)
       else
         local cached0 = self["_filter-cache"][cache_key]
         local cached_obj_3f = ((type(cached0) == "table") and (type(cached0.indices) == "table"))
+        local cached_full_3f = (cached_obj_3f and (cached0.full == true))
         local cached
         if cached_obj_3f then
-          cached = cached0.indices
-        else
-          if (type(cached0) == "table") then
-            cached = cached0
+          if cached_full_3f then
+            cached = cached0.indices
           else
             cached = nil
           end
+        else
+          cached = nil
         end
         local cached_line_count0
         if cached_obj_3f then
@@ -380,14 +399,17 @@ M.new = function(nvim, condition)
           else
           end
           self.buf.indices = vim.deepcopy(next)
-          self["_filter-cache"][cache_key] = {indices = vim.deepcopy(next), ["line-count"] = line_count}
+          self["_filter-cache"][cache_key] = {indices = vim.deepcopy(next), ["line-count"] = line_count, full = true}
         else
           local first = reset_3f
           for _, q in ipairs(queries) do
             self.buf["run-filter"](matcher, q, ignorecase, first, self.win.window)
             first = false
           end
-          self["_filter-cache"][cache_key] = {indices = vim.deepcopy(self.buf.indices), ["line-count"] = line_count}
+          if reset_3f then
+            self["_filter-cache"][cache_key] = {indices = vim.deepcopy(self.buf.indices), ["line-count"] = line_count, full = true}
+          else
+          end
         end
       end
       local hits_changed
