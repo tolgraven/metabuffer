@@ -65,6 +65,53 @@ Runtime toggles while Meta is active:
 
 - `<C-b>` toggle repo-wide source mode (shows floating source info window on the right)
 
+## Prompt Niceties
+
+The default prompt supports shell/emacs-style editing and history shortcuts.
+
+Insert-mode edit keys:
+
+- `<C-a>` move to line start
+- `<C-e>` move to line end
+- `<C-u>` delete from line start to cursor
+- `<C-k>` delete from cursor to line end
+- `<C-y>` yank previously killed prompt text
+
+History insertion shorthands (insert + normal):
+
+- `!!` insert latest history entry at cursor
+- `!$` insert last token from latest history entry
+- `!^!` insert latest history entry except first token
+
+Token operators:
+
+- Leading `!` negates a token in `all` matcher mode
+- `^` and `$` anchors are supported per token
+- In insert mode, `<LocalLeader>1` and `<LocalLeader>!` toggle negation of the token at cursor
+- In the result window (normal mode), `!` appends `!<cword>` into the prompt
+
+History/searchback:
+
+- `<C-r>` opens floating history searchback browser
+- Typing in prompt filters browser items live
+- `<Up>/<Down>` move browser selection while open
+- `<CR>` applies selected history/saved entry into prompt
+- `<Esc>` closes browser first; pressing again closes Meta
+- Session history is isolated; merge persisted history explicitly with:
+  - prompt directive `#history` (consumed)
+  - `<LocalLeader>h`
+
+Saved prompts:
+
+- `#save:tag` saves current prompt text under `tag` (directive is consumed)
+- `##tag` restores saved prompt inline
+- `##` opens saved-prompt browser
+
+Persistence:
+
+- Prompt history and saved tags are persisted to:
+  - `stdpath("data")/metabuffer_prompt_history.json`
+
 ## Module Structure
 
 The port mirrors the original Python module breakdown:
