@@ -227,14 +227,24 @@
           cache-shrank? (< line-count self._filter-cache-line-count)
           cache-reset? cache-shrank?
           cache-key (.. matcher-name "|" (if ignorecase "1" "0") "|" (table.concat queries "\n"))
-          reset? (or (= prev-text "")
-                     (not (vim.startswith self.text prev-text))
-                     ;; When backing cache is stale and we cannot reuse a cached
-                     ;; query entry, recompute from full set to include new lines.
-                     cache-grew?
-                     cache-reset?
-                     (~= self._prev-ignorecase ignorecase)
-                     (~= self._prev-matcher matcher-name))]
+          reset0? (or (= prev-text "")
+                      (not (vim.startswith self.text prev-text))
+                      ;; When backing cache is stale and we cannot reuse a cached
+                      ;; query entry, recompute from full set to include new lines.
+                      cache-grew?
+                      cache-reset?
+                      (~= self._prev-ignorecase ignorecase)
+                      (~= self._prev-matcher matcher-name))
+          ;; Fast path for narrowing edits: if the current hit set is already
+          ;; small and the prompt grew, keep filtering only current hits.
+          ;; This avoids full re-scans on every keystroke while narrowing.
+          narrow-reuse-threshold (or vim.g.meta_narrow_reuse_threshold 400)
+          narrow-reuse? (and reset0?
+                             (= matcher-name "all")
+                             (> (# prev-text) 0)
+                             (> (# self.text) (# prev-text))
+                             (<= (# prev-hits) narrow-reuse-threshold))
+          reset? (and reset0? (not narrow-reuse?))]
       (when cache-reset?
         (set self._filter-cache {})
         (set self._filter-cache-line-count line-count))
