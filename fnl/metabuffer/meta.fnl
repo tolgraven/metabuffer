@@ -61,6 +61,59 @@
             ""))
       ""))
 
+(fn bang-token-completed?
+  [prev next]
+  (let [prev0 (or prev "")
+        next0 (or next "")
+        prev-n (# prev0)
+        next-n (# next0)]
+    (and (> prev-n 0)
+         (> next-n prev-n)
+         (vim.startswith next0 prev0)
+         (= (string.sub prev0 prev-n prev-n) "!")
+         (let [before (if (> prev-n 1)
+                          (string.sub prev0 (- prev-n 1) (- prev-n 1))
+                          "")]
+           (and (~= before "\\")
+                (or (= prev-n 1)
+                    (not (not (string.find before "%s"))))))
+         (let [added (string.sub next0 (+ prev-n 1) (+ prev-n 1))]
+           (not (not (string.find added "%S")))))))
+
+(fn ends-with-space?
+  [s]
+  (let [txt (or s "")
+        n (# txt)]
+    (and (> n 0)
+         (not (not (string.find (string.sub txt n n) "%s"))))))
+
+(fn last-token
+  [s]
+  (let [txt (or s "")
+        n (# txt)]
+    (if (or (= n 0) (ends-with-space? txt))
+        nil
+        (let [start (or (string.match txt ".*()%s%S+$") 1)]
+          (string.sub txt start)))))
+
+(fn negation-growth-broadens?
+  [prev next]
+  (let [prev0 (or prev "")
+        next0 (or next "")]
+    (if (or (= prev0 "")
+            (not (vim.startswith next0 prev0))
+            (<= (# next0) (# prev0))
+            (ends-with-space? prev0))
+        false
+        (let [prev-tok (or (last-token prev0) "")
+              next-tok (or (last-token next0) "")
+              same-token? (and (~= prev-tok "")
+                               (vim.startswith next-tok prev-tok))
+              unescaped-bang? (and (> (# prev-tok) 0)
+                                   (= (string.sub prev-tok 1 1) "!")
+                                   (not (vim.startswith prev-tok "\\!")))]
+          (and same-token? unescaped-bang?)))))
+
 (fn M.new
   [nvim condition]
   "Construct Meta state and bind matcher/query/buffer runtime."
@@ -227,14 +280,26 @@
           cache-shrank? (< line-count self._filter-cache-line-count)
           cache-reset? cache-shrank?
           cache-key (.. matcher-name "|" (if ignorecase "1" "0") "|" (table.concat queries "\n"))
-          reset? (or (= prev-text "")
-                     (not (vim.startswith self.text prev-text))
-                     ;; When backing cache is stale and we cannot reuse a cached
-                     ;; query entry, recompute from full set to include new lines.
-                     cache-grew?
-                     cache-reset?
-                     (~= self._prev-ignorecase ignorecase)
-                     (~= self._prev-matcher matcher-name))]
+          reset0? (or (= prev-text "")
+                      (not (vim.startswith self.text prev-text))
+                      (bang-token-completed? prev-text self.text)
+                      ;; When backing cache is stale and we cannot reuse a cached
+                      ;; query entry, recompute from full set to include new lines.
+                      cache-grew?
+                      cache-reset?
+                      (~= self._prev-ignorecase ignorecase)
+                      (~= self._prev-matcher matcher-name))
+          ;; Fast path for narrowing edits: if the current hit set is already
+          ;; small and the prompt grew, keep filtering only current hits.
+          ;; This avoids full re-scans on every keystroke while narrowing.
+          narrow-reuse-threshold (or vim.g.meta_narrow_reuse_threshold 400)
+          narrow-reuse? (and reset0?
+                             (= matcher-name "all")
+                             (not (negation-growth-broadens? prev-text self.text))
+                             (> (# prev-text) 0)
+                             (> (# self.text) (# prev-text))
+                             (<= (# prev-hits) narrow-reuse-threshold))
+          reset? (and reset0? (not narrow-reuse?))]
       (when cache-reset?
         (set self._filter-cache {})
         (set self._filter-cache-line-count line-count))

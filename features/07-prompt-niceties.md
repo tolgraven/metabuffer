@@ -1,16 +1,70 @@
-The main "all" filter mode should have some nice shortcuts.
-Mainly ! to negate a search (filter out) (this should also make the word highlight in red), but also other regex-like quick shortcuts (^, $)
-We also want a shortcut for the main results buffer (if moving into it from prompt) where you can exclude the symbol under cursor (use ! as well)
-In both insert and normal we also want some quick shell bindings such as !! (insert last prompt, so like <Up> but inline) and !$ for last token of last prompt (should then be cyclable with <Up>/<Down>)
+# 07 Prompt Niceties
 
-General highlighting of the input is also important. We'll do advanced regex highlighting later, for now just the basics.
+## Scope summary
 
-## Additions after implementation started
-- !^! - insert last prompt except first word
-- <LocalLeader>1 and <LocalLeader>! in insert - negate current prompt token (insert ! before, restore cursor pos)
-- We need a <C-r> searchback mode. This should use full highlighting for all previous displayed prompts, and utilize a floating window for them (make a new window type in window/ based on floating). Typing should stay in-prompt, but with the search filter text replaced by the selected prompt upon <CR>
-- Ensure previous prompts are persistently stored so can resume and search across sessions. But the current session should not be automatically polluted by other concurrent sessions - though we want a keybind and flag (`#history` -> merges prompt history and deletes itself)
-- Should be able to save prompts and later insert them. Syntax: `#save:tag`, then `##tag` to restore (`##` by itself should bring up history (based on how `<C-r>` functionality and code, but only showing saved tags and their prompts) and allow inline filtering of them)
-- Most `#flags` should do what's needed and then disappear. So `#+deps` would enable deps search and then disappear so doesn't pollute input.
-- Common regex stuff like `\w` and similar, groups etc, should automatically enable regex search _only for that token or group_. otherwise keeping normal mode. These should be highlighted by an underline in regex mode color.
-- We need to be able to lookback when negating. `!import when-not` and `when-not !import` should be equivalent.
+Implemented prompt usability additions include:
+
+- token negation (`!term`) with prompt highlighting
+- quick anchors (`^`, `$`) in `all` matcher
+- result-buffer `!` to append `!<cword>`
+- inline history shorthands (`!!`, `!$`, `!^!`)
+- commandline shorthand expansion in `:Meta[!]`, `:MetaResume`, `:MetaSync`
+- insert-mode shell/emacs edit keys (`<C-a>`, `<C-e>`, `<C-u>`, `<C-k>`, `<C-y>`)
+- insert-mode token negation toggles (`<LocalLeader>1`, `<LocalLeader>!`)
+- floating searchback browser (`<C-r>`) driven by prompt text
+- prompt history persistence and saved prompt tags
+- consumable prompt directives (`#history`, `#save:tag`, `##`, `##tag`, and scan flags)
+- per-token regex handling in `all` matcher with fallback to literal on invalid regex
+
+## Keybinds
+
+Default prompt keybind additions:
+
+- `!!`: insert latest prompt history entry
+- `!$`: insert latest history token
+- `!^!`: insert latest history entry without first token
+- `<C-a>`: line start
+- `<C-e>`: line end
+- `<C-u>`: kill backward to line start
+- `<C-k>`: kill forward to line end
+- `<C-y>`: yank killed text
+- `<LocalLeader>1`, `<LocalLeader>!`: toggle `!` on current token
+- `<C-r>`: open history searchback browser
+- `<LocalLeader>h`: merge persisted history into the current session history cache
+
+## Directives
+
+Control directives are consumed from query text once applied:
+
+- `#history`: merge persisted history into this session cache
+- `#save:tag`: save current prompt text under `tag`
+- `##tag`: restore saved prompt `tag`
+- `##`: open saved prompts browser
+- bare scan directives toggle current value:
+  - `#hidden`, `#ignored`, `#deps`, `#prefilter`, `#lazy`
+- explicit scan directives force value:
+  - `#+hidden` / `#-hidden`
+  - `#+ignored` / `#-ignored`
+  - `#+deps` / `#-deps`
+  - `#+prefilter` / `#-prefilter` (`#escape` / `#noprefilter` also disable)
+  - `#+lazy` / `#-lazy`
+
+## Behavior details
+
+- `<CR>` accepts selected hit, or applies selected history/saved-browser entry if browser is open.
+- `<Esc>` closes browser first (if open), then closes Meta on next cancel.
+- Commandline query shorthands are expanded before session startup:
+  - `:Meta !!`
+  - `:Meta !$`
+  - `:Meta !^!`
+- Session history remains local unless merged (`#history` / `<LocalLeader>h`).
+- Persistent storage file:
+  - `stdpath("data")/metabuffer_prompt_history.json`
+
+## Follow-up work
+
+Not implemented in this feature pass:
+
+- full regex treesitter prompt syntax coloring
+- `|`/`&` operator-specific prompt highlighting semantics
+- prompt `:s/` substitution execution mode

@@ -29,6 +29,13 @@
           ["n" "!!" "insert-last-prompt"]
           ["i" "!$" "insert-last-token"]
           ["n" "!$" "insert-last-token"]
+          ["i" "!^!" "insert-last-tail"]
+          ["n" "!^!" "insert-last-tail"]
+          ["i" "<LocalLeader>1" "negate-current-token"]
+          ["i" "<LocalLeader>!" "negate-current-token"]
+          ["n" "<LocalLeader>h" "merge-history"]
+          ["i" "<LocalLeader>h" "merge-history"]
+          ["i" "<C-r>" "history-searchback"]
           ;; Statusline keys: C^ (matcher), C_ (case), Cs (syntax)
           [["n" "i"] "<C-^>" "switch-mode" "matcher"]
           [["n" "i"] "<C-6>" "switch-mode" "matcher"]

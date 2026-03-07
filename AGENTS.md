@@ -60,18 +60,26 @@
 
 - If you rework compile tooling, keep compatibility with `plugin/metabuffer.lua` and `lua/` output paths.
 - If vendored `nfnl` is refreshed, verify no plain `nfnl.*` namespace imports remain.
-- This repository intentionally commits compiled Lua so users do not need nfnl at runtime.
+- This repository will later on commit compiled Lua so users do not need nfnl at runtime.
 
 ## Fennel code style
 
 - Mirror Clojure best practices as close as possible.
 - Function arguments always on separate line (unless entire thing oneliner).
-- Write (brief) docstrings for functions and keep them up to date. Include expected output.
+- Write (brief) docstrings for not immediately (from outside) self-descriptive functions and keep them up to date. Include expected output.
 - Beware of tendency to try to call locally defined functions globally (through vim dispatch), ensure no __fnl_global__ related errors by using vars in these instances. Forward declaration issue due to Lua transpilation.
 
 ## Self-improvement
 
 - When appropriate, update this file with new learnings, conventions, information, but make sure it is important enough, and ensure anything outdated is replaced rather than just countinously appending.
+- Always update docs when new functionality is added or changed. Both README and vim docs should be comprehensive.
+
+## Agent behavior
+
+- Never stop work unecessarily. User should never have to simply type "go", unless you make an optional (somewhat unlikely to be wanted) suggestion. Generally stop when there are multiple paths to take and user needs to choose. But if both can be implemented without issue and seem reasonable based on spec, simply implement them without asking.
+- Features in `features` should always result in feature branches in git. Commit each step when doing that, without asking. Don't push unless asked. Other work can be done straight on mainline, and then you should defer committing until told.
+- Try to avoid commands that need escalated permissions and hence user input (to confirm), since these disrupt work. Always see if there is an in-sandbox alternative.
+- Since you lack full access to `~/.local/state/nvim` you need to always use `/tmp` and set appropriate exports for such things when trying to test using a full neovim config/setup.
 
 ## Symbol Index
 

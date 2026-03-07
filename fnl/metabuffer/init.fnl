@@ -161,6 +161,7 @@
     (hi 0 "MetaSearchHitRegex" (hit-hl "Special" "Type"))
     (hi 0 "MetaPromptNeg" {:default true :link "ErrorMsg"})
     (hi 0 "MetaPromptAnchor" {:default true :link "SpecialChar"})
+    (hi 0 "MetaPromptRegex" {:default true :link "MetaSearchHitRegex" :underline true})
     (hi 0 "MetaSourceLineNr" {:default true :link "LineNr"})
     (hi 0 "MetaSourceDir" {:default true :link "Directory"})
     (hi 0 "MetaSourceBoundary" (thin-underline-from "Error"))

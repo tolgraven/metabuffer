@@ -6,6 +6,9 @@ CONTENTS\t\t\t\t*metabuffer-contents*
 INTRODUCTION\t\t\t|metabuffer-introduction|
 USAGE\t\t\t\t|metabuffer-usage|
 COMMANDS\t\t\t|metabuffer-commands|
+PROMPT KEYS\t\t\t|metabuffer-prompt-keys|
+PROMPT DIRECTIVES\t\t|metabuffer-prompt-directives|
+PROMPT BEHAVIOR\t\t|metabuffer-prompt-behavior|
 
 ==============================================================================
 INTRODUCTION\t\t\t\t*metabuffer-introduction*
@@ -40,5 +43,75 @@ COMMANDS\t\t\t\t*metabuffer-commands*
 \t\t\t\t\t*:MetaPush*
 :MetaPush
 \tPush edited visible metabuffer lines back to source line locations.
+
+==============================================================================
+PROMPT KEYS\t\t\t\t*metabuffer-prompt-keys*
+
+Default prompt mappings:
+
+Accept/cancel:
+\t<CR>\tAccept current selection, or apply selected history-browser item.
+\t<Esc>\tNormal mode: cancel. If history browser is open, closes browser first.
+
+Navigation:
+\t<C-p>, <C-n>, <C-j>, <C-k>\tMove selection
+\t<Up>, <Down>\t\t\tHistory browse or move selection
+
+Shell/history shorthands (insert + normal):
+\t!!\tInsert latest prompt history entry inline
+\t!$\tInsert last token from latest prompt history entry
+\t!^!\tInsert latest prompt history entry except first token
+
+Insert-mode editing:
+\t<C-a>\tMove cursor to line start
+\t<C-e>\tMove cursor to line end
+\t<C-u>\tKill from line start to cursor
+\t<C-k>\tKill from cursor to line end
+\t<C-y>\tYank killed prompt text
+
+Prompt token operators:
+\t<LocalLeader>1, <LocalLeader>!\tToggle leading ! on token under cursor
+\t<C-r>\t\t\t\tOpen floating history searchback
+\t<LocalLeader>h\t\t\tMerge persisted history into current session cache
+
+Main/results buffer:
+\t!\tAppend !<cword> to prompt query
+
+==============================================================================
+PROMPT DIRECTIVES\t\t\t*metabuffer-prompt-directives*
+
+Most directives are consumed from prompt text after applying:
+
+\t#history\tMerge persisted history into current session cache
+\t#save:tag\tSave current prompt under `tag`
+\t##tag\t\tRestore saved prompt `tag`
+\t##\t\tOpen saved-prompt browser
+\t#+deps\t\tEnable deps searching (consumed)
+\t#-deps\t\tDisable deps searching (consumed)
+\t#+hidden / #-hidden, #+ignored / #-ignored,
+\t#+prefilter / #-prefilter, #+lazy / #-lazy are also supported.
+
+==============================================================================
+PROMPT BEHAVIOR\t\t\t*metabuffer-prompt-behavior*
+
+- `all` matcher supports token negation via `!token`.
+- `^` and `$` anchors work per token.
+- Regex-like tokens (for example containing `(`, `[`, `\\w`, `+`, `*`, `?`, `|`)
+  are treated as regex for that token only when valid.
+- Invalid/incomplete regex tokens fall back to literal matching.
+- Negated plain word tokens prefer word-boundary exclusion.
+- Prompt highlights:
+\t- Negated token (`!word`) -> error-style highlight
+\t- Anchors (`^`, `$`) -> anchor highlight
+\t- Regex token -> regex highlight (underlined)
+
+- History browser behavior:
+\t- Typing stays in prompt; floating browser updates from prompt text
+\t- <CR> writes selected browser entry into prompt text
+\t- <Esc> closes browser first, then Meta on next cancel
+
+- Persistence:
+\t- Prompt history and saved tags are stored at:
+\t  `stdpath("data")/metabuffer_prompt_history.json`
 
 vim:tw=78:ts=8:noet:ft=help:norl:
