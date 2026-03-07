@@ -1,13 +1,6 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
-
-(fn lnum-width-from-max-len
-  [max-len]
-  (+ (math.max 2 (or max-len 1)) 1))
-
-(fn lnum-width-from-max-value
-  [max-value]
-  (lnum-width-from-max-len (# (tostring (math.max 1 (or max-value 1))))))
+(local lineno-mod (require :metabuffer.window.lineno))
 
 (fn trim-or-pad-lines
   [lines target]
@@ -43,9 +36,7 @@
       (pcall vim.api.nvim_set_option_value "relativenumber" false {:win win})
       (pcall vim.api.nvim_set_option_value "signcolumn" "no" {:win win})
       (pcall vim.api.nvim_set_option_value "foldcolumn" "0" {:win win})
-      (pcall vim.api.nvim_set_option_value "statuscolumn"
-             "%#LineNr#%=%{v:virtnum>0?'':printf('%*d ',get(b:,'meta_preview_lnum_width',3)-1,get(b:,'meta_preview_start_lnum',1)+v:lnum-1)}"
-             {:win win})
+      (pcall vim.api.nvim_set_option_value "statuscolumn" "" {:win win})
       (pcall vim.api.nvim_set_option_value "spell" false {:win win})
       (pcall vim.api.nvim_set_option_value "cursorline" true {:win win})
       ;; Match regular window palette in preview.
@@ -95,7 +86,7 @@
 
   (fn ensure-preview-window!
     [session]
-    (when (not (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win)))
+    (when-not (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
       (let [buf (vim.api.nvim_create_buf false true)
             p-row-col (vim.api.nvim_win_get_position session.prompt-win)
             p-row (. p-row-col 1)
@@ -199,14 +190,24 @@
       (pcall vim.api.nvim_win_set_buf session.preview-win session.preview-buf))
     (let [bo (. vim.bo session.preview-buf)]
       (set (. bo :modifiable) true))
-    (vim.api.nvim_buf_set_lines session.preview-buf 0 -1 false (. ctx :lines))
-    (let [b (. vim.b session.preview-buf)
-          start (or (. ctx :start-lnum) 1)
+    (let [start (or (. ctx :start-lnum) 1)
           stop (+ start (math.max 0 (- (# (. ctx :lines)) 1)))
-          width (lnum-width-from-max-value stop)]
-      (set (. b :meta_preview_start_lnum) start)
-      (set (. b :meta_preview_lnum_width) width)
-      (pcall vim.api.nvim_set_option_value "numberwidth" width {:win session.preview-win}))
+          digit-width (lineno-mod.digit-width-from-max-value stop)
+          field-width (+ digit-width 1)
+          rendered []
+          highlights []]
+      (each [i line (ipairs (. ctx :lines))]
+        (let [lnum-cell (lineno-mod.lnum-cell (+ start i -1) digit-width)
+              text (.. lnum-cell (or line ""))]
+          (table.insert rendered text)
+          (table.insert highlights [(- i 1) "LineNr" 0 (# lnum-cell)])))
+      (vim.api.nvim_buf_set_lines session.preview-buf 0 -1 false rendered)
+      (pcall vim.api.nvim_set_option_value "numberwidth" field-width {:win session.preview-win})
+      (let [ns (or session.preview-hl-ns (vim.api.nvim_create_namespace "metabuffer.preview"))]
+        (set session.preview-hl-ns ns)
+        (vim.api.nvim_buf_clear_namespace session.preview-buf ns 0 -1)
+        (each [_ h (ipairs highlights)]
+          (vim.api.nvim_buf_add_highlight session.preview-buf ns (. h 2) (. h 1) (. h 3) (. h 4)))))
     (let [bo (. vim.bo session.preview-buf)
           ft (. ctx :ft)]
       (set (. bo :modifiable) false)
