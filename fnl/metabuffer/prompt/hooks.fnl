@@ -71,10 +71,34 @@
         (fn [] (router.move-selection session.prompt-buf arg))
         (= action "history-or-move")
         (fn [] (router.history-or-move session.prompt-buf arg))
+        (= action "prompt-home")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.prompt-home session.prompt-buf))))
+        (= action "prompt-end")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.prompt-end session.prompt-buf))))
+        (= action "prompt-kill-backward")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.prompt-kill-backward session.prompt-buf))))
+        (= action "prompt-kill-forward")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.prompt-kill-forward session.prompt-buf))))
+        (= action "prompt-yank")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.prompt-yank session.prompt-buf))))
         (= action "insert-last-prompt")
-        (fn [] (router.insert-last-prompt session.prompt-buf))
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.insert-last-prompt session.prompt-buf))))
         (= action "insert-last-token")
-        (fn [] (router.insert-last-token session.prompt-buf))
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.insert-last-token session.prompt-buf))))
         (= action "switch-mode")
         (fn [] (switch-mode session arg))
         (= action "toggle-scan-option")
@@ -102,6 +126,35 @@
                 (vim.notify
                   (.. "metabuffer: unknown prompt keymap action '" (tostring action) "' for " (tostring lhs))
                   vim.log.levels.WARN))))))
+
+    (fn apply-emacs-insert-fallbacks
+  [router session]
+      (let [opts {:buffer session.prompt-buf :silent true :noremap true :nowait true}]
+        (vim.keymap.set "i" "<C-a>"
+          (fn [] (schedule-when-valid session
+                   (fn []
+                     (router.prompt-home session.prompt-buf))))
+          opts)
+        (vim.keymap.set "i" "<C-e>"
+          (fn [] (schedule-when-valid session
+                   (fn []
+                     (router.prompt-end session.prompt-buf))))
+          opts)
+        (vim.keymap.set "i" "<C-u>"
+          (fn [] (schedule-when-valid session
+                   (fn []
+                     (router.prompt-kill-backward session.prompt-buf))))
+          opts)
+        (vim.keymap.set "i" "<C-k>"
+          (fn [] (schedule-when-valid session
+                   (fn []
+                     (router.prompt-kill-forward session.prompt-buf))))
+          opts)
+        (vim.keymap.set "i" "<C-y>"
+          (fn [] (schedule-when-valid session
+                   (fn []
+                     (router.prompt-yank session.prompt-buf))))
+          opts)))
 
     (fn register!
   [router session]
@@ -143,7 +196,8 @@
                          session
                          (fn []
                            (disable-cmp session)
-                           (apply-keymaps router session))))})
+                           (apply-keymaps router session)
+                           (apply-emacs-insert-fallbacks router session))))})
       ;; Some statusline plugins or focus transitions (for example tmux pane
       ;; switches) can overwrite local statusline state. Re-apply ours when the
       ;; prompt window regains focus.
@@ -189,7 +243,8 @@
         (disable-cmp session)
         (mark-prompt-buffer! session.prompt-buf)
         (refresh-prompt-highlights! session)
-        (apply-keymaps router session)))
+        (apply-keymaps router session)
+        (apply-emacs-insert-fallbacks router session)))
 
     {:register! register!}))
 
