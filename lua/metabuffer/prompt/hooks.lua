@@ -483,10 +483,24 @@ M.new = function(opts)
       return schedule_when_valid(session, _91_)
     end
     vim.keymap.set("n", "<CR>", _90_, {buffer = session.meta.buf.buffer, silent = true, noremap = true, nowait = true})
-    local function _92_(_)
+    local function _92_()
+      local function _93_()
+        return router["insert-symbol-under-cursor"](session["prompt-buf"])
+      end
+      return schedule_when_valid(session, _93_)
+    end
+    vim.keymap.set("n", "<M-CR>", _92_, {buffer = session.meta.buf.buffer, silent = true, noremap = true, nowait = true})
+    local function _94_()
+      local function _95_()
+        return router["insert-symbol-under-cursor"](session["prompt-buf"])
+      end
+      return schedule_when_valid(session, _95_)
+    end
+    vim.keymap.set("n", "<A-CR>", _94_, {buffer = session.meta.buf.buffer, silent = true, noremap = true, nowait = true})
+    local function _96_(_)
       return schedule_scroll_sync_21(session)
     end
-    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _92_})
+    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _96_})
     disable_cmp(session)
     mark_prompt_buffer_21(session["prompt-buf"])
     refresh_prompt_highlights_21(session)

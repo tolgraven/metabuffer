@@ -361,6 +361,18 @@
               (fn []
                 (router.accept-main session.prompt-buf))))
           {:buffer session.meta.buf.buffer :silent true :noremap true :nowait true})
+        (vim.keymap.set "n" "<M-CR>"
+          (fn []
+            (schedule-when-valid session
+              (fn []
+                (router.insert-symbol-under-cursor session.prompt-buf))))
+          {:buffer session.meta.buf.buffer :silent true :noremap true :nowait true})
+        (vim.keymap.set "n" "<A-CR>"
+          (fn []
+            (schedule-when-valid session
+              (fn []
+                (router.insert-symbol-under-cursor session.prompt-buf))))
+          {:buffer session.meta.buf.buffer :silent true :noremap true :nowait true})
         (vim.api.nvim_create_autocmd "WinScrolled"
           {:group aug
            :callback (fn [_]

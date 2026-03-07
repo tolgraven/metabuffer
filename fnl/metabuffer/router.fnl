@@ -807,6 +807,27 @@
                 next (.. current sep token)]
             (router_util_mod.set-prompt-text! session next)))))))
 
+(fn M.insert-symbol-under-cursor
+  [prompt-buf]
+  "Append <cword> into prompt query."
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when session
+      (let [word (vim.api.nvim_win_call
+                   session.meta.win.window
+                   (fn [] (vim.fn.expand "<cword>")))
+            token (if (and (= (type word) "string") (~= (vim.trim word) ""))
+                      word
+                      "")]
+        (when (~= token "")
+          (let [current (router_util_mod.prompt-text session)
+                sep (if (or (= current "")
+                            (vim.endswith current " ")
+                            (vim.endswith current "\n"))
+                        ""
+                        " ")
+                next (.. current sep token)]
+            (router_util_mod.set-prompt-text! session next)))))))
+
 (fn M.toggle-scan-option
   [prompt-buf which]
   "Toggle include-hidden/include-ignored/include-deps scan flags."
