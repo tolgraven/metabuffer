@@ -4,8 +4,8 @@
 (local M {})
 
 (fn choose-current-when-nil
-  [value current]
-  (if-some [v value] v current))
+  [query-mod value current]
+  (query-mod.resolve-option value current))
 
 (fn prompt-delay-ms
   [settings query-mod session]
@@ -149,11 +149,11 @@
               _ (when (and (. parsed :saved-browser)
                            open-saved-browser!)
                   (open-saved-browser! session))
-              next-hidden (choose-current-when-nil (. parsed :include-hidden) session.include-hidden)
-              next-ignored (choose-current-when-nil (. parsed :include-ignored) session.include-ignored)
-              next-deps (choose-current-when-nil (. parsed :include-deps) session.include-deps)
-              next-prefilter (choose-current-when-nil (. parsed :prefilter) session.prefilter-mode)
-              next-lazy (choose-current-when-nil (. parsed :lazy) session.lazy-mode)
+              next-hidden (choose-current-when-nil query-mod (. parsed :include-hidden) session.include-hidden)
+              next-ignored (choose-current-when-nil query-mod (. parsed :include-ignored) session.include-ignored)
+              next-deps (choose-current-when-nil query-mod (. parsed :include-deps) session.include-deps)
+              next-prefilter (choose-current-when-nil query-mod (. parsed :prefilter) session.prefilter-mode)
+              next-lazy (choose-current-when-nil query-mod (. parsed :lazy) session.lazy-mode)
               changed (or (~= next-hidden session.effective-include-hidden)
                           (~= next-ignored session.effective-include-ignored)
                           (~= next-deps session.effective-include-deps)
@@ -171,17 +171,13 @@
           (set session.prompt-last-applied-text effective-text)
           (set session.meta.debug_out
             (if session.project-mode
-                (.. " ["
-                    (if session.effective-include-hidden "+hidden" "-hidden")
-                    " "
-                    (if session.effective-include-ignored "+ignored" "-ignored")
-                    " "
-                    (if session.effective-include-deps "+deps" "-deps")
-                    " "
-                    (if session.prefilter-mode "+prefilter" "-prefilter")
-                    " "
-                    (if session.lazy-mode "+lazy" "-lazy")
-                    "]")
+                (let [flags [(if session.effective-include-hidden "+hidden" "-hidden")
+                             (if session.effective-include-ignored "+ignored" "-ignored")
+                             (if session.effective-include-deps "+deps" "-deps")
+                             (if session.prefilter-mode "+prefilter" "-prefilter")]]
+                  (when-not session.lazy-mode
+                    (table.insert flags "-lazy"))
+                  (.. " [" (table.concat flags " ") "]"))
                 ""))
           (when changed
             (invalidate-filter-cache! session))

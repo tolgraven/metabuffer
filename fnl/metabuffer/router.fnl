@@ -822,21 +822,21 @@
   "Create a Meta session and wire prompt/result/project orchestration."
   (let [parsed-query (query_mod.parse-query-text query)
         query0 (. parsed-query :query)
-        start-hidden (if-some [v (. parsed-query :include-hidden)]
-                             v
-                             (query_mod.truthy? M.default-include-hidden))
-        start-ignored (if-some [v (. parsed-query :include-ignored)]
-                              v
-                              (query_mod.truthy? M.default-include-ignored))
-        start-deps (if-some [v (. parsed-query :include-deps)]
-                           v
-                           (query_mod.truthy? M.default-include-deps))
-        start-prefilter (if-some [v (. parsed-query :prefilter)]
-                                v
-                                (query_mod.truthy? M.project-lazy-prefilter-enabled))
-        start-lazy (if-some [v (. parsed-query :lazy)]
-                           v
-                           (query_mod.truthy? M.project-lazy-enabled))
+        start-hidden (query_mod.resolve-option
+                       (. parsed-query :include-hidden)
+                       (query_mod.truthy? M.default-include-hidden))
+        start-ignored (query_mod.resolve-option
+                        (. parsed-query :include-ignored)
+                        (query_mod.truthy? M.default-include-ignored))
+        start-deps (query_mod.resolve-option
+                     (. parsed-query :include-deps)
+                     (query_mod.truthy? M.default-include-deps))
+        start-prefilter (query_mod.resolve-option
+                          (. parsed-query :prefilter)
+                          (query_mod.truthy? M.project-lazy-prefilter-enabled))
+        start-lazy (query_mod.resolve-option
+                     (. parsed-query :lazy)
+                     (query_mod.truthy? M.project-lazy-enabled))
         query query0]
   (let [source-buf (vim.api.nvim_get_current_buf)]
     (when (. M.active-by-source source-buf)
