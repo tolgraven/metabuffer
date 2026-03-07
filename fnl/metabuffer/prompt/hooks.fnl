@@ -53,6 +53,12 @@
                             e0 e]
                         (when (and (> (# token) 1) (= (string.sub token 1 1) "!"))
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptNeg" r s0 e0))
+                        (let [core (if (and (> (# token) 1) (= (string.sub token 1 1) "!"))
+                                        (string.sub token 2)
+                                        token)]
+                          (when (and (> (# core) 0)
+                                     (not (not (string.find core "[\\%[%]%(%)%+%*%?%|]"))))
+                            (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptRegex" r s0 e0)))
                         (when (and (> (# token) 0) (= (string.sub token 1 1) "^"))
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r s0 (+ s0 1)))
                         (when (and (> (# token) 0) (= (string.sub token (# token)) "$"))
@@ -73,7 +79,13 @@
                     row0 (math.max 0 (- row 1))
                     line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf row0 (+ row0 1) false) 1) "")
                     left (if (> col 0) (string.sub line 1 col) "")
-                    trigger (if (and (>= col 2) (vim.endswith left "!!"))
+                    saved-tag (string.match left "##([%w_%-]+)$")
+                    saved-replacement (if saved-tag
+                                          (router.saved-prompt-entry saved-tag)
+                                          "")
+                    trigger (if (and (>= col 3) (vim.endswith left "!^!"))
+                                "!^!"
+                                (and (>= col 2) (vim.endswith left "!!"))
                                 "!!"
                                 (and (>= col 2) (vim.endswith left "!$"))
                                 "!$"
@@ -82,29 +94,44 @@
                                     (router.last-prompt-entry session.prompt-buf)
                                     (= trigger "!$")
                                     (router.last-prompt-token session.prompt-buf)
+                                    (= trigger "!^!")
+                                    (router.last-prompt-tail session.prompt-buf)
                                     "")]
-                (if (and trigger
-                         (= (type replacement) "string")
-                         (~= replacement ""))
+                (if (and trigger (= (type replacement) "string") (~= replacement ""))
                     (do
                       (set session._expanding-history-shorthand true)
-                      (vim.api.nvim_buf_set_text session.prompt-buf row0 (- col 2) row0 col [""])
-                      (pcall vim.api.nvim_win_set_cursor session.prompt-win [row (- col 2)])
+                      (let [start-col (- col (if (= trigger "!^!") 3 2))]
+                        (vim.api.nvim_buf_set_text session.prompt-buf row0 start-col row0 col [""])
+                        (pcall vim.api.nvim_win_set_cursor session.prompt-win [row start-col]))
                       (if (= trigger "!!")
                           (router.insert-last-prompt session.prompt-buf)
-                          (router.insert-last-token session.prompt-buf))
+                          (= trigger "!$")
+                          (router.insert-last-token session.prompt-buf)
+                          (router.insert-last-tail session.prompt-buf))
                       (set session._expanding-history-shorthand false)
                       true)
-                    false))
+                    (if (and saved-tag
+                             (= (type saved-replacement) "string")
+                             (~= saved-replacement ""))
+                        (do
+                          (set session._expanding-history-shorthand true)
+                          (let [tag-len (+ 2 (# saved-tag))
+                                start-col (- col tag-len)]
+                            (vim.api.nvim_buf_set_text session.prompt-buf row0 start-col row0 col [""])
+                            (pcall vim.api.nvim_win_set_cursor session.prompt-win [row start-col]))
+                          (router.prompt-insert-text session.prompt-buf saved-replacement)
+                          (set session._expanding-history-shorthand false)
+                          true)
+                        false)))
               false)))
 
     (fn resolve-map-action
   [router session action arg]
       (if
         (= action "accept")
-        (fn [] (router.finish "accept" session.prompt-buf))
+        (fn [] (router.accept session.prompt-buf))
         (= action "cancel")
-        (fn [] (router.finish "cancel" session.prompt-buf))
+        (fn [] (router.cancel session.prompt-buf))
         (= action "move-selection")
         (fn [] (router.move-selection session.prompt-buf arg))
         (= action "history-or-move")
@@ -137,6 +164,22 @@
         (fn [] (schedule-when-valid session
                  (fn []
                    (router.insert-last-token session.prompt-buf))))
+        (= action "insert-last-tail")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.insert-last-tail session.prompt-buf))))
+        (= action "negate-current-token")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.negate-current-token session.prompt-buf))))
+        (= action "history-searchback")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.open-history-searchback session.prompt-buf))))
+        (= action "merge-history")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.merge-history-cache session.prompt-buf))))
         (= action "switch-mode")
         (fn [] (switch-mode session arg))
         (= action "toggle-scan-option")
@@ -159,7 +202,8 @@
                 action (. r 3)
                 arg (. r 4)
                 opts (if (or (= action "insert-last-prompt")
-                             (= action "insert-last-token"))
+                             (= action "insert-last-token")
+                             (= action "insert-last-tail"))
                          (vim.tbl_extend "force" base-opts {:nowait false})
                          base-opts)
                 rhs (resolve-map-action router session action arg)]

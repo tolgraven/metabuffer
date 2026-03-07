@@ -23,16 +23,21 @@
 (fn parse-option-token
   [tok]
   (let [prefix (option-prefix)
-        hidden-on (or (= tok "#hidden") (= tok "+hidden") (= tok (.. prefix "hidden")))
-        hidden-off (or (= tok "#nohidden") (= tok "-hidden") (= tok (.. prefix "nohidden")))
-        ignored-on (or (= tok "#ignored") (= tok "+ignored") (= tok (.. prefix "ignored")))
-        ignored-off (or (= tok "#noignored") (= tok "-ignored") (= tok (.. prefix "noignored")))
-        deps-on (or (= tok "#deps") (= tok "+deps") (= tok (.. prefix "deps")))
-        deps-off (or (= tok "#nodeps") (= tok "-deps") (= tok (.. prefix "nodeps")))
-        prefilter-off (or (= tok "#escape") (= tok "+escape") (= tok (.. prefix "escape")) (= tok "#noprefilter") (= tok "-prefilter") (= tok (.. prefix "noprefilter")))
-        prefilter-on (or (= tok "#prefilter") (= tok "+prefilter") (= tok (.. prefix "prefilter")))
-        lazy-off (or (= tok "#nolazy") (= tok "-lazy") (= tok (.. prefix "nolazy")))
-        lazy-on (or (= tok "#lazy") (= tok "+lazy") (= tok (.. prefix "lazy")))]
+        hidden-on (or (= tok "#hidden") (= tok "+hidden") (= tok "#+hidden") (= tok (.. prefix "hidden")))
+        hidden-off (or (= tok "#nohidden") (= tok "-hidden") (= tok "#-hidden") (= tok (.. prefix "nohidden")))
+        ignored-on (or (= tok "#ignored") (= tok "+ignored") (= tok "#+ignored") (= tok (.. prefix "ignored")))
+        ignored-off (or (= tok "#noignored") (= tok "-ignored") (= tok "#-ignored") (= tok (.. prefix "noignored")))
+        deps-on (or (= tok "#deps") (= tok "+deps") (= tok "#+deps") (= tok (.. prefix "deps")))
+        deps-off (or (= tok "#nodeps") (= tok "-deps") (= tok "#-deps") (= tok (.. prefix "nodeps")))
+        prefilter-off (or (= tok "#escape") (= tok "+escape") (= tok "#+escape") (= tok (.. prefix "escape")) (= tok "#noprefilter") (= tok "-prefilter") (= tok "#-prefilter") (= tok (.. prefix "noprefilter")))
+        prefilter-on (or (= tok "#prefilter") (= tok "+prefilter") (= tok "#+prefilter") (= tok (.. prefix "prefilter")))
+        lazy-off (or (= tok "#nolazy") (= tok "-lazy") (= tok "#-lazy") (= tok (.. prefix "nolazy")))
+        lazy-on (or (= tok "#lazy") (= tok "+lazy") (= tok "#+lazy") (= tok (.. prefix "lazy")))
+        history-merge? (= tok "#history")
+        save-tag (or (string.match tok "^#save:(.+)$")
+                     (string.match tok (.. "^" (vim.pesc prefix) "save:(.+)$")))
+        saved-tag (string.match tok "^##(.+)$")
+        saved-browser? (= tok "##")]
     (cond
       hidden-on [:hidden true]
       hidden-off [:hidden false]
@@ -43,7 +48,11 @@
       prefilter-off [:prefilter false]
       prefilter-on [:prefilter true]
       lazy-off [:lazy false]
-      lazy-on [:lazy true])))
+      lazy-on [:lazy true]
+      history-merge? [:history true]
+      save-tag [:save-tag save-tag]
+      (and saved-tag (~= (vim.trim saved-tag) "")) [:saved-tag (vim.trim saved-tag)]
+      saved-browser? [:saved-browser true])))
 
 (fn assoc-option
   [acc k v]
@@ -90,7 +99,11 @@
               :ignored nil
               :deps nil
               :prefilter nil
-              :lazy nil}]
+              :lazy nil
+              :history nil
+              :save-tag nil
+              :saved-tag nil
+              :saved-browser nil}]
     (parse-lines (or lines []) 1 init)))
 
 (fn M.parse-query-text
@@ -104,13 +117,21 @@
        :include-ignored (. parsed :ignored)
        :include-deps (. parsed :deps)
        :prefilter (. parsed :prefilter)
-       :lazy (. parsed :lazy)})
+       :lazy (. parsed :lazy)
+       :history (. parsed :history)
+       :save-tag (. parsed :save-tag)
+       :saved-tag (. parsed :saved-tag)
+       :saved-browser (. parsed :saved-browser)})
     {:query query
      :include-hidden nil
      :include-ignored nil
      :include-deps nil
      :prefilter nil
-     :lazy nil}))
+     :lazy nil
+     :history nil
+     :save-tag nil
+     :saved-tag nil
+     :saved-browser nil}))
 
 (fn lines-has-active?
   [lines idx]

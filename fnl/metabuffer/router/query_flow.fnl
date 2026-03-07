@@ -91,20 +91,44 @@
   [deps session]
   (let [{: query-mod
          : project-source
-         : update-info-window}
+         : update-info-window
+         : merge-history-into-session!
+         : save-current-prompt-tag!
+         : restore-saved-prompt-tag!
+         : open-saved-browser!}
         deps]
     (when (and session (not session.closing) (vim.api.nvim_buf_is_valid session.prompt-buf))
-      (let [lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
-        (set session.last-prompt-text (table.concat lines "\n"))
-        (set session.prompt-last-applied-text session.last-prompt-text)
-        (let [parsed (if session.project-mode
-                         (query-mod.parse-query-lines lines)
-                         {:lines lines
-                          :include-hidden nil
-                          :include-ignored nil
-                          :include-deps nil
-                          :prefilter nil
-                          :lazy nil})
+      (let [raw-lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
+        (let [parsed (query-mod.parse-query-lines raw-lines)
+              lines (. parsed :lines)
+              prompt-text (table.concat lines "\n")
+              raw-text (table.concat raw-lines "\n")
+              stripped? (~= prompt-text raw-text)
+              _ (when stripped?
+                  (let [cursor (if (and session.prompt-win
+                                        (vim.api.nvim_win_is_valid session.prompt-win))
+                                   (vim.api.nvim_win_get_cursor session.prompt-win)
+                                   [1 0])
+                        row (. cursor 1)
+                        col (. cursor 2)]
+                    (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false lines)
+                    (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+                      (let [line (or (. lines row) "")
+                            max-col (# line)]
+                        (pcall vim.api.nvim_win_set_cursor session.prompt-win [row (math.min col max-col)])))))
+              _ (when (and (. parsed :history) merge-history-into-session!)
+                  (merge-history-into-session! session))
+              _ (when (and (= (type (. parsed :save-tag)) "string")
+                           (~= (vim.trim (. parsed :save-tag)) "")
+                           save-current-prompt-tag!)
+                  (save-current-prompt-tag! session (. parsed :save-tag) prompt-text))
+              _ (when (and (= (type (. parsed :saved-tag)) "string")
+                           (~= (vim.trim (. parsed :saved-tag)) "")
+                           restore-saved-prompt-tag!)
+                  (restore-saved-prompt-tag! session (. parsed :saved-tag)))
+              _ (when (and (. parsed :saved-browser)
+                           open-saved-browser!)
+                  (open-saved-browser! session))
               next-hidden (choose-current-when-nil (. parsed :include-hidden) session.include-hidden)
               next-ignored (choose-current-when-nil (. parsed :include-ignored) session.include-ignored)
               next-deps (choose-current-when-nil (. parsed :include-deps) session.include-deps)
@@ -121,6 +145,8 @@
           (set session.prefilter-mode next-prefilter)
           (set session.lazy-mode next-lazy)
           (set session.last-parsed-query parsed)
+          (set session.last-prompt-text prompt-text)
+          (set session.prompt-last-applied-text prompt-text)
           (set session.meta.debug_out
             (if session.project-mode
                 (.. " ["

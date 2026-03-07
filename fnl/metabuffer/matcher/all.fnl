@@ -4,6 +4,12 @@
 
 (local M {})
 
+(fn regex-token?
+  [token]
+  (and (= (type token) "string")
+       (~= token "")
+       (not (not (string.find token "[\\%[%]%(%)%+%*%?%|]")))))
+
 (fn parse-term
   [raw]
   (let [token (or raw "")
@@ -16,27 +22,33 @@
     {:negated negated
      :anchor-start anchor-start
      :anchor-end anchor-end
-     :needle body2}))
+     :needle body2
+     :regex (regex-token? body2)}))
 
 (fn term-match?
   [term line]
   (let [needle (or (. term :needle) "")]
     (if (= needle "")
         true
+        (if (. term :regex)
+            (let [[ok s _] [(pcall string.find line needle 1)]]
+              (and ok s))
         (if (. term :anchor-start)
             (if (. term :anchor-end)
                 (= line needle)
                 (vim.startswith line needle))
             (if (. term :anchor-end)
                 (vim.endswith line needle)
-                (not (not (string.find line needle 1 true))))))))
+                (not (not (string.find line needle 1 true)))))))))
 
 (fn term-highlight-pattern
   [term]
   (let [needle (or (. term :needle) "")]
     (if (= needle "")
         ""
-        (base.escape-vim-patterns needle))))
+        (if (. term :regex)
+            needle
+            (base.escape-vim-patterns needle)))))
 
 (fn M.new
   []
@@ -47,9 +59,9 @@
         (let [items []]
           (each [_ raw (ipairs (util.split-input query))]
             (let [term (parse-term raw)
-                  pat (term-highlight-pattern term)]
+              pat (term-highlight-pattern term)]
               (when (and (~= pat "") (not (. term :negated)))
-                (table.insert items {:group "MetaSearchHitAll"
+                (table.insert items {:group (if (. term :regex) "MetaSearchHitRegex" "MetaSearchHitAll")
                                      :pattern (.. "\\%(" pat "\\)")}))))
           items))
      :filter
