@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 {:base (require :metabuffer.matcher.base)
  :all (require :metabuffer.matcher.all)
  :fuzzy (require :metabuffer.matcher.fuzzy)

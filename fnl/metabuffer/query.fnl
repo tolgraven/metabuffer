@@ -1,4 +1,10 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let
+                 : if-let
+                 : when-some
+                 : if-some
+                 : when-not
+                 : cond}
+  :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
 (fn M.truthy?
@@ -8,10 +14,11 @@
 
 (fn option-prefix
   []
-  (let [p (. vim.g "meta#prefix")]
+  (if-let [p (. vim.g "meta#prefix")]
     (if (and (= (type p) "string") (~= p ""))
-        p
-        "#")))
+      p
+      "#")
+    "#"))
 
 (fn parse-option-token
   [tok]
@@ -26,87 +33,95 @@
         prefilter-on (or (= tok "#prefilter") (= tok "+prefilter") (= tok (.. prefix "prefilter")))
         lazy-off (or (= tok "#nolazy") (= tok "-lazy") (= tok (.. prefix "nolazy")))
         lazy-on (or (= tok "#lazy") (= tok "+lazy") (= tok (.. prefix "lazy")))]
-    (if hidden-on
-        [:hidden true]
-        (if hidden-off
-            [:hidden false]
-            (if ignored-on
-                [:ignored true]
-                (if ignored-off
-                    [:ignored false]
-                    (if deps-on
-                        [:deps true]
-                        (if deps-off
-                            [:deps false]
-                            (if prefilter-off
-                                [:prefilter false]
-                                (if prefilter-on
-                                    [:prefilter true]
-                                    (if lazy-off
-                                        [:lazy false]
-                                        (when lazy-on
-                                          [:lazy true]))))))))))))
+    (cond
+      hidden-on [:hidden true]
+      hidden-off [:hidden false]
+      ignored-on [:ignored true]
+      ignored-off [:ignored false]
+      deps-on [:deps true]
+      deps-off [:deps false]
+      prefilter-off [:prefilter false]
+      prefilter-on [:prefilter true]
+      lazy-off [:lazy false]
+      lazy-on [:lazy true])))
+
+(fn assoc-option
+  [acc k v]
+  (let [next (vim.deepcopy acc)]
+    (set (. next k) v)
+    next))
+
+(fn parse-parts
+  [parts idx state]
+  (if (> idx (# parts))
+    state
+    (let [tok (. parts idx)]
+      (if-let [parsed (parse-option-token tok)]
+        (parse-parts parts (+ idx 1) (assoc-option state (. parsed 1) (. parsed 2)))
+        (let [next (vim.deepcopy state)]
+          (table.insert (. next :keep) tok)
+          (parse-parts parts (+ idx 1) next))))))
+
+(fn parse-line
+  [acc line]
+  (let [trimmed (vim.trim (or line ""))]
+    (if (= trimmed "")
+      (let [next (vim.deepcopy acc)]
+        (table.insert (. next :lines) "")
+        next)
+      (let [parts (vim.split trimmed "%s+" {:trimempty true})
+            state (parse-parts parts 1 (assoc-option acc :keep []))
+            next (vim.deepcopy state)]
+        (table.insert (. next :lines) (table.concat (. state :keep) " "))
+        (set (. next :keep) nil)
+        next))))
+
+(fn parse-lines
+  [lines idx state]
+  (if (> idx (# lines))
+    state
+    (parse-lines lines (+ idx 1) (parse-line state (. lines idx)))))
 
 (fn M.parse-query-lines
   [lines]
   "Public API: M.parse-query-lines."
-  (var include-hidden nil)
-  (var include-ignored nil)
-  (var include-deps nil)
-  (var prefilter nil)
-  (var lazy nil)
-  (let [cleaned []]
-    (each [_ line (ipairs (or lines []))]
-      (let [trimmed (vim.trim (or line ""))]
-        (if (= trimmed "")
-            (table.insert cleaned "")
-            (let [parts (vim.split trimmed "%s+")
-                  keep []]
-              (each [_ tok (ipairs (or parts []))]
-                (let [parsed (parse-option-token tok)]
-                  (if parsed
-                      (let [k (. parsed 1)
-                            v (. parsed 2)]
-                        (if (= k :hidden)
-                            (set include-hidden v)
-                            (if (= k :ignored)
-                                (set include-ignored v)
-                                (if (= k :deps)
-                                    (set include-deps v)
-                                    (if (= k :prefilter)
-                                        (set prefilter v)
-                                        (when (= k :lazy)
-                                          (set lazy v)))))))
-                      (table.insert keep tok))))
-              (table.insert cleaned (table.concat keep " "))))))
-    {:lines cleaned
-     :include-hidden include-hidden
-     :include-ignored include-ignored
-     :include-deps include-deps
-     :prefilter prefilter
-     :lazy lazy}))
+  (let [init {:lines []
+              :hidden nil
+              :ignored nil
+              :deps nil
+              :prefilter nil
+              :lazy nil}]
+    (parse-lines (or lines []) 1 init)))
 
 (fn M.parse-query-text
   [query]
   "Public API: M.parse-query-text."
-  (if (not (and (= (type query) "string") (~= query "")))
-      {:query query :include-hidden nil :include-ignored nil :include-deps nil :prefilter nil :lazy nil}
-      (let [lines (vim.split query "\n" {:plain true})
-            parsed (M.parse-query-lines lines)]
-        {:query (table.concat (. parsed :lines) "\n")
-         :include-hidden (. parsed :include-hidden)
-         :include-ignored (. parsed :include-ignored)
-         :include-deps (. parsed :include-deps)
-         :prefilter (. parsed :prefilter)
-         :lazy (. parsed :lazy)})))
+  (if (and (= (type query) "string") (~= query ""))
+    (let [lines (vim.split query "\n" {:plain true})
+          parsed (M.parse-query-lines lines)]
+      {:query (table.concat (. parsed :lines) "\n")
+       :include-hidden (. parsed :hidden)
+       :include-ignored (. parsed :ignored)
+       :include-deps (. parsed :deps)
+       :prefilter (. parsed :prefilter)
+       :lazy (. parsed :lazy)})
+    {:query query
+     :include-hidden nil
+     :include-ignored nil
+     :include-deps nil
+     :prefilter nil
+     :lazy nil}))
+
+(fn lines-has-active?
+  [lines idx]
+  (if (> idx (# lines))
+    false
+    (or (~= (vim.trim (or (. lines idx) "")) "")
+        (lines-has-active? lines (+ idx 1)))))
 
 (fn M.query-lines-has-active?
   [lines]
   "Public API: M.query-lines-has-active?."
-  (var has false)
-  (each [_ line (ipairs (or lines []))]
-    (when (and (not has) (~= (vim.trim (or line "")) ""))
-      (set has true)))
-  has)
+  (lines-has-active? (or lines []) 1))
 
 M

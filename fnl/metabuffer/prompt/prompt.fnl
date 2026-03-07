@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local caret_mod (require :metabuffer.prompt.caret))
 (local history_mod (require :metabuffer.prompt.history))
 (local action_mod (require :metabuffer.prompt.action))
@@ -144,7 +144,7 @@
                                 (set status (or (self.on-keypress stroke) M.STATUS_PROGRESS))
                                 (debug-log (.. "[prompt] post-keypress status=" (tostring status)))
                                 (set status (or (self.on-update status) status))))))]]
-          (when (not ok)
+          (when-not ok
             (debug-log (.. "[prompt] error=" (tostring err)))
             (if (or (= err "Keyboard interrupt") (string.find (tostring err) "Keyboard interrupt"))
                 (set status M.STATUS_INTERRUPT)

@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local util (require :metabuffer.prompt.util))
 
 (local M {})
@@ -24,7 +24,7 @@
 
         (fn _instance.find
   [_ ch1 ch2]
-          (when (not _instance.registry)
+          (when-not _instance.registry
             (set _instance.registry (parse_digraph_output (vim.fn.execute "digraphs"))))
           (or (. _instance.registry (.. ch1 ch2))
               (. _instance.registry (.. ch2 ch1))

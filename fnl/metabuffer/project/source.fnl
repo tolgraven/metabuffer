@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
 (fn M.new
@@ -96,7 +96,7 @@
     [session]
     (when (and session (session-active? session) (not session.closing))
       (set session.lazy-refresh-dirty true)
-      (when (not session.lazy-refresh-pending)
+      (when-not session.lazy-refresh-pending
         (set session.lazy-refresh-pending true)
         (vim.defer_fn
           (fn []
@@ -377,7 +377,7 @@
                         (schedule-prompt-update! session (math.max 1 (- need-quiet quiet-for)))
                         (schedule-prompt-update! session 0))))
                 ;; Keep selection/view stable even when no prompt filter is applied.
-                (when (not has-query)
+                (when-not has-query
                   (pcall session.meta.buf.render)
                   (restore-meta-view! session.meta session.source-view)
                   (pcall session.meta.refresh_statusline)

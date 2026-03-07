@@ -81,5 +81,5 @@
 
 ## Feature files.
 
-- In the folder features/ we describe upcoming (branched) features in individual files. When told, and only then, use the relevant file as basis for feature implementation. Always check out a new branch for these, and make a PR at end.
+- In the folder features/ we describe upcoming (branched) features in individual files. When told, and only then, use the relevant file as basis for feature implementation. Always check out a new branch for these, commit each step individually, and make a PR (right away, but user will merge manually when finished). Don't push unless asked to.
 - The folder also has a running-todo.md describing minor fixes to be done, and then checked off (only when I say it works). Only work on them when told.

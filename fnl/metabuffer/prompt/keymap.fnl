@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local key_mod (require :metabuffer.prompt.key))
 (local ks_mod (require :metabuffer.prompt.keystroke))
 (local util (require :metabuffer.prompt.util))
@@ -128,7 +128,7 @@
                                 (ks_mod.parse nvim code))
                             [(key_mod.parse nvim code)])]
               (each [_ k (ipairs chunk)]
-                (when (not resolved)
+                (when-not resolved
                   (feed-key k)))))))
     (debug-log (.. "[keymap] resolved=" (tostring resolved)))
     resolved)

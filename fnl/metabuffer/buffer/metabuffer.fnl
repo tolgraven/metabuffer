@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local base (require :metabuffer.buffer.base))
 (local ui (require :metabuffer.buffer.ui))
 
@@ -108,7 +108,7 @@
                           synfiles (syntax-files-for-ft ft)
                           has-syntax (> (# synfiles) 0)]
                     (when has-syntax
-                      (when (not (. included cluster))
+                      (when-not (. included cluster)
                         ;; Most syntax files early-return when b:current_syntax
                         ;; is set; clear it before each include so mixed
                         ;; filetype blocks can all load.
@@ -130,7 +130,7 @@
                 (let [idx (. self.indices i)
                       ref (and idx (. self.source-refs idx))
                       ft (self.ref-filetype ref)]
-                  (when (not prev-ft)
+                  (when-not prev-ft
                     (set prev-ft ft))
                   (when (~= ft prev-ft)
                     (add-block start (- i 1) prev-ft)

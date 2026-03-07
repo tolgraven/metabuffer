@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local digraph_mod (require :metabuffer.prompt.digraph))
 (local util (require :metabuffer.prompt.util))
 
@@ -35,7 +35,8 @@
   [name fail_silently]
     (if (. self.registry name)
         (set (. self.registry name) nil)
-        (when (not fail_silently) (error name))))
+        (when-not fail_silently
+          (error name))))
 
   (fn self.register_from_rules
   [rules]

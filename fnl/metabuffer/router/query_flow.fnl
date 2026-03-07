@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local router_util_mod (require :metabuffer.router.util))
 (local router_prompt_mod (require :metabuffer.router.prompt))
 (local M {})
@@ -52,12 +52,12 @@
 (fn queue-update-after-edit!
   [settings prompt-scheduler-ctx session force txt now delay]
   (when (or (not session.project-mode) session.project-bootstrapped)
-    (when (not (and force session.prompt-update-pending))
+    (when-not (and force session.prompt-update-pending)
       (let [skip-identical? (and force
                                  (recent-identical-forced-refresh? settings session txt now))
             skip-active-input? (and force
                                     (force-blocked-by-active-input? settings session now))]
-        (when (not (or skip-identical? skip-active-input?))
+        (when-not (or skip-identical? skip-active-input?)
           (if (and force (force-within-idle-window? settings session now))
               (schedule-update!
                 prompt-scheduler-ctx
@@ -71,7 +71,7 @@
   (set session.last-prompt-text txt)
   (set session.prompt-update-dirty true)
   (set session.prompt-last-change-ms now)
-  (when (not force)
+  (when-not force
     (set session.prompt-force-block-until (+ now (math.max 0 delay))))
   (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
   (when (and session.project-mode
@@ -168,18 +168,18 @@
       (let [duplicate-event? (and (not force)
                                   event-tick
                                   (= event-tick (or session.prompt-last-event-tick -1)))]
-        (when (not duplicate-event?)
+        (when-not duplicate-event?
           (let [txt (router_util_mod.prompt-text session)
                 now (router_prompt_mod.now-ms)
                 delay (prompt-delay-ms settings query-mod session)]
             (when (and (not force) event-tick)
               (set session.prompt-last-event-tick event-tick))
-            (when (not (and force (< now (or session.prompt-force-block-until 0))))
+            (when-not (and force (< now (or session.prompt-force-block-until 0)))
               (let [duplicate-text? (and (not force)
                                          (= txt (or session.prompt-last-event-text "")))]
                 (when duplicate-text?
                   (apply-duplicate-text-event! prompt-scheduler-ctx session now delay))
-                (when (not duplicate-text?)
+                (when-not duplicate-text?
                   (apply-fresh-prompt-event!
                     query-mod
                     project-source

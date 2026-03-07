@@ -1,4 +1,10 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let
+                 : if-let
+                 : when-some
+                 : if-some
+                 : when-not
+                 : cond}
+  :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
 (fn M.prompt-height
@@ -75,7 +81,7 @@
 
 (fn M.ensure-source-refs!
   [meta]
-  (when (not meta.buf.source-refs)
+  (when-not meta.buf.source-refs
     (set meta.buf.source-refs []))
   (when (< (# meta.buf.source-refs) (# meta.buf.content))
     (let [path (or (M.current-buffer-path meta.buf.model) "[Current Buffer]")
@@ -95,33 +101,37 @@
 (fn hidden-path?
   [path]
   (let [parts (vim.split path "/" {:plain true})]
-    (var hidden false)
-    (each [_ p (ipairs parts)]
-      (when (and (~= p "") (vim.startswith p "."))
-        (set hidden true)))
-    hidden))
+    (let [step (fn step
+                 [idx]
+                 (if (> idx (# parts))
+                   false
+                   (let [p (. parts idx)]
+                     (or (and (~= p "")
+                              (= (string.sub p 1 1) "."))
+                         (step (+ idx 1))))))]
+      (step 1))))
 
 (fn dep-path?
   [settings path]
   (let [parts (vim.split path "/" {:plain true})]
-    (var dep false)
-    (each [_ p (ipairs parts)]
-      (when (. settings.dep-dir-names p)
-        (set dep true)))
-    dep))
+    (let [step (fn step
+                 [idx]
+                 (if (> idx (# parts))
+                   false
+                   (or (. settings.dep-dir-names (. parts idx))
+                       (step (+ idx 1)))))]
+      (step 1))))
 
 (fn M.allow-project-path?
   [settings rel include-hidden include-deps]
   (let [s (or rel "")]
-    (if (or (= s "") (= s "."))
-        false
-        (if (or (vim.startswith s ".git/") (string.find s "/.git/" 1 true))
-            false
-            (if (and (not include-hidden) (hidden-path? s))
-                false
-                (if (and (not include-deps) (dep-path? settings s))
-                    false
-                    true))))))
+    (cond
+      (or (= s "") (= s ".")) false
+      (or (vim.startswith s ".git/")
+          (string.find s "/.git/" 1 true)) false
+      (and (not include-hidden) (hidden-path? s)) false
+      (and (not include-deps) (dep-path? settings s)) false
+      :else true)))
 
 (fn M.project-file-list
   [settings root include-hidden include-ignored include-deps]
@@ -136,7 +146,7 @@
               _ (when include-ignored
                   (each [_ arg (ipairs (or settings.project-rg-include-ignored-args []))]
                     (table.insert cmd arg)))
-              _ (when (not include-deps)
+              _ (when-not include-deps
                   (each [_ glob (ipairs (or settings.project-rg-deps-exclude-globs []))]
                     (table.insert cmd "--glob")
                     (table.insert cmd glob)))

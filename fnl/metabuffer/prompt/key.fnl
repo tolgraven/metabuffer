@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local util (require :metabuffer.prompt.util))
 
 (local M {})
@@ -48,7 +48,7 @@
 
 (fn ensure-reverse-termcodes
   []
-  (when (not reverse-termcodes)
+  (when-not reverse-termcodes
     (set reverse-termcodes {})
     (let [tokens []]
       (each [_ v (pairs M.SPECIAL_KEYS)]

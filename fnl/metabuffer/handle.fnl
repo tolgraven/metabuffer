@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
 (fn valid-buf?
@@ -79,7 +79,7 @@
 
     (fn self.destroy
       []
-      (when (not self.terminated)
+      (when-not self.terminated
         (self.restore-opts)
         (set self.terminated true)))
 

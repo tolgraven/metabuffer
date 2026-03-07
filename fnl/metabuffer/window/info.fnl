@@ -1,5 +1,6 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
+(local lineno-mod (require :metabuffer.window.lineno))
 
 (fn ext-from-path
   [path]
@@ -109,15 +110,6 @@
                 stop (math.min total (+ start cap -1))]
             [start stop]))))
 
-(fn lnum-width-from-max-len
-  [max-len]
-  (math.max 2 (# (tostring (math.max 1 (or max-len 1))))))
-
-(fn lnum-cell
-  [lnum width]
-  (let [s (tostring lnum)]
-    (.. (string.rep " " (math.max 0 (- width (# s)))) s " ")))
-
 (fn numeric-max
   [vals default]
   (if (or (not vals) (= (# vals) 0))
@@ -137,7 +129,7 @@
 
   (fn ensure-info-window!
     [session]
-    (when (not (and session.info-win (vim.api.nvim_win_is_valid session.info-win)))
+    (when-not (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
       (let [buf (vim.api.nvim_create_buf false true)
             width info-min-width
             height (info-height session)
@@ -214,7 +206,7 @@
                           (if (= 1 (vim.fn.hlexists "NvimTreeFileName"))
                               "NvimTreeFileName"
                               "Normal")))
-          lnum-width (let [limit (math.min (# idxs) info-max-lines)
+          lnum-digit-width (let [limit (math.min (# idxs) info-max-lines)
                            max-lnum-len (if (> limit 0)
                                             (let [lens []]
                                               (for [i 1 limit]
@@ -224,8 +216,9 @@
                                                   (table.insert lens (# lnum))))
                                               (numeric-max lens 1))
                                             1)]
-                       (lnum-width-from-max-len max-lnum-len))
-          path-width (math.max 1 (- target-width lnum-width))
+                       (lineno-mod.digit-width-from-max-len max-lnum-len))
+          lnum-field-width (+ lnum-digit-width 1)
+          path-width (math.max 1 (- target-width lnum-field-width))
           lines []
           highlights []]
       (if (= (# idxs) 0)
@@ -235,7 +228,7 @@
               (let [src-idx (. idxs i)
                     ref (. refs src-idx)
                     lnum (tostring (or (and ref ref.lnum) src-idx))
-                    lnum-cell0 (lnum-cell lnum lnum-width)
+                    lnum-cell0 (lineno-mod.lnum-cell lnum lnum-digit-width)
                     path (vim.fn.fnamemodify (or (and ref ref.path) "[Current Buffer]") ":~:.")
                     icon-info (devicon-for-path path file-hl)
                     icon (or (. icon-info :icon) "")
@@ -282,7 +275,7 @@
         (set (. bo :modifiable) true))
       (fit-info-width! session lines)
       (let [[ok-set err-set] [(pcall vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)]]
-        (when (not ok-set)
+        (when-not ok-set
           (debug-log (.. "info set_lines failed: " (tostring err-set)))))
       (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
       (each [_ h (ipairs highlights)]
@@ -307,7 +300,7 @@
         (pcall vim.api.nvim_win_set_option session.info-win "statusline" status)
         (when (> info-lines 0)
           (let [[ok-cur err-cur] [(pcall vim.api.nvim_win_set_cursor session.info-win [row 0])]]
-            (when (not ok-cur)
+            (when-not ok-cur
               (debug-log (.. "info set_cursor failed: " (tostring err-cur)))))))))
 
   (fn update-regular!

@@ -1,13 +1,15 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let
+                 : if-let
+                 : when-some
+                 : if-some
+                 : when-not}
+  :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
 (fn M.split-input
   [text]
   "Public API: M.split-input."
-  (let [out []]
-    (each [_ tok (ipairs (vim.split (or text "") "%s+" {:trimempty true}))]
-      (table.insert out tok))
-    out))
+  (vim.split (or text "") "%s+" {:trimempty true}))
 
 (fn M.convert2regex-pattern
   [text]
