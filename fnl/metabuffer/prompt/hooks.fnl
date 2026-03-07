@@ -5,6 +5,7 @@
   [opts]
   "Public API: M.new."
   (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
+         : default-main-keymaps : default-prompt-fallback-keymaps
          : on-prompt-changed : update-info-window : maybe-sync-from-main!
          : schedule-scroll-sync!} opts]
     (fn disable-cmp
@@ -157,6 +158,8 @@
       (if
         (= action "accept")
         (fn [] (router.accept session.prompt-buf))
+        (= action "accept-main")
+        (fn [] (router.accept-main session.prompt-buf))
         (= action "cancel")
         (fn [] (router.cancel session.prompt-buf))
         (= action "move-selection")
@@ -215,14 +218,15 @@
         (fn [] (router.scroll-main session.prompt-buf arg))
         (= action "toggle-project-mode")
         (fn [] (router.toggle-project-mode session.prompt-buf))
+        (= action "exclude-symbol-under-cursor")
+        (fn [] (router.exclude-symbol-under-cursor session.prompt-buf))
+        (= action "insert-symbol-under-cursor")
+        (fn [] (router.insert-symbol-under-cursor session.prompt-buf))
         nil))
 
     (fn apply-keymaps
-      [router session]
-      (let [base-opts {:buffer session.prompt-buf :silent true :noremap true :nowait true}
-            rules (if (= (type vim.g.meta_prompt_keymaps) "table")
-                      vim.g.meta_prompt_keymaps
-                      default-prompt-keymaps)]
+      [router session target-buf rules]
+      (let [base-opts {:buffer target-buf :silent true :noremap true :nowait true}]
         (each [_ r (ipairs rules)]
           (let [mode (. r 1)
                 lhs (. r 2)
@@ -237,37 +241,32 @@
             (if rhs
                 (vim.keymap.set mode lhs rhs opts)
                 (vim.notify
-                  (.. "metabuffer: unknown prompt keymap action '" (tostring action) "' for " (tostring lhs))
+                  (.. "metabuffer: unknown keymap action '" (tostring action) "' for " (tostring lhs))
                   vim.log.levels.WARN))))))
 
-    (fn apply-emacs-insert-fallbacks
-  [router session]
-      (let [opts {:buffer session.prompt-buf :silent true :noremap true :nowait true}]
-        (vim.keymap.set "i" "<C-a>"
-          (fn [] (schedule-when-valid session
-                   (fn []
-                     (router.prompt-home session.prompt-buf))))
-          opts)
-        (vim.keymap.set "i" "<C-e>"
-          (fn [] (schedule-when-valid session
-                   (fn []
-                     (router.prompt-end session.prompt-buf))))
-          opts)
-        (vim.keymap.set "i" "<C-u>"
-          (fn [] (schedule-when-valid session
-                   (fn []
-                     (router.prompt-kill-backward session.prompt-buf))))
-          opts)
-        (vim.keymap.set "i" "<C-k>"
-          (fn [] (schedule-when-valid session
-                   (fn []
-                     (router.prompt-kill-forward session.prompt-buf))))
-          opts)
-        (vim.keymap.set "i" "<C-y>"
-          (fn [] (schedule-when-valid session
-                   (fn []
-                     (router.prompt-yank session.prompt-buf))))
-          opts)))
+    (fn prompt-rules
+      []
+      (if (= (type vim.g.meta_prompt_keymaps) "table")
+          vim.g.meta_prompt_keymaps
+          default-prompt-keymaps))
+
+    (fn prompt-fallback-rules
+      []
+      (if (= (type vim.g.meta_prompt_fallback_keymaps) "table")
+          vim.g.meta_prompt_fallback_keymaps
+          default-prompt-fallback-keymaps))
+
+    (fn main-rules
+      []
+      (if (= (type vim.g.meta_main_keymaps) "table")
+          vim.g.meta_main_keymaps
+          default-main-keymaps))
+
+    (fn apply-all-keymaps
+      [router session]
+      (apply-keymaps router session session.prompt-buf (prompt-rules))
+      (apply-keymaps router session session.prompt-buf (prompt-fallback-rules))
+      (apply-keymaps router session session.meta.buf.buffer (main-rules)))
 
     (fn register!
   [router session]
@@ -315,8 +314,7 @@
                          session
                          (fn []
                            (disable-cmp session)
-                           (apply-keymaps router session)
-                           (apply-emacs-insert-fallbacks router session))))})
+                           (apply-all-keymaps router session))))})
       ;; Some statusline plugins or focus transitions (for example tmux pane
       ;; switches) can overwrite local statusline state. Re-apply ours when the
       ;; prompt window regains focus.
@@ -351,28 +349,6 @@
                        (schedule-when-valid session
                          (fn []
                            (maybe-sync-from-main! session))))})
-        (vim.keymap.set "n" "!"
-          (fn []
-            (router.exclude-symbol-under-cursor session.prompt-buf))
-          {:buffer session.meta.buf.buffer :silent true :noremap true})
-        (vim.keymap.set "n" "<CR>"
-          (fn []
-            (schedule-when-valid session
-              (fn []
-                (router.accept-main session.prompt-buf))))
-          {:buffer session.meta.buf.buffer :silent true :noremap true :nowait true})
-        (vim.keymap.set "n" "<M-CR>"
-          (fn []
-            (schedule-when-valid session
-              (fn []
-                (router.insert-symbol-under-cursor session.prompt-buf))))
-          {:buffer session.meta.buf.buffer :silent true :noremap true :nowait true})
-        (vim.keymap.set "n" "<A-CR>"
-          (fn []
-            (schedule-when-valid session
-              (fn []
-                (router.insert-symbol-under-cursor session.prompt-buf))))
-          {:buffer session.meta.buf.buffer :silent true :noremap true :nowait true})
         (vim.api.nvim_create_autocmd "WinScrolled"
           {:group aug
            :callback (fn [_]
@@ -380,8 +356,7 @@
         (disable-cmp session)
         (mark-prompt-buffer! session.prompt-buf)
         (refresh-prompt-highlights! session)
-        (apply-keymaps router session)
-        (apply-emacs-insert-fallbacks router session)))
+        (apply-all-keymaps router session)))
 
     {:register! register!}))
 

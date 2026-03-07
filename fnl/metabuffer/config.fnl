@@ -52,7 +52,18 @@
           [["n" "i"] "<C-f>" "scroll-main" "page-down"]
           [["n" "i"] "<C-b>" "scroll-main" "page-up"]
           ;; keep project toggle available without conflicting with scroll/page keys
-          [["n" "i"] "<C-t>" "toggle-project-mode"]]]
+          [["n" "i"] "<C-t>" "toggle-project-mode"]]
+        default-main-keymaps
+        [ ["n" "!" "exclude-symbol-under-cursor"]
+          ["n" "<CR>" "accept-main"]
+          ["n" "<M-CR>" "insert-symbol-under-cursor"]
+          ["n" "<A-CR>" "insert-symbol-under-cursor"]]
+        default-prompt-fallback-keymaps
+        [ ["i" "<C-a>" "prompt-home"]
+          ["i" "<C-e>" "prompt-end"]
+          ["i" "<C-u>" "prompt-kill-backward"]
+          ["i" "<C-k>" "prompt-kill-forward"]
+          ["i" "<C-y>" "prompt-yank"]]]
   (set router.history-max 100)
   (set router.project-max-file-bytes (or vim.g.meta_project_max_file_bytes (* 1024 1024)))
   (set router.project-max-total-lines (or vim.g.meta_project_max_total_lines 200000))
@@ -95,8 +106,14 @@
   (set router.source-syntax-refresh-debounce-ms (or vim.g.meta_source_syntax_refresh_debounce_ms 80))
   (set router.scroll-sync-debounce-ms (or vim.g.meta_scroll_sync_debounce_ms 20))
   (set router.default-prompt-keymaps default-prompt-keymaps)
+  (set router.default-main-keymaps default-main-keymaps)
+  (set router.default-prompt-fallback-keymaps default-prompt-fallback-keymaps)
   (when (= vim.g.meta_prompt_keymaps nil)
     (set vim.g.meta_prompt_keymaps (vim.deepcopy default-prompt-keymaps)))
+  (when (= vim.g.meta_main_keymaps nil)
+    (set vim.g.meta_main_keymaps (vim.deepcopy default-main-keymaps)))
+  (when (= vim.g.meta_prompt_fallback_keymaps nil)
+    (set vim.g.meta_prompt_fallback_keymaps (vim.deepcopy default-prompt-fallback-keymaps)))
   (set router.dep-dir-names
     {"node_modules" true
      ".venv" true

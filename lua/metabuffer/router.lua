@@ -968,7 +968,7 @@ M["toggle-project-mode"] = function(prompt_buf)
   end
 end
 local function register_prompt_hooks(session)
-  local hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = M["default-prompt-keymaps"], ["active-by-prompt"] = M["active-by-prompt"], ["on-prompt-changed"] = M["on-prompt-changed"], ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21})
+  local hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = M["default-prompt-keymaps"], ["default-main-keymaps"] = M["default-main-keymaps"], ["default-prompt-fallback-keymaps"] = M["default-prompt-fallback-keymaps"], ["active-by-prompt"] = M["active-by-prompt"], ["on-prompt-changed"] = M["on-prompt-changed"], ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21})
   return hooks["register!"](M, session)
 end
 M.start = function(query, mode, _meta, project_mode)

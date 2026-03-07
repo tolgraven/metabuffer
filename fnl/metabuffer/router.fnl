@@ -864,6 +864,8 @@
         (prompt_hooks_mod.new
           {:mark-prompt-buffer! router_util_mod.mark-prompt-buffer!
            :default-prompt-keymaps M.default-prompt-keymaps
+           :default-main-keymaps M.default-main-keymaps
+           :default-prompt-fallback-keymaps M.default-prompt-fallback-keymaps
            :active-by-prompt M.active-by-prompt
            :on-prompt-changed M.on-prompt-changed
            :update-info-window update-info-window
