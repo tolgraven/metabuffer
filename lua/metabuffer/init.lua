@@ -1,0 +1,338 @@
+-- [nfnl] fnl/metabuffer/init.fnl
+local router = require("metabuffer.router")
+local M = {}
+local function rgb_luma(n)
+  if not n then
+    return nil
+  else
+    local r = math.floor((n / 65536))
+    local g = math.floor(((n / 256) % 256))
+    local b = (n % 256)
+    return ((0.2126 * r) + (0.7152 * g) + (0.0722 * b))
+  end
+end
+local function statusline_color_from(group)
+  local opts = {cterm = {reverse = false}, reverse = false}
+  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  local nok,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
+  if (ok and (type(hl) == "table")) then
+    local fg = hl.fg
+    local cfg = hl.ctermfg
+    if (not fg and hl.reverse) then
+      fg = hl.bg
+    else
+    end
+    if (not cfg and (hl.reverse or (hl.cterm and hl.cterm.reverse))) then
+      cfg = hl.ctermbg
+    else
+    end
+    if fg then
+      opts["bg"] = fg
+    else
+      if (nok and (type(normal) == "table") and normal.bg) then
+        opts["bg"] = normal.bg
+      else
+      end
+    end
+    if cfg then
+      opts["ctermbg"] = cfg
+    else
+      if (nok and (type(normal) == "table") and normal.ctermbg) then
+        opts["ctermbg"] = normal.ctermbg
+      else
+      end
+    end
+    if hl.bold then
+      opts["bold"] = hl.bold
+    else
+    end
+  else
+  end
+  do
+    local bl = rgb_luma(opts.bg)
+    if (bl and (bl > 128)) then
+      opts["fg"] = 0
+    else
+      opts["fg"] = 16777215
+    end
+  end
+  if (opts.ctermbg and (opts.ctermbg > 7)) then
+    opts["ctermfg"] = 0
+  else
+    opts["ctermfg"] = 15
+  end
+  return opts
+end
+local function undercurl_from(group)
+  local opts = {default = true, undercurl = true}
+  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  if (ok and (type(hl) == "table")) then
+    if hl.sp then
+      opts["sp"] = hl.sp
+    else
+    end
+    if (not opts.sp and hl.fg) then
+      opts["sp"] = hl.fg
+    else
+    end
+  else
+  end
+  return opts
+end
+local function hit_hl(main_group, curl_group)
+  local opts = {default = true, undercurl = true}
+  local ok_main,main = pcall(vim.api.nvim_get_hl, 0, {name = main_group, link = false})
+  local ok_curl,curl = pcall(vim.api.nvim_get_hl, 0, {name = curl_group, link = false})
+  if (ok_main and (type(main) == "table")) then
+    if main.fg then
+      opts["fg"] = main.fg
+    else
+    end
+    if main.bg then
+      opts["bg"] = main.bg
+    else
+    end
+    if main.ctermfg then
+      opts["ctermfg"] = main.ctermfg
+    else
+    end
+    if main.ctermbg then
+      opts["ctermbg"] = main.ctermbg
+    else
+    end
+  else
+  end
+  if (ok_curl and (type(curl) == "table")) then
+    if curl.sp then
+      opts["sp"] = curl.sp
+    else
+      if curl.fg then
+        opts["sp"] = curl.fg
+      else
+      end
+    end
+  else
+  end
+  return opts
+end
+local function thin_underline_from(group)
+  local opts = {default = true, underdotted = true, nocombine = true}
+  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  if (ok and (type(hl) == "table")) then
+    if hl.sp then
+      opts["sp"] = hl.sp
+    else
+      if hl.fg then
+        opts["sp"] = hl.fg
+      else
+        opts["sp"] = 16711680
+      end
+    end
+  else
+  end
+  return opts
+end
+local function plain_hl_from(group)
+  local opts = {default = true}
+  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  if (ok and (type(hl) == "table")) then
+    if hl.fg then
+      opts["fg"] = hl.fg
+    else
+    end
+    if hl.bg then
+      opts["bg"] = hl.bg
+    else
+    end
+    if hl.ctermfg then
+      opts["ctermfg"] = hl.ctermfg
+    else
+    end
+    if hl.ctermbg then
+      opts["ctermbg"] = hl.ctermbg
+    else
+    end
+  else
+  end
+  return opts
+end
+local function darken_rgb(n, factor)
+  if not n then
+    return nil
+  else
+    local r = math.floor((n / 65536))
+    local g = math.floor(((n / 256) % 256))
+    local b = (n % 256)
+    local f = math.max(0, math.min(factor, 1))
+    local dr = math.max(0, math.min(255, math.floor((r * (1 - f)))))
+    local dg = math.max(0, math.min(255, math.floor((g * (1 - f)))))
+    local db = math.max(0, math.min(255, math.floor((b * (1 - f)))))
+    return ((dr * 65536) + (dg * 256) + db)
+  end
+end
+local function hl_bg(group)
+  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  if (ok and (type(hl) == "table")) then
+    return hl.bg
+  else
+    return nil
+  end
+end
+local function alt_bg_from(group)
+  local opts = {}
+  local base_bg = (hl_bg(group) or hl_bg("Normal") or hl_bg("NormalNC") or hl_bg("ColorColumn") or hl_bg("CursorLine") or 1973790)
+  local bg = darken_rgb(base_bg, 0.15)
+  if bg then
+    opts["bg"] = bg
+  else
+  end
+  return opts
+end
+local function ensure_defaults_and_highlights_21()
+  vim.g["meta#custom_mappings"] = (vim.g["meta#custom_mappings"] or {})
+  vim.g["meta#highlight_groups"] = (vim.g["meta#highlight_groups"] or {All = "Title", Fuzzy = "Number", Regex = "Special"})
+  vim.g["meta#syntax_on_init"] = (vim.g["meta#syntax_on_init"] or "buffer")
+  vim.g["meta#prefix"] = (vim.g["meta#prefix"] or "#")
+  local hi = vim.api.nvim_set_hl
+  hi(0, "MetaStatuslineModeInsert", statusline_color_from("Tag"))
+  hi(0, "MetaStatuslineModeReplace", statusline_color_from("Todo"))
+  hi(0, "MetaStatuslineModeNormal", statusline_color_from("Comment"))
+  hi(0, "MetaStatuslineQuery", statusline_color_from("Normal"))
+  hi(0, "MetaStatuslineFile", statusline_color_from("Comment"))
+  hi(0, "MetaStatuslineMiddle", plain_hl_from("StatusLine"))
+  hi(0, "MetaStatuslineMatcherAll", statusline_color_from("Statement"))
+  hi(0, "MetaStatuslineMatcherFuzzy", statusline_color_from("Number"))
+  hi(0, "MetaStatuslineMatcherRegex", statusline_color_from("Special"))
+  hi(0, "MetaStatuslineCaseSmart", statusline_color_from("String"))
+  hi(0, "MetaStatuslineCaseIgnore", statusline_color_from("Special"))
+  hi(0, "MetaStatuslineCaseNormal", statusline_color_from("Normal"))
+  hi(0, "MetaStatuslineSyntaxBuffer", statusline_color_from("Comment"))
+  hi(0, "MetaStatuslineSyntaxMeta", statusline_color_from("Number"))
+  hi(0, "MetaStatuslineIndicator", statusline_color_from("Tag"))
+  hi(0, "MetaStatuslineKey", statusline_color_from("Comment"))
+  hi(0, "MetaSearchHitAll", hit_hl("Statement", "Error"))
+  hi(0, "MetaSearchHitBuffer", hit_hl("Statement", "Error"))
+  hi(0, "MetaSearchHitFuzzy", hit_hl("Number", "WarningMsg"))
+  hi(0, "MetaSearchHitFuzzyBetween", hit_hl("IncSearch", "Question"))
+  hi(0, "MetaSearchHitRegex", hit_hl("Special", "Type"))
+  hi(0, "MetaPromptNeg", {default = true, link = "ErrorMsg"})
+  hi(0, "MetaPromptAnchor", {default = true, link = "SpecialChar"})
+  hi(0, "MetaPromptRegex", {default = true, link = "MetaSearchHitRegex", underline = true})
+  hi(0, "MetaSourceLineNr", {default = true, link = "LineNr"})
+  hi(0, "MetaSourceDir", {default = true, link = "Directory"})
+  hi(0, "MetaSourceBoundary", thin_underline_from("Error"))
+  hi(0, "MetaSourceAltBg", alt_bg_from("Normal"))
+  if (1 == vim.fn.hlexists("NetrwPlain")) then
+    return hi(0, "MetaSourceFile", {default = true, link = "NetrwPlain"})
+  else
+    return hi(0, "MetaSourceFile", {default = true, link = "Normal"})
+  end
+end
+local function ensure_command(name, callback, opts)
+  pcall(vim.api.nvim_del_user_command, name)
+  return vim.api.nvim_create_user_command(name, callback, opts)
+end
+local function plugin_root()
+  local src = debug.getinfo(1, "S").source
+  local path
+  if vim.startswith(src, "@") then
+    path = string.sub(src, 2)
+  else
+    path = src
+  end
+  return vim.fn.fnamemodify(path, ":p:h:h:h")
+end
+local function clear_module_cache()
+  for k, _ in pairs(package.loaded) do
+    if ((k == "metabuffer") or vim.startswith(k, "metabuffer.")) then
+      package.loaded[k] = nil
+    else
+    end
+  end
+  return nil
+end
+local function clear_plugin_loaded_flags_21()
+  vim.g.loaded_metabuffer = nil
+  vim.g.meta_loaded = nil
+  return nil
+end
+local function source_plugin_bootstrap_21()
+  local root = plugin_root()
+  local file = (root .. "/plugin/metabuffer.lua")
+  if (1 == vim.fn.filereadable(file)) then
+    return vim.cmd(("silent source " .. vim.fn.fnameescape(file)))
+  else
+    return error(("plugin bootstrap not found: " .. file))
+  end
+end
+local function maybe_compile_21()
+  local root = plugin_root()
+  local script = (root .. "/scripts/compile-fennel.sh")
+  if (1 == vim.fn.filereadable(script)) then
+    local out = vim.fn.system({"sh", script})
+    if (vim.v.shell_error == 0) then
+      return true
+    else
+      return error(("compile failed:\n" .. out))
+    end
+  else
+    return error(("compile script not found: " .. script))
+  end
+end
+M.reload = function(opts)
+  local cfg = (opts or {})
+  local do_compile = (cfg.compile and true)
+  if do_compile then
+    maybe_compile_21()
+  else
+  end
+  clear_module_cache()
+  clear_plugin_loaded_flags_21()
+  source_plugin_bootstrap_21()
+  local _41_
+  if do_compile then
+    _41_ = "[metabuffer] reloaded (compiled)"
+  else
+    _41_ = "[metabuffer] reloaded"
+  end
+  vim.notify(_41_, vim.log.levels.INFO)
+  return true
+end
+M.setup = function()
+  ensure_defaults_and_highlights_21()
+  local function _43_(args)
+    return router.entry_start(args.args, args.bang)
+  end
+  ensure_command("Meta", _43_, {nargs = "?", bang = true})
+  local function _44_(args)
+    return router.entry_resume(args.args)
+  end
+  ensure_command("MetaResume", _44_, {nargs = "?"})
+  local function _45_()
+    return router.entry_cursor_word(false)
+  end
+  ensure_command("MetaCursorWord", _45_, {nargs = 0})
+  local function _46_()
+    return router.entry_cursor_word(true)
+  end
+  ensure_command("MetaResumeCursorWord", _46_, {nargs = 0})
+  local function _47_(args)
+    return router.entry_sync(args.args)
+  end
+  ensure_command("MetaSync", _47_, {nargs = "?"})
+  local function _48_()
+    return router.entry_push()
+  end
+  ensure_command("MetaPush", _48_, {nargs = 0})
+  local function _49_(args)
+    local ok,err = pcall(M.reload, {compile = args.bang})
+    if not ok then
+      return vim.notify(("[metabuffer] reload failed: " .. tostring(err)), vim.log.levels.ERROR)
+    else
+      return nil
+    end
+  end
+  ensure_command("MetaReload", _49_, {nargs = 0, bang = true})
+  return true
+end
+return M
