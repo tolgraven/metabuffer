@@ -30,9 +30,9 @@ local function unclosed_pattern_delims_3f(token)
   return ((paren > 0) or (bracket > 0))
 end
 local function regex_token_3f(token)
-  local and_4_ = (type(token) == "string") and (token ~= "") and not unclosed_pattern_delims_3f(token) and not not string.find(token, "[\\%[%]%(%)%+%*%?%|]")
+  local and_4_ = (type(token) == "string") and (token ~= "") and not string.match(token, "^[%?%*%+%|%.]$") and not unclosed_pattern_delims_3f(token) and not not string.find(token, "[\\%[%]%(%)%+%*%?%|%.]")
   if and_4_ then
-    local ok = pcall(string.find, "", token, 1)
+    local ok = pcall(vim.regex, ("\\C" .. token))
     and_4_ = ok
   end
   return and_4_
@@ -108,29 +108,58 @@ local function parse_term(raw)
   local effective_negated = (negated and has_needle)
   return {negated = effective_negated, ["anchor-start"] = anchor_start, ["anchor-end"] = anchor_end, needle = needle, regex = regex_token_3f(needle)}
 end
-local function term_match_3f(term, line)
+local function term_match_3f(term, line, literal_probe, ignorecase)
   local needle = (term.needle or "")
   if (needle == "") then
     return true
   else
     if term.regex then
-      local ok,s,_ = pcall(string.find, line, needle, 1)
-      return (ok and s)
+      local rx_key
+      if ignorecase then
+        rx_key = "rx-ic"
+      else
+        rx_key = "rx-cs"
+      end
+      local existing = term[rx_key]
+      local rx
+      if existing then
+        rx = existing
+      else
+        local _12_
+        if ignorecase then
+          _12_ = "\\c"
+        else
+          _12_ = "\\C"
+        end
+        local ok,rex = pcall(vim.regex, (_12_ .. needle))
+        if ok then
+          term[rx_key] = rex
+          rx = rex
+        else
+          rx = nil
+        end
+      end
+      if rx then
+        local s,_e = rx:match_str(line)
+        return s
+      else
+        return false
+      end
     else
       if (term.negated and not term["anchor-start"] and not term["anchor-end"] and not term.regex and not not string.match(needle, "^[%w_]+$")) then
-        return not not string.find(line, ("%f[%w_]" .. needle .. "%f[^%w_]"))
+        return not not string.find(literal_probe, ("%f[%w_]" .. needle .. "%f[^%w_]"))
       else
         if term["anchor-start"] then
           if term["anchor-end"] then
-            return (line == needle)
+            return (literal_probe == needle)
           else
-            return vim.startswith(line, needle)
+            return vim.startswith(literal_probe, needle)
           end
         else
           if term["anchor-end"] then
-            return vim.endswith(line, needle)
+            return vim.endswith(literal_probe, needle)
           else
-            return not not string.find(line, needle, 1, true)
+            return not not string.find(literal_probe, needle, 1, true)
           end
         end
       end
@@ -150,30 +179,33 @@ local function term_highlight_pattern(term)
   end
 end
 M.new = function()
-  local function _19_(_, query)
+  local function _25_(_, query)
     local items = {}
     for _0, raw in ipairs(util["split-input"](query)) do
       local term = parse_term(raw)
       local pat = term_highlight_pattern(term)
       if ((pat ~= "") and not term.negated) then
-        local _20_
+        local _26_
         if term.regex then
-          _20_ = "MetaSearchHitRegex"
+          _26_ = "MetaSearchHitRegex"
         else
-          _20_ = "MetaSearchHitAll"
+          _26_ = "MetaSearchHitAll"
         end
-        table.insert(items, {group = _20_, pattern = ("\\%(" .. pat .. "\\)")})
+        table.insert(items, {group = _26_, pattern = ("\\%(" .. pat .. "\\)")})
       else
       end
     end
     return items
   end
-  local function _23_(_, query, indices, candidates, ignorecase)
+  local function _29_(_, query, indices, candidates, ignorecase)
     local terms = vim.tbl_map(parse_term, util["split-input"](query))
     local out = {}
     if ignorecase then
       for _0, t in ipairs(terms) do
-        t["needle"] = string.lower((t.needle or ""))
+        if not t.regex then
+          t["needle"] = string.lower((t.needle or ""))
+        else
+        end
       end
     else
     end
@@ -187,7 +219,7 @@ M.new = function()
       end
       local ok = true
       for _1, term in ipairs(terms) do
-        local hit_3f = term_match_3f(term, probe)
+        local hit_3f = term_match_3f(term, line, probe, ignorecase)
         local pass_3f
         if term.negated then
           pass_3f = not hit_3f
@@ -206,6 +238,6 @@ M.new = function()
     end
     return out
   end
-  return base.new("all", {["get-highlight-pattern"] = _19_, filter = _23_})
+  return base.new("all", {["get-highlight-pattern"] = _25_, filter = _29_})
 end
 return M

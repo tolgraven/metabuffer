@@ -30,9 +30,11 @@
   [token]
   (and (= (type token) "string")
        (~= token "")
+       ;; Single metachar tokens (e.g. "?") are treated as literals in all-mode.
+       (not (string.match token "^[%?%*%+%|%.]$"))
        (not (unclosed-pattern-delims? token))
-       (not (not (string.find token "[\\%[%]%(%)%+%*%?%|]")))
-       (let [[ok] [(pcall string.find "" token 1)]]
+       (not (not (string.find token "[\\%[%]%(%)%+%*%?%|%.]")))
+       (let [[ok] [(pcall vim.regex (.. "\\C" token))]]
          ok)))
 
 (fn unescape-token-specials
@@ -112,27 +114,39 @@
      :regex (regex-token? needle)}))
 
 (fn term-match?
-  [term line]
+  [term line literal-probe ignorecase]
   (let [needle (or (. term :needle) "")]
     (if (= needle "")
         true
         (if (. term :regex)
-            (let [[ok s _] [(pcall string.find line needle 1)]]
-              (and ok s))
+            (let [rx-key (if ignorecase :rx-ic :rx-cs)
+                  existing (. term rx-key)
+                  rx (if existing
+                         existing
+                         (let [[ok rex] [(pcall vim.regex (.. (if ignorecase "\\c" "\\C") needle))]]
+                           (if ok
+                               (do
+                                 (set (. term rx-key) rex)
+                                 rex)
+                               nil)))]
+              (if rx
+                  (let [[s _e] [(rx:match_str line)]]
+                    s)
+                  false))
             (if (and (. term :negated)
                      (not (. term :anchor-start))
                      (not (. term :anchor-end))
                      (not (. term :regex))
                      (not (not (string.match needle "^[%w_]+$"))))
                 ;; Negation is more useful as a token exclusion than raw substring.
-                (not (not (string.find line (.. "%f[%w_]" needle "%f[^%w_]"))))
+                (not (not (string.find literal-probe (.. "%f[%w_]" needle "%f[^%w_]"))))
                 (if (. term :anchor-start)
                     (if (. term :anchor-end)
-                        (= line needle)
-                        (vim.startswith line needle))
+                        (= literal-probe needle)
+                        (vim.startswith literal-probe needle))
                     (if (. term :anchor-end)
-                        (vim.endswith line needle)
-                        (not (not (string.find line needle 1 true))))))))))
+                        (vim.endswith literal-probe needle)
+                        (not (not (string.find literal-probe needle 1 true))))))))))
 
 (fn term-highlight-pattern
   [term]
@@ -163,13 +177,14 @@
               out []]
           (when ignorecase
             (each [_ t (ipairs terms)]
-              (set (. t :needle) (string.lower (or (. t :needle) "")))))
+              (when-not (. t :regex)
+                (set (. t :needle) (string.lower (or (. t :needle) ""))))))
           (each [_ idx (ipairs indices)]
             (let [line (. candidates idx)
                   probe (if ignorecase (string.lower line) line)]
               (var ok true)
               (each [_ term (ipairs terms)]
-                (let [hit? (term-match? term probe)
+                (let [hit? (term-match? term line probe ignorecase)
                       pass? (if (. term :negated) (not hit?) hit?)]
                   (when (and ok (not pass?))
                     (set ok false))))

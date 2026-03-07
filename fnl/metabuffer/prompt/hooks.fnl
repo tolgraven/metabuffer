@@ -64,6 +64,7 @@
                         (when negated?
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptNeg" r s0 e0))
                         (when (and (> (# body) 0)
+                                   (not (string.match body "^[%?%*%+%|%.]$"))
                                    (not (not (string.find body "[\\%[%]%(%)%+%*%?%|]"))))
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptRegex" r s0 e0))
                         (when (and (> (# body) 0)
