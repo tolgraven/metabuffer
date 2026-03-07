@@ -61,6 +61,25 @@
             ""))
       ""))
 
+(fn bang-token-completed?
+  [prev next]
+  (let [prev0 (or prev "")
+        next0 (or next "")
+        prev-n (# prev0)
+        next-n (# next0)]
+    (and (> prev-n 0)
+         (> next-n prev-n)
+         (vim.startswith next0 prev0)
+         (= (string.sub prev0 prev-n prev-n) "!")
+         (let [before (if (> prev-n 1)
+                          (string.sub prev0 (- prev-n 1) (- prev-n 1))
+                          "")]
+           (and (~= before "\\")
+                (or (= prev-n 1)
+                    (not (not (string.find before "%s"))))))
+         (let [added (string.sub next0 (+ prev-n 1) (+ prev-n 1))]
+           (not (not (string.find added "%S")))))))
+
 (fn M.new
   [nvim condition]
   "Construct Meta state and bind matcher/query/buffer runtime."
@@ -229,6 +248,7 @@
           cache-key (.. matcher-name "|" (if ignorecase "1" "0") "|" (table.concat queries "\n"))
           reset0? (or (= prev-text "")
                       (not (vim.startswith self.text prev-text))
+                      (bang-token-completed? prev-text self.text)
                       ;; When backing cache is stale and we cannot reuse a cached
                       ;; query entry, recompute from full set to include new lines.
                       cache-grew?

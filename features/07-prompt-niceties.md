@@ -8,6 +8,7 @@ Implemented prompt usability additions include:
 - quick anchors (`^`, `$`) in `all` matcher
 - result-buffer `!` to append `!<cword>`
 - inline history shorthands (`!!`, `!$`, `!^!`)
+- commandline shorthand expansion in `:Meta[!]`, `:MetaResume`, `:MetaSync`
 - insert-mode shell/emacs edit keys (`<C-a>`, `<C-e>`, `<C-u>`, `<C-k>`, `<C-y>`)
 - insert-mode token negation toggles (`<LocalLeader>1`, `<LocalLeader>!`)
 - floating searchback browser (`<C-r>`) driven by prompt text
@@ -45,6 +46,10 @@ Control directives are consumed from query text once applied:
 
 - `<CR>` accepts selected hit, or applies selected history/saved-browser entry if browser is open.
 - `<Esc>` closes browser first (if open), then closes Meta on next cancel.
+- Commandline query shorthands are expanded before session startup:
+  - `:Meta !!`
+  - `:Meta !$`
+  - `:Meta !^!`
 - Session history remains local unless merged (`#history` / `<LocalLeader>h`).
 - Persistent storage file:
   - `stdpath("data")/metabuffer_prompt_history.json`

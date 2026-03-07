@@ -65,11 +65,19 @@
   (if (> idx (# parts))
     state
     (let [tok (. parts idx)]
-      (if-let [parsed (parse-option-token tok)]
-        (parse-parts parts (+ idx 1) (assoc-option state (. parsed 1) (. parsed 2)))
-        (let [next (vim.deepcopy state)]
-          (table.insert (. next :keep) tok)
-          (parse-parts parts (+ idx 1) next))))))
+      (if (vim.startswith tok "\\#")
+          (let [next (vim.deepcopy state)
+                literal (string.sub tok 2)]
+            (table.insert (. next :keep) literal)
+            (parse-parts parts (+ idx 1) next))
+          (if-let [parsed (parse-option-token tok)]
+            (parse-parts parts (+ idx 1) (assoc-option state (. parsed 1) (. parsed 2)))
+            (if (vim.startswith tok "#")
+                (let [next (assoc-option state :pending-control true)]
+                  (parse-parts parts (+ idx 1) next))
+                (let [next (vim.deepcopy state)]
+                  (table.insert (. next :keep) tok)
+                  (parse-parts parts (+ idx 1) next))))))))
 
 (fn parse-line
   [acc line]
@@ -103,7 +111,8 @@
               :history nil
               :save-tag nil
               :saved-tag nil
-              :saved-browser nil}]
+              :saved-browser nil
+              :pending-control false}]
     (parse-lines (or lines []) 1 init)))
 
 (fn M.parse-query-text
@@ -121,7 +130,8 @@
        :history (. parsed :history)
        :save-tag (. parsed :save-tag)
        :saved-tag (. parsed :saved-tag)
-       :saved-browser (. parsed :saved-browser)})
+       :saved-browser (. parsed :saved-browser)
+       :pending-control (. parsed :pending-control)})
     {:query query
      :include-hidden nil
      :include-ignored nil
@@ -131,7 +141,8 @@
      :history nil
      :save-tag nil
      :saved-tag nil
-     :saved-browser nil}))
+     :saved-browser nil
+     :pending-control false}))
 
 (fn lines-has-active?
   [lines idx]

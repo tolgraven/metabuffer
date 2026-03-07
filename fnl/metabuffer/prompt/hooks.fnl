@@ -50,21 +50,41 @@
                   (if (and s e)
                       (let [token (string.sub txt s e)
                             s0 (- s 1)
-                            e0 e]
-                        (when (and (> (# token) 1) (= (string.sub token 1 1) "!"))
+                            e0 e
+                            escaped-neg? (vim.startswith token "\\!")
+                            negated? (and (> (# token) 1)
+                                          (= (string.sub token 1 1) "!")
+                                          (not escaped-neg?))
+                            body (if negated?
+                                     (string.sub token 2)
+                                     escaped-neg?
+                                     (string.sub token 2)
+                                     token)
+                            body-start (if (or negated? escaped-neg?) (+ s0 1) s0)]
+                        (when negated?
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptNeg" r s0 e0))
-                        (let [core (if (and (> (# token) 1) (= (string.sub token 1 1) "!"))
-                                        (string.sub token 2)
-                                        token)]
-                          (when (and (> (# core) 0)
-                                     (not (not (string.find core "[\\%[%]%(%)%+%*%?%|]"))))
-                            (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptRegex" r s0 e0)))
-                        (when (and (> (# token) 0) (= (string.sub token 1 1) "^"))
-                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r s0 (+ s0 1)))
-                        (when (and (> (# token) 0) (= (string.sub token (# token)) "$"))
+                        (when (and (> (# body) 0)
+                                   (not (not (string.find body "[\\%[%]%(%)%+%*%?%|]"))))
+                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptRegex" r s0 e0))
+                        (when (and (> (# body) 0)
+                                   (not (vim.startswith body "\\^"))
+                                   (= (string.sub body 1 1) "^"))
+                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r body-start (+ body-start 1)))
+                        (when (and (> (# body) 0)
+                                   (not (vim.endswith body "\\$"))
+                                   (= (string.sub body (# body)) "$"))
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r (- e0 1) e0))
                         (set pos (+ e 1)))
-                        (set pos (+ (# txt) 1))))))))))
+                      (set pos (+ (# txt) 1))))))))))
+
+    (fn escaped-inline-shorthand?
+  [left token]
+      (let [n (# (or left ""))
+            m (# (or token ""))]
+        (and (>= n m)
+             (let [before (- n m)]
+               (and (>= before 1)
+                    (= (string.sub left before before) "\\"))))))
 
     (fn maybe-expand-history-shorthand!
   [router session]
@@ -80,16 +100,20 @@
                     line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf row0 (+ row0 1) false) 1) "")
                     left (if (> col 0) (string.sub line 1 col) "")
                     saved-tag (string.match left "##([%w_%-]+)$")
+                    saved-token (and saved-tag (.. "##" saved-tag))
                     saved-replacement (if saved-tag
                                           (router.saved-prompt-entry saved-tag)
                                           "")
-                    trigger (if (and (>= col 3) (vim.endswith left "!^!"))
-                                "!^!"
-                                (and (>= col 2) (vim.endswith left "!!"))
-                                "!!"
-                                (and (>= col 2) (vim.endswith left "!$"))
-                                "!$"
-                                nil)
+                    trigger0 (if (and (>= col 3) (vim.endswith left "!^!"))
+                                 "!^!"
+                                 (and (>= col 2) (vim.endswith left "!!"))
+                                 "!!"
+                                 (and (>= col 2) (vim.endswith left "!$"))
+                                 "!$"
+                                 nil)
+                    trigger (if (and trigger0 (escaped-inline-shorthand? left trigger0))
+                                nil
+                                trigger0)
                     replacement (if (= trigger "!!")
                                     (router.last-prompt-entry session.prompt-buf)
                                     (= trigger "!$")
@@ -111,6 +135,7 @@
                       (set session._expanding-history-shorthand false)
                       true)
                     (if (and saved-tag
+                             (not (escaped-inline-shorthand? left saved-token))
                              (= (type saved-replacement) "string")
                              (~= saved-replacement ""))
                         (do

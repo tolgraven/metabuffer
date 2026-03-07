@@ -520,6 +520,19 @@
         (table.concat (vim.list_slice parts 2) " ")
         "")))
 
+(fn expand-command-query
+  [query]
+  (if (and (= (type query) "string") (~= query ""))
+      (let [trimmed (vim.trim query)]
+        (if (= trimmed "!!")
+            (history-latest nil)
+            (if (= trimmed "!$")
+                (history-latest-token nil)
+                (if (= trimmed "!^!")
+                    (history-latest-tail nil)
+                    query))))
+      query))
+
 (fn M.last-prompt-entry
   [prompt-buf]
   "Return most recent prompt history entry."
@@ -946,18 +959,18 @@
 (fn M.entry_start
   [query _bang]
   "Public API: M.entry_start."
-  (M.start query "start" nil _bang))
+  (M.start (expand-command-query query) "start" nil _bang))
 
 (fn M.entry_resume
   [query]
   "Public API: M.entry_resume."
-  (M.start query "resume" nil))
+  (M.start (expand-command-query query) "resume" nil))
 
 (fn M.entry_sync
   [query]
   "Public API: M.entry_sync."
   (let [key (vim.api.nvim_get_current_buf)]
-    (M.sync (. M.instances key) query)))
+    (M.sync (. M.instances key) (expand-command-query query))))
 
 (fn M.entry_push
   []

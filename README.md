@@ -15,6 +15,12 @@ Interactive buffer/project line filtering for Neovim, with a prompt-first workfl
 - `:MetaSync [query]`
 - `:MetaPush`
 
+Commandline history shorthands for `[query]`:
+
+- `!!` expands to latest prompt history entry
+- `!$` expands to final token from latest prompt history entry
+- `!^!` expands to latest prompt history entry without first token
+
 ### Runtime Toggles
 
 - `<C-b>` toggle repo-wide source mode (shows floating source info window on the right)

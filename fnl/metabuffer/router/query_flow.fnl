@@ -87,6 +87,13 @@
     (set session.prompt-force-block-until (+ now (math.max 0 delay)))
     (schedule-update! prompt-scheduler-ctx session delay)))
 
+(fn invalidate-filter-cache!
+  [session]
+  (when (and session session.meta)
+    (set session.meta._prev_text "")
+    (set session.meta._filter-cache {})
+    (set session.meta._filter-cache-line-count (# session.meta.buf.content))))
+
 (fn M.apply-prompt-lines!
   [deps session]
   (let [{: query-mod
@@ -151,7 +158,9 @@
                           (~= next-ignored session.effective-include-ignored)
                           (~= next-deps session.effective-include-deps)
                           (~= next-prefilter session.prefilter-mode)
-                          (~= next-lazy session.lazy-mode))]
+                          (~= next-lazy session.lazy-mode))
+              pending-control? (= (. parsed :pending-control) true)
+              skip-filter? (and pending-control? (not changed))]
           (set session.effective-include-hidden next-hidden)
           (set session.effective-include-ignored next-ignored)
           (set session.effective-include-deps next-deps)
@@ -174,24 +183,32 @@
                     (if session.lazy-mode "+lazy" "-lazy")
                     "]")
                 ""))
+          (when changed
+            (invalidate-filter-cache! session))
           (when (and session.project-mode changed)
             (project-source.apply-source-set! session))
-          (session.meta.set-query-lines effective-lines))
-        (let [[ok err] [(pcall session.meta.on-update 0)]]
-          (if ok
+          (if skip-filter?
               (do
+                (set session.prompt-last-applied-text raw-text)
                 (session.meta.refresh_statusline)
                 (update-info-window session))
-              (when (string.find (tostring err) "E565")
-                ;; Textlock race: retry right after current input cycle.
-                (vim.defer_fn
-                  (fn []
-                    (when (and session.meta
-                               (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-                      (pcall session.meta.on-update 0)
-                      (pcall session.meta.refresh_statusline)
-                      (pcall update-info-window session)))
-                  1))))))))
+              (do
+                (session.meta.set-query-lines effective-lines)
+                (let [[ok err] [(pcall session.meta.on-update 0)]]
+                  (if ok
+                      (do
+                        (session.meta.refresh_statusline)
+                        (update-info-window session))
+                      (when (string.find (tostring err) "E565")
+                        ;; Textlock race: retry right after current input cycle.
+                        (vim.defer_fn
+                          (fn []
+                            (when (and session.meta
+                                       (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+                              (pcall session.meta.on-update 0)
+                              (pcall session.meta.refresh_statusline)
+                              (pcall update-info-window session)))
+                          1)))))))))))
 
 (fn M.on-prompt-changed!
   [deps prompt-buf force event-tick]
@@ -210,24 +227,35 @@
         (when-not duplicate-event?
           (let [txt (router_util_mod.prompt-text session)
                 now (router_prompt_mod.now-ms)
-                delay (prompt-delay-ms settings query-mod session)]
+                delay (prompt-delay-ms settings query-mod session)
+                parsed (query-mod.parse-query-lines
+                         (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false))
+                pending-control? (= (. parsed :pending-control) true)]
             (when (and (not force) event-tick)
               (set session.prompt-last-event-tick event-tick))
-            (when-not (and force (< now (or session.prompt-force-block-until 0)))
-              (let [duplicate-text? (and (not force)
-                                         (= txt (or session.prompt-last-event-text "")))]
-                (when duplicate-text?
-                  (apply-duplicate-text-event! prompt-scheduler-ctx session now delay))
-                (when-not duplicate-text?
-                  (apply-fresh-prompt-event!
-                    query-mod
-                    project-source
-                    settings
-                    prompt-scheduler-ctx
-                    session
-                    force
-                    txt
-                    now
-                    delay))))))))))
+            (if pending-control?
+                (do
+                  (router_prompt_mod.cancel-prompt-update! session)
+                  (set session.prompt-update-dirty false)
+                  (set session.prompt-last-event-text txt)
+                  (set session.last-prompt-text txt)
+                  (set session.prompt-last-change-ms now)
+                  (set session.last-parsed-query parsed))
+                (when-not (and force (< now (or session.prompt-force-block-until 0)))
+                  (let [duplicate-text? (and (not force)
+                                             (= txt (or session.prompt-last-event-text "")))]
+                    (when duplicate-text?
+                      (apply-duplicate-text-event! prompt-scheduler-ctx session now delay))
+                    (when-not duplicate-text?
+                      (apply-fresh-prompt-event!
+                        query-mod
+                        project-source
+                        settings
+                        prompt-scheduler-ctx
+                        session
+                        force
+                        txt
+                        now
+                        delay)))))))))))
 
 M
