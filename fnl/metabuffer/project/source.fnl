@@ -13,14 +13,44 @@
 
   (fn parse-prefilter-terms
     [query-lines ignorecase]
+    (fn prefilter-safe-token
+      [tok]
+      (let [raw (or tok "")
+            escaped-neg? (vim.startswith raw "\\!")
+            negated? (and (= (string.sub raw 1 1) "!")
+                          (not escaped-neg?))
+            body0 (if escaped-neg?
+                      (string.sub raw 2)
+                      negated?
+                      (string.sub raw 2)
+                      raw)
+            anchor-start (and (> (# body0) 0)
+                              (not (vim.startswith body0 "\\^"))
+                              (= (string.sub body0 1 1) "^"))
+            body1 (if anchor-start (string.sub body0 2) body0)
+            anchor-end (and (> (# body1) 0)
+                            (not (vim.endswith body1 "\\$"))
+                            (= (string.sub body1 (# body1)) "$"))
+            body2 (if anchor-end (string.sub body1 1 (- (# body1) 1)) body1)
+            unescaped (-> body2
+                          (string.gsub "\\\\!" "!")
+                          (string.gsub "\\%^" "^")
+                          (string.gsub "\\%$" "$"))]
+        (if negated?
+            nil
+            ;; Prefilter must not create false negatives. Skip regex-like terms:
+            ;; exact matcher will handle them later.
+            (if (not (not (string.find unescaped "[\\%[%]%(%)%+%*%?%|]")))
+                nil
+                (if (~= unescaped "") unescaped nil)))))
     (let [groups []]
       (each [_ line (ipairs (or query-lines []))]
         (let [trimmed (vim.trim (or line ""))]
           (when (~= trimmed "")
             (let [toks []]
               (each [_ tok (ipairs (vim.split trimmed "%s+"))]
-                (when (~= tok "")
-                  (table.insert toks (if ignorecase (string.lower tok) tok))))
+                (when-let [needle (prefilter-safe-token tok)]
+                  (table.insert toks (if ignorecase (string.lower needle) needle))))
               (when (> (# toks) 0)
                 (table.insert groups toks))))))
       groups))
