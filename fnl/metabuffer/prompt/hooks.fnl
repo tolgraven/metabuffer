@@ -48,21 +48,22 @@
               (while (<= pos (# txt))
                 (let [[s e] [(string.find txt "%S+" pos)]]
                   (if (and s e)
-                      (let [token (string.sub txt s e)
-                            s0 (- s 1)
-                            e0 e
-                            escaped-neg? (vim.startswith token "\\!")
+                        (let [token (string.sub txt s e)
+                              s0 (- s 1)
+                              e0 e
+                              escaped-neg? (vim.startswith token "\\!")
                             negated? (and (> (# token) 1)
                                           (= (string.sub token 1 1) "!")
                                           (not escaped-neg?))
-                            body (if negated?
-                                     (string.sub token 2)
-                                     escaped-neg?
-                                     (string.sub token 2)
-                                     token)
-                            body-start (if (or negated? escaped-neg?) (+ s0 1) s0)]
-                        (when negated?
-                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptNeg" r s0 e0))
+                              body (if negated?
+                                       (string.sub token 2)
+                                       escaped-neg?
+                                       (string.sub token 2)
+                                       token)
+                              body-start (if (or negated? escaped-neg?) (+ s0 1) s0)]
+                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptText" r s0 e0)
+                          (when negated?
+                            (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptNeg" r s0 e0))
                         (when (and (> (# body) 0)
                                    (not (string.match body "^[%?%*%+%|%.]$"))
                                    (not (not (string.find body "[\\%[%]%(%)%+%*%?%|]"))))

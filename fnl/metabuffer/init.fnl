@@ -110,6 +110,19 @@
             db (math.max 0 (math.min 255 (math.floor (* b (- 1 f)))))]
         (+ (* dr 0x10000) (* dg 0x100) db))))
 
+(fn brighten-rgb
+  [n factor]
+  (if (not n)
+      nil
+      (let [r (math.floor (/ n 0x10000))
+            g (math.floor (% (/ n 0x100) 0x100))
+            b (% n 0x100)
+            f (math.max 0 (math.min factor 1))
+            br (math.max 0 (math.min 255 (math.floor (+ r (* (- 255 r) f)))))
+            bg (math.max 0 (math.min 255 (math.floor (+ g (* (- 255 g) f)))))
+            bb (math.max 0 (math.min 255 (math.floor (+ b (* (- 255 b) f)))))]
+        (+ (* br 0x10000) (* bg 0x100) bb))))
+
 (fn hl-bg
   [group]
   (let [[ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
@@ -128,6 +141,22 @@
         bg (darken-rgb base-bg 0.15)]
     (when bg
       (set (. opts :bg) bg))
+    opts))
+
+(fn prompt-text-hl
+  []
+  (let [opts {:default true :bold true :cterm {:bold true}}
+        [ok-normal normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]
+        [ok-title title] [(pcall vim.api.nvim_get_hl 0 {:name "Title" :link false})]
+        bg (and ok-normal (= (type normal) "table") (. normal :bg))
+        fg0 (or (and ok-title (= (type title) "table") (. title :fg))
+                (and ok-normal (= (type normal) "table") (. normal :fg)))
+        dark? (and bg (< (or (rgb-luma bg) 255) 120))
+        fg (if dark?
+               (brighten-rgb fg0 0.18)
+               fg0)]
+    (when fg
+      (set (. opts :fg) fg))
     opts))
 
 (fn ensure-defaults-and-highlights!
@@ -159,6 +188,7 @@
     (hi 0 "MetaSearchHitFuzzy" (hit-hl "Number" "WarningMsg"))
     (hi 0 "MetaSearchHitFuzzyBetween" (hit-hl "IncSearch" "Question"))
     (hi 0 "MetaSearchHitRegex" (hit-hl "Special" "Type"))
+    (hi 0 "MetaPromptText" (prompt-text-hl))
     (hi 0 "MetaPromptNeg" {:default true :link "ErrorMsg"})
     (hi 0 "MetaPromptAnchor" {:default true :link "SpecialChar"})
     (hi 0 "MetaPromptRegex" {:default true :link "MetaSearchHitRegex" :underline true})

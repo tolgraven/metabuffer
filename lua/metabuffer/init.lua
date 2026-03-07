@@ -170,6 +170,20 @@ local function darken_rgb(n, factor)
     return ((dr * 65536) + (dg * 256) + db)
   end
 end
+local function brighten_rgb(n, factor)
+  if not n then
+    return nil
+  else
+    local r = math.floor((n / 65536))
+    local g = math.floor(((n / 256) % 256))
+    local b = (n % 256)
+    local f = math.max(0, math.min(factor, 1))
+    local br = math.max(0, math.min(255, math.floor((r + ((255 - r) * f)))))
+    local bg = math.max(0, math.min(255, math.floor((g + ((255 - g) * f)))))
+    local bb = math.max(0, math.min(255, math.floor((b + ((255 - b) * f)))))
+    return ((br * 65536) + (bg * 256) + bb)
+  end
+end
 local function hl_bg(group)
   local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
   if (ok and (type(hl) == "table")) then
@@ -184,6 +198,25 @@ local function alt_bg_from(group)
   local bg = darken_rgb(base_bg, 0.15)
   if bg then
     opts["bg"] = bg
+  else
+  end
+  return opts
+end
+local function prompt_text_hl()
+  local opts = {default = true, bold = true, cterm = {bold = true}}
+  local ok_normal,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
+  local ok_title,title = pcall(vim.api.nvim_get_hl, 0, {name = "Title", link = false})
+  local bg = (ok_normal and (type(normal) == "table") and normal.bg)
+  local fg0 = ((ok_title and (type(title) == "table") and title.fg) or (ok_normal and (type(normal) == "table") and normal.fg))
+  local dark_3f = (bg and ((rgb_luma(bg) or 255) < 120))
+  local fg
+  if dark_3f then
+    fg = brighten_rgb(fg0, 0.18)
+  else
+    fg = fg0
+  end
+  if fg then
+    opts["fg"] = fg
   else
   end
   return opts
@@ -215,6 +248,7 @@ local function ensure_defaults_and_highlights_21()
   hi(0, "MetaSearchHitFuzzy", hit_hl("Number", "WarningMsg"))
   hi(0, "MetaSearchHitFuzzyBetween", hit_hl("IncSearch", "Question"))
   hi(0, "MetaSearchHitRegex", hit_hl("Special", "Type"))
+  hi(0, "MetaPromptText", prompt_text_hl())
   hi(0, "MetaPromptNeg", {default = true, link = "ErrorMsg"})
   hi(0, "MetaPromptAnchor", {default = true, link = "SpecialChar"})
   hi(0, "MetaPromptRegex", {default = true, link = "MetaSearchHitRegex", underline = true})
@@ -289,42 +323,42 @@ M.reload = function(opts)
   clear_module_cache()
   clear_plugin_loaded_flags_21()
   source_plugin_bootstrap_21()
-  local _41_
+  local _44_
   if do_compile then
-    _41_ = "[metabuffer] reloaded (compiled)"
+    _44_ = "[metabuffer] reloaded (compiled)"
   else
-    _41_ = "[metabuffer] reloaded"
+    _44_ = "[metabuffer] reloaded"
   end
-  vim.notify(_41_, vim.log.levels.INFO)
+  vim.notify(_44_, vim.log.levels.INFO)
   return true
 end
 M.setup = function()
   ensure_defaults_and_highlights_21()
-  local function _43_(args)
+  local function _46_(args)
     return router.entry_start(args.args, args.bang)
   end
-  ensure_command("Meta", _43_, {nargs = "?", bang = true})
-  local function _44_(args)
+  ensure_command("Meta", _46_, {nargs = "?", bang = true})
+  local function _47_(args)
     return router.entry_resume(args.args)
   end
-  ensure_command("MetaResume", _44_, {nargs = "?"})
-  local function _45_()
+  ensure_command("MetaResume", _47_, {nargs = "?"})
+  local function _48_()
     return router.entry_cursor_word(false)
   end
-  ensure_command("MetaCursorWord", _45_, {nargs = 0})
-  local function _46_()
+  ensure_command("MetaCursorWord", _48_, {nargs = 0})
+  local function _49_()
     return router.entry_cursor_word(true)
   end
-  ensure_command("MetaResumeCursorWord", _46_, {nargs = 0})
-  local function _47_(args)
+  ensure_command("MetaResumeCursorWord", _49_, {nargs = 0})
+  local function _50_(args)
     return router.entry_sync(args.args)
   end
-  ensure_command("MetaSync", _47_, {nargs = "?"})
-  local function _48_()
+  ensure_command("MetaSync", _50_, {nargs = "?"})
+  local function _51_()
     return router.entry_push()
   end
-  ensure_command("MetaPush", _48_, {nargs = 0})
-  local function _49_(args)
+  ensure_command("MetaPush", _51_, {nargs = 0})
+  local function _52_(args)
     local ok,err = pcall(M.reload, {compile = args.bang})
     if not ok then
       return vim.notify(("[metabuffer] reload failed: " .. tostring(err)), vim.log.levels.ERROR)
@@ -332,7 +366,7 @@ M.setup = function()
       return nil
     end
   end
-  ensure_command("MetaReload", _49_, {nargs = 0, bang = true})
+  ensure_command("MetaReload", _52_, {nargs = 0, bang = true})
   return true
 end
 return M

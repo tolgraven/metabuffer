@@ -68,6 +68,7 @@ M.new = function(opts)
             else
               body_start = s0
             end
+            vim.api.nvim_buf_add_highlight(session["prompt-buf"], ns, "MetaPromptText", r, s0, e0)
             if negated_3f then
               vim.api.nvim_buf_add_highlight(session["prompt-buf"], ns, "MetaPromptNeg", r, s0, e0)
             else
