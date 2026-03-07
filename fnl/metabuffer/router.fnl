@@ -294,6 +294,45 @@
         (close-history-browser! session)
         (M.finish "cancel" prompt-buf))))
 
+(fn M.accept-main
+  [prompt-buf]
+  "Accept from the results window by syncing selection from main cursor first."
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when session
+      (session_view.sync-selected-from-main-cursor! session)
+      (M.accept prompt-buf))))
+
+(fn open-selected-hit!
+  [curr]
+  (let [ref (router_util_mod.selected-ref curr)
+        open-fn (or (and ref (. ref :open))
+                    (and ref (. ref :open!))
+                    (and ref (. ref :accept)))
+        lnum (math.max 1 (or (and ref ref.lnum) (curr.selected_line) 1))
+        col0 (math.max 0 (- (or (and ref ref.col) 1) 1))
+        path (and ref ref.path)
+        buf (and ref ref.buf)]
+    (cond
+      (= (type open-fn) "function")
+      (open-fn ref curr)
+
+      (and buf (vim.api.nvim_buf_is_valid buf))
+      (do
+        (base_buffer.switch-buf buf)
+        (pcall vim.api.nvim_win_set_cursor 0 [lnum col0]))
+
+      (and (= (type path) "string") (~= path ""))
+      (do
+        (vim.cmd (.. "edit " (vim.fn.fnameescape path)))
+        (pcall vim.api.nvim_win_set_cursor 0 [lnum col0]))
+
+      true
+      (do
+        (base_buffer.switch-buf curr.buf.model)
+        (pcall curr.win.set-row lnum true)
+        (pcall vim.api.nvim_win_set_cursor 0 [lnum col0])))
+    ref))
+
 (fn finish-accept
   [session]
   (let [curr session.meta]
@@ -312,23 +351,17 @@
                (vim.api.nvim_buf_is_valid session.origin-buf))
       (pcall vim.api.nvim_set_current_win session.origin-win)
       (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
-    (if session.project-mode
-        (let [ref (router_util_mod.selected-ref curr)]
-          (when (and ref ref.path)
-            (vim.cmd (.. "edit " (vim.fn.fnameescape ref.path)))
-            (vim.api.nvim_win_set_cursor 0 [(math.max 1 (or ref.lnum 1)) 0])))
-        (do
-          (base_buffer.switch-buf curr.buf.model)
-          (let [row (curr.selected_line)]
-            (curr.win.set-row row true)
-            (let [vq (curr.vim_query)]
-              (when (~= vq "")
-                (vim.api.nvim_win_set_cursor 0 [row 0])
-                (let [pos (vim.fn.searchpos vq "cnW" row)
-                      hit-row (. pos 1)
-                      hit-col (. pos 2)]
-                  (when (and (= hit-row row) (> hit-col 0))
-                    (vim.api.nvim_win_set_cursor 0 [row hit-col]))))))))
+    (let [ref (open-selected-hit! curr)
+          vq (curr.vim_query)
+          lnum (math.max 1 (or (and ref ref.lnum) (curr.selected_line) 1))
+          has-explicit-col? (and ref (not (= ref.col nil)))]
+      (when (and (not has-explicit-col?) (~= vq ""))
+        (pcall vim.api.nvim_win_set_cursor 0 [lnum 0])
+        (let [pos (vim.fn.searchpos vq "cnW" lnum)
+              hit-row (. pos 1)
+              hit-col (. pos 2)]
+          (when (and (= hit-row lnum) (> hit-col 0))
+            (pcall vim.api.nvim_win_set_cursor 0 [lnum hit-col])))))
     (vim.cmd "normal! zv")
     (let [vq (curr.vim_query)]
       (when (~= vq "")
