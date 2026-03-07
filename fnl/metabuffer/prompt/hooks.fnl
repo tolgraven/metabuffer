@@ -58,7 +58,45 @@
                         (when (and (> (# token) 0) (= (string.sub token (# token)) "$"))
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r (- e0 1) e0))
                         (set pos (+ e 1)))
-                      (set pos (+ (# txt) 1))))))))))
+                        (set pos (+ (# txt) 1))))))))))
+
+    (fn maybe-expand-history-shorthand!
+  [router session]
+      (if session._expanding-history-shorthand
+          false
+          (if (and session
+                   session.prompt-buf
+                   session.prompt-win
+                   (vim.api.nvim_buf_is_valid session.prompt-buf)
+                   (vim.api.nvim_win_is_valid session.prompt-win))
+              (let [[row col] (vim.api.nvim_win_get_cursor session.prompt-win)
+                    row0 (math.max 0 (- row 1))
+                    line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf row0 (+ row0 1) false) 1) "")
+                    left (if (> col 0) (string.sub line 1 col) "")
+                    trigger (if (and (>= col 2) (vim.endswith left "!!"))
+                                "!!"
+                                (and (>= col 2) (vim.endswith left "!$"))
+                                "!$"
+                                nil)
+                    replacement (if (= trigger "!!")
+                                    (router.last-prompt-entry session.prompt-buf)
+                                    (= trigger "!$")
+                                    (router.last-prompt-token session.prompt-buf)
+                                    "")]
+                (if (and trigger
+                         (= (type replacement) "string")
+                         (~= replacement ""))
+                    (do
+                      (set session._expanding-history-shorthand true)
+                      (vim.api.nvim_buf_set_text session.prompt-buf row0 (- col 2) row0 col [""])
+                      (pcall vim.api.nvim_win_set_cursor session.prompt-win [row (- col 2)])
+                      (if (= trigger "!!")
+                          (router.insert-last-prompt session.prompt-buf)
+                          (router.insert-last-token session.prompt-buf))
+                      (set session._expanding-history-shorthand false)
+                      true)
+                    false))
+              false)))
 
     (fn resolve-map-action
   [router session action arg]
@@ -111,7 +149,7 @@
 
     (fn apply-keymaps
       [router session]
-      (let [opts {:buffer session.prompt-buf :silent true :noremap true :nowait true}
+      (let [base-opts {:buffer session.prompt-buf :silent true :noremap true :nowait true}
             rules (if (= (type vim.g.meta_prompt_keymaps) "table")
                       vim.g.meta_prompt_keymaps
                       default-prompt-keymaps)]
@@ -120,6 +158,10 @@
                 lhs (. r 2)
                 action (. r 3)
                 arg (. r 4)
+                opts (if (or (= action "insert-last-prompt")
+                             (= action "insert-last-token"))
+                         (vim.tbl_extend "force" base-opts {:nowait false})
+                         base-opts)
                 rhs (resolve-map-action router session action arg)]
             (if rhs
                 (vim.keymap.set mode lhs rhs opts)
@@ -170,8 +212,11 @@
                          (fn []
                            (when (and session.prompt-buf
                                       (= (. active-by-prompt session.prompt-buf) session))
-                             (refresh-prompt-highlights! session)
-                             (on-prompt-changed session.prompt-buf false changedtick)))))
+                             (if (maybe-expand-history-shorthand! router session)
+                                 nil
+                                 (do
+                                   (refresh-prompt-highlights! session)
+                                   (on-prompt-changed session.prompt-buf false changedtick)))))))
            :on_detach (fn []
                         (when session.prompt-buf
                           (set (. active-by-prompt session.prompt-buf) nil)))})
@@ -181,11 +226,14 @@
           {:group aug
            :buffer session.prompt-buf
            :callback (fn [_]
-                       (refresh-prompt-highlights! session)
-                       (on-prompt-changed
-                         session.prompt-buf
-                         false
-                         (vim.api.nvim_buf_get_changedtick session.prompt-buf)))})
+                       (if (maybe-expand-history-shorthand! router session)
+                           nil
+                           (do
+                             (refresh-prompt-highlights! session)
+                             (on-prompt-changed
+                               session.prompt-buf
+                               false
+                               (vim.api.nvim_buf_get_changedtick session.prompt-buf)))))})
       ;; Re-assert prompt maps when entering insert mode; this wins over late
       ;; plugin mappings (for example completion plugins).
         (vim.api.nvim_create_autocmd "InsertEnter"

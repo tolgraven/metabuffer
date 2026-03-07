@@ -390,6 +390,16 @@
         (. parts (# parts))
         "")))
 
+(fn M.last-prompt-entry
+  [_]
+  "Return most recent prompt history entry."
+  (history-latest))
+
+(fn M.last-prompt-token
+  [_]
+  "Return final token of most recent prompt history entry."
+  (history-latest-token))
+
 (fn prompt-insert-at-cursor!
   [session text]
   (when (and session
@@ -399,7 +409,7 @@
              (vim.api.nvim_win_is_valid session.prompt-win)
              (= (type text) "string")
              (~= text ""))
-    (let [[row col] (unpack (vim.api.nvim_win_get_cursor session.prompt-win))
+    (let [[row col] (vim.api.nvim_win_get_cursor session.prompt-win)
           row0 (math.max 0 (- row 1))
           chunks (vim.split text "\n" {:plain true})
           last-line (. chunks (# chunks))
