@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
 (fn M.new
@@ -34,6 +34,32 @@
           (when (session-prompt-valid? session)
             (f)))))
 
+    (fn refresh-prompt-highlights!
+  [session]
+      (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
+        (let [ns (or session.prompt-hl-ns (vim.api.nvim_create_namespace "metabuffer.prompt"))
+              lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
+          (set session.prompt-hl-ns ns)
+          (vim.api.nvim_buf_clear_namespace session.prompt-buf ns 0 -1)
+          (each [row line (ipairs (or lines []))]
+            (let [r (- row 1)
+                  txt (or line "")]
+              (var pos 1)
+              (while (<= pos (# txt))
+                (let [[s e] [(string.find txt "%S+" pos)]]
+                  (if (and s e)
+                      (let [token (string.sub txt s e)
+                            s0 (- s 1)
+                            e0 e]
+                        (when (and (> (# token) 1) (= (string.sub token 1 1) "!"))
+                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptNeg" r s0 e0))
+                        (when (and (> (# token) 0) (= (string.sub token 1 1) "^"))
+                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r s0 (+ s0 1)))
+                        (when (and (> (# token) 0) (= (string.sub token (# token)) "$"))
+                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r (- e0 1) e0))
+                        (set pos (+ e 1)))
+                      (set pos (+ (# txt) 1))))))))))
+
     (fn resolve-map-action
   [router session action arg]
       (if
@@ -45,6 +71,10 @@
         (fn [] (router.move-selection session.prompt-buf arg))
         (= action "history-or-move")
         (fn [] (router.history-or-move session.prompt-buf arg))
+        (= action "insert-last-prompt")
+        (fn [] (router.insert-last-prompt session.prompt-buf))
+        (= action "insert-last-token")
+        (fn [] (router.insert-last-token session.prompt-buf))
         (= action "switch-mode")
         (fn [] (switch-mode session arg))
         (= action "toggle-scan-option")
@@ -87,6 +117,7 @@
                          (fn []
                            (when (and session.prompt-buf
                                       (= (. active-by-prompt session.prompt-buf) session))
+                             (refresh-prompt-highlights! session)
                              (on-prompt-changed session.prompt-buf false changedtick)))))
            :on_detach (fn []
                         (when session.prompt-buf
@@ -97,6 +128,7 @@
           {:group aug
            :buffer session.prompt-buf
            :callback (fn [_]
+                       (refresh-prompt-highlights! session)
                        (on-prompt-changed
                          session.prompt-buf
                          false
@@ -146,12 +178,17 @@
                        (schedule-when-valid session
                          (fn []
                            (maybe-sync-from-main! session))))})
+        (vim.keymap.set "n" "!"
+          (fn []
+            (router.exclude-symbol-under-cursor session.prompt-buf))
+          {:buffer session.meta.buf.buffer :silent true :noremap true})
         (vim.api.nvim_create_autocmd "WinScrolled"
           {:group aug
            :callback (fn [_]
                        (schedule-scroll-sync! session))})
         (disable-cmp session)
         (mark-prompt-buffer! session.prompt-buf)
+        (refresh-prompt-highlights! session)
         (apply-keymaps router session)))
 
     {:register! register!}))

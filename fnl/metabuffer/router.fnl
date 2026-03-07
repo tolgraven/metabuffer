@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local meta_mod (require :metabuffer.meta))
 (local prompt_window_mod (require :metabuffer.window.prompt))
 (local meta_window_mod (require :metabuffer.window.metawindow))
@@ -285,7 +285,7 @@
   [session]
   (when (can-refresh-source-syntax? session)
     (set session.syntax-refresh-dirty true)
-    (when (not session.syntax-refresh-pending)
+    (when-not session.syntax-refresh-pending
       (set session.syntax-refresh-pending true)
       (vim.defer_fn
         (fn []
@@ -375,6 +375,80 @@
                         (set session.last-history-text entry)
                         (router_util_mod.set-prompt-text! session entry))))))
             (M.move-selection prompt-buf delta))))))
+
+(fn history-latest
+  []
+  (let [h (history_store.list)
+        n (# h)]
+    (if (> n 0) (. h n) "")))
+
+(fn history-latest-token
+  []
+  (let [entry (history-latest)
+        parts (vim.split (or entry "") "%s+" {:trimempty true})]
+    (if (> (# parts) 0)
+        (. parts (# parts))
+        "")))
+
+(fn prompt-insert-at-cursor!
+  [session text]
+  (when (and session
+             session.prompt-buf
+             session.prompt-win
+             (vim.api.nvim_buf_is_valid session.prompt-buf)
+             (vim.api.nvim_win_is_valid session.prompt-win)
+             (= (type text) "string")
+             (~= text ""))
+    (let [[row col] (unpack (vim.api.nvim_win_get_cursor session.prompt-win))
+          row0 (math.max 0 (- row 1))
+          chunks (vim.split text "\n" {:plain true})
+          last-line (. chunks (# chunks))
+          next-row (+ row0 (# chunks))
+          next-col (if (= (# chunks) 1)
+                       (+ col (# last-line))
+                       (# last-line))]
+      (vim.api.nvim_buf_set_text session.prompt-buf row0 col row0 col chunks)
+      (pcall vim.api.nvim_win_set_cursor session.prompt-win [next-row next-col]))))
+
+(fn M.insert-last-prompt
+  [prompt-buf]
+  "Insert most recent prompt history entry at cursor."
+  (let [session (. M.active-by-prompt prompt-buf)
+        entry (history-latest)]
+    (prompt-insert-at-cursor! session entry)
+    (when (and session (~= entry ""))
+      (set session.last-history-text entry))))
+
+(fn M.insert-last-token
+  [prompt-buf]
+  "Insert last token from most recent prompt history entry at cursor."
+  (let [session (. M.active-by-prompt prompt-buf)
+        token (history-latest-token)
+        entry (history-latest)]
+    (prompt-insert-at-cursor! session token)
+    (when (and session (~= token ""))
+      (set session.last-history-text entry))))
+
+(fn M.exclude-symbol-under-cursor
+  [prompt-buf]
+  "Append !<cword> into prompt query."
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when session
+      (let [word (vim.api.nvim_win_call
+                   session.meta.win.window
+                   (fn [] (vim.fn.expand "<cword>")))
+            token (if (and (= (type word) "string") (~= (vim.trim word) ""))
+                      (.. "!" word)
+                      "")]
+        (when (~= token "")
+          (let [current (router_util_mod.prompt-text session)
+                sep (if (or (= current "")
+                            (vim.endswith current " ")
+                            (vim.endswith current "\n"))
+                        ""
+                        " ")
+                next (.. current sep token)]
+            (router_util_mod.set-prompt-text! session next)))))))
 
 (fn M.toggle-scan-option
   [prompt-buf which]
@@ -520,7 +594,7 @@
         (register-prompt-hooks session)
         (set (. M.active-by-source source-buf) session)
         (set (. M.active-by-prompt prompt-buf) session)
-        (when (not (and session.project-mode (not initial-query-active)))
+        (when-not (and session.project-mode (not initial-query-active))
           (apply-prompt-lines session))
         (vim.api.nvim_set_current_win prompt-win.window)
         (vim.cmd "startinsert")
@@ -540,7 +614,7 @@
 (fn M.sync
   [meta query]
   "Public API: M.sync."
-  (when (not meta)
+  (when-not meta
     (vim.notify "No Meta instance" vim.log.levels.WARN))
   (when meta
     (meta.set-query-lines (if (and query (~= query "")) [query] []))
@@ -551,7 +625,7 @@
 (fn M.push
   [meta]
   "Public API: M.push."
-  (when (not meta)
+  (when-not meta
     (vim.notify "No Meta instance" vim.log.levels.WARN))
   (when meta
     (let [lines (vim.api.nvim_buf_get_lines meta.buf.buffer 0 -1 false)]

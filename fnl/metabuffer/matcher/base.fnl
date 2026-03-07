@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local util (require :metabuffer.util))
 (local M {})
 
@@ -11,7 +11,7 @@
   "Public API: M.new."
   (let [self {:name name
               :also-highlight-per-char (and opts opts.also-highlight-per-char)
-              :match-id nil
+              :match-ids []
               :char-match-id nil
               :match-win nil
               :get-highlight-pattern (or (and opts opts.get-highlight-pattern) (fn [_ _] ""))
@@ -26,9 +26,9 @@
 
   (fn self.remove-highlight
   []
-    (when self.match-id
-      (delete-match self.match-id self.match-win)
-      (set self.match-id nil))
+    (each [_ id (ipairs (or self.match-ids []))]
+      (delete-match id self.match-win))
+    (set self.match-ids [])
     (when self.char-match-id
       (delete-match self.char-match-id self.match-win)
       (set self.char-match-id nil))
@@ -57,7 +57,17 @@
             case-prefix (if ignorecase "\\c" "\\C")
             win (or target-win (vim.api.nvim_get_current_win))]
         (set self.match-win win)
-        (set self.match-id (matchadd-in-window group (.. case-prefix pat) win))
+        (if (= (type pat) "string")
+            (when (~= pat "")
+              (table.insert self.match-ids
+                (matchadd-in-window group (.. case-prefix pat) win)))
+            (when (= (type pat) "table")
+              (each [_ item (ipairs pat)]
+                (let [item-group (or (. item :group) group)
+                      item-pat (or (. item :pattern) "")]
+                  (when (~= item-pat "")
+                    (table.insert self.match-ids
+                      (matchadd-in-window item-group (.. case-prefix item-pat) win)))))))
         (when self.also-highlight-per-char
           (set self.char-match-id
             (matchadd-in-window M.default-hi-char (table.concat (vim.split query "") "\\|") win))))))

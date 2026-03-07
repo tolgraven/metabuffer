@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local router (require :metabuffer.router))
 
 (local M {})
@@ -159,6 +159,8 @@
     (hi 0 "MetaSearchHitFuzzy" (hit-hl "Number" "WarningMsg"))
     (hi 0 "MetaSearchHitFuzzyBetween" (hit-hl "IncSearch" "Question"))
     (hi 0 "MetaSearchHitRegex" (hit-hl "Special" "Type"))
+    (hi 0 "MetaPromptNeg" {:default true :link "ErrorMsg"})
+    (hi 0 "MetaPromptAnchor" {:default true :link "SpecialChar"})
     (hi 0 "MetaSourceLineNr" {:default true :link "LineNr"})
     (hi 0 "MetaSourceDir" {:default true :link "Directory"})
     (hi 0 "MetaSourceBoundary" (thin-underline-from "Error"))
@@ -256,7 +258,7 @@
   (ensure-command "MetaReload"
     (fn [args]
       (let [[ok err] [(pcall M.reload {:compile args.bang})]]
-        (when (not ok)
+        (when-not ok
           (vim.notify (.. "[metabuffer] reload failed: " (tostring err)) vim.log.levels.ERROR))))
     {:nargs 0 :bang true})
 

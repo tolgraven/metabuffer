@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
 (fn M.apply-router-defaults
@@ -21,6 +21,10 @@
           ["i" "<Down>" "history-or-move" -1]
           ["n" "<Up>" "history-or-move" 1]
           ["n" "<Down>" "history-or-move" -1]
+          ["i" "!!" "insert-last-prompt"]
+          ["n" "!!" "insert-last-prompt"]
+          ["i" "!$" "insert-last-token"]
+          ["n" "!$" "insert-last-token"]
           ;; Statusline keys: C^ (matcher), C_ (case), Cs (syntax)
           [["n" "i"] "<C-^>" "switch-mode" "matcher"]
           [["n" "i"] "<C-6>" "switch-mode" "matcher"]
