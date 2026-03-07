@@ -410,6 +410,88 @@
       (vim.api.nvim_buf_set_text session.prompt-buf row0 col row0 col chunks)
       (pcall vim.api.nvim_win_set_cursor session.prompt-win [next-row next-col]))))
 
+(fn prompt-row-col
+  [session]
+  (if (and session
+           session.prompt-win
+           (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [[row col] (vim.api.nvim_win_get_cursor session.prompt-win)]
+        {:row (math.max 1 row)
+         :row0 (math.max 0 (- row 1))
+         :col (math.max 0 col)})
+      {:row 1 :row0 0 :col 0}))
+
+(fn prompt-line-text
+  [session row0]
+  (let [lines (vim.api.nvim_buf_get_lines session.prompt-buf row0 (+ row0 1) false)]
+    (or (. lines 1) "")))
+
+(fn M.prompt-home
+  [prompt-buf]
+  "Move prompt cursor to start of current line."
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when (and session
+               session.prompt-win
+               (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [{: row} (prompt-row-col session)]
+        (pcall vim.api.nvim_win_set_cursor session.prompt-win [row 0])))))
+
+(fn M.prompt-end
+  [prompt-buf]
+  "Move prompt cursor to end of current line."
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when (and session
+               session.prompt-buf
+               session.prompt-win
+               (vim.api.nvim_buf_is_valid session.prompt-buf)
+               (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [{: row : row0} (prompt-row-col session)
+            line (prompt-line-text session row0)]
+        (pcall vim.api.nvim_win_set_cursor session.prompt-win [row (# line)])))))
+
+(fn M.prompt-kill-backward
+  [prompt-buf]
+  "Kill from line start to cursor and store in prompt yank register."
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when (and session
+               session.prompt-buf
+               session.prompt-win
+               (vim.api.nvim_buf_is_valid session.prompt-buf)
+               (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [{: row : row0 : col} (prompt-row-col session)]
+        (when (> col 0)
+          (let [line (prompt-line-text session row0)
+                killed (string.sub line 1 col)]
+            (set session.prompt-yank-register (or killed ""))
+            (vim.api.nvim_buf_set_text session.prompt-buf row0 0 row0 col [""])
+            (pcall vim.api.nvim_win_set_cursor session.prompt-win [row 0])))))))
+
+(fn M.prompt-kill-forward
+  [prompt-buf]
+  "Kill from cursor to end of current line and store in prompt yank register."
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when (and session
+               session.prompt-buf
+               session.prompt-win
+               (vim.api.nvim_buf_is_valid session.prompt-buf)
+               (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [{: row : row0 : col} (prompt-row-col session)
+            line (prompt-line-text session row0)
+            len (# line)]
+        (when (< col len)
+          (let [killed (string.sub line (+ col 1))]
+            (set session.prompt-yank-register (or killed ""))
+            (vim.api.nvim_buf_set_text session.prompt-buf row0 col row0 len [""])
+            (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col])))))))
+
+(fn M.prompt-yank
+  [prompt-buf]
+  "Insert prompt yank register content at cursor."
+  (let [session (. M.active-by-prompt prompt-buf)
+        text (or (and session session.prompt-yank-register) "")]
+    (when (~= text "")
+      (prompt-insert-at-cursor! session text))))
+
 (fn M.insert-last-prompt
   [prompt-buf]
   "Insert most recent prompt history entry at cursor."

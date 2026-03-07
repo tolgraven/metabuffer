@@ -1,4 +1,4 @@
-(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local prompt_mod (require :metabuffer.prompt.prompt))
 (local prompt_action_mod (require :metabuffer.prompt.action))
 (local modeindexer (require :metabuffer.modeindexer))
@@ -45,6 +45,21 @@
         (vim.startswith m "i")
         {:group "Insert" :label (if (nerd-font-enabled?) "𝐈" "Insert")}
         {:group "Normal" :label (if (nerd-font-enabled?) "𝗡" "Normal")})))
+
+(fn highlight-pattern->vim-query
+  [pat]
+  (if (= (type pat) "string")
+      pat
+      (= (type pat) "table")
+      (let [parts []]
+        (each [_ item (ipairs pat)]
+          (let [item-pat (or (. item :pattern) "")]
+            (when (~= item-pat "")
+              (table.insert parts item-pat))))
+        (if (> (# parts) 0)
+            (table.concat parts "\\|")
+            ""))
+      ""))
 
 (fn M.new
   [nvim condition]
@@ -142,8 +157,11 @@
       ""
       (let [caseprefix (if (self.ignorecase) "\\c" "\\C")
             matcher_obj (self.matcher)
-            pat (matcher_obj.get-highlight-pattern matcher_obj q)]
-        (.. caseprefix pat)))))
+            pat0 (matcher_obj.get-highlight-pattern matcher_obj q)
+            pat (highlight-pattern->vim-query pat0)]
+        (if (= pat "")
+            ""
+            (.. caseprefix pat))))))
 
       (fn self.refresh_statusline
         []
@@ -282,7 +300,7 @@
         (each [i src (ipairs self.buf.indices)]
           (when (and (not idx) (= src prev-line))
             (set idx i)))
-        (when (not idx)
+        (when-not idx
           (set idx (self.buf.closest-index prev-line)))
         (when idx
           (set self.selected_index (- idx 1))
