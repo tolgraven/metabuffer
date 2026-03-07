@@ -80,6 +80,19 @@
          (let [added (string.sub next0 (+ prev-n 1) (+ prev-n 1))]
            (not (not (string.find added "%S")))))))
 
+(fn query-has-negation?
+  [queries]
+  (var found false)
+  (each [_ line (ipairs (or queries []))]
+    (when (and (not found) (= (type line) "string") (~= (vim.trim line) ""))
+      (each [_ tok (ipairs (vim.split line "%s+" {:trimempty true}))]
+        (when (and (not found)
+                   (> (# tok) 1)
+                   (= (string.sub tok 1 1) "!")
+                   (not (vim.startswith tok "\\!")))
+          (set found true)))))
+  found)
+
 (fn M.new
   [nvim condition]
   "Construct Meta state and bind matcher/query/buffer runtime."
@@ -259,8 +272,10 @@
           ;; small and the prompt grew, keep filtering only current hits.
           ;; This avoids full re-scans on every keystroke while narrowing.
           narrow-reuse-threshold (or vim.g.meta_narrow_reuse_threshold 400)
+          has-negation? (query-has-negation? queries)
           narrow-reuse? (and reset0?
                              (= matcher-name "all")
+                             (not has-negation?)
                              (> (# prev-text) 0)
                              (> (# self.text) (# prev-text))
                              (<= (# prev-hits) narrow-reuse-threshold))

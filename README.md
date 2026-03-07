@@ -65,6 +65,19 @@ Saved prompts:
 - `##tag` restores saved prompt inline
 - `##` opens saved-prompt browser
 
+Control directives (consumed from prompt):
+
+- bare `#hidden`, `#ignored`, `#deps`, `#prefilter`, `#lazy` toggle current value
+- explicit forms force value:
+  - `#+hidden` / `#-hidden`
+  - `#+ignored` / `#-ignored`
+  - `#+deps` / `#-deps`
+  - `#+prefilter` / `#-prefilter`
+  - `#+lazy` / `#-lazy`
+- aliases:
+  - `#nohidden`, `#noignored`, `#nodeps`, `#noprefilter`, `#nolazy`
+  - `#escape` is equivalent to disabling prefilter
+
 Persistence:
 
 - prompt history and saved tags are persisted to:

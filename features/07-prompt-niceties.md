@@ -40,7 +40,14 @@ Control directives are consumed from query text once applied:
 - `#save:tag`: save current prompt text under `tag`
 - `##tag`: restore saved prompt `tag`
 - `##`: open saved prompts browser
-- `#+deps` / `#-deps` and other `#(+|-)` scan directives
+- bare scan directives toggle current value:
+  - `#hidden`, `#ignored`, `#deps`, `#prefilter`, `#lazy`
+- explicit scan directives force value:
+  - `#+hidden` / `#-hidden`
+  - `#+ignored` / `#-ignored`
+  - `#+deps` / `#-deps`
+  - `#+prefilter` / `#-prefilter` (`#escape` / `#noprefilter` also disable)
+  - `#+lazy` / `#-lazy`
 
 ## Behavior details
 
