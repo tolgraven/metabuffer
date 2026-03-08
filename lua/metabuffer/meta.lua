@@ -1,6 +1,5 @@
 -- [nfnl] fnl/metabuffer/meta.fnl
 local prompt_mod = require("metabuffer.prompt.prompt")
-local prompt_action_mod = require("metabuffer.prompt.action")
 local modeindexer = require("metabuffer.modeindexer")
 local state = require("metabuffer.core.state")
 local all_matcher = require("metabuffer.matcher.all")
@@ -156,7 +155,6 @@ M.new = function(nvim, condition)
   self["query-lines"] = {}
   self["_prev-ignorecase"] = nil
   self["_prev-matcher"] = nil
-  self.action = prompt_action_mod.DEFAULT_ACTION
   self.win = meta_window_mod.new(nvim, vim.api.nvim_get_current_win())
   self["status-win"] = self.win
   self.buf = meta_buffer_mod.new(nvim, vim.api.nvim_get_current_buf())
@@ -323,6 +321,7 @@ M.new = function(nvim, condition)
       local prev_text = self._prev_text
       local prev_hits = self.buf.indices
       local prev_line = line_of_index(self.buf, self.selected_index)
+      local effective_query = table.concat(queries, "\n")
       local matcher_name = self.matcher().name
       local ignorecase = self.ignorecase()
       local line_count = #self.buf.content
@@ -336,12 +335,13 @@ M.new = function(nvim, condition)
       else
         _34_ = "0"
       end
-      cache_key = (matcher_name .. "|" .. _34_ .. "|" .. table.concat(queries, "\n"))
+      cache_key = (matcher_name .. "|" .. _34_ .. "|" .. effective_query)
       local reset0_3f = ((prev_text == "") or not vim.startswith(self.text, prev_text) or bang_token_completed_3f(prev_text, self.text) or cache_grew_3f or cache_reset_3f or (self["_prev-ignorecase"] ~= ignorecase) or (self["_prev-matcher"] ~= matcher_name))
       local narrow_reuse_threshold = (vim.g.meta_narrow_reuse_threshold or 400)
       local narrow_reuse_3f = (reset0_3f and (matcher_name == "all") and not negation_growth_broadens_3f(prev_text, self.text) and (#prev_text > 0) and (#self.text > #prev_text) and (#prev_hits <= narrow_reuse_threshold))
       local shortened_3f = (#self.text < #prev_text)
-      local reset_3f = (reset0_3f and not narrow_reuse_3f and (not shortened_3f or deletion_broadens_3f(prev_text, self.text)))
+      local broaden_on_delete_3f = (shortened_3f and deletion_broadens_3f(prev_text, self.text))
+      local reset_3f = (reset0_3f and not narrow_reuse_3f and (not shortened_3f or broaden_on_delete_3f))
       if cache_reset_3f then
         self["_filter-cache"] = {}
         self["_filter-cache-line-count"] = line_count
@@ -355,6 +355,10 @@ M.new = function(nvim, condition)
       self["_prev-ignorecase"] = ignorecase
       self["_prev-matcher"] = matcher_name
       self.updates = (self.updates + 1)
+      if broaden_on_delete_3f then
+        self.buf["reset-filter"]()
+      else
+      end
       if (#queries == 0) then
         self.buf["reset-filter"]()
         clear_all_highlights()
@@ -363,7 +367,7 @@ M.new = function(nvim, condition)
         local cached_obj_3f = ((type(cached0) == "table") and (type(cached0.indices) == "table"))
         local cached_full_3f = (cached_obj_3f and (cached0.full == true))
         local cached
-        if cached_obj_3f then
+        if (cached_obj_3f and not shortened_3f) then
           if cached_full_3f then
             cached = cached0.indices
           else
@@ -422,11 +426,12 @@ M.new = function(nvim, condition)
           hits_changed = not vim.deep_equal(prev_hits, self.buf.indices)
         end
       end
-      if hits_changed then
+      local needs_render_3f = (hits_changed or broaden_on_delete_3f)
+      if needs_render_3f then
         self.buf.render()
       else
       end
-      if hits_changed then
+      if needs_render_3f then
         local idx = nil
         for i, src in ipairs(self.buf.indices) do
           if (not idx and (src == prev_line)) then
@@ -449,10 +454,16 @@ M.new = function(nvim, condition)
       else
       end
       local matcher = self.matcher()
+      for _, m in ipairs(self.mode.matcher.candidates) do
+        if (m and (m ~= matcher)) then
+          m["remove-highlight"](m)
+        else
+        end
+      end
       if ((#queries == 0) or (#self.buf.indices >= 1000)) then
         matcher["remove-highlight"](matcher)
       else
-        matcher.highlight(matcher, self.text, ignorecase, self.win.window)
+        matcher.highlight(matcher, effective_query, ignorecase, self.win.window)
       end
     end
     return status

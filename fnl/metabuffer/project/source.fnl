@@ -166,12 +166,14 @@
         (vim.defer_fn
           (fn []
             (set session.lazy-refresh-pending false)
-            (when (and session (session-active? session) session.lazy-refresh-dirty)
+          (when (and session (session-active? session) session.lazy-refresh-dirty)
               (set session.lazy-refresh-dirty false)
               (on-prompt-changed session.prompt-buf true))
             (when (and session (session-active? session) session.lazy-refresh-dirty)
               (schedule-lazy-refresh! session)))
-          (math.max 20 (or settings.project-lazy-refresh-debounce-ms 80))))))
+          (math.max
+            (or settings.project-lazy-refresh-min-ms 0)
+            settings.project-lazy-refresh-debounce-ms)))))
 
   (fn push-file-into-pool!
     [session path lines prefilter]
@@ -318,7 +320,7 @@
                  (not session.lazy-stream-done))
         (let [paths session.lazy-stream-paths
               total (# paths)
-              chunk (math.max 1 (or settings.project-lazy-chunk-size 8))]
+              chunk (math.max 1 settings.project-lazy-chunk-size)]
           (var consumed 0)
           (var touched false)
           (while (and (< consumed chunk)
@@ -447,7 +449,7 @@
                   (restore-meta-view! session.meta session.source-view)
                   (pcall session.meta.refresh_statusline)
                   (pcall update-info-window session)))))
-          (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms 120))))))
+          (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms))))))
 
   {:schedule-lazy-refresh! schedule-lazy-refresh!
    :apply-source-set! apply-source-set!

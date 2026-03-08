@@ -98,6 +98,7 @@
   (set router.project-lazy-min-estimated-lines (or vim.g.meta_project_lazy_min_estimated_lines 10000))
   (set router.project-lazy-chunk-size (or vim.g.meta_project_lazy_chunk_size 8))
   (set router.project-lazy-refresh-debounce-ms (or vim.g.meta_project_lazy_refresh_debounce_ms 80))
+  (set router.project-lazy-refresh-min-ms (or vim.g.meta_project_lazy_refresh_min_ms 20))
   (set router.project-lazy-prefilter-enabled (if (= vim.g.meta_project_lazy_prefilter_enabled nil) true vim.g.meta_project_lazy_prefilter_enabled))
   (set router.project-bootstrap-delay-ms (or vim.g.meta_project_bootstrap_delay_ms 120))
   (set router.project-bootstrap-idle-delay-ms (or vim.g.meta_project_bootstrap_idle_delay_ms 700))

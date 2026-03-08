@@ -453,7 +453,7 @@
             ;; run one trailing update.
             (when session.syntax-refresh-dirty
               (schedule-source-syntax-refresh! session))))
-        (or M.source-syntax-refresh-debounce-ms 80)))))
+        M.source-syntax-refresh-debounce-ms))))
 
 (fn M.scroll-main
   [prompt-buf action]

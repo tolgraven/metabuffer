@@ -101,6 +101,6 @@
         (fn []
           (set session.scroll-sync-pending false)
           (maybe-sync-from-main! session true))
-        (or scroll-sync-debounce-ms 20)))))
+        scroll-sync-debounce-ms))))
 
 M

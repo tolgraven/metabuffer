@@ -274,22 +274,37 @@
         (set session.augroup aug)
       ;; Some environments/plugins do not reliably emit TextChangedI for this
       ;; scratch prompt buffer; keep a low-level line-change hook as a fallback.
-        (vim.api.nvim_buf_attach session.prompt-buf false
-          {:on_lines (fn [_ _ changedtick _ _ _ _ _]
-                       ;; on_lines can fire before insert-state buffer text is fully
-                       ;; visible; defer one tick so we observe the committed prompt.
-                       (vim.schedule
+        (vim.api.nvim_buf_attach
+          session.prompt-buf
+          false
+          {:on_lines
+           (fn [_ _ changedtick _ _ _ _ _]
+             ;; on_lines can fire before insert-state buffer text is fully
+             ;; visible; defer one tick. Use this as fallback only when
+             ;; TextChanged/TextChangedI did not arrive.
+             (vim.schedule
+               (fn []
+                 (when (and session.prompt-buf
+                            (= (. active-by-prompt session.prompt-buf) session))
+                   (let [first-for-tick? (and changedtick
+                                              (~= changedtick session.prompt-last-onlines-tick))]
+                     (when first-for-tick?
+                       (set session.prompt-last-onlines-tick changedtick)
+                       (vim.defer_fn
                          (fn []
                            (when (and session.prompt-buf
-                                      (= (. active-by-prompt session.prompt-buf) session))
+                                      (= (. active-by-prompt session.prompt-buf) session)
+                                      (~= changedtick session.prompt-last-textchanged-tick))
                              (if (maybe-expand-history-shorthand! router session)
                                  nil
                                  (do
                                    (refresh-prompt-highlights! session)
-                                   (on-prompt-changed session.prompt-buf false changedtick)))))))
-           :on_detach (fn []
-                        (when session.prompt-buf
-                          (set (. active-by-prompt session.prompt-buf) nil)))})
+                                   (on-prompt-changed session.prompt-buf false changedtick)))))
+                         5)))))))
+           :on_detach
+           (fn []
+             (when session.prompt-buf
+               (set (. active-by-prompt session.prompt-buf) nil)))})
       ;; Prompt text updates: rely on post-change autocmds to avoid pre-edit race
       ;; behavior that can leave matcher one character behind while typing.
         (vim.api.nvim_create_autocmd ["TextChanged" "TextChangedI"]
@@ -300,10 +315,12 @@
                            nil
                            (do
                              (refresh-prompt-highlights! session)
+                             (set session.prompt-last-textchanged-tick
+                               (vim.api.nvim_buf_get_changedtick session.prompt-buf))
                              (on-prompt-changed
                                session.prompt-buf
                                false
-                               (vim.api.nvim_buf_get_changedtick session.prompt-buf)))))})
+                               session.prompt-last-textchanged-tick))))})
       ;; Re-assert prompt maps when entering insert mode; this wins over late
       ;; plugin mappings (for example completion plugins).
         (vim.api.nvim_create_autocmd "InsertEnter"

@@ -142,7 +142,7 @@
     (km.register_from_rules nvim rules)
     km))
 
-(set M.DEFAULT_KEYMAP_RULES
+(local default-keymap-rules
   [ ["<C-B>" "<prompt:move_caret_to_head>" "noremap"]
     ["<C-E>" "<prompt:move_caret_to_tail>" "noremap"]
     ["<BS>" "<prompt:delete_char_before_caret>" "noremap"]
@@ -176,5 +176,10 @@
     ["<PageDown>" "<prompt:assign_next_text>" "noremap"]
     ["<PageUp>" "<prompt:assign_previous_text>" "noremap"]
     ["<INSERT>" "<prompt:toggle_insert_mode>" "noremap"] ])
+
+(set M.DEFAULT_KEYMAP_RULES
+  (if (= (type vim.g.meta_legacy_prompt_keymap_rules) "table")
+      vim.g.meta_legacy_prompt_keymap_rules
+      default-keymap-rules))
 
 M

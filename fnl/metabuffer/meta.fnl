@@ -1,6 +1,5 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local prompt_mod (require :metabuffer.prompt.prompt))
-(local prompt_action_mod (require :metabuffer.prompt.action))
 (local modeindexer (require :metabuffer.modeindexer))
 (local state (require :metabuffer.core.state))
 (local all_matcher (require :metabuffer.matcher.all))
@@ -155,8 +154,6 @@
   (set self._prev-ignorecase nil)
   (set self._prev-matcher nil)
 
-  (set self.action prompt_action_mod.DEFAULT_ACTION)
-
   (set self.win (meta_window_mod.new nvim (vim.api.nvim_get_current_win)))
   (set self.status-win self.win)
   (set self.buf (meta_buffer_mod.new nvim (vim.api.nvim_get_current_buf)))
@@ -294,17 +291,18 @@
 
   (fn self.on-update
     [status]
-    (let [queries (self.active-queries)
+      (let [queries (self.active-queries)
           prev-text self._prev_text
           prev-hits self.buf.indices
           prev-line (line_of_index self.buf self.selected_index)
+          effective-query (table.concat queries "\n")
           matcher-name (. (self.matcher) :name)
           ignorecase (self.ignorecase)
           line-count (# self.buf.content)
           cache-grew? (> line-count self._filter-cache-line-count)
           cache-shrank? (< line-count self._filter-cache-line-count)
           cache-reset? cache-shrank?
-          cache-key (.. matcher-name "|" (if ignorecase "1" "0") "|" (table.concat queries "\n"))
+          cache-key (.. matcher-name "|" (if ignorecase "1" "0") "|" effective-query)
           reset0? (or (= prev-text "")
                       (not (vim.startswith self.text prev-text))
                       (bang-token-completed? prev-text self.text)
@@ -325,10 +323,11 @@
                              (> (# self.text) (# prev-text))
                              (<= (# prev-hits) narrow-reuse-threshold))
           shortened? (< (# self.text) (# prev-text))
+          broaden-on-delete? (and shortened? (deletion-broadens? prev-text self.text))
           reset? (and reset0?
                       (not narrow-reuse?)
                       (or (not shortened?)
-                          (deletion-broadens? prev-text self.text)))]
+                          broaden-on-delete?))]
       (when cache-reset?
         (set self._filter-cache {})
         (set self._filter-cache-line-count line-count))
@@ -338,6 +337,10 @@
       (set self._prev-ignorecase ignorecase)
       (set self._prev-matcher matcher-name)
       (set self.updates (+ self.updates 1))
+      (when broaden-on-delete?
+        ;; Ensure broaden-on-delete always starts from full candidate set.
+        ;; This avoids sticky narrowed indices when cache/reuse paths race.
+        (self.buf.reset-filter))
       (if (= (# queries) 0)
           (do
             (self.buf.reset-filter)
@@ -346,7 +349,7 @@
                 cached-obj? (and (= (type cached0) "table")
                                  (= (type (. cached0 :indices)) "table"))
                 cached-full? (and cached-obj? (= (. cached0 :full) true))
-                cached (if cached-obj?
+                cached (if (and cached-obj? (not shortened?))
                            (when cached-full? (. cached0 :indices))
                            nil)
                 cached-line-count0 (if cached-obj?
@@ -391,10 +394,11 @@
                              false
                              (if (~= (# prev-hits) (# self.buf.indices))
                                  true
-                                 (not (vim.deep_equal prev-hits self.buf.indices))))]
-      (when hits-changed
+                                 (not (vim.deep_equal prev-hits self.buf.indices))))
+            needs-render? (or hits-changed broaden-on-delete?)]
+      (when needs-render?
         (self.buf.render))
-      (when hits-changed
+      (when needs-render?
         (var idx nil)
         (each [i src (ipairs self.buf.indices)]
           (when (and (not idx) (= src prev-line))
@@ -408,9 +412,14 @@
       ;; Render can refresh/clear syntax regions; re-apply match highlights
       ;; afterward so visible hit highlighting remains stable.
       (let [matcher (self.matcher)]
+        ;; Ensure stale matchadd patterns from previously active matcher modes
+        ;; never linger in the results window.
+        (each [_ m (ipairs (. (. self.mode :matcher) :candidates))]
+          (when (and m (~= m matcher))
+            (m.remove-highlight m)))
         (if (or (= (# queries) 0) (>= (# self.buf.indices) 1000))
             (matcher.remove-highlight matcher)
-            (matcher.highlight matcher self.text ignorecase self.win.window)))))
+            (matcher.highlight matcher effective-query ignorecase self.win.window)))))
     status)
 
   (fn self.on-term

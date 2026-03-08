@@ -67,7 +67,7 @@
   [_ _]
   4)
 
-(set M.DEFAULT_ACTION_RULES
+(local default-action-rules
   [ ["meta:select_next_candidate" _select-next]
     ["meta:select_previous_candidate" _select-prev]
     ["meta:select_clicked_candidate" _select-clicked]
@@ -77,7 +77,7 @@
     ["meta:switch_highlight" _switch-highlight]
     ["meta:pause_prompt" _pause]])
 
-(set M.DEFAULT_ACTION_KEYMAP
+(local default-action-keymap
   [ ["<PageUp>" "<meta:select_previous_candidate>" "noremap"]
     ["<PageDown>" "<meta:select_next_candidate>" "noremap"]
     ["<C-A>" "<meta:move_caret_to_head>" "noremap"]
@@ -99,6 +99,16 @@
     ["<LeftMouse>" "<meta:select_clicked_candidate>" "noremap"]
     ["<LeftRelease>" "<meta:select_clicked_candidate>" "noremap"]
     ["<C-z>" "<meta:pause_prompt>" "noremap"]])
+
+(set M.DEFAULT_ACTION_RULES
+  (if (= (type vim.g.meta_legacy_action_rules) "table")
+      vim.g.meta_legacy_action_rules
+      default-action-rules))
+
+(set M.DEFAULT_ACTION_KEYMAP
+  (if (= (type vim.g.meta_legacy_action_keymap) "table")
+      vim.g.meta_legacy_action_keymap
+      default-action-keymap))
 
 ;; Backward compatibility aliases.
 (set M.DEFAULT-ACTION-RULES M.DEFAULT_ACTION_RULES)

@@ -14,3 +14,12 @@ apply-source-syntax-regions|schedule-source-syntax-refresh|sync|scroll-main|upda
     Read router.fnl
 ```
 could put this search into Meta! and show what you see
+
+This means we deliver results concurrently to the agent while driving our UI.
+
+Other context-pull wins:
+- Some command to automatically bring into metabuffer the docstring, source, other repo mentions, sub-agent web lookup of any function referenced in the function we've pulled in from first getting it as a result.
+- General other "follow the symbols" paths where you can just go "+" and broaden the scope of context for your hit(s)
+  - Very important that we allow both piece-by-piece (char by char when filtering, smoothly expanding context when pulling that in) interactive way of things for humans, and "straight to what I say" headless intermediate context minimizing modes.
+    - Best of all if can make agents separately drive a more "zooming in" / "out" workflow on the side, while themselves working by going straight to exactly what they want.
+- Plugin, but especially MCP should allow things like "context of function" that's essentially a bolted together layer above LSP level that does what it says.

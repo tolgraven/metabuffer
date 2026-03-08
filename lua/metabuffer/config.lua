@@ -37,6 +37,7 @@ M["apply-router-defaults"] = function(router, vim)
   router["project-lazy-min-estimated-lines"] = (vim.g.meta_project_lazy_min_estimated_lines or 10000)
   router["project-lazy-chunk-size"] = (vim.g.meta_project_lazy_chunk_size or 8)
   router["project-lazy-refresh-debounce-ms"] = (vim.g.meta_project_lazy_refresh_debounce_ms or 80)
+  router["project-lazy-refresh-min-ms"] = (vim.g.meta_project_lazy_refresh_min_ms or 20)
   if (vim.g.meta_project_lazy_prefilter_enabled == nil) then
     router["project-lazy-prefilter-enabled"] = true
   else

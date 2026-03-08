@@ -234,7 +234,7 @@ M.new = function(opts)
             return nil
           end
         end
-        return vim.defer_fn(_27_, math.max(20, (settings["project-lazy-refresh-debounce-ms"] or 80)))
+        return vim.defer_fn(_27_, math.max((settings["project-lazy-refresh-min-ms"] or 0), settings["project-lazy-refresh-debounce-ms"]))
       else
         return nil
       end
@@ -409,7 +409,7 @@ M.new = function(opts)
       if (session_active_3f(session) and (stream_id == session["lazy-stream-id"]) and not session["lazy-stream-done"]) then
         local paths = session["lazy-stream-paths"]
         local total = #paths
-        local chunk = math.max(1, (settings["project-lazy-chunk-size"] or 8))
+        local chunk = math.max(1, settings["project-lazy-chunk-size"])
         local consumed = 0
         local touched = false
         while ((consumed < chunk) and (session["lazy-stream-next"] <= total) and (#session.meta.buf.content < settings["project-max-total-lines"])) do
@@ -545,7 +545,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_62_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"] or 120)))
+      return vim.defer_fn(_62_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
     else
       return nil
     end

@@ -123,7 +123,7 @@ M["schedule-scroll-sync!"] = function(session, opts)
       session["scroll-sync-pending"] = false
       return maybe_sync_from_main_21(session, true)
     end
-    return vim.defer_fn(_20_, (scroll_sync_debounce_ms or 20))
+    return vim.defer_fn(_20_, scroll_sync_debounce_ms)
   else
     return nil
   end

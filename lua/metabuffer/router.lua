@@ -477,7 +477,7 @@ local function schedule_source_syntax_refresh_21(session)
           return nil
         end
       end
-      return vim.defer_fn(_63_, (M["source-syntax-refresh-debounce-ms"] or 80))
+      return vim.defer_fn(_63_, M["source-syntax-refresh-debounce-ms"])
     else
       return nil
     end

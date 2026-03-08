@@ -27,9 +27,11 @@ local ok, err = pcall(function() \
 end) \
 if not ok then \
   vim.api.nvim_err_writeln(err) \
-  vim.cmd('cq') \
+  vim.cmd('cquit 1') \
+else \
+  vim.cmd('qa') \
 end" \
-  -c "qa"
+  >/dev/null
 
 # Validate generated Lua output with LuaLS (if available).
 if command -v lua-language-server >/dev/null 2>&1; then

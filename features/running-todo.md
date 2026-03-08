@@ -2,7 +2,7 @@
 
 ## These are to be checked off as they are completed, and later (assuming previously committed to git) manually cleared so as to not clutter.
 - 1 [] Any earlier hlsearch should be cleared when invoking Meta.
-- 2 [] prompt window scratch buffer should also be renamed (to the same as existing statusline) so looks better when navigating away from tmux split and airline does a modification.
+- 2 [] prompt window scratch buffer should also be renamed (to the same as existing statusline) so looks better when navigating away from tmux split and airline or similar does a statusline modification overriding us.
 - 3 [x] rework all files per guidelines in AGENTS.md, especially around function definitions (separate line, small docstr).
 - 4 [x] change the keymaps to use builder functions rather than tons of redundant repetition.
 - 5 [x] MOVED TO FEATURE: lazy hits in general. stream results if Meta! init > 100ms, don't wait for them all. (additional debounce for each incoming chunk)
@@ -17,3 +17,12 @@
 - 14 [] Sluggish on <CR>: there is a weird delay when opening a hit, even in same file. It should make the jump first and only then do regular teardown, async.
 - 15 [x] Sluggish when narrowing search: when we only have a few results, and don't input something that might actually broaden results, there should be no need to re-search everything, only the existing hits. This should improve performance greatly.
 - 16 [] If do `!!` from an empty prompt, or running `:Meta !!`, the full settings used with that prompt (including `#deps` etc toggles) should be recalled. When cycling through prompts after this (with <Up> etc) the same should happen.
+- 17 [] History search suboptimal: typing `##` just gives a floating popup window (in the way of and hiding prompt input - should go above) saying "No history matches". 
+- 18 [] Prompt height changes get captured correctly and restore, but not if closing nvim and opening it again. Should be properly persistent.
+- 19 [] <CR> in results buffer results in "E5108: Error executing lua: ...IM/LISTA/metabuffer/metabuffer/lua/metabuffer/router.lua:329: attempt
+to call local 'open_fn' (a nil value)
+stack traceback:
+        ...IM/LISTA/metabuffer/metabuffer/lua/metabuffer/router.lua:329: in function 'open_selected_h
+it_21'
+        ...IM/LISTA/metabuffer/metabuffer/lua/metabuffer/router.lua:353: in function <...IM/LISTA/met
+abuffer/metabuffer/lua/metabuffer/router.lua:332>"
