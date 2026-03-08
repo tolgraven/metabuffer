@@ -51,14 +51,13 @@
 
 (fn queue-update-after-edit!
   [settings prompt-scheduler-ctx session force txt now delay]
-  (when (or (not session.project-mode) session.project-bootstrapped)
-    (when-not (and force session.prompt-update-pending)
-      (if (and force (force-within-idle-window? settings session now))
-          (schedule-update!
-            prompt-scheduler-ctx
-            session
-            (math.max delay settings.prompt-update-idle-ms))
-          (schedule-update! prompt-scheduler-ctx session delay)))))
+  (when-not (and force session.prompt-update-pending)
+    (if (and force (force-within-idle-window? settings session now))
+        (schedule-update!
+          prompt-scheduler-ctx
+          session
+          (math.max delay settings.prompt-update-idle-ms))
+        (schedule-update! prompt-scheduler-ctx session delay))))
 
 (fn apply-fresh-prompt-event!
   [query-mod project-source settings prompt-scheduler-ctx session force txt now delay]

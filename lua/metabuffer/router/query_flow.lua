@@ -24,15 +24,11 @@ local function force_within_idle_window_3f(settings, session, now)
   return ((math.max(0, (settings["prompt-update-idle-ms"] or 0)) > 0) and ((now - (session["prompt-last-change-ms"] or 0)) < math.max(0, (settings["prompt-update-idle-ms"] or 0))))
 end
 local function queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, txt, now, delay)
-  if (not session["project-mode"] or session["project-bootstrapped"]) then
-    if not (force and session["prompt-update-pending"]) then
-      if (force and force_within_idle_window_3f(settings, session, now)) then
-        return schedule_update_21(prompt_scheduler_ctx, session, math.max(delay, settings["prompt-update-idle-ms"]))
-      else
-        return schedule_update_21(prompt_scheduler_ctx, session, delay)
-      end
+  if not (force and session["prompt-update-pending"]) then
+    if (force and force_within_idle_window_3f(settings, session, now)) then
+      return schedule_update_21(prompt_scheduler_ctx, session, math.max(delay, settings["prompt-update-idle-ms"]))
     else
-      return nil
+      return schedule_update_21(prompt_scheduler_ctx, session, delay)
     end
   else
     return nil
@@ -158,32 +154,32 @@ M["apply-prompt-lines!"] = function(deps, session)
     session["prompt-last-applied-text"] = effective_text
     if session["project-mode"] then
       local flags
-      local _15_
+      local _14_
       if session["effective-include-hidden"] then
-        _15_ = "+hidden"
+        _14_ = "+hidden"
       else
-        _15_ = "-hidden"
+        _14_ = "-hidden"
       end
-      local _17_
+      local _16_
       if session["effective-include-ignored"] then
-        _17_ = "+ignored"
+        _16_ = "+ignored"
       else
-        _17_ = "-ignored"
+        _16_ = "-ignored"
       end
-      local _19_
+      local _18_
       if session["effective-include-deps"] then
-        _19_ = "+deps"
+        _18_ = "+deps"
       else
-        _19_ = "-deps"
+        _18_ = "-deps"
       end
-      local function _21_()
+      local function _20_()
         if session["prefilter-mode"] then
           return "+prefilter"
         else
           return "-prefilter"
         end
       end
-      flags = {_15_, _17_, _19_, _21_()}
+      flags = {_14_, _16_, _18_, _20_()}
       if not session["lazy-mode"] then
         table.insert(flags, "-lazy")
       else
@@ -212,7 +208,7 @@ M["apply-prompt-lines!"] = function(deps, session)
         return update_info_window(session)
       else
         if string.find(tostring(err), "E565") then
-          local function _26_()
+          local function _25_()
             if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
               pcall(session.meta["on-update"], 0)
               pcall(session.meta.refresh_statusline)
@@ -221,7 +217,7 @@ M["apply-prompt-lines!"] = function(deps, session)
               return nil
             end
           end
-          return vim.defer_fn(_26_, 1)
+          return vim.defer_fn(_25_, 1)
         else
           return nil
         end

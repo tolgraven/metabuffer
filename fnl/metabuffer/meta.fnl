@@ -317,6 +317,7 @@
           ;; This avoids full re-scans on every keystroke while narrowing.
           narrow-reuse-threshold (or vim.g.meta_narrow_reuse_threshold 400)
           narrow-reuse? (and reset0?
+                             (vim.startswith self.text prev-text)
                              (= matcher-name "all")
                              (not (negation-growth-broadens? prev-text self.text))
                              (> (# prev-text) 0)
