@@ -214,40 +214,36 @@
         deps
         session (. active-by-prompt prompt-buf)]
     (when (and session (not session.closing))
-      (let [duplicate-event? (and (not force)
-                                  event-tick
-                                  (= event-tick (or session.prompt-last-event-tick -1)))]
-        (when-not duplicate-event?
-          (let [txt (router_util_mod.prompt-text session)
-                now (router_prompt_mod.now-ms)
-                delay (prompt-delay-ms settings query-mod session)
-                parsed (query-mod.parse-query-lines
-                         (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false))
-                pending-control? (= (. parsed :pending-control) true)]
-            (when (and (not force) event-tick)
-              (set session.prompt-last-event-tick event-tick))
-            (if pending-control?
-                (do
-                  (router_prompt_mod.cancel-prompt-update! session)
-                  (set session.prompt-update-dirty false)
-                  (set session.prompt-last-event-text txt)
-                  (set session.last-prompt-text txt)
-                  (set session.prompt-last-change-ms now)
-                  (set session.last-parsed-query parsed))
-                (when-not (and force (< now (or session.prompt-force-block-until 0)))
-                  (let [duplicate-text? (and (not force)
-                                             (= txt (or session.prompt-last-event-text "")))]
-                    (if duplicate-text?
-                        (apply-duplicate-text-event! prompt-scheduler-ctx session now delay)
-                        (apply-fresh-prompt-event!
-                          query-mod
-                          project-source
-                          settings
-                          prompt-scheduler-ctx
-                          session
-                          force
-                          txt
-                          now
-                          delay)))))))))))
+      (let [txt (router_util_mod.prompt-text session)
+            now (router_prompt_mod.now-ms)
+            delay (prompt-delay-ms settings query-mod session)
+            parsed (query-mod.parse-query-lines
+                     (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false))
+            pending-control? (= (. parsed :pending-control) true)]
+        (when (and (not force) event-tick)
+          (set session.prompt-last-event-tick event-tick))
+        (if pending-control?
+            (do
+              (router_prompt_mod.cancel-prompt-update! session)
+              (set session.prompt-update-dirty false)
+              (set session.prompt-last-event-text txt)
+              (set session.last-prompt-text txt)
+              (set session.prompt-last-change-ms now)
+              (set session.last-parsed-query parsed))
+            (when-not (and force (< now (or session.prompt-force-block-until 0)))
+              (let [duplicate-text? (and (not force)
+                                         (= txt (or session.prompt-last-event-text "")))]
+                (if duplicate-text?
+                    (apply-duplicate-text-event! prompt-scheduler-ctx session now delay)
+                    (apply-fresh-prompt-event!
+                      query-mod
+                      project-source
+                      settings
+                      prompt-scheduler-ctx
+                      session
+                      force
+                      txt
+                      now
+                      delay)))))))))
 
 M

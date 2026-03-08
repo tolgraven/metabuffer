@@ -239,39 +239,34 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
   local prompt_scheduler_ctx = deps["prompt-scheduler-ctx"]
   local session = active_by_prompt[prompt_buf]
   if (session and not session.closing) then
-    local duplicate_event_3f = (not force and event_tick and (event_tick == (session["prompt-last-event-tick"] or -1)))
-    if not duplicate_event_3f then
-      local txt = router_util_mod["prompt-text"](session)
-      local now = router_prompt_mod["now-ms"]()
-      local delay = prompt_delay_ms(settings, query_mod, session)
-      local parsed = query_mod["parse-query-lines"](vim.api.nvim_buf_get_lines(session["prompt-buf"], 0, -1, false))
-      local pending_control_3f = (parsed["pending-control"] == true)
-      if (not force and event_tick) then
-        session["prompt-last-event-tick"] = event_tick
-      else
-      end
-      if pending_control_3f then
-        router_prompt_mod["cancel-prompt-update!"](session)
-        session["prompt-update-dirty"] = false
-        session["prompt-last-event-text"] = txt
-        session["last-prompt-text"] = txt
-        session["prompt-last-change-ms"] = now
-        session["last-parsed-query"] = parsed
-        return nil
-      else
-        if not (force and (now < (session["prompt-force-block-until"] or 0))) then
-          local duplicate_text_3f = (not force and (txt == (session["prompt-last-event-text"] or "")))
-          if duplicate_text_3f then
-            return apply_duplicate_text_event_21(prompt_scheduler_ctx, session, now, delay)
-          else
-            return apply_fresh_prompt_event_21(query_mod, project_source, settings, prompt_scheduler_ctx, session, force, txt, now, delay)
-          end
-        else
-          return nil
-        end
-      end
+    local txt = router_util_mod["prompt-text"](session)
+    local now = router_prompt_mod["now-ms"]()
+    local delay = prompt_delay_ms(settings, query_mod, session)
+    local parsed = query_mod["parse-query-lines"](vim.api.nvim_buf_get_lines(session["prompt-buf"], 0, -1, false))
+    local pending_control_3f = (parsed["pending-control"] == true)
+    if (not force and event_tick) then
+      session["prompt-last-event-tick"] = event_tick
     else
+    end
+    if pending_control_3f then
+      router_prompt_mod["cancel-prompt-update!"](session)
+      session["prompt-update-dirty"] = false
+      session["prompt-last-event-text"] = txt
+      session["last-prompt-text"] = txt
+      session["prompt-last-change-ms"] = now
+      session["last-parsed-query"] = parsed
       return nil
+    else
+      if not (force and (now < (session["prompt-force-block-until"] or 0))) then
+        local duplicate_text_3f = (not force and (txt == (session["prompt-last-event-text"] or "")))
+        if duplicate_text_3f then
+          return apply_duplicate_text_event_21(prompt_scheduler_ctx, session, now, delay)
+        else
+          return apply_fresh_prompt_event_21(query_mod, project_source, settings, prompt_scheduler_ctx, session, force, txt, now, delay)
+        end
+      else
+        return nil
+      end
     end
   else
     return nil

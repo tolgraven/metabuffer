@@ -133,20 +133,13 @@
                   (let [[s _e] [(rx:match_str line)]]
                     s)
                   false))
-            (if (and (. term :negated)
-                     (not (. term :anchor-start))
-                     (not (. term :anchor-end))
-                     (not (. term :regex))
-                     (not (not (string.match needle "^[%w_]+$"))))
-                ;; Negation is more useful as a token exclusion than raw substring.
-                (not (not (string.find literal-probe (.. "%f[%w_]" needle "%f[^%w_]"))))
-                (if (. term :anchor-start)
-                    (if (. term :anchor-end)
-                        (= literal-probe needle)
-                        (vim.startswith literal-probe needle))
-                    (if (. term :anchor-end)
-                        (vim.endswith literal-probe needle)
-                        (not (not (string.find literal-probe needle 1 true))))))))))
+            (if (. term :anchor-start)
+                (if (. term :anchor-end)
+                    (= literal-probe needle)
+                    (vim.startswith literal-probe needle))
+                (if (. term :anchor-end)
+                    (vim.endswith literal-probe needle)
+                    (not (not (string.find literal-probe needle 1 true)))))))))
 
 (fn term-highlight-pattern
   [term]

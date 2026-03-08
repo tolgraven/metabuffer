@@ -146,21 +146,17 @@ local function term_match_3f(term, line, literal_probe, ignorecase)
         return false
       end
     else
-      if (term.negated and not term["anchor-start"] and not term["anchor-end"] and not term.regex and not not string.match(needle, "^[%w_]+$")) then
-        return not not string.find(literal_probe, ("%f[%w_]" .. needle .. "%f[^%w_]"))
-      else
-        if term["anchor-start"] then
-          if term["anchor-end"] then
-            return (literal_probe == needle)
-          else
-            return vim.startswith(literal_probe, needle)
-          end
+      if term["anchor-start"] then
+        if term["anchor-end"] then
+          return (literal_probe == needle)
         else
-          if term["anchor-end"] then
-            return vim.endswith(literal_probe, needle)
-          else
-            return not not string.find(literal_probe, needle, 1, true)
-          end
+          return vim.startswith(literal_probe, needle)
+        end
+      else
+        if term["anchor-end"] then
+          return vim.endswith(literal_probe, needle)
+        else
+          return not not string.find(literal_probe, needle, 1, true)
         end
       end
     end
@@ -179,25 +175,25 @@ local function term_highlight_pattern(term)
   end
 end
 M.new = function()
-  local function _25_(_, query)
+  local function _24_(_, query)
     local items = {}
     for _0, raw in ipairs(util["split-input"](query)) do
       local term = parse_term(raw)
       local pat = term_highlight_pattern(term)
       if ((pat ~= "") and not term.negated) then
-        local _26_
+        local _25_
         if term.regex then
-          _26_ = "MetaSearchHitRegex"
+          _25_ = "MetaSearchHitRegex"
         else
-          _26_ = "MetaSearchHitAll"
+          _25_ = "MetaSearchHitAll"
         end
-        table.insert(items, {group = _26_, pattern = ("\\%(" .. pat .. "\\)")})
+        table.insert(items, {group = _25_, pattern = ("\\%(" .. pat .. "\\)")})
       else
       end
     end
     return items
   end
-  local function _29_(_, query, indices, candidates, ignorecase)
+  local function _28_(_, query, indices, candidates, ignorecase)
     local terms = vim.tbl_map(parse_term, util["split-input"](query))
     local out = {}
     if ignorecase then
@@ -238,6 +234,6 @@ M.new = function()
     end
     return out
   end
-  return base.new("all", {["get-highlight-pattern"] = _25_, filter = _29_})
+  return base.new("all", {["get-highlight-pattern"] = _24_, filter = _28_})
 end
 return M
