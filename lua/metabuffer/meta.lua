@@ -460,7 +460,8 @@ M.new = function(nvim, condition)
         else
         end
       end
-      if ((#queries == 0) or (#self.buf.indices >= 1000)) then
+      local highlight_max_hits = (vim.g.meta_highlight_max_hits or 20000)
+      if ((#queries == 0) or (#self.buf.indices >= highlight_max_hits)) then
         matcher["remove-highlight"](matcher)
       else
         matcher.highlight(matcher, effective_query, ignorecase, self.win.window)

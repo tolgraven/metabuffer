@@ -418,9 +418,11 @@
         (each [_ m (ipairs (. (. self.mode :matcher) :candidates))]
           (when (and m (~= m matcher))
             (m.remove-highlight m)))
-        (if (or (= (# queries) 0) (>= (# self.buf.indices) 1000))
+        (let [highlight-max-hits
+              (or vim.g.meta_highlight_max_hits 20000)]
+        (if (or (= (# queries) 0) (>= (# self.buf.indices) highlight-max-hits))
             (matcher.remove-highlight matcher)
-            (matcher.highlight matcher effective-query ignorecase self.win.window)))))
+            (matcher.highlight matcher effective-query ignorecase self.win.window))))))
     status)
 
   (fn self.on-term

@@ -268,6 +268,16 @@
       (apply-keymaps router session session.prompt-buf (prompt-fallback-rules))
       (apply-keymaps router session session.meta.buf.buffer (main-rules)))
 
+    (fn trigger-prompt-update!
+      [router session]
+      (when (and session.prompt-buf
+                 (= (. active-by-prompt session.prompt-buf) session))
+        (if (maybe-expand-history-shorthand! router session)
+            nil
+            (do
+              (refresh-prompt-highlights! session)
+              (on-prompt-changed session.prompt-buf false nil)))))
+
     (fn register!
   [router session]
       (let [aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true})]
@@ -279,28 +289,14 @@
           false
           {:on_lines
            (fn [_ _ changedtick _ _ _ _ _]
-             ;; on_lines can fire before insert-state buffer text is fully
-             ;; visible; defer one tick. Use this as fallback only when
-             ;; TextChanged/TextChangedI did not arrive.
-             (vim.schedule
+             ;; on_lines can fire before insert-state text is fully visible.
+             ;; Defer slightly and let query-flow coalesce duplicate updates.
+             (when changedtick
+               (set session.prompt-last-onlines-tick changedtick))
+             (vim.defer_fn
                (fn []
-                 (when (and session.prompt-buf
-                            (= (. active-by-prompt session.prompt-buf) session))
-                   (let [first-for-tick? (and changedtick
-                                              (~= changedtick session.prompt-last-onlines-tick))]
-                     (when first-for-tick?
-                       (set session.prompt-last-onlines-tick changedtick)
-                       (vim.defer_fn
-                         (fn []
-                           (when (and session.prompt-buf
-                                      (= (. active-by-prompt session.prompt-buf) session)
-                                      (~= changedtick session.prompt-last-textchanged-tick))
-                             (if (maybe-expand-history-shorthand! router session)
-                                 nil
-                                 (do
-                                   (refresh-prompt-highlights! session)
-                                   (on-prompt-changed session.prompt-buf false changedtick)))))
-                         5)))))))
+                 (trigger-prompt-update! router session))
+               5))
            :on_detach
            (fn []
              (when session.prompt-buf
@@ -311,16 +307,9 @@
           {:group aug
            :buffer session.prompt-buf
            :callback (fn [_]
-                       (if (maybe-expand-history-shorthand! router session)
-                           nil
-                           (do
-                             (refresh-prompt-highlights! session)
-                             (set session.prompt-last-textchanged-tick
-                               (vim.api.nvim_buf_get_changedtick session.prompt-buf))
-                             (on-prompt-changed
-                               session.prompt-buf
-                               false
-                               session.prompt-last-textchanged-tick))))})
+                       (set session.prompt-last-textchanged-tick
+                         (vim.api.nvim_buf_get_changedtick session.prompt-buf))
+                       (trigger-prompt-update! router session))})
       ;; Re-assert prompt maps when entering insert mode; this wins over late
       ;; plugin mappings (for example completion plugins).
         (vim.api.nvim_create_autocmd "InsertEnter"
