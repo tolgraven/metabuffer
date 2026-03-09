@@ -427,7 +427,8 @@ M.new = function(opts)
       local function _71_()
         return schedule_prompt_update_21(router, session)
       end
-      return vim.defer_fn(_71_, 5)
+      vim.defer_fn(_71_, 5)
+      return nil
     end
     local function _72_()
       if session["prompt-buf"] then

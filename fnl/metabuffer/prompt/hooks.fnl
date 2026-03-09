@@ -304,7 +304,8 @@
              (vim.defer_fn
                (fn []
                  (schedule-prompt-update! router session))
-               5))
+               5)
+             nil)
            :on_detach
            (fn []
              (when session.prompt-buf
