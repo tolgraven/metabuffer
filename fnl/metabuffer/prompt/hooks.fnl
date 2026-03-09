@@ -286,6 +286,22 @@
         (fn []
           (trigger-prompt-update! router session))))
 
+    (fn prompt-text
+      [session]
+      (table.concat
+        (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)
+        "\n"))
+
+    (fn maybe-trigger-text-sync!
+      [router session]
+      (when (and session.prompt-buf
+                 (vim.api.nvim_buf_is_valid session.prompt-buf)
+                 (= (. active-by-prompt session.prompt-buf) session))
+        (let [txt (prompt-text session)]
+          (when (~= txt (or session.prompt-last-synced-text ""))
+            (set session.prompt-last-synced-text txt)
+            (schedule-prompt-update! router session)))))
+
     (fn register!
   [router session]
       (let [aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true})]
@@ -318,7 +334,15 @@
            :callback (fn [_]
                        (set session.prompt-last-textchanged-tick
                          (vim.api.nvim_buf_get_changedtick session.prompt-buf))
+                       (set session.prompt-last-synced-text (prompt-text session))
                        (schedule-prompt-update! router session))})
+      ;; Hard fallback: some setups intermittently miss TextChangedI on prompt
+      ;; buffers, but cursor movement in insert mode still occurs per keystroke.
+        (vim.api.nvim_create_autocmd ["CursorMovedI" "CursorMoved"]
+          {:group aug
+           :buffer session.prompt-buf
+           :callback (fn [_]
+                       (maybe-trigger-text-sync! router session))})
       ;; Re-assert prompt maps when entering insert mode; this wins over late
       ;; plugin mappings (for example completion plugins).
         (vim.api.nvim_create_autocmd "InsertEnter"

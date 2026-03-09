@@ -416,21 +416,37 @@ M.new = function(opts)
     end
     return vim.schedule(_68_)
   end
+  local function prompt_text(session)
+    return table.concat(vim.api.nvim_buf_get_lines(session["prompt-buf"], 0, -1, false), "\n")
+  end
+  local function maybe_trigger_text_sync_21(router, session)
+    if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
+      local txt = prompt_text(session)
+      if (txt ~= (session["prompt-last-synced-text"] or "")) then
+        session["prompt-last-synced-text"] = txt
+        return schedule_prompt_update_21(router, session)
+      else
+        return nil
+      end
+    else
+      return nil
+    end
+  end
   local function register_21(router, session)
     local aug = vim.api.nvim_create_augroup(("MetaPrompt" .. session["prompt-buf"]), {clear = true})
     session.augroup = aug
-    local function _69_(_, _0, changedtick, _1, _2, _3, _4, _5)
+    local function _71_(_, _0, changedtick, _1, _2, _3, _4, _5)
       if changedtick then
         session["prompt-last-onlines-tick"] = changedtick
       else
       end
-      local function _71_()
+      local function _73_()
         return schedule_prompt_update_21(router, session)
       end
-      vim.defer_fn(_71_, 5)
+      vim.defer_fn(_73_, 5)
       return nil
     end
-    local function _72_()
+    local function _74_()
       if session["prompt-buf"] then
         active_by_prompt[session["prompt-buf"]] = nil
         return nil
@@ -438,52 +454,57 @@ M.new = function(opts)
         return nil
       end
     end
-    vim.api.nvim_buf_attach(session["prompt-buf"], false, {on_lines = _69_, on_detach = _72_})
-    local function _74_(_)
+    vim.api.nvim_buf_attach(session["prompt-buf"], false, {on_lines = _71_, on_detach = _74_})
+    local function _76_(_)
       session["prompt-last-textchanged-tick"] = vim.api.nvim_buf_get_changedtick(session["prompt-buf"])
+      session["prompt-last-synced-text"] = prompt_text(session)
       return schedule_prompt_update_21(router, session)
     end
-    vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {group = aug, buffer = session["prompt-buf"], callback = _74_})
-    local function _75_(_)
-      local function _76_()
+    vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {group = aug, buffer = session["prompt-buf"], callback = _76_})
+    local function _77_(_)
+      return maybe_trigger_text_sync_21(router, session)
+    end
+    vim.api.nvim_create_autocmd({"CursorMovedI", "CursorMoved"}, {group = aug, buffer = session["prompt-buf"], callback = _77_})
+    local function _78_(_)
+      local function _79_()
         disable_cmp(session)
         return apply_all_keymaps(router, session)
       end
-      return schedule_when_valid(session, _76_)
+      return schedule_when_valid(session, _79_)
     end
-    vim.api.nvim_create_autocmd("InsertEnter", {group = aug, buffer = session["prompt-buf"], callback = _75_})
-    local function _77_(_)
-      local function _78_()
+    vim.api.nvim_create_autocmd("InsertEnter", {group = aug, buffer = session["prompt-buf"], callback = _78_})
+    local function _80_(_)
+      local function _81_()
         return pcall(session.meta.refresh_statusline)
       end
-      return schedule_when_valid(session, _78_)
+      return schedule_when_valid(session, _81_)
     end
-    vim.api.nvim_create_autocmd({"BufEnter", "WinEnter", "FocusGained"}, {group = aug, buffer = session["prompt-buf"], callback = _77_})
-    local function _79_(_)
-      local function _80_()
+    vim.api.nvim_create_autocmd({"BufEnter", "WinEnter", "FocusGained"}, {group = aug, buffer = session["prompt-buf"], callback = _80_})
+    local function _82_(_)
+      local function _83_()
         return pcall(session.meta.refresh_statusline)
       end
-      return schedule_when_valid(session, _80_)
+      return schedule_when_valid(session, _83_)
     end
-    vim.api.nvim_create_autocmd({"ModeChanged", "InsertEnter", "InsertLeave"}, {group = aug, buffer = session["prompt-buf"], callback = _79_})
-    local function _81_(_)
-      local function _82_()
+    vim.api.nvim_create_autocmd({"ModeChanged", "InsertEnter", "InsertLeave"}, {group = aug, buffer = session["prompt-buf"], callback = _82_})
+    local function _84_(_)
+      local function _85_()
         return pcall(update_info_window, session)
       end
-      return schedule_when_valid(session, _82_)
+      return schedule_when_valid(session, _85_)
     end
-    vim.api.nvim_create_autocmd({"VimResized", "WinResized"}, {group = aug, callback = _81_})
-    local function _83_(_)
-      local function _84_()
+    vim.api.nvim_create_autocmd({"VimResized", "WinResized"}, {group = aug, callback = _84_})
+    local function _86_(_)
+      local function _87_()
         return maybe_sync_from_main_21(session)
       end
-      return schedule_when_valid(session, _84_)
+      return schedule_when_valid(session, _87_)
     end
-    vim.api.nvim_create_autocmd({"CursorMoved", "CursorMovedI"}, {group = aug, buffer = session.meta.buf.buffer, callback = _83_})
-    local function _85_(_)
+    vim.api.nvim_create_autocmd({"CursorMoved", "CursorMovedI"}, {group = aug, buffer = session.meta.buf.buffer, callback = _86_})
+    local function _88_(_)
       return schedule_scroll_sync_21(session)
     end
-    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _85_})
+    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _88_})
     disable_cmp(session)
     mark_prompt_buffer_21(session["prompt-buf"])
     refresh_prompt_highlights_21(session)
