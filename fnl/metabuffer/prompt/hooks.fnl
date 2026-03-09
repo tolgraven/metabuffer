@@ -278,6 +278,14 @@
               (refresh-prompt-highlights! session)
               (on-prompt-changed session.prompt-buf false nil)))))
 
+    (fn schedule-prompt-update!
+      [router session]
+      ;; Always run prompt reads on the next scheduler turn so matcher logic
+      ;; observes the final post-edit buffer contents across Neovim variants.
+      (vim.schedule
+        (fn []
+          (trigger-prompt-update! router session))))
+
     (fn register!
   [router session]
       (let [aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true})]
@@ -295,7 +303,7 @@
                (set session.prompt-last-onlines-tick changedtick))
              (vim.defer_fn
                (fn []
-                 (trigger-prompt-update! router session))
+                 (schedule-prompt-update! router session))
                5))
            :on_detach
            (fn []
@@ -309,7 +317,7 @@
            :callback (fn [_]
                        (set session.prompt-last-textchanged-tick
                          (vim.api.nvim_buf_get_changedtick session.prompt-buf))
-                       (trigger-prompt-update! router session))})
+                       (schedule-prompt-update! router session))})
       ;; Re-assert prompt maps when entering insert mode; this wins over late
       ;; plugin mappings (for example completion plugins).
         (vim.api.nvim_create_autocmd "InsertEnter"
