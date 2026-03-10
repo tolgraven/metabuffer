@@ -280,11 +280,7 @@
 
     (fn schedule-prompt-update!
       [router session]
-      ;; Always run prompt reads on the next scheduler turn so matcher logic
-      ;; observes the final post-edit buffer contents across Neovim variants.
-      (vim.schedule
-        (fn []
-          (trigger-prompt-update! router session))))
+      (trigger-prompt-update! router session))
 
     (fn register!
   [router session]
