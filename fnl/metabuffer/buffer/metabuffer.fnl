@@ -233,6 +233,7 @@
                    :end_col 0
                    :hl_group "MetaSourceAltBg"
                    :hl_eol true
+                   :hl_mode "combine"
                    ;; Keep this below syntax priority so syntax colors remain.
                    :priority 1}))))
           (for [i 1 (- n 1)]
@@ -252,6 +253,7 @@
                    :end_col 0
                    :hl_group "MetaSourceBoundary"
                    :hl_eol true
+                   :hl_mode "combine"
                    :priority 120}))))))
       (self.apply-source-syntax-regions)
       (let [bo (. vim.bo self.buffer)]

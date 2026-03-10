@@ -262,7 +262,7 @@ M.new = function(nvim, model)
         else
         end
         if alt then
-          vim.api.nvim_buf_set_extmark(self.buffer, self["source-alt-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceAltBg", hl_eol = true, priority = 1})
+          vim.api.nvim_buf_set_extmark(self.buffer, self["source-alt-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceAltBg", hl_eol = true, hl_mode = "combine", priority = 1})
         else
         end
       end
@@ -274,7 +274,7 @@ M.new = function(nvim, model)
         local cur_path = (cur_ref and cur_ref.path)
         local next_path = (next_ref and next_ref.path)
         if ((cur_path or "") ~= (next_path or "")) then
-          vim.api.nvim_buf_set_extmark(self.buffer, self["source-sep-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceBoundary", hl_eol = true, priority = 120})
+          vim.api.nvim_buf_set_extmark(self.buffer, self["source-sep-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceBoundary", hl_eol = true, hl_mode = "combine", priority = 120})
         else
         end
       end
