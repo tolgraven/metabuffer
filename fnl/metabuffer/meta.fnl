@@ -162,6 +162,7 @@
   (set self.query-lines [])
   (set self._prev-ignorecase nil)
   (set self._prev-matcher nil)
+  (set self._selection-cache {})
 
   (set self.win (meta_window_mod.new nvim (vim.api.nvim_get_current_win)))
   (set self.status-win self.win)
@@ -309,6 +310,11 @@
           effective-query (table.concat queries "\n")
           matcher-name (. (self.matcher) :name)
           ignorecase (self.ignorecase)
+          prev-ignorecase (if (= self._prev-ignorecase nil)
+                              ignorecase
+                              self._prev-ignorecase)
+          prev-matcher-name (or self._prev-matcher matcher-name)
+          prev-cache-key (.. prev-matcher-name "|" (if prev-ignorecase "1" "0") "|" (or prev-text ""))
           line-count (# self.buf.content)
           cache-grew? (> line-count self._filter-cache-line-count)
           cache-shrank? (< line-count self._filter-cache-line-count)
@@ -340,6 +346,7 @@
                       (not narrow-reuse?)
                       (or (not shortened?)
                           broaden-on-delete?))]
+      (set (. self._selection-cache prev-cache-key) prev-line)
       (when cache-reset?
         (set self._filter-cache {})
         (set self._filter-cache-line-count line-count))
@@ -411,16 +418,19 @@
       (when needs-render?
         (self.buf.render))
       (when needs-render?
+        (let [preferred-line (or (. self._selection-cache cache-key) prev-line)]
         (var idx nil)
         (each [i src (ipairs self.buf.indices)]
-          (when (and (not idx) (= src prev-line))
+          (when (and (not idx) (= src preferred-line))
             (set idx i)))
         (when-not idx
-          (set idx (self.buf.closest-index prev-line)))
+          (set idx (self.buf.closest-index preferred-line)))
         (when idx
           (set self.selected_index (- idx 1))
+          (set (. self._selection-cache cache-key)
+               (line_of_index self.buf self.selected_index))
           (when (vim.api.nvim_win_is_valid self.win.window)
-            (vim.api.nvim_win_set_cursor self.win.window [idx 0]))))
+            (vim.api.nvim_win_set_cursor self.win.window [idx 0])))))
       ;; Render can refresh/clear syntax regions; re-apply match highlights
       ;; afterward so visible hit highlighting remains stable.
       (let [matcher (self.matcher)]
