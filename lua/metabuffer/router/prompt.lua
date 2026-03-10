@@ -1,5 +1,41 @@
 -- [nfnl] fnl/metabuffer/router/prompt.fnl
 local M = {}
+local function last_non_empty_trimmed(lines)
+  local n = #(lines or {})
+  local step
+  local function step0(idx)
+    if (idx <= 0) then
+      return ""
+    else
+      local trimmed = vim.trim((lines[idx] or ""))
+      if (trimmed ~= "") then
+        return trimmed
+      else
+        return step0((idx - 1))
+      end
+    end
+  end
+  step = step0
+  return step(n)
+end
+local function any_active_line_3f(lines)
+  local n = #(lines or {})
+  local step
+  local function step0(idx)
+    if (idx > n) then
+      return false
+    else
+      local trimmed = vim.trim((lines[idx] or ""))
+      if (trimmed ~= "") then
+        return true
+      else
+        return step0((idx + 1))
+      end
+    end
+  end
+  step = step0
+  return step(1)
+end
 M["now-ms"] = function()
   return (vim.loop.hrtime() / 1000000)
 end
@@ -23,18 +59,7 @@ M["prompt-update-delay-ms"] = function(settings, query_mod, prompt_lines, sessio
     else
       parsed = {lines = lines}
     end
-    local last_active
-    do
-      local s = ""
-      for _, line in ipairs((parsed.lines or {})) do
-        local trimmed = vim.trim((line or ""))
-        if (trimmed ~= "") then
-          s = trimmed
-        else
-        end
-      end
-      last_active = s
-    end
+    local last_active = last_non_empty_trimmed((parsed.lines or {}))
     qlen = #(last_active or "")
   end
   local short_extra
@@ -75,14 +100,7 @@ M["prompt-update-delay-ms"] = function(settings, query_mod, prompt_lines, sessio
 end
 M["prompt-has-active-query?"] = function(query_mod, prompt_lines, session)
   local parsed = query_mod["parse-query-lines"](prompt_lines(session))
-  local has = false
-  for _, line in ipairs((parsed.lines or {})) do
-    if (not has and (vim.trim((line or "")) ~= "")) then
-      has = true
-    else
-    end
-  end
-  return has
+  return any_active_line_3f((parsed.lines or {}))
 end
 M["cancel-prompt-update!"] = function(session)
   if (session and session["prompt-update-timer"]) then
@@ -149,7 +167,7 @@ M["schedule-prompt-update!"] = function(ctx, session, wait_ms)
     local token = session["prompt-update-token"]
     local timer = vim.loop.new_timer()
     session["prompt-update-timer"] = timer
-    local function _19_()
+    local function _21_()
       if (session["prompt-update-timer"] and (session["prompt-update-timer"] == timer)) then
         cancel_prompt_update_21(session)
       else
@@ -169,7 +187,7 @@ M["schedule-prompt-update!"] = function(ctx, session, wait_ms)
         return nil
       end
     end
-    return timer.start(timer, math.max(0, wait_ms), 0, vim.schedule_wrap(_19_))
+    return timer.start(timer, math.max(0, wait_ms), 0, vim.schedule_wrap(_21_))
   else
     return nil
   end

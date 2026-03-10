@@ -102,9 +102,7 @@
   []
   "Public API: M.saved-items."
   (let [saved (M.saved)
-        tags []]
-    (each [k _ (pairs saved)]
-      (table.insert tags k))
+        tags (vim.tbl_keys saved)]
     (table.sort tags)
     (let [out []]
       (each [_ tag (ipairs tags)]

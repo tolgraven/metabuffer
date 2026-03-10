@@ -111,10 +111,7 @@ M["saved-entry"] = function(tag)
 end
 M["saved-items"] = function()
   local saved = M.saved()
-  local tags = {}
-  for k, _ in pairs(saved) do
-    table.insert(tags, k)
-  end
+  local tags = vim.tbl_keys(saved)
   table.sort(tags)
   local out = {}
   for _, tag in ipairs(tags) do
