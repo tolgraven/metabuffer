@@ -24,4 +24,8 @@ end
 _G.MiniTest = mini_test
 mini_test.setup()
 
+-- Keep project lazy behavior active in headless mini.test child sessions so
+-- :Meta! tests exercise the same async path as interactive use.
+vim.g.meta_project_lazy_disable_headless = false
+
 require("metabuffer").setup()

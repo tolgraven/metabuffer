@@ -76,6 +76,7 @@ M["apply-prompt-lines!"] = function(deps, session)
   local query_mod = deps["query-mod"]
   local project_source = deps["project-source"]
   local update_info_window = deps["update-info-window"]
+  local settings = deps.settings
   local merge_history_into_session_21 = deps["merge-history-into-session!"]
   local save_current_prompt_tag_21 = deps["save-current-prompt-tag!"]
   local restore_saved_prompt_tag_21 = deps["restore-saved-prompt-tag!"]
@@ -197,6 +198,10 @@ M["apply-prompt-lines!"] = function(deps, session)
         invalidate_filter_cache_21(session)
       else
       end
+      if (session["project-mode"] and text_changed_3f and query_mod["truthy?"](settings["project-lazy-prefilter-enabled"]) and session["prefilter-mode"]) then
+        project_source["apply-source-set!"](session)
+      else
+      end
       if (session["project-mode"] and changed) then
         project_source["apply-source-set!"](session)
       else
@@ -209,7 +214,7 @@ M["apply-prompt-lines!"] = function(deps, session)
       return update_info_window(session)
     else
       if string.find(tostring(err), "E565") then
-        local function _26_()
+        local function _27_()
           if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
             pcall(session.meta["on-update"], 0)
             pcall(session.meta.refresh_statusline)
@@ -218,7 +223,7 @@ M["apply-prompt-lines!"] = function(deps, session)
             return nil
           end
         end
-        return vim.defer_fn(_26_, 1)
+        return vim.defer_fn(_27_, 1)
       else
         return nil
       end
@@ -242,12 +247,15 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
     else
     end
     session["prompt-update-dirty"] = true
-    session["prompt-last-change-ms"] = now
     if not force then
+      session["prompt-last-change-ms"] = now
       session["prompt-force-block-until"] = (now + math.max(0, delay))
     else
     end
-    session["prompt-change-seq"] = (1 + (session["prompt-change-seq"] or 0))
+    if not force then
+      session["prompt-change-seq"] = (1 + (session["prompt-change-seq"] or 0))
+    else
+    end
     if (session["project-mode"] and not session["project-bootstrapped"] and prompt_has_active_query_3f(query_mod, session)) then
       project_source["schedule-project-bootstrap!"](session, settings["project-bootstrap-delay-ms"])
     else

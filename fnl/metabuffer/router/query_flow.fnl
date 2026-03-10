@@ -93,6 +93,7 @@
   (let [{: query-mod
          : project-source
          : update-info-window
+         : settings
          : merge-history-into-session!
          : save-current-prompt-tag!
          : restore-saved-prompt-tag!
@@ -175,6 +176,14 @@
                 ""))
           (when (or changed text-changed?)
             (invalidate-filter-cache! session))
+          (when (and session.project-mode
+                     text-changed?
+                     (query-mod.truthy? settings.project-lazy-prefilter-enabled)
+                     session.prefilter-mode)
+            ;; Lazy prefilter depends on query terms at stream-build time.
+            ;; If query text changes, rebuild pool so broaden/delete can
+            ;; recover omitted lines from earlier prefilter terms.
+            (project-source.apply-source-set! session))
           (when (and session.project-mode changed)
             (project-source.apply-source-set! session))
           (session.meta.set-query-lines effective-lines))
@@ -210,10 +219,11 @@
         (when (and (not force) event-tick)
           (set session.prompt-last-event-tick event-tick))
         (set session.prompt-update-dirty true)
-        (set session.prompt-last-change-ms now)
         (when-not force
+          (set session.prompt-last-change-ms now)
           (set session.prompt-force-block-until (+ now (math.max 0 delay))))
-        (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
+        (when-not force
+          (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0))))
         (when (and session.project-mode
                    (not session.project-bootstrapped)
                    (prompt-has-active-query? query-mod session))
