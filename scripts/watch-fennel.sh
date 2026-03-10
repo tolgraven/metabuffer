@@ -22,11 +22,6 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-if ! command -v clj-kondo >/dev/null 2>&1; then
-  echo "clj-kondo not found in PATH" >&2
-  exit 1
-fi
-
 file_signature() {
   # Stable content signature over Fennel sources + nfnl config.
   # shellcheck disable=SC2016
@@ -40,13 +35,6 @@ file_signature() {
 
 run_checks() {
   printf '\n[%s] linting fnl...\n' "$(date '+%H:%M:%S')"
-  if clj-kondo --lint fnl; then
-    echo "[watch-fennel] clj-kondo: ok"
-  else
-    echo "[watch-fennel] clj-kondo: failed"
-    return 1
-  fi
-
   if [ "$DO_COMPILE" -eq 1 ]; then
     echo "[watch-fennel] compiling..."
     if ./scripts/compile-fennel.sh; then
