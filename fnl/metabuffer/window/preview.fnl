@@ -24,6 +24,27 @@
   (let [{: floating-window-mod : selected-ref : read-file-lines-cached
          : is-active-session : debug-log : source-switch-debounce-ms} opts]
 
+  (fn preview-window-config
+    [session width height]
+    (let [p-row-col (vim.api.nvim_win_get_position session.prompt-win)
+          p-row (. p-row-col 1)
+          p-col (. p-row-col 2)
+          p-width (vim.api.nvim_win_get_width session.prompt-win)]
+      (if session.window-local-layout
+          {:relative "win"
+           :win session.prompt-win
+           :anchor "NW"
+           :row 0
+           :col p-width
+           :width width
+           :height height}
+          {:relative "editor"
+           :anchor "NE"
+           :row p-row
+           :col (+ p-col p-width)
+           :width width
+           :height height})))
+
   (fn mark-preview-buffer!
     [buf]
     (when (and buf (vim.api.nvim_buf_is_valid buf))
@@ -94,14 +115,11 @@
     [session]
     (when-not (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
       (let [buf (vim.api.nvim_create_buf false true)
-            p-row-col (vim.api.nvim_win_get_position session.prompt-win)
-            p-row (. p-row-col 1)
-            p-col (. p-row-col 2)
             p-width (vim.api.nvim_win_get_width session.prompt-win)
             p-height (vim.api.nvim_win_get_height session.prompt-win)
             width (math.max 36 (math.min 128 (math.floor (* p-width 0.58))))
-            col (+ p-col p-width)
-            win (floating-window-mod.new vim buf {:width width :height p-height :col col :row p-row})]
+            cfg (preview-window-config session width p-height)
+            win (floating-window-mod.new vim buf cfg)]
         (set session.preview-buf buf)
         (set session.preview-win win.window)
         (set session.preview-layout nil)
@@ -144,19 +162,10 @@
   (fn preview-context
     [session]
     (let [ref (selected-ref session.meta)
-          p-row-col (vim.api.nvim_win_get_position session.prompt-win)
-          p-row (. p-row-col 1)
-          p-col (. p-row-col 2)
           p-width (vim.api.nvim_win_get_width session.prompt-win)
           p-height (vim.api.nvim_win_get_height session.prompt-win)
           width (math.max 36 (math.min 128 (math.floor (* p-width 0.58))))
-          col (+ p-col p-width)
-          cfg {:relative "editor"
-               :anchor "NE"
-               :row p-row
-               :col col
-               :width width
-               :height p-height}
+          cfg (preview-window-config session width p-height)
           ft (filetype-for-ref ref)
           lines (context-lines-for-ref session ref p-height)
           start-lnum (if ref (math.max 1 (- (or ref.lnum 1) 1)) 1)
@@ -166,10 +175,10 @@
                           (math.max 1 (math.min row p-height)))
                         1)]
       {:ref ref
-       :p-row p-row
+       :p-row (. cfg :row)
        :p-height p-height
        :width width
-       :col col
+       :col (. cfg :col)
        :cfg cfg
        :ft ft
        :lines lines

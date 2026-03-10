@@ -106,6 +106,7 @@
   (set router.preview-source-switch-debounce-ms (or vim.g.meta_preview_source_switch_debounce_ms 60))
   (set router.source-syntax-refresh-debounce-ms (or vim.g.meta_source_syntax_refresh_debounce_ms 80))
   (set router.scroll-sync-debounce-ms (or vim.g.meta_scroll_sync_debounce_ms 20))
+  (set router.window-local-layout (if (= vim.g.meta_window_local_layout nil) true vim.g.meta_window_local_layout))
   (set router.default-prompt-keymaps default-prompt-keymaps)
   (set router.default-main-keymaps default-main-keymaps)
   (set router.default-prompt-fallback-keymaps default-prompt-fallback-keymaps)

@@ -4,9 +4,25 @@ local M = {}
 M.new = function(nvim, opts)
   local cfg = (opts or {})
   local height = (cfg.height or 3)
-  vim.cmd(("botright " .. tostring(height) .. "new"))
-  local win = vim.api.nvim_get_current_win()
-  local buf = vim.api.nvim_get_current_buf()
+  local local_layout_3f
+  if (cfg["window-local-layout"] == nil) then
+    local_layout_3f = true
+  else
+    local_layout_3f = cfg["window-local-layout"]
+  end
+  local origin_win = cfg["origin-win"]
+  local win
+  if (local_layout_3f and origin_win and vim.api.nvim_win_is_valid(origin_win)) then
+    local function _2_()
+      vim.cmd(("belowright " .. tostring(height) .. "new"))
+      return vim.api.nvim_get_current_win()
+    end
+    win = vim.api.nvim_win_call(origin_win, _2_)
+  else
+    vim.cmd(("botright " .. tostring(height) .. "new"))
+    win = vim.api.nvim_get_current_win()
+  end
+  local buf = vim.api.nvim_win_get_buf(win)
   local self = base.new(nvim, win, {}, {})
   pcall(vim.api.nvim_win_set_height, win, height)
   do

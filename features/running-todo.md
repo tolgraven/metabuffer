@@ -26,7 +26,7 @@ stack traceback:
 it_21'
         ...IM/LISTA/metabuffer/metabuffer/lua/metabuffer/router.lua:353: in function <...IM/LISTA/met
 abuffer/metabuffer/lua/metabuffer/router.lua:332>"
-- 20 [] Meta "takes over" the entire nvim tab instead of just the area around the active window. Everything should be window-local (but user togglable with a flag).
+- 20 [x] Meta "takes over" the entire nvim tab instead of just the area around the active window. Everything should be window-local (but user togglable with a flag).
 - 21 [x] lua error when trying to filter a buffer that's already empty (such as :enew)
 - 22 [x] info window with hit source info updates correctly when deleting filter, and updates, but hit buffer does not update.
 - 23 [x] if type filter like "lua", then deleting it, then "lua" again, selected line gets reset to line 1, should be recalled properly.

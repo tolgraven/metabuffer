@@ -49,6 +49,11 @@ M["apply-router-defaults"] = function(router, vim)
   router["preview-source-switch-debounce-ms"] = (vim.g.meta_preview_source_switch_debounce_ms or 60)
   router["source-syntax-refresh-debounce-ms"] = (vim.g.meta_source_syntax_refresh_debounce_ms or 80)
   router["scroll-sync-debounce-ms"] = (vim.g.meta_scroll_sync_debounce_ms or 20)
+  if (vim.g.meta_window_local_layout == nil) then
+    router["window-local-layout"] = true
+  else
+    router["window-local-layout"] = vim.g.meta_window_local_layout
+  end
   router["default-prompt-keymaps"] = default_prompt_keymaps
   router["default-main-keymaps"] = default_main_keymaps
   router["default-prompt-fallback-keymaps"] = default_prompt_fallback_keymaps

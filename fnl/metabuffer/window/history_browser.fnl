@@ -13,9 +13,23 @@
           p-height (vim.api.nvim_win_get_height session.prompt-win)
           width (math.max 42 (math.min 120 p-width))
           height (math.max 4 (math.min 12 p-height))
-          row (math.max 0 (- p-row height))
-          col p-col
-          win (floating-window-mod.new vim buf {:width width :height height :col col :row row})]
+          cfg (if session.window-local-layout
+                  {:relative "win"
+                   :win session.prompt-win
+                   :anchor "SW"
+                   :row 0
+                   :col 0
+                   :width width
+                   :height height}
+                  (let [row (math.max 0 (- p-row height))
+                        col p-col]
+                    {:relative "editor"
+                     :anchor "NE"
+                     :row row
+                     :col col
+                     :width width
+                     :height height}))
+          win (floating-window-mod.new vim buf cfg)]
       (set session.history-browser-buf buf)
       (set session.history-browser-win win.window)
       (let [bo (. vim.bo buf)]

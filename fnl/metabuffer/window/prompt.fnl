@@ -6,10 +6,21 @@
   [nvim opts]
   "Create the bottom prompt window used by Meta interactive input."
   (let [cfg (or opts {})
-        height (or cfg.height 3)]
-    (vim.cmd (.. "botright " (tostring height) "new"))
-    (let [win (vim.api.nvim_get_current_win)
-          buf (vim.api.nvim_get_current_buf)
+        height (or cfg.height 3)
+        local-layout? (if (= cfg.window-local-layout nil) true cfg.window-local-layout)
+        origin-win cfg.origin-win
+        win (if (and local-layout?
+                     origin-win
+                     (vim.api.nvim_win_is_valid origin-win))
+                (vim.api.nvim_win_call
+                  origin-win
+                  (fn []
+                    (vim.cmd (.. "belowright " (tostring height) "new"))
+                    (vim.api.nvim_get_current_win)))
+                (do
+                  (vim.cmd (.. "botright " (tostring height) "new"))
+                  (vim.api.nvim_get_current_win)))
+        buf (vim.api.nvim_win_get_buf win)
           self (base.new nvim win [] {})]
       (pcall vim.api.nvim_win_set_height win height)
       (let [bo (. vim.bo buf)]
@@ -29,6 +40,6 @@
         (set (. wo :foldcolumn) "0")
         (set (. wo :spell) false))
       (set self.buffer buf)
-      self)))
+      self))
 
 M

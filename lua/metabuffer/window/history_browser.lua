@@ -10,9 +10,15 @@ local function ensure_window_21(floating_window_mod, session)
     local p_height = vim.api.nvim_win_get_height(session["prompt-win"])
     local width = math.max(42, math.min(120, p_width))
     local height = math.max(4, math.min(12, p_height))
-    local row = math.max(0, (p_row - height))
-    local col = p_col
-    local win = floating_window_mod.new(vim, buf, {width = width, height = height, col = col, row = row})
+    local cfg
+    if session["window-local-layout"] then
+      cfg = {relative = "win", win = session["prompt-win"], anchor = "SW", row = 0, col = 0, width = width, height = height}
+    else
+      local row = math.max(0, (p_row - height))
+      local col = p_col
+      cfg = {relative = "editor", anchor = "NE", row = row, col = col, width = width, height = height}
+    end
+    local win = floating_window_mod.new(vim, buf, cfg)
     session["history-browser-buf"] = buf
     session["history-browser-win"] = win.window
     local bo = vim.bo[buf]

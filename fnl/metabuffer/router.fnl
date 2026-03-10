@@ -936,7 +936,11 @@
     (let [initial-lines (if (and query (~= query ""))
                             (vim.split query "\n" {:plain true})
                             [""])
-          prompt-win (prompt_window_mod.new vim {:height (router_util_mod.prompt-height)})
+          prompt-win (prompt_window_mod.new
+                       vim
+                       {:height (router_util_mod.prompt-height)
+                        :window-local-layout M.window-local-layout
+                        :origin-win origin-win})
           prompt-buf prompt-win.buffer
           session {:source-buf source-buf
                    :origin-win origin-win
@@ -945,6 +949,7 @@
                    :initial-source-line (math.max 1 (or (. source-view :lnum) (+ (or condition.selected-index 0) 1)))
                    :prompt-win prompt-win.window
                    :prompt-buf prompt-buf
+                   :window-local-layout M.window-local-layout
                    :initial-prompt-text (table.concat initial-lines "\n")
                    :last-prompt-text (table.concat initial-lines "\n")
                    :last-history-text ""
