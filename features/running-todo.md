@@ -2,7 +2,7 @@
 
 ## These are to be checked off as they are completed, and later (assuming previously committed to git) manually cleared so as to not clutter.
 - 1 [x] Any earlier hlsearch should be cleared when invoking Meta.
-- 2 [] prompt window scratch buffer should also be renamed (to the same as existing statusline) so looks better when navigating away from tmux split and airline or similar does a statusline modification overriding us.
+- 2 [x] prompt window scratch buffer should also be renamed (to the same as existing statusline) so looks better when navigating away from tmux split and airline or similar does a statusline modification overriding us.
 - 3 [x] rework all files per guidelines in AGENTS.md, especially around function definitions (separate line, small docstr).
 - 4 [x] change the keymaps to use builder functions rather than tons of redundant repetition.
 - 5 [x] MOVED TO FEATURE: lazy hits in general. stream results if Meta! init > 100ms, don't wait for them all. (additional debounce for each incoming chunk)

@@ -19,6 +19,21 @@
 (local router_query_flow_mod (require :metabuffer.router.query_flow))
 
 (local M {})
+
+(fn sync-prompt-buffer-name!
+  [session]
+  (when (and session
+             session.prompt-buf
+             (vim.api.nvim_buf_is_valid session.prompt-buf)
+             session.meta
+             session.meta.buf
+             (= (type session.meta.buf.name) "string")
+             (~= session.meta.buf.name ""))
+    (pcall
+      vim.api.nvim_buf_set_name
+      session.prompt-buf
+      (.. session.meta.buf.name " [Prompt]"))))
+
 (set M.instances {})
 (set M.active-by-source {})
 (set M.active-by-prompt {})
@@ -788,6 +803,7 @@
       (set session.project-mode (not session.project-mode))
       (set session.meta.project-mode session.project-mode)
       (session.meta.buf.set-name (router_util_mod.meta-buffer-name session))
+      (sync-prompt-buffer-name! session)
       (project-source.apply-source-set! session)
       (apply-prompt-lines session))))
 
@@ -898,6 +914,7 @@
         ;; Initialize/render after prompt split exists so we avoid an extra
         ;; post-split view correction pass that can visually "flash" scroll.
         (curr.on-init)
+        (sync-prompt-buffer-name! session)
         ;; Ensure initial selection/view is anchored before attaching prompt
         ;; hooks that may sync from main-window cursor events.
         (when session.project-mode
