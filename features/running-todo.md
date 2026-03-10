@@ -14,7 +14,7 @@
 - 11 [] regular cursorline highlight doesn't apply, except for the underline I have in insert mode. But the background gets overridden by the window/buffer background highlighting.
 - 12 [] the preview window should show what file it's showing. best would be to put this in the main statusline. Compact the existing statusline to make space by using short forms for the flags: hidden -> hid, ignored -> ig, deps -> dep, prefilter -> prf, lazy -> lz. Also lazy is core default  and assumed, so don't show that unless nolazy (-> nlz). The text should go right underneath where the preview window starts so matches up.
 - 13 [] Syntax highlighting in hit buffer can often get crazy due to regions showing non-consecutive lines. This might get fixed when we try to use Treesitter and hiding lines instead, but first we should try to reset highlight for each new non-consecutive line, that is, have separate regions for them.
-- 14 [] Sluggish on <CR>: there is a weird delay when opening a hit, even in same file. It should make the jump first and only then do regular teardown, async.
+- 14 [x] Sluggish on <CR>: there is a weird delay when opening a hit, even in same file. It should make the jump first and only then do regular teardown, async.
 - 15 [x] Sluggish when narrowing search: when we only have a few results, and don't input something that might actually broaden results, there should be no need to re-search everything, only the existing hits. This should improve performance greatly.
 - 16 [] If do `!!` from an empty prompt, or running `:Meta !!`, the full settings used with that prompt (including `#deps` etc toggles) should be recalled. When cycling through prompts after this (with <Up> etc) the same should happen.
 - 17 [] History search suboptimal: typing `##` just gives a floating popup window (in the way of and hiding prompt input - should go above) saying "No history matches". 
@@ -28,3 +28,4 @@ it_21'
 abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 20 [] Meta "takes over" the entire nvim tab instead of just the area around the active window. Everything should be window-local (but user togglable with a flag).
 - 21 [x] lua error when trying to filter a buffer that's already empty (such as :enew)
+- 22 [] info window with hit source info updates correctly when deleting filter, and updates, but hit buffer does not update.

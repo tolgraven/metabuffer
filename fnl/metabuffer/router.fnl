@@ -315,14 +315,6 @@
     (set session.last-prompt-text (router_util_mod.prompt-text session))
     (push-history! session.last-prompt-text)
     (apply-prompt-lines session)
-    (router_prompt_mod.begin-session-close!
-      session
-      router_prompt_mod.cancel-prompt-update!)
-    (pcall vim.cmd "stopinsert")
-    (let [matcher (curr.matcher)]
-      (when matcher
-        (pcall matcher.remove-highlight matcher)))
-    (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
     (when (and (vim.api.nvim_win_is_valid session.origin-win)
                (vim.api.nvim_buf_is_valid session.origin-buf))
       (pcall vim.api.nvim_set_current_win session.origin-win)
@@ -349,9 +341,20 @@
       (when (~= vq "")
         (vim.fn.setreg "/" vq)
         (set vim.o.hlsearch true)))
-    (session_view.wipe-temp-buffers curr)
-    (remove-session session)
-    (M._wrapup curr)
+    (vim.schedule
+      (fn []
+        (when (= (. M.active-by-prompt session.prompt-buf) session)
+          (router_prompt_mod.begin-session-close!
+            session
+            router_prompt_mod.cancel-prompt-update!)
+          (pcall vim.cmd "stopinsert")
+          (let [matcher (curr.matcher)]
+            (when matcher
+              (pcall matcher.remove-highlight matcher)))
+          (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
+          (session_view.wipe-temp-buffers curr)
+          (remove-session session)
+          (M._wrapup curr))))
     curr))
 
 (fn finish-cancel
