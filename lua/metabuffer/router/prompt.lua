@@ -131,7 +131,23 @@ M["begin-session-close!"] = function(session, cancel_prompt_update_21)
     session["lazy-refresh-pending"] = false
     session["syntax-refresh-dirty"] = false
     session["syntax-refresh-pending"] = false
-    return nil
+    if session["prompt-text-sync-timer"] then
+      local timer = session["prompt-text-sync-timer"]
+      local stopf = timer.stop
+      local closef = timer.close
+      if stopf then
+        pcall(stopf, timer)
+      else
+      end
+      if closef then
+        pcall(closef, timer)
+      else
+      end
+      session["prompt-text-sync-timer"] = nil
+      return nil
+    else
+      return nil
+    end
   else
     return nil
   end
@@ -149,7 +165,7 @@ M["schedule-prompt-update!"] = function(ctx, session, wait_ms)
     local token = session["prompt-update-token"]
     local timer = vim.loop.new_timer()
     session["prompt-update-timer"] = timer
-    local function _19_()
+    local function _22_()
       if (session["prompt-update-timer"] and (session["prompt-update-timer"] == timer)) then
         cancel_prompt_update_21(session)
       else
@@ -169,7 +185,7 @@ M["schedule-prompt-update!"] = function(ctx, session, wait_ms)
         return nil
       end
     end
-    return timer.start(timer, math.max(0, wait_ms), 0, vim.schedule_wrap(_19_))
+    return timer.start(timer, math.max(0, wait_ms), 0, vim.schedule_wrap(_22_))
   else
     return nil
   end

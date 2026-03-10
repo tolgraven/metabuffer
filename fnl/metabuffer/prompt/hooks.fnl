@@ -6,6 +6,7 @@
   "Public API: M.new."
   (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
          : default-main-keymaps : default-prompt-fallback-keymaps
+         : prompt-text-sync-interval-ms
          : on-prompt-changed : update-info-window : maybe-sync-from-main!
          : schedule-scroll-sync!} opts]
     (fn disable-cmp
@@ -302,6 +303,35 @@
             (set session.prompt-last-synced-text txt)
             (schedule-prompt-update! router session)))))
 
+    (fn stop-prompt-sync-timer!
+      [session]
+      (when session.prompt-text-sync-timer
+        (let [timer session.prompt-text-sync-timer
+              stopf (. timer :stop)
+              closef (. timer :close)]
+          (when stopf (pcall stopf timer))
+          (when closef (pcall closef timer))
+          (set session.prompt-text-sync-timer nil))))
+
+    (fn start-prompt-sync-timer!
+      [router session]
+      (stop-prompt-sync-timer! session)
+      (let [interval (math.max 10 (or prompt-text-sync-interval-ms 25))
+            timer (vim.loop.new_timer)]
+        (set session.prompt-text-sync-timer timer)
+        ((. timer :start)
+         timer
+         interval
+         interval
+         (vim.schedule_wrap
+           (fn []
+             (when (and session
+                        session.prompt-buf
+                        (vim.api.nvim_buf_is_valid session.prompt-buf)
+                        (= (. active-by-prompt session.prompt-buf) session)
+                        (not session.closing))
+               (maybe-trigger-text-sync! router session)))))))
+
     (fn register!
   [router session]
       (let [aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true})]
@@ -324,6 +354,7 @@
              nil)
            :on_detach
            (fn []
+             (stop-prompt-sync-timer! session)
              (when session.prompt-buf
                (set (. active-by-prompt session.prompt-buf) nil)))})
       ;; Prompt text updates: rely on post-change autocmds to avoid pre-edit race
@@ -395,6 +426,8 @@
         (disable-cmp session)
         (mark-prompt-buffer! session.prompt-buf)
         (refresh-prompt-highlights! session)
+        (set session.prompt-last-synced-text (prompt-text session))
+        (start-prompt-sync-timer! router session)
         (apply-all-keymaps router session)))
 
     {:register! register!}))
