@@ -12,6 +12,12 @@
       (table.insert out ""))
     out))
 
+(fn leading-indent-width
+  [line]
+  (let [txt (or line "")
+        ws (or (string.match txt "^(%s*)") "")]
+    (vim.fn.strdisplaywidth ws)))
+
 (fn M.new
   [opts]
   "Create preview window manager for selected source refs."
@@ -194,6 +200,10 @@
           stop (+ start (math.max 0 (- (# (. ctx :lines)) 1)))
           digit-width (lineno-mod.digit-width-from-max-value stop)
           field-width (+ digit-width 1)
+          focus-row (math.max 1 (or (. ctx :focus-row) 1))
+          focus-line (or (. (. ctx :lines) focus-row) "")
+          indent (leading-indent-width focus-line)
+          target-leftcol (math.max 0 (+ field-width (math.max 0 (- indent 2))))
           rendered []
           highlights []]
       (each [i line (ipairs (. ctx :lines))]
@@ -216,7 +226,8 @@
                         "text")]
         (when (~= (. bo :filetype) next-ft)
           (set (. bo :filetype) next-ft))))
-    (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0]))
+    (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0])
+    (pcall vim.fn.winrestview {:leftcol target-leftcol}))
 
   (fn update-preview-window!
     [session]

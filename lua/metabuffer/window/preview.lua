@@ -14,6 +14,11 @@ local function trim_or_pad_lines(lines, target)
   end
   return out
 end
+local function leading_indent_width(line)
+  local txt = (line or "")
+  local ws = (string.match(txt, "^(%s*)") or "")
+  return vim.fn.strdisplaywidth(ws)
+end
 M.new = function(opts)
   local floating_window_mod = opts["floating-window-mod"]
   local selected_ref = opts["selected-ref"]
@@ -223,6 +228,10 @@ M.new = function(opts)
       local stop = (start + math.max(0, (#ctx.lines - 1)))
       local digit_width = lineno_mod["digit-width-from-max-value"](stop)
       local field_width = (digit_width + 1)
+      local focus_row = math.max(1, (ctx["focus-row"] or 1))
+      local focus_line = (ctx.lines[focus_row] or "")
+      local indent = leading_indent_width(focus_line)
+      local target_leftcol = math.max(0, (field_width + math.max(0, (indent - 2))))
       local rendered = {}
       local highlights = {}
       for i, line in ipairs(ctx.lines) do
@@ -255,7 +264,8 @@ M.new = function(opts)
       else
       end
     end
-    return pcall(vim.api.nvim_win_set_cursor, session["preview-win"], {ctx["focus-row"], 0})
+    pcall(vim.api.nvim_win_set_cursor, session["preview-win"], {ctx["focus-row"], 0})
+    return pcall(vim.fn.winrestview, {leftcol = __fnl_global__target_2dleftcol})
   end
   local function update_preview_window_21(session)
     ensure_preview_window_21(session)
