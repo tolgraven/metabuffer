@@ -2,8 +2,14 @@
 local router_util_mod = require("metabuffer.router.util")
 local router_prompt_mod = require("metabuffer.router.prompt")
 local M = {}
-local function choose_current_when_nil(query_mod, value, current)
-  return query_mod["resolve-option"](value, current)
+local function choose_current_when_nil(value, current)
+  local val_113_auto = value
+  if (nil ~= val_113_auto) then
+    local v = val_113_auto
+    return v
+  else
+    return current
+  end
 end
 local function prompt_delay_ms(settings, query_mod, session)
   return router_prompt_mod["prompt-update-delay-ms"](settings, query_mod, router_util_mod["prompt-lines"], session)
@@ -24,11 +30,21 @@ local function force_within_idle_window_3f(settings, session, now)
   return ((math.max(0, (settings["prompt-update-idle-ms"] or 0)) > 0) and ((now - (session["prompt-last-change-ms"] or 0)) < math.max(0, (settings["prompt-update-idle-ms"] or 0))))
 end
 local function queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, txt, now, delay)
-  if not (force and session["prompt-update-pending"]) then
-    if (force and force_within_idle_window_3f(settings, session, now)) then
-      return schedule_update_21(prompt_scheduler_ctx, session, math.max(delay, settings["prompt-update-idle-ms"]))
+  if (not session["project-mode"] or session["project-bootstrapped"]) then
+    if not (force and session["prompt-update-pending"]) then
+      local skip_identical_3f = (force and recent_identical_forced_refresh_3f(settings, session, txt, now))
+      local skip_active_input_3f = (force and force_blocked_by_active_input_3f(settings, session, now))
+      if not (skip_identical_3f or skip_active_input_3f) then
+        if (force and force_within_idle_window_3f(settings, session, now)) then
+          return schedule_update_21(prompt_scheduler_ctx, session, math.max(delay, settings["prompt-update-idle-ms"]))
+        else
+          return schedule_update_21(prompt_scheduler_ctx, session, delay)
+        end
+      else
+        return nil
+      end
     else
-      return schedule_update_21(prompt_scheduler_ctx, session, delay)
+      return nil
     end
   else
     return nil
@@ -51,17 +67,10 @@ local function apply_fresh_prompt_event_21(query_mod, project_source, settings, 
   return queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, txt, now, delay)
 end
 local function apply_duplicate_text_event_21(prompt_scheduler_ctx, session, now, delay)
-  session["prompt-last-change-ms"] = now
-  session["prompt-force-block-until"] = (now + math.max(0, delay))
-  session["prompt-update-dirty"] = true
-  return schedule_update_21(prompt_scheduler_ctx, session, delay)
-end
-local function invalidate_filter_cache_21(session)
-  if (session and session.meta) then
-    session.meta._prev_text = ""
-    session.meta["_filter-cache"] = {}
-    session.meta["_filter-cache-line-count"] = #session.meta.buf.content
-    return nil
+  if session["prompt-update-pending"] then
+    session["prompt-last-change-ms"] = now
+    session["prompt-force-block-until"] = (now + math.max(0, delay))
+    return schedule_update_21(prompt_scheduler_ctx, session, delay)
   else
     return nil
   end
@@ -135,13 +144,11 @@ M["apply-prompt-lines!"] = function(deps, session)
       else
         _3 = nil
       end
-      local next_hidden = choose_current_when_nil(query_mod, parsed["include-hidden"], session["include-hidden"])
-      local next_ignored = choose_current_when_nil(query_mod, parsed["include-ignored"], session["include-ignored"])
-      local next_deps = choose_current_when_nil(query_mod, parsed["include-deps"], session["include-deps"])
-      local next_prefilter = choose_current_when_nil(query_mod, parsed.prefilter, session["prefilter-mode"])
-      local next_lazy = choose_current_when_nil(query_mod, parsed.lazy, session["lazy-mode"])
-      local prev_effective_text = (session["prompt-last-applied-text"] or "")
-      local text_changed_3f = (effective_text ~= prev_effective_text)
+      local next_hidden = choose_current_when_nil(parsed["include-hidden"], session["include-hidden"])
+      local next_ignored = choose_current_when_nil(parsed["include-ignored"], session["include-ignored"])
+      local next_deps = choose_current_when_nil(parsed["include-deps"], session["include-deps"])
+      local next_prefilter = choose_current_when_nil(parsed.prefilter, session["prefilter-mode"])
+      local next_lazy = choose_current_when_nil(parsed.lazy, session["lazy-mode"])
       local changed = ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]))
       session["effective-include-hidden"] = next_hidden
       session["effective-include-ignored"] = next_ignored
@@ -152,44 +159,39 @@ M["apply-prompt-lines!"] = function(deps, session)
       session["last-prompt-text"] = effective_text
       session["prompt-last-applied-text"] = effective_text
       if session["project-mode"] then
-        local flags
-        local _14_
+        local _17_
         if session["effective-include-hidden"] then
-          _14_ = "+hidden"
+          _17_ = "+hidden"
         else
-          _14_ = "-hidden"
+          _17_ = "-hidden"
         end
-        local _16_
+        local _19_
         if session["effective-include-ignored"] then
-          _16_ = "+ignored"
+          _19_ = "+ignored"
         else
-          _16_ = "-ignored"
+          _19_ = "-ignored"
         end
-        local _18_
+        local _21_
         if session["effective-include-deps"] then
-          _18_ = "+deps"
+          _21_ = "+deps"
         else
-          _18_ = "-deps"
+          _21_ = "-deps"
         end
-        local function _20_()
-          if session["prefilter-mode"] then
-            return "+prefilter"
-          else
-            return "-prefilter"
-          end
-        end
-        flags = {_14_, _16_, _18_, _20_()}
-        if not session["lazy-mode"] then
-          table.insert(flags, "-lazy")
+        local _23_
+        if session["prefilter-mode"] then
+          _23_ = "+prefilter"
         else
+          _23_ = "-prefilter"
         end
-        session.meta.debug_out = (" [" .. table.concat(flags, " ") .. "]")
+        local _25_
+        if session["lazy-mode"] then
+          _25_ = "+lazy"
+        else
+          _25_ = "-lazy"
+        end
+        session.meta.debug_out = (" [" .. _17_ .. " " .. _19_ .. " " .. _21_ .. " " .. _23_ .. " " .. _25_ .. "]")
       else
         session.meta.debug_out = ""
-      end
-      if (changed or text_changed_3f) then
-        invalidate_filter_cache_21(session)
-      else
       end
       if (session["project-mode"] and changed) then
         project_source["apply-source-set!"](session)
@@ -203,7 +205,7 @@ M["apply-prompt-lines!"] = function(deps, session)
       return update_info_window(session)
     else
       if string.find(tostring(err), "E565") then
-        local function _25_()
+        local function _29_()
           if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
             pcall(session.meta["on-update"], 0)
             pcall(session.meta.refresh_statusline)
@@ -212,7 +214,7 @@ M["apply-prompt-lines!"] = function(deps, session)
             return nil
           end
         end
-        return vim.defer_fn(_25_, 1)
+        return vim.defer_fn(_29_, 1)
       else
         return nil
       end
@@ -229,24 +231,32 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
   local prompt_scheduler_ctx = deps["prompt-scheduler-ctx"]
   local session = active_by_prompt[prompt_buf]
   if (session and not session.closing) then
-    local now = router_prompt_mod["now-ms"]()
-    local delay = prompt_delay_ms(settings, query_mod, session)
-    if (not force and event_tick) then
-      session["prompt-last-event-tick"] = event_tick
+    local duplicate_event_3f = (not force and event_tick and (event_tick == (session["prompt-last-event-tick"] or -1)))
+    if not duplicate_event_3f then
+      local txt = router_util_mod["prompt-text"](session)
+      local now = router_prompt_mod["now-ms"]()
+      local delay = prompt_delay_ms(settings, query_mod, session)
+      if (not force and event_tick) then
+        session["prompt-last-event-tick"] = event_tick
+      else
+      end
+      if not (force and (now < (session["prompt-force-block-until"] or 0))) then
+        local duplicate_text_3f = (not force and (txt == (session["prompt-last-event-text"] or "")))
+        if duplicate_text_3f then
+          apply_duplicate_text_event_21(prompt_scheduler_ctx, session, now, delay)
+        else
+        end
+        if not duplicate_text_3f then
+          return apply_fresh_prompt_event_21(query_mod, project_source, settings, prompt_scheduler_ctx, session, force, txt, now, delay)
+        else
+          return nil
+        end
+      else
+        return nil
+      end
     else
+      return nil
     end
-    session["prompt-update-dirty"] = true
-    session["prompt-last-change-ms"] = now
-    if not force then
-      session["prompt-force-block-until"] = (now + math.max(0, delay))
-    else
-    end
-    session["prompt-change-seq"] = (1 + (session["prompt-change-seq"] or 0))
-    if (session["project-mode"] and not session["project-bootstrapped"] and prompt_has_active_query_3f(query_mod, session)) then
-      project_source["schedule-project-bootstrap!"](session, settings["project-bootstrap-delay-ms"])
-    else
-    end
-    return queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, "", now, delay)
   else
     return nil
   end

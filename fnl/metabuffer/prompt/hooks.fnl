@@ -5,7 +5,6 @@
   [opts]
   "Public API: M.new."
   (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
-         : default-main-keymaps : default-prompt-fallback-keymaps
          : on-prompt-changed : update-info-window : maybe-sync-from-main!
          : schedule-scroll-sync!} opts]
     (fn disable-cmp
@@ -49,45 +48,23 @@
               (while (<= pos (# txt))
                 (let [[s e] [(string.find txt "%S+" pos)]]
                   (if (and s e)
-                        (let [token (string.sub txt s e)
-                              s0 (- s 1)
-                              e0 e
-                              escaped-neg? (vim.startswith token "\\!")
-                            negated? (and (> (# token) 1)
-                                          (= (string.sub token 1 1) "!")
-                                          (not escaped-neg?))
-                              body (if negated?
-                                       (string.sub token 2)
-                                       escaped-neg?
-                                       (string.sub token 2)
-                                       token)
-                              body-start (if (or negated? escaped-neg?) (+ s0 1) s0)]
-                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptText" r s0 e0)
-                          (when negated?
-                            (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptNeg" r s0 e0))
-                        (when (and (> (# body) 0)
-                                   (not (string.match body "^[%?%*%+%|%.]$"))
-                                   (not (not (string.find body "[\\%[%]%(%)%+%*%?%|]"))))
-                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptRegex" r s0 e0))
-                        (when (and (> (# body) 0)
-                                   (not (vim.startswith body "\\^"))
-                                   (= (string.sub body 1 1) "^"))
-                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r body-start (+ body-start 1)))
-                        (when (and (> (# body) 0)
-                                   (not (vim.endswith body "\\$"))
-                                   (= (string.sub body (# body)) "$"))
+                      (let [token (string.sub txt s e)
+                            s0 (- s 1)
+                            e0 e]
+                        (when (and (> (# token) 1) (= (string.sub token 1 1) "!"))
+                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptNeg" r s0 e0))
+                        (let [core (if (and (> (# token) 1) (= (string.sub token 1 1) "!"))
+                                        (string.sub token 2)
+                                        token)]
+                          (when (and (> (# core) 0)
+                                     (not (not (string.find core "[\\%[%]%(%)%+%*%?%|]"))))
+                            (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptRegex" r s0 e0)))
+                        (when (and (> (# token) 0) (= (string.sub token 1 1) "^"))
+                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r s0 (+ s0 1)))
+                        (when (and (> (# token) 0) (= (string.sub token (# token)) "$"))
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r (- e0 1) e0))
                         (set pos (+ e 1)))
-                      (set pos (+ (# txt) 1))))))))))
-
-    (fn escaped-inline-shorthand?
-  [left token]
-      (let [n (# (or left ""))
-            m (# (or token ""))]
-        (and (>= n m)
-             (let [before (- n m)]
-               (and (>= before 1)
-                    (= (string.sub left before before) "\\"))))))
+                        (set pos (+ (# txt) 1))))))))))
 
     (fn maybe-expand-history-shorthand!
   [router session]
@@ -103,20 +80,16 @@
                     line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf row0 (+ row0 1) false) 1) "")
                     left (if (> col 0) (string.sub line 1 col) "")
                     saved-tag (string.match left "##([%w_%-]+)$")
-                    saved-token (and saved-tag (.. "##" saved-tag))
                     saved-replacement (if saved-tag
                                           (router.saved-prompt-entry saved-tag)
                                           "")
-                    trigger0 (if (and (>= col 3) (vim.endswith left "!^!"))
-                                 "!^!"
-                                 (and (>= col 2) (vim.endswith left "!!"))
-                                 "!!"
-                                 (and (>= col 2) (vim.endswith left "!$"))
-                                 "!$"
-                                 nil)
-                    trigger (if (and trigger0 (escaped-inline-shorthand? left trigger0))
-                                nil
-                                trigger0)
+                    trigger (if (and (>= col 3) (vim.endswith left "!^!"))
+                                "!^!"
+                                (and (>= col 2) (vim.endswith left "!!"))
+                                "!!"
+                                (and (>= col 2) (vim.endswith left "!$"))
+                                "!$"
+                                nil)
                     replacement (if (= trigger "!!")
                                     (router.last-prompt-entry session.prompt-buf)
                                     (= trigger "!$")
@@ -138,7 +111,6 @@
                       (set session._expanding-history-shorthand false)
                       true)
                     (if (and saved-tag
-                             (not (escaped-inline-shorthand? left saved-token))
                              (= (type saved-replacement) "string")
                              (~= saved-replacement ""))
                         (do
@@ -158,8 +130,6 @@
       (if
         (= action "accept")
         (fn [] (router.accept session.prompt-buf))
-        (= action "accept-main")
-        (fn [] (router.accept-main session.prompt-buf))
         (= action "cancel")
         (fn [] (router.cancel session.prompt-buf))
         (= action "move-selection")
@@ -218,15 +188,14 @@
         (fn [] (router.scroll-main session.prompt-buf arg))
         (= action "toggle-project-mode")
         (fn [] (router.toggle-project-mode session.prompt-buf))
-        (= action "exclude-symbol-under-cursor")
-        (fn [] (router.exclude-symbol-under-cursor session.prompt-buf))
-        (= action "insert-symbol-under-cursor")
-        (fn [] (router.insert-symbol-under-cursor session.prompt-buf))
         nil))
 
     (fn apply-keymaps
-      [router session target-buf rules]
-      (let [base-opts {:buffer target-buf :silent true :noremap true :nowait true}]
+      [router session]
+      (let [base-opts {:buffer session.prompt-buf :silent true :noremap true :nowait true}
+            rules (if (= (type vim.g.meta_prompt_keymaps) "table")
+                      vim.g.meta_prompt_keymaps
+                      default-prompt-keymaps)]
         (each [_ r (ipairs rules)]
           (let [mode (. r 1)
                 lhs (. r 2)
@@ -241,32 +210,37 @@
             (if rhs
                 (vim.keymap.set mode lhs rhs opts)
                 (vim.notify
-                  (.. "metabuffer: unknown keymap action '" (tostring action) "' for " (tostring lhs))
+                  (.. "metabuffer: unknown prompt keymap action '" (tostring action) "' for " (tostring lhs))
                   vim.log.levels.WARN))))))
 
-    (fn prompt-rules
-      []
-      (if (= (type vim.g.meta_prompt_keymaps) "table")
-          vim.g.meta_prompt_keymaps
-          default-prompt-keymaps))
-
-    (fn prompt-fallback-rules
-      []
-      (if (= (type vim.g.meta_prompt_fallback_keymaps) "table")
-          vim.g.meta_prompt_fallback_keymaps
-          default-prompt-fallback-keymaps))
-
-    (fn main-rules
-      []
-      (if (= (type vim.g.meta_main_keymaps) "table")
-          vim.g.meta_main_keymaps
-          default-main-keymaps))
-
-    (fn apply-all-keymaps
-      [router session]
-      (apply-keymaps router session session.prompt-buf (prompt-rules))
-      (apply-keymaps router session session.prompt-buf (prompt-fallback-rules))
-      (apply-keymaps router session session.meta.buf.buffer (main-rules)))
+    (fn apply-emacs-insert-fallbacks
+  [router session]
+      (let [opts {:buffer session.prompt-buf :silent true :noremap true :nowait true}]
+        (vim.keymap.set "i" "<C-a>"
+          (fn [] (schedule-when-valid session
+                   (fn []
+                     (router.prompt-home session.prompt-buf))))
+          opts)
+        (vim.keymap.set "i" "<C-e>"
+          (fn [] (schedule-when-valid session
+                   (fn []
+                     (router.prompt-end session.prompt-buf))))
+          opts)
+        (vim.keymap.set "i" "<C-u>"
+          (fn [] (schedule-when-valid session
+                   (fn []
+                     (router.prompt-kill-backward session.prompt-buf))))
+          opts)
+        (vim.keymap.set "i" "<C-k>"
+          (fn [] (schedule-when-valid session
+                   (fn []
+                     (router.prompt-kill-forward session.prompt-buf))))
+          opts)
+        (vim.keymap.set "i" "<C-y>"
+          (fn [] (schedule-when-valid session
+                   (fn []
+                     (router.prompt-yank session.prompt-buf))))
+          opts)))
 
     (fn register!
   [router session]
@@ -274,27 +248,22 @@
         (set session.augroup aug)
       ;; Some environments/plugins do not reliably emit TextChangedI for this
       ;; scratch prompt buffer; keep a low-level line-change hook as a fallback.
-        (vim.api.nvim_buf_attach
-          session.prompt-buf
-          false
-          {:on_lines
-           (fn [_ _ changedtick _ _ _ _ _]
-             ;; on_lines can fire during insert processing; schedule to observe
-             ;; committed prompt text before query flow reads it.
-             (vim.schedule
-               (fn []
-                 (when (and session.prompt-buf
-                            (= (. active-by-prompt session.prompt-buf) session))
-                   (if (maybe-expand-history-shorthand! router session)
-                       nil
-                       (do
-                         (refresh-prompt-highlights! session)
-                         (on-prompt-changed session.prompt-buf false changedtick))))))
-             nil)
-           :on_detach
-           (fn []
-             (when session.prompt-buf
-               (set (. active-by-prompt session.prompt-buf) nil)))})
+        (vim.api.nvim_buf_attach session.prompt-buf false
+          {:on_lines (fn [_ _ changedtick _ _ _ _ _]
+                       ;; on_lines can fire before insert-state buffer text is fully
+                       ;; visible; defer one tick so we observe the committed prompt.
+                       (vim.schedule
+                         (fn []
+                           (when (and session.prompt-buf
+                                      (= (. active-by-prompt session.prompt-buf) session))
+                             (if (maybe-expand-history-shorthand! router session)
+                                 nil
+                                 (do
+                                   (refresh-prompt-highlights! session)
+                                   (on-prompt-changed session.prompt-buf false changedtick)))))))
+           :on_detach (fn []
+                        (when session.prompt-buf
+                          (set (. active-by-prompt session.prompt-buf) nil)))})
       ;; Prompt text updates: rely on post-change autocmds to avoid pre-edit race
       ;; behavior that can leave matcher one character behind while typing.
         (vim.api.nvim_create_autocmd ["TextChanged" "TextChangedI"]
@@ -305,12 +274,10 @@
                            nil
                            (do
                              (refresh-prompt-highlights! session)
-                             (set session.prompt-last-textchanged-tick
-                               (vim.api.nvim_buf_get_changedtick session.prompt-buf))
                              (on-prompt-changed
                                session.prompt-buf
                                false
-                               session.prompt-last-textchanged-tick))))})
+                               (vim.api.nvim_buf_get_changedtick session.prompt-buf)))))})
       ;; Re-assert prompt maps when entering insert mode; this wins over late
       ;; plugin mappings (for example completion plugins).
         (vim.api.nvim_create_autocmd "InsertEnter"
@@ -321,7 +288,8 @@
                          session
                          (fn []
                            (disable-cmp session)
-                           (apply-all-keymaps router session))))})
+                           (apply-keymaps router session)
+                           (apply-emacs-insert-fallbacks router session))))})
       ;; Some statusline plugins or focus transitions (for example tmux pane
       ;; switches) can overwrite local statusline state. Re-apply ours when the
       ;; prompt window regains focus.
@@ -356,6 +324,10 @@
                        (schedule-when-valid session
                          (fn []
                            (maybe-sync-from-main! session))))})
+        (vim.keymap.set "n" "!"
+          (fn []
+            (router.exclude-symbol-under-cursor session.prompt-buf))
+          {:buffer session.meta.buf.buffer :silent true :noremap true})
         (vim.api.nvim_create_autocmd "WinScrolled"
           {:group aug
            :callback (fn [_]
@@ -363,7 +335,8 @@
         (disable-cmp session)
         (mark-prompt-buffer! session.prompt-buf)
         (refresh-prompt-highlights! session)
-        (apply-all-keymaps router session)))
+        (apply-keymaps router session)
+        (apply-emacs-insert-fallbacks router session)))
 
     {:register! register!}))
 

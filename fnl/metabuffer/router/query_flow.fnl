@@ -4,8 +4,8 @@
 (local M {})
 
 (fn choose-current-when-nil
-  [query-mod value current]
-  (query-mod.resolve-option value current))
+  [value current]
+  (if-some [v value] v current))
 
 (fn prompt-delay-ms
   [settings query-mod session]
@@ -51,13 +51,19 @@
 
 (fn queue-update-after-edit!
   [settings prompt-scheduler-ctx session force txt now delay]
-  (when-not (and force session.prompt-update-pending)
-    (if (and force (force-within-idle-window? settings session now))
-        (schedule-update!
-          prompt-scheduler-ctx
-          session
-          (math.max delay settings.prompt-update-idle-ms))
-        (schedule-update! prompt-scheduler-ctx session delay))))
+  (when (or (not session.project-mode) session.project-bootstrapped)
+    (when-not (and force session.prompt-update-pending)
+      (let [skip-identical? (and force
+                                 (recent-identical-forced-refresh? settings session txt now))
+            skip-active-input? (and force
+                                    (force-blocked-by-active-input? settings session now))]
+        (when-not (or skip-identical? skip-active-input?)
+          (if (and force (force-within-idle-window? settings session now))
+              (schedule-update!
+                prompt-scheduler-ctx
+                session
+                (math.max delay settings.prompt-update-idle-ms))
+              (schedule-update! prompt-scheduler-ctx session delay)))))))
 
 (fn apply-fresh-prompt-event!
   [query-mod project-source settings prompt-scheduler-ctx session force txt now delay]
@@ -76,17 +82,10 @@
 
 (fn apply-duplicate-text-event!
   [prompt-scheduler-ctx session now delay]
-  (set session.prompt-last-change-ms now)
-  (set session.prompt-force-block-until (+ now (math.max 0 delay)))
-  (set session.prompt-update-dirty true)
-  (schedule-update! prompt-scheduler-ctx session delay))
-
-(fn invalidate-filter-cache!
-  [session]
-  (when (and session session.meta)
-    (set session.meta._prev_text "")
-    (set session.meta._filter-cache {})
-    (set session.meta._filter-cache-line-count (# session.meta.buf.content))))
+  (when session.prompt-update-pending
+    (set session.prompt-last-change-ms now)
+    (set session.prompt-force-block-until (+ now (math.max 0 delay)))
+    (schedule-update! prompt-scheduler-ctx session delay)))
 
 (fn M.apply-prompt-lines!
   [deps session]
@@ -143,13 +142,11 @@
               _ (when (and (. parsed :saved-browser)
                            open-saved-browser!)
                   (open-saved-browser! session))
-              next-hidden (choose-current-when-nil query-mod (. parsed :include-hidden) session.include-hidden)
-              next-ignored (choose-current-when-nil query-mod (. parsed :include-ignored) session.include-ignored)
-              next-deps (choose-current-when-nil query-mod (. parsed :include-deps) session.include-deps)
-              next-prefilter (choose-current-when-nil query-mod (. parsed :prefilter) session.prefilter-mode)
-              next-lazy (choose-current-when-nil query-mod (. parsed :lazy) session.lazy-mode)
-              prev-effective-text (or session.prompt-last-applied-text "")
-              text-changed? (~= effective-text prev-effective-text)
+              next-hidden (choose-current-when-nil (. parsed :include-hidden) session.include-hidden)
+              next-ignored (choose-current-when-nil (. parsed :include-ignored) session.include-ignored)
+              next-deps (choose-current-when-nil (. parsed :include-deps) session.include-deps)
+              next-prefilter (choose-current-when-nil (. parsed :prefilter) session.prefilter-mode)
+              next-lazy (choose-current-when-nil (. parsed :lazy) session.lazy-mode)
               changed (or (~= next-hidden session.effective-include-hidden)
                           (~= next-ignored session.effective-include-ignored)
                           (~= next-deps session.effective-include-deps)
@@ -165,16 +162,18 @@
           (set session.prompt-last-applied-text effective-text)
           (set session.meta.debug_out
             (if session.project-mode
-                (let [flags [(if session.effective-include-hidden "+hidden" "-hidden")
-                             (if session.effective-include-ignored "+ignored" "-ignored")
-                             (if session.effective-include-deps "+deps" "-deps")
-                             (if session.prefilter-mode "+prefilter" "-prefilter")]]
-                  (when-not session.lazy-mode
-                    (table.insert flags "-lazy"))
-                  (.. " [" (table.concat flags " ") "]"))
+                (.. " ["
+                    (if session.effective-include-hidden "+hidden" "-hidden")
+                    " "
+                    (if session.effective-include-ignored "+ignored" "-ignored")
+                    " "
+                    (if session.effective-include-deps "+deps" "-deps")
+                    " "
+                    (if session.prefilter-mode "+prefilter" "-prefilter")
+                    " "
+                    (if session.lazy-mode "+lazy" "-lazy")
+                    "]")
                 ""))
-          (when (or changed text-changed?)
-            (invalidate-filter-cache! session))
           (when (and session.project-mode changed)
             (project-source.apply-source-set! session))
           (session.meta.set-query-lines effective-lines))
@@ -205,19 +204,30 @@
         deps
         session (. active-by-prompt prompt-buf)]
     (when (and session (not session.closing))
-      (let [now (router_prompt_mod.now-ms)
-            delay (prompt-delay-ms settings query-mod session)]
-        (when (and (not force) event-tick)
-          (set session.prompt-last-event-tick event-tick))
-        (set session.prompt-update-dirty true)
-        (set session.prompt-last-change-ms now)
-        (when-not force
-          (set session.prompt-force-block-until (+ now (math.max 0 delay))))
-        (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
-        (when (and session.project-mode
-                   (not session.project-bootstrapped)
-                   (prompt-has-active-query? query-mod session))
-          (project-source.schedule-project-bootstrap! session settings.project-bootstrap-delay-ms))
-        (queue-update-after-edit! settings prompt-scheduler-ctx session force "" now delay)))))
+      (let [duplicate-event? (and (not force)
+                                  event-tick
+                                  (= event-tick (or session.prompt-last-event-tick -1)))]
+        (when-not duplicate-event?
+          (let [txt (router_util_mod.prompt-text session)
+                now (router_prompt_mod.now-ms)
+                delay (prompt-delay-ms settings query-mod session)]
+            (when (and (not force) event-tick)
+              (set session.prompt-last-event-tick event-tick))
+            (when-not (and force (< now (or session.prompt-force-block-until 0)))
+              (let [duplicate-text? (and (not force)
+                                         (= txt (or session.prompt-last-event-text "")))]
+                (when duplicate-text?
+                  (apply-duplicate-text-event! prompt-scheduler-ctx session now delay))
+                (when-not duplicate-text?
+                  (apply-fresh-prompt-event!
+                    query-mod
+                    project-source
+                    settings
+                    prompt-scheduler-ctx
+                    session
+                    force
+                    txt
+                    now
+                    delay))))))))))
 
 M

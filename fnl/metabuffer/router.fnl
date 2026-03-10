@@ -294,45 +294,6 @@
         (close-history-browser! session)
         (M.finish "cancel" prompt-buf))))
 
-(fn M.accept-main
-  [prompt-buf]
-  "Accept from the results window by syncing selection from main cursor first."
-  (let [session (. M.active-by-prompt prompt-buf)]
-    (when session
-      (session_view.sync-selected-from-main-cursor! session)
-      (M.accept prompt-buf))))
-
-(fn open-selected-hit!
-  [curr]
-  (let [ref (router_util_mod.selected-ref curr)
-        open-fn (or (and ref (. ref :open))
-                    (and ref (. ref :open!))
-                    (and ref (. ref :accept)))
-        lnum (math.max 1 (or (and ref ref.lnum) (curr.selected_line) 1))
-        col0 (math.max 0 (- (or (and ref ref.col) 1) 1))
-        path (and ref ref.path)
-        buf (and ref ref.buf)]
-    (cond
-      (= (type open-fn) "function")
-      (open-fn ref curr)
-
-      (and buf (vim.api.nvim_buf_is_valid buf))
-      (do
-        (base_buffer.switch-buf buf)
-        (pcall vim.api.nvim_win_set_cursor 0 [lnum col0]))
-
-      (and (= (type path) "string") (~= path ""))
-      (do
-        (vim.cmd (.. "edit " (vim.fn.fnameescape path)))
-        (pcall vim.api.nvim_win_set_cursor 0 [lnum col0]))
-
-      true
-      (do
-        (base_buffer.switch-buf curr.buf.model)
-        (pcall curr.win.set-row lnum true)
-        (pcall vim.api.nvim_win_set_cursor 0 [lnum col0])))
-    ref))
-
 (fn finish-accept
   [session]
   (let [curr session.meta]
@@ -351,17 +312,23 @@
                (vim.api.nvim_buf_is_valid session.origin-buf))
       (pcall vim.api.nvim_set_current_win session.origin-win)
       (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
-    (let [ref (open-selected-hit! curr)
-          vq (curr.vim_query)
-          lnum (math.max 1 (or (and ref ref.lnum) (curr.selected_line) 1))
-          has-explicit-col? (and ref (not (= ref.col nil)))]
-      (when (and (not has-explicit-col?) (~= vq ""))
-        (pcall vim.api.nvim_win_set_cursor 0 [lnum 0])
-        (let [pos (vim.fn.searchpos vq "cnW" lnum)
-              hit-row (. pos 1)
-              hit-col (. pos 2)]
-          (when (and (= hit-row lnum) (> hit-col 0))
-            (pcall vim.api.nvim_win_set_cursor 0 [lnum hit-col])))))
+    (if session.project-mode
+        (let [ref (router_util_mod.selected-ref curr)]
+          (when (and ref ref.path)
+            (vim.cmd (.. "edit " (vim.fn.fnameescape ref.path)))
+            (vim.api.nvim_win_set_cursor 0 [(math.max 1 (or ref.lnum 1)) 0])))
+        (do
+          (base_buffer.switch-buf curr.buf.model)
+          (let [row (curr.selected_line)]
+            (curr.win.set-row row true)
+            (let [vq (curr.vim_query)]
+              (when (~= vq "")
+                (vim.api.nvim_win_set_cursor 0 [row 0])
+                (let [pos (vim.fn.searchpos vq "cnW" row)
+                      hit-row (. pos 1)
+                      hit-col (. pos 2)]
+                  (when (and (= hit-row row) (> hit-col 0))
+                    (vim.api.nvim_win_set_cursor 0 [row hit-col]))))))))
     (vim.cmd "normal! zv")
     (let [vq (curr.vim_query)]
       (when (~= vq "")
@@ -453,7 +420,7 @@
             ;; run one trailing update.
             (when session.syntax-refresh-dirty
               (schedule-source-syntax-refresh! session))))
-        M.source-syntax-refresh-debounce-ms))))
+        (or M.source-syntax-refresh-debounce-ms 80)))))
 
 (fn M.scroll-main
   [prompt-buf action]
@@ -552,19 +519,6 @@
     (if (> (# parts) 1)
         (table.concat (vim.list_slice parts 2) " ")
         "")))
-
-(fn expand-command-query
-  [query]
-  (if (and (= (type query) "string") (~= query ""))
-      (let [trimmed (vim.trim query)]
-        (if (= trimmed "!!")
-            (history-latest nil)
-            (if (= trimmed "!$")
-                (history-latest-token nil)
-                (if (= trimmed "!^!")
-                    (history-latest-tail nil)
-                    query))))
-      query))
 
 (fn M.last-prompt-entry
   [prompt-buf]
@@ -807,27 +761,6 @@
                 next (.. current sep token)]
             (router_util_mod.set-prompt-text! session next)))))))
 
-(fn M.insert-symbol-under-cursor
-  [prompt-buf]
-  "Append <cword> into prompt query."
-  (let [session (. M.active-by-prompt prompt-buf)]
-    (when session
-      (let [word (vim.api.nvim_win_call
-                   session.meta.win.window
-                   (fn [] (vim.fn.expand "<cword>")))
-            token (if (and (= (type word) "string") (~= (vim.trim word) ""))
-                      word
-                      "")]
-        (when (~= token "")
-          (let [current (router_util_mod.prompt-text session)
-                sep (if (or (= current "")
-                            (vim.endswith current " ")
-                            (vim.endswith current "\n"))
-                        ""
-                        " ")
-                next (.. current sep token)]
-            (router_util_mod.set-prompt-text! session next)))))))
-
 (fn M.toggle-scan-option
   [prompt-buf which]
   "Toggle include-hidden/include-ignored/include-deps scan flags."
@@ -864,8 +797,6 @@
         (prompt_hooks_mod.new
           {:mark-prompt-buffer! router_util_mod.mark-prompt-buffer!
            :default-prompt-keymaps M.default-prompt-keymaps
-           :default-main-keymaps M.default-main-keymaps
-           :default-prompt-fallback-keymaps M.default-prompt-fallback-keymaps
            :active-by-prompt M.active-by-prompt
            :on-prompt-changed M.on-prompt-changed
            :update-info-window update-info-window
@@ -878,21 +809,21 @@
   "Create a Meta session and wire prompt/result/project orchestration."
   (let [parsed-query (query_mod.parse-query-text query)
         query0 (. parsed-query :query)
-        start-hidden (query_mod.resolve-option
-                       (. parsed-query :include-hidden)
-                       (query_mod.truthy? M.default-include-hidden))
-        start-ignored (query_mod.resolve-option
-                        (. parsed-query :include-ignored)
-                        (query_mod.truthy? M.default-include-ignored))
-        start-deps (query_mod.resolve-option
-                     (. parsed-query :include-deps)
-                     (query_mod.truthy? M.default-include-deps))
-        start-prefilter (query_mod.resolve-option
-                          (. parsed-query :prefilter)
-                          (query_mod.truthy? M.project-lazy-prefilter-enabled))
-        start-lazy (query_mod.resolve-option
-                     (. parsed-query :lazy)
-                     (query_mod.truthy? M.project-lazy-enabled))
+        start-hidden (if-some [v (. parsed-query :include-hidden)]
+                             v
+                             (query_mod.truthy? M.default-include-hidden))
+        start-ignored (if-some [v (. parsed-query :include-ignored)]
+                              v
+                              (query_mod.truthy? M.default-include-ignored))
+        start-deps (if-some [v (. parsed-query :include-deps)]
+                           v
+                           (query_mod.truthy? M.default-include-deps))
+        start-prefilter (if-some [v (. parsed-query :prefilter)]
+                                v
+                                (query_mod.truthy? M.project-lazy-prefilter-enabled))
+        start-lazy (if-some [v (. parsed-query :lazy)]
+                           v
+                           (query_mod.truthy? M.project-lazy-enabled))
         query query0]
   (let [source-buf (vim.api.nvim_get_current_buf)]
     (when (. M.active-by-source source-buf)
@@ -1015,18 +946,18 @@
 (fn M.entry_start
   [query _bang]
   "Public API: M.entry_start."
-  (M.start (expand-command-query query) "start" nil _bang))
+  (M.start query "start" nil _bang))
 
 (fn M.entry_resume
   [query]
   "Public API: M.entry_resume."
-  (M.start (expand-command-query query) "resume" nil))
+  (M.start query "resume" nil))
 
 (fn M.entry_sync
   [query]
   "Public API: M.entry_sync."
   (let [key (vim.api.nvim_get_current_buf)]
-    (M.sync (. M.instances key) (expand-command-query query))))
+    (M.sync (. M.instances key) query)))
 
 (fn M.entry_push
   []
