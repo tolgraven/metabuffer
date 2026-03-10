@@ -894,6 +894,7 @@ local function register_prompt_hooks(session)
   return hooks["register!"](M, session)
 end
 M.start = function(query, mode, _meta, project_mode)
+  pcall(vim.cmd, "silent! nohlsearch")
   local parsed_query = query_mod["parse-query-text"](query)
   local query0 = parsed_query.query
   local start_hidden

@@ -807,6 +807,7 @@
 (fn M.start
   [query mode _meta project-mode]
   "Create a Meta session and wire prompt/result/project orchestration."
+  (pcall vim.cmd "silent! nohlsearch")
   (let [parsed-query (query_mod.parse-query-text query)
         query0 (. parsed-query :query)
         start-hidden (if-some [v (. parsed-query :include-hidden)]

@@ -1,7 +1,7 @@
 # File for tracking stuff I think of while you work
 
 ## These are to be checked off as they are completed, and later (assuming previously committed to git) manually cleared so as to not clutter.
-- 1 [] Any earlier hlsearch should be cleared when invoking Meta.
+- 1 [x] Any earlier hlsearch should be cleared when invoking Meta.
 - 2 [] prompt window scratch buffer should also be renamed (to the same as existing statusline) so looks better when navigating away from tmux split and airline or similar does a statusline modification overriding us.
 - 3 [x] rework all files per guidelines in AGENTS.md, especially around function definitions (separate line, small docstr).
 - 4 [x] change the keymaps to use builder functions rather than tons of redundant repetition.
@@ -27,3 +27,4 @@ it_21'
         ...IM/LISTA/metabuffer/metabuffer/lua/metabuffer/router.lua:353: in function <...IM/LISTA/met
 abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 20 [] Meta "takes over" the entire nvim tab instead of just the area around the active window. Everything should be window-local (but user togglable with a flag).
+- 21 [] lua error when trying to filter a buffer that's already empty (such as :enew)
