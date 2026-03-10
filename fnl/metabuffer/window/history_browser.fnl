@@ -13,8 +13,9 @@
           p-height (vim.api.nvim_win_get_height session.prompt-win)
           width (math.max 42 (math.min 120 p-width))
           height (math.max 4 (math.min 12 p-height))
-          col (+ p-col p-width)
-          win (floating-window-mod.new vim buf {:width width :height height :col col :row p-row})]
+          row (math.max 0 (- p-row height))
+          col p-col
+          win (floating-window-mod.new vim buf {:width width :height height :col col :row row})]
       (set session.history-browser-buf buf)
       (set session.history-browser-win win.window)
       (let [bo (. vim.bo buf)]
@@ -53,7 +54,7 @@
           idx (clamp-index (or session.history-browser-index 1) (# items))]
       (set session.history-browser-index idx)
       (if (= (# items) 0)
-          (table.insert lines "No history matches")
+          (table.insert lines "")
           (each [i item (ipairs items)]
             (let [label (or (. item :label) "")
                   mark (if (= i idx) "> " "  ")]
