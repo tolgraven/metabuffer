@@ -45,6 +45,15 @@
         {:group "Insert" :label (if (nerd-font-enabled?) "𝐈" "Insert")}
         {:group "Normal" :label (if (nerd-font-enabled?) "𝗡" "Normal")})))
 
+(fn selected-preview-file
+  [self]
+  (let [src-idx (. self.buf.indices (+ self.selected_index 1))
+        ref (and src-idx (. (or self.buf.source-refs []) src-idx))
+        path (and ref ref.path)]
+    (if (and (= (type path) "string") (~= path ""))
+        (vim.fn.pathshorten (vim.fn.fnamemodify path ":~:."))
+        "")))
+
 (fn highlight-pattern->vim-query
   [pat]
   (if (= (type pat) "string")
@@ -241,7 +250,8 @@
       (fn self.refresh_statusline
         []
         (let [mode-state (statusline-mode-state)
-              hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")]
+              hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")
+              preview-file (selected-preview-file self)]
           (self.status-win.set-statusline-state
             (. mode-state :group)
             (. mode-state :label)
@@ -250,6 +260,7 @@
             (self.buf.line-count)
             (self.selected_line)
             self.debug_out
+            preview-file
             (. (self.matcher) :name)
             (self.case)
             hl-prefix

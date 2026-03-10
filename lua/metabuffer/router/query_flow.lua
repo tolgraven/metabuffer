@@ -162,32 +162,32 @@ M["apply-prompt-lines!"] = function(deps, session)
         local flags
         local _15_
         if session["effective-include-hidden"] then
-          _15_ = "+hidden"
+          _15_ = "+hid"
         else
-          _15_ = "-hidden"
+          _15_ = "-hid"
         end
         local _17_
         if session["effective-include-ignored"] then
-          _17_ = "+ignored"
+          _17_ = "+ig"
         else
-          _17_ = "-ignored"
+          _17_ = "-ig"
         end
         local _19_
         if session["effective-include-deps"] then
-          _19_ = "+deps"
+          _19_ = "+dep"
         else
-          _19_ = "-deps"
+          _19_ = "-dep"
         end
         local function _21_()
           if session["prefilter-mode"] then
-            return "+prefilter"
+            return "+prf"
           else
-            return "-prefilter"
+            return "-prf"
           end
         end
         flags = {_15_, _17_, _19_, _21_()}
         if not session["lazy-mode"] then
-          table.insert(flags, "-lazy")
+          table.insert(flags, "nlz")
         else
         end
         session.meta.debug_out = (" [" .. table.concat(flags, " ") .. "]")

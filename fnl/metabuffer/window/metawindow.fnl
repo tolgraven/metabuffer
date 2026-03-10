@@ -7,7 +7,7 @@
 (set M.opts-to-stash ["foldcolumn" "number" "relativenumber" "wrap" "conceallevel"])
 
 (set M.statusline
-  "%%#MetaStatuslineMode%s# %s%%#MetaStatuslineIndicator# %d/%d%s%%#MetaStatuslineMiddle#%%=%%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s ")
+  "%%#MetaStatuslineMode%s# %s%%#MetaStatuslineIndicator# %d/%d%s%%#MetaStatuslineMiddle#%%=%%#MetaStatuslineFile# %s %%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s ")
 
 (fn title-case
   [s]
@@ -21,12 +21,13 @@
   (let [self (base.new nvim (or win (vim.api.nvim_get_current_win)) M.opts-to-stash M.default-opts)]
 
     (fn self.set-statusline-state
-      [mode-group mode-label name num-hits num-lines line-nr debug-out matcher case-mode hl-prefix syntax]
+      [mode-group mode-label name num-hits num-lines line-nr debug-out preview-file matcher case-mode hl-prefix syntax]
       (let [matcher-suffix (title-case matcher)
             case-suffix (title-case case-mode)
             text (string.format M.statusline
                    mode-group mode-label
                    num-hits num-lines (or debug-out "")
+                   (or preview-file "")
                    matcher-suffix matcher "C^"
                    case-suffix case-mode "C-o"
                    hl-prefix syntax "Cs")]
