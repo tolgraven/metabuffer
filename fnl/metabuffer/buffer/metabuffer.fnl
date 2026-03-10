@@ -126,16 +126,19 @@
                       (table.insert groups group)))))
               (var start 1)
               (var prev-ft nil)
+              (var prev-src-idx nil)
               (for [i 1 n]
                 (let [idx (. self.indices i)
                       ref (and idx (. self.source-refs idx))
                       ft (self.ref-filetype ref)]
                   (when-not prev-ft
                     (set prev-ft ft))
-                  (when (~= ft prev-ft)
+                  (when (or (~= ft prev-ft)
+                            (and prev-src-idx (~= idx (+ prev-src-idx 1))))
                     (add-block start (- i 1) prev-ft)
                     (set start i)
-                    (set prev-ft ft))))
+                    (set prev-ft ft))
+                  (set prev-src-idx idx)))
               (when prev-ft
                 (add-block start n prev-ft))
               ;; Re-sync so contained syntax in mixed blocks updates reliably.

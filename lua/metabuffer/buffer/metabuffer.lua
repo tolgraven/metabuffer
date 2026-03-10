@@ -128,6 +128,7 @@ M.new = function(nvim, model)
         end
         local start = 1
         local prev_ft = nil
+        local prev_src_idx = nil
         for i = 1, n do
           local idx = self.indices[i]
           local ref = (idx and self["source-refs"][idx])
@@ -136,12 +137,13 @@ M.new = function(nvim, model)
             prev_ft = ft
           else
           end
-          if (ft ~= prev_ft) then
+          if ((ft ~= prev_ft) or (prev_src_idx and (idx ~= (prev_src_idx + 1)))) then
             add_block(start, (i - 1), prev_ft)
             start = i
             prev_ft = ft
           else
           end
+          prev_src_idx = idx
         end
         if prev_ft then
           add_block(start, n, prev_ft)
