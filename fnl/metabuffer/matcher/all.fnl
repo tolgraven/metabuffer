@@ -173,7 +173,7 @@
               (when-not (. t :regex)
                 (set (. t :needle) (string.lower (or (. t :needle) ""))))))
           (each [_ idx (ipairs indices)]
-            (let [line (. candidates idx)
+            (let [line (or (. candidates idx) "")
                   probe (if ignorecase (string.lower line) line)]
               (var ok true)
               (each [_ term (ipairs terms)]
