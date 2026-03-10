@@ -927,6 +927,10 @@
         (when-not (and session.project-mode (not initial-query-active))
           (apply-prompt-lines session))
         (vim.api.nvim_set_current_win prompt-win.window)
+        (let [row (math.max 1 (# initial-lines))
+              line (or (. initial-lines row) "")
+              col (# line)]
+          (pcall vim.api.nvim_win_set_cursor prompt-win.window [row col]))
         (vim.cmd "startinsert")
         (vim.schedule (fn [] (set session.startup-initializing false)))
         (when (and session.project-mode (not initial-query-active))

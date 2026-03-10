@@ -1018,6 +1018,12 @@ M.start = function(query, mode, _meta, project_mode)
   else
   end
   vim.api.nvim_set_current_win(prompt_win.window)
+  do
+    local row = math.max(1, #initial_lines)
+    local line = (initial_lines[row] or "")
+    local col = #line
+    pcall(vim.api.nvim_win_set_cursor, prompt_win.window, {row, col})
+  end
   vim.cmd("startinsert")
   local function _138_()
     session["startup-initializing"] = false
