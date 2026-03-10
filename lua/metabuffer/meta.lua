@@ -330,7 +330,7 @@ M.new = function(nvim, condition)
     do
       local queries = self["active-queries"]()
       local prev_text = self._prev_text
-      local prev_hits = self.buf.indices
+      local prev_hits = vim.deepcopy((self.buf.indices or {}))
       local prev_line = line_of_index(self.buf, self.selected_index)
       local effective_query = table.concat(queries, "\n")
       local matcher_name = self.matcher().name

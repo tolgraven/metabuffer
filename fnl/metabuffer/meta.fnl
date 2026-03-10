@@ -304,7 +304,7 @@
     [status]
       (let [queries (self.active-queries)
           prev-text self._prev_text
-          prev-hits self.buf.indices
+          prev-hits (vim.deepcopy (or self.buf.indices []))
           prev-line (line_of_index self.buf self.selected_index)
           effective-query (table.concat queries "\n")
           matcher-name (. (self.matcher) :name)
