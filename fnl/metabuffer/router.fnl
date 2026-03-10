@@ -867,7 +867,6 @@
            :default-main-keymaps M.default-main-keymaps
            :default-prompt-fallback-keymaps M.default-prompt-fallback-keymaps
            :active-by-prompt M.active-by-prompt
-           :prompt-text-sync-interval-ms M.prompt-text-sync-interval-ms
            :on-prompt-changed M.on-prompt-changed
            :update-info-window update-info-window
            :maybe-sync-from-main! maybe-sync-from-main!

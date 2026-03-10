@@ -76,151 +76,145 @@ M["apply-prompt-lines!"] = function(deps, session)
   local open_saved_browser_21 = deps["open-saved-browser!"]
   if (session and not session.closing and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
     local raw_lines = vim.api.nvim_buf_get_lines(session["prompt-buf"], 0, -1, false)
-    local parsed = query_mod["parse-query-lines"](raw_lines)
-    local lines = parsed.lines
-    local consume_controls_3f = ((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "")))
-    local effective_lines
-    if consume_controls_3f then
-      effective_lines = lines
-    else
-      effective_lines = raw_lines
-    end
-    local effective_text = table.concat(effective_lines, "\n")
-    local prompt_text = table.concat(lines, "\n")
-    local raw_text = table.concat(raw_lines, "\n")
-    local stripped_3f = (consume_controls_3f and (prompt_text ~= raw_text))
-    local _
-    if stripped_3f then
-      local cursor
-      if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-        cursor = vim.api.nvim_win_get_cursor(session["prompt-win"])
+    do
+      local parsed = query_mod["parse-query-lines"](raw_lines)
+      local lines = parsed.lines
+      local consume_controls_3f = ((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "")))
+      local effective_lines
+      if consume_controls_3f then
+        effective_lines = lines
       else
-        cursor = {1, 0}
+        effective_lines = raw_lines
       end
-      local row = cursor[1]
-      local col = cursor[2]
-      vim.api.nvim_buf_set_lines(session["prompt-buf"], 0, -1, false, effective_lines)
-      if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-        local line = (effective_lines[row] or "")
-        local max_col = #line
-        _ = pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, math.min(col, max_col)})
+      local effective_text = table.concat(effective_lines, "\n")
+      local prompt_text = table.concat(lines, "\n")
+      local raw_text = table.concat(raw_lines, "\n")
+      local stripped_3f = (consume_controls_3f and (prompt_text ~= raw_text))
+      local _
+      if stripped_3f then
+        local cursor
+        if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+          cursor = vim.api.nvim_win_get_cursor(session["prompt-win"])
+        else
+          cursor = {1, 0}
+        end
+        local row = cursor[1]
+        local col = cursor[2]
+        vim.api.nvim_buf_set_lines(session["prompt-buf"], 0, -1, false, effective_lines)
+        if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+          local line = (effective_lines[row] or "")
+          local max_col = #line
+          _ = pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, math.min(col, max_col)})
+        else
+          _ = nil
+        end
       else
         _ = nil
       end
-    else
-      _ = nil
-    end
-    local _0
-    if (parsed.history and merge_history_into_session_21) then
-      _0 = merge_history_into_session_21(session)
-    else
-      _0 = nil
-    end
-    local _1
-    if ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "") and save_current_prompt_tag_21) then
-      _1 = save_current_prompt_tag_21(session, parsed["save-tag"], prompt_text)
-    else
-      _1 = nil
-    end
-    local _2
-    if ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "") and restore_saved_prompt_tag_21) then
-      _2 = restore_saved_prompt_tag_21(session, parsed["saved-tag"])
-    else
-      _2 = nil
-    end
-    local _3
-    if (parsed["saved-browser"] and open_saved_browser_21) then
-      _3 = open_saved_browser_21(session)
-    else
-      _3 = nil
-    end
-    local next_hidden = choose_current_when_nil(query_mod, parsed["include-hidden"], session["include-hidden"])
-    local next_ignored = choose_current_when_nil(query_mod, parsed["include-ignored"], session["include-ignored"])
-    local next_deps = choose_current_when_nil(query_mod, parsed["include-deps"], session["include-deps"])
-    local next_prefilter = choose_current_when_nil(query_mod, parsed.prefilter, session["prefilter-mode"])
-    local next_lazy = choose_current_when_nil(query_mod, parsed.lazy, session["lazy-mode"])
-    local prev_effective_text = (session["prompt-last-applied-text"] or "")
-    local text_changed_3f = (effective_text ~= prev_effective_text)
-    local changed = ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]))
-    local pending_control_3f = (parsed["pending-control"] == true)
-    local skip_filter_3f = (pending_control_3f and not changed)
-    session["effective-include-hidden"] = next_hidden
-    session["effective-include-ignored"] = next_ignored
-    session["effective-include-deps"] = next_deps
-    session["prefilter-mode"] = next_prefilter
-    session["lazy-mode"] = next_lazy
-    session["last-parsed-query"] = parsed
-    session["last-prompt-text"] = effective_text
-    session["prompt-last-applied-text"] = effective_text
-    if session["project-mode"] then
-      local flags
-      local _14_
-      if session["effective-include-hidden"] then
-        _14_ = "+hidden"
+      local _0
+      if (parsed.history and merge_history_into_session_21) then
+        _0 = merge_history_into_session_21(session)
       else
-        _14_ = "-hidden"
+        _0 = nil
       end
-      local _16_
-      if session["effective-include-ignored"] then
-        _16_ = "+ignored"
+      local _1
+      if ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "") and save_current_prompt_tag_21) then
+        _1 = save_current_prompt_tag_21(session, parsed["save-tag"], prompt_text)
       else
-        _16_ = "-ignored"
+        _1 = nil
       end
-      local _18_
-      if session["effective-include-deps"] then
-        _18_ = "+deps"
+      local _2
+      if ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "") and restore_saved_prompt_tag_21) then
+        _2 = restore_saved_prompt_tag_21(session, parsed["saved-tag"])
       else
-        _18_ = "-deps"
+        _2 = nil
       end
-      local function _20_()
-        if session["prefilter-mode"] then
-          return "+prefilter"
+      local _3
+      if (parsed["saved-browser"] and open_saved_browser_21) then
+        _3 = open_saved_browser_21(session)
+      else
+        _3 = nil
+      end
+      local next_hidden = choose_current_when_nil(query_mod, parsed["include-hidden"], session["include-hidden"])
+      local next_ignored = choose_current_when_nil(query_mod, parsed["include-ignored"], session["include-ignored"])
+      local next_deps = choose_current_when_nil(query_mod, parsed["include-deps"], session["include-deps"])
+      local next_prefilter = choose_current_when_nil(query_mod, parsed.prefilter, session["prefilter-mode"])
+      local next_lazy = choose_current_when_nil(query_mod, parsed.lazy, session["lazy-mode"])
+      local prev_effective_text = (session["prompt-last-applied-text"] or "")
+      local text_changed_3f = (effective_text ~= prev_effective_text)
+      local changed = ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]))
+      session["effective-include-hidden"] = next_hidden
+      session["effective-include-ignored"] = next_ignored
+      session["effective-include-deps"] = next_deps
+      session["prefilter-mode"] = next_prefilter
+      session["lazy-mode"] = next_lazy
+      session["last-parsed-query"] = parsed
+      session["last-prompt-text"] = effective_text
+      session["prompt-last-applied-text"] = effective_text
+      if session["project-mode"] then
+        local flags
+        local _14_
+        if session["effective-include-hidden"] then
+          _14_ = "+hidden"
         else
-          return "-prefilter"
+          _14_ = "-hidden"
         end
+        local _16_
+        if session["effective-include-ignored"] then
+          _16_ = "+ignored"
+        else
+          _16_ = "-ignored"
+        end
+        local _18_
+        if session["effective-include-deps"] then
+          _18_ = "+deps"
+        else
+          _18_ = "-deps"
+        end
+        local function _20_()
+          if session["prefilter-mode"] then
+            return "+prefilter"
+          else
+            return "-prefilter"
+          end
+        end
+        flags = {_14_, _16_, _18_, _20_()}
+        if not session["lazy-mode"] then
+          table.insert(flags, "-lazy")
+        else
+        end
+        session.meta.debug_out = (" [" .. table.concat(flags, " ") .. "]")
+      else
+        session.meta.debug_out = ""
       end
-      flags = {_14_, _16_, _18_, _20_()}
-      if not session["lazy-mode"] then
-        table.insert(flags, "-lazy")
+      if (changed or text_changed_3f) then
+        invalidate_filter_cache_21(session)
       else
       end
-      session.meta.debug_out = (" [" .. table.concat(flags, " ") .. "]")
-    else
-      session.meta.debug_out = ""
+      if (session["project-mode"] and changed) then
+        project_source["apply-source-set!"](session)
+      else
+      end
+      session.meta["set-query-lines"](effective_lines)
     end
-    if (changed or text_changed_3f) then
-      invalidate_filter_cache_21(session)
-    else
-    end
-    if (session["project-mode"] and changed) then
-      project_source["apply-source-set!"](session)
-    else
-    end
-    if skip_filter_3f then
-      session["prompt-last-applied-text"] = raw_text
+    local ok,err = pcall(session.meta["on-update"], 0)
+    if ok then
       session.meta.refresh_statusline()
       return update_info_window(session)
     else
-      session.meta["set-query-lines"](effective_lines)
-      local ok,err = pcall(session.meta["on-update"], 0)
-      if ok then
-        session.meta.refresh_statusline()
-        return update_info_window(session)
-      else
-        if string.find(tostring(err), "E565") then
-          local function _25_()
-            if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
-              pcall(session.meta["on-update"], 0)
-              pcall(session.meta.refresh_statusline)
-              return pcall(update_info_window, session)
-            else
-              return nil
-            end
+      if string.find(tostring(err), "E565") then
+        local function _25_()
+          if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
+            pcall(session.meta["on-update"], 0)
+            pcall(session.meta.refresh_statusline)
+            return pcall(update_info_window, session)
+          else
+            return nil
           end
-          return vim.defer_fn(_25_, 1)
-        else
-          return nil
         end
+        return vim.defer_fn(_25_, 1)
+      else
+        return nil
       end
     end
   else

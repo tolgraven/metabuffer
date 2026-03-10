@@ -6,7 +6,6 @@
   "Public API: M.new."
   (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
          : default-main-keymaps : default-prompt-fallback-keymaps
-         : prompt-text-sync-interval-ms
          : on-prompt-changed : update-info-window : maybe-sync-from-main!
          : schedule-scroll-sync!} opts]
     (fn disable-cmp
@@ -287,51 +286,6 @@
         (fn []
           (trigger-prompt-update! router session))))
 
-    (fn prompt-text
-      [session]
-      (table.concat
-        (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)
-        "\n"))
-
-    (fn maybe-trigger-text-sync!
-      [router session]
-      (when (and session.prompt-buf
-                 (vim.api.nvim_buf_is_valid session.prompt-buf)
-                 (= (. active-by-prompt session.prompt-buf) session))
-        (let [txt (prompt-text session)]
-          (when (~= txt (or session.prompt-last-synced-text ""))
-            (set session.prompt-last-synced-text txt)
-            (schedule-prompt-update! router session)))))
-
-    (fn stop-prompt-sync-timer!
-      [session]
-      (when session.prompt-text-sync-timer
-        (let [timer session.prompt-text-sync-timer
-              stopf (. timer :stop)
-              closef (. timer :close)]
-          (when stopf (pcall stopf timer))
-          (when closef (pcall closef timer))
-          (set session.prompt-text-sync-timer nil))))
-
-    (fn start-prompt-sync-timer!
-      [router session]
-      (stop-prompt-sync-timer! session)
-      (let [interval (math.max 10 (or prompt-text-sync-interval-ms 25))
-            timer (vim.loop.new_timer)]
-        (set session.prompt-text-sync-timer timer)
-        ((. timer :start)
-         timer
-         interval
-         interval
-         (vim.schedule_wrap
-           (fn []
-             (when (and session
-                        session.prompt-buf
-                        (vim.api.nvim_buf_is_valid session.prompt-buf)
-                        (= (. active-by-prompt session.prompt-buf) session)
-                        (not session.closing))
-               (maybe-trigger-text-sync! router session)))))))
-
     (fn register!
   [router session]
       (let [aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true})]
@@ -354,7 +308,6 @@
              nil)
            :on_detach
            (fn []
-             (stop-prompt-sync-timer! session)
              (when session.prompt-buf
                (set (. active-by-prompt session.prompt-buf) nil)))})
       ;; Prompt text updates: rely on post-change autocmds to avoid pre-edit race
@@ -365,15 +318,7 @@
            :callback (fn [_]
                        (set session.prompt-last-textchanged-tick
                          (vim.api.nvim_buf_get_changedtick session.prompt-buf))
-                       (set session.prompt-last-synced-text (prompt-text session))
                        (schedule-prompt-update! router session))})
-      ;; Hard fallback: some setups intermittently miss TextChangedI on prompt
-      ;; buffers, but cursor movement in insert mode still occurs per keystroke.
-        (vim.api.nvim_create_autocmd ["CursorMovedI" "CursorMoved"]
-          {:group aug
-           :buffer session.prompt-buf
-           :callback (fn [_]
-                       (maybe-trigger-text-sync! router session))})
       ;; Re-assert prompt maps when entering insert mode; this wins over late
       ;; plugin mappings (for example completion plugins).
         (vim.api.nvim_create_autocmd "InsertEnter"
@@ -426,8 +371,6 @@
         (disable-cmp session)
         (mark-prompt-buffer! session.prompt-buf)
         (refresh-prompt-highlights! session)
-        (set session.prompt-last-synced-text (prompt-text session))
-        (start-prompt-sync-timer! router session)
         (apply-all-keymaps router session)))
 
     {:register! register!}))

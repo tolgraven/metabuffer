@@ -154,9 +154,7 @@
                           (~= next-ignored session.effective-include-ignored)
                           (~= next-deps session.effective-include-deps)
                           (~= next-prefilter session.prefilter-mode)
-                          (~= next-lazy session.lazy-mode))
-              pending-control? (= (. parsed :pending-control) true)
-              skip-filter? (and pending-control? (not changed))]
+                          (~= next-lazy session.lazy-mode))]
           (set session.effective-include-hidden next-hidden)
           (set session.effective-include-ignored next-ignored)
           (set session.effective-include-deps next-deps)
@@ -179,28 +177,22 @@
             (invalidate-filter-cache! session))
           (when (and session.project-mode changed)
             (project-source.apply-source-set! session))
-          (if skip-filter?
+          (session.meta.set-query-lines effective-lines))
+        (let [[ok err] [(pcall session.meta.on-update 0)]]
+          (if ok
               (do
-                (set session.prompt-last-applied-text raw-text)
                 (session.meta.refresh_statusline)
                 (update-info-window session))
-              (do
-                (session.meta.set-query-lines effective-lines)
-                (let [[ok err] [(pcall session.meta.on-update 0)]]
-                  (if ok
-                      (do
-                        (session.meta.refresh_statusline)
-                        (update-info-window session))
-                      (when (string.find (tostring err) "E565")
-                        ;; Textlock race: retry right after current input cycle.
-                        (vim.defer_fn
-                          (fn []
-                            (when (and session.meta
-                                       (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-                              (pcall session.meta.on-update 0)
-                              (pcall session.meta.refresh_statusline)
-                              (pcall update-info-window session)))
-                          1)))))))))))
+              (when (string.find (tostring err) "E565")
+                ;; Textlock race: retry right after current input cycle.
+                (vim.defer_fn
+                  (fn []
+                    (when (and session.meta
+                               (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+                      (pcall session.meta.on-update 0)
+                      (pcall session.meta.refresh_statusline)
+                      (pcall update-info-window session)))
+                  1))))))))
 
 (fn M.on-prompt-changed!
   [deps prompt-buf force event-tick]

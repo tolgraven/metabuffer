@@ -81,14 +81,7 @@
     (set session.lazy-refresh-dirty false)
     (set session.lazy-refresh-pending false)
     (set session.syntax-refresh-dirty false)
-    (set session.syntax-refresh-pending false)
-    (when session.prompt-text-sync-timer
-      (let [timer session.prompt-text-sync-timer
-            stopf (. timer :stop)
-            closef (. timer :close)]
-        (when stopf (pcall stopf timer))
-        (when closef (pcall closef timer))
-        (set session.prompt-text-sync-timer nil)))))
+    (set session.syntax-refresh-pending false)))
 
 (fn M.schedule-prompt-update!
   [ctx session wait-ms]

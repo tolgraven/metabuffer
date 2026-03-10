@@ -86,7 +86,6 @@
   (set router.info-max-width (or vim.g.meta_info_max_width 52))
   (set router.prompt-update-debounce-ms (or vim.g.meta_prompt_update_debounce_ms 170))
   (set router.prompt-update-idle-ms (or vim.g.meta_prompt_update_idle_ms 90))
-  (set router.prompt-text-sync-interval-ms (or vim.g.meta_prompt_text_sync_interval_ms 25))
   (set router.prompt-short-query-extra-ms
     (or vim.g.meta_prompt_short_query_extra_ms [180 120 70]))
   (set router.prompt-size-scale-thresholds
