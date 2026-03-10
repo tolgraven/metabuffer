@@ -18,7 +18,7 @@
 - 15 [x] Sluggish when narrowing search: when we only have a few results, and don't input something that might actually broaden results, there should be no need to re-search everything, only the existing hits. This should improve performance greatly.
 - 16 [] If do `!!` from an empty prompt, or running `:Meta !!`, the full settings used with that prompt (including `#deps` etc toggles) should be recalled. When cycling through prompts after this (with <Up> etc) the same should happen.
 - 17 [] History search suboptimal: typing `##` just gives a floating popup window (in the way of and hiding prompt input - should go above) saying "No history matches". 
-- 18 [] Prompt height changes get captured correctly and restore, but not if closing nvim and opening it again. Should be properly persistent.
+- 18 [x] Prompt height changes get captured correctly and restore, but not if closing nvim and opening it again. Should be properly persistent.
 - 19 [x] <CR> in results buffer results in "E5108: Error executing lua: ...IM/LISTA/metabuffer/metabuffer/lua/metabuffer/router.lua:329: attempt
 to call local 'open_fn' (a nil value)
 stack traceback:

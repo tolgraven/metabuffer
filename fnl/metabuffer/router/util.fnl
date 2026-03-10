@@ -7,10 +7,32 @@
   :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
+(local prompt-height-state-file
+  (.. (vim.fn.stdpath "state") "/metabuffer_prompt_height"))
+
+(fn read-prompt-height-state
+  []
+  (let [[ok fh] [(pcall io.open prompt-height-state-file "r")]]
+    (if (and ok fh)
+        (let [line (fh:read "*l")
+              _ (fh:close)
+              n (tonumber (or line ""))]
+          (if (and n (> n 0)) n nil))
+        nil)))
+
+(fn write-prompt-height-state!
+  [h]
+  (when (and h (> h 0))
+    (let [[ok fh] [(pcall io.open prompt-height-state-file "w")]]
+      (when (and ok fh)
+        (fh:write (tostring h))
+        (fh:close)))))
+
 (fn M.prompt-height
   []
   (or (tonumber vim.g.meta_prompt_height)
       (tonumber (. vim.g "meta#prompt_height"))
+      (read-prompt-height-state)
       7))
 
 (fn M.persist-prompt-height!
@@ -19,7 +41,8 @@
     (let [[ok h] [(pcall vim.api.nvim_win_get_height session.prompt-win)]]
       (when (and ok h (> h 0))
         (set vim.g.meta_prompt_height h)
-        (set (. vim.g "meta#prompt_height") h)))))
+        (set (. vim.g "meta#prompt_height") h)
+        (write-prompt-height-state! h)))))
 
 (fn M.info-height
   [session]
