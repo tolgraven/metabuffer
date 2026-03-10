@@ -24,7 +24,7 @@
         ;; [(_ val) (pcall #:foo)]
         ;;  => [(bindGENSYM12345 val) (pcall #:foo)]
         (when (= `_ (. bind-expr 1))
-          (set (. bind-expr 1) (gensym "bind")))
+          (tset bind-expr 1 (gensym "bind")))
 
         `(let [,bind-expr ,value-expr]
            (,branch ,(. bind-expr 1) ,...)))
