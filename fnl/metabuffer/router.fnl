@@ -255,13 +255,60 @@
   (vim.cmd "redraw|redrawstatus")
   (M._store_vars meta))
 
+(fn project-setting-token
+  [name enabled]
+  (.. "#" (if enabled "+" "-") name))
+
+(fn history-entry-query
+  [entry]
+  (let [parsed (query_mod.parse-query-text (or entry ""))]
+    (or (. parsed :query) "")))
+
+(fn history-entry-token
+  [entry]
+  (let [parts (vim.split (history-entry-query entry) "%s+" {:trimempty true})]
+    (if (> (# parts) 0)
+        (. parts (# parts))
+        "")))
+
+(fn history-entry-tail
+  [entry]
+  (let [parts (vim.split (history-entry-query entry) "%s+" {:trimempty true})]
+    (if (> (# parts) 1)
+        (table.concat (vim.list_slice parts 2) " ")
+        "")))
+
+(fn history-entry-with-settings
+  [session prompt]
+  (let [query-text (or prompt "")
+        prefix (if (and session session.project-mode)
+                   (table.concat
+                     [(project-setting-token "hidden" session.effective-include-hidden)
+                      (project-setting-token "ignored" session.effective-include-ignored)
+                      (project-setting-token "deps" session.effective-include-deps)
+                      (project-setting-token "prefilter" session.prefilter-mode)
+                      (project-setting-token "lazy" session.lazy-mode)]
+                     " ")
+                   "")]
+    (if (= prefix "")
+        query-text
+        (if (= query-text "")
+            prefix
+            (.. prefix " " query-text)))))
+
+(fn push-history-entry!
+  [session text]
+  (push-history! (history-entry-with-settings session text)))
+
 (fn remove-session
   [session]
   (when session
-    (push-history! (or session.last-prompt-text
-                       (if (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
-                           (router_util_mod.prompt-text session)
-                           "")))
+    (push-history-entry!
+      session
+      (or session.last-prompt-text
+          (if (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
+              (router_util_mod.prompt-text session)
+              "")))
     (router_util_mod.persist-prompt-height! session)
     (when session.augroup
       (pcall vim.api.nvim_del_augroup_by_id session.augroup))
@@ -313,7 +360,7 @@
   [session]
   (let [curr session.meta]
     (set session.last-prompt-text (router_util_mod.prompt-text session))
-    (push-history! session.last-prompt-text)
+    (push-history-entry! session session.last-prompt-text)
     (apply-prompt-lines session)
     (when (and (vim.api.nvim_win_is_valid session.origin-win)
                (vim.api.nvim_buf_is_valid session.origin-buf))
@@ -364,7 +411,7 @@
       session
       router_prompt_mod.cancel-prompt-update!)
     (set session.last-prompt-text (router_util_mod.prompt-text session))
-    (push-history! session.last-prompt-text)
+    (push-history-entry! session session.last-prompt-text)
     (pcall vim.cmd "stopinsert")
     (let [matcher (curr.matcher)]
       (when matcher
@@ -500,7 +547,8 @@
           (let [txt (router_util_mod.prompt-text session)
                 can-history (or (= txt "")
                                 (= txt session.initial-prompt-text)
-                                (= txt session.last-history-text))]
+                                (= txt session.last-history-text)
+                                (= txt (history-entry-query session.last-history-text)))]
             (if can-history
                 (let [h (or session.history-cache (history_store.list))
                       n (# h)]
@@ -524,19 +572,11 @@
 
 (fn history-latest-token
   [session]
-  (let [entry (history-latest session)
-        parts (vim.split (or entry "") "%s+" {:trimempty true})]
-    (if (> (# parts) 0)
-        (. parts (# parts))
-        "")))
+  (history-entry-token (history-latest session)))
 
 (fn history-latest-tail
   [session]
-  (let [entry (history-latest session)
-        parts (vim.split (or entry "") "%s+" {:trimempty true})]
-    (if (> (# parts) 1)
-        (table.concat (vim.list_slice parts 2) " ")
-        "")))
+  (history-entry-tail (history-latest session)))
 
 (fn M.last-prompt-entry
   [prompt-buf]
@@ -854,7 +894,16 @@
   [query mode _meta project-mode]
   "Create a Meta session and wire prompt/result/project orchestration."
   (pcall vim.cmd "silent! nohlsearch")
-  (let [parsed-query (query_mod.parse-query-text query)
+  (let [start-query (or query "")
+        latest-history (history-latest nil)
+        expanded-query (if (= start-query "!!")
+                           latest-history
+                           (= start-query "!$")
+                           (history-entry-token latest-history)
+                           (= start-query "!^!")
+                           (history-entry-tail latest-history)
+                           start-query)
+        parsed-query (query_mod.parse-query-text expanded-query)
         query0 (. parsed-query :query)
         start-hidden (if-some [v (. parsed-query :include-hidden)]
                              v
