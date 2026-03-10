@@ -398,36 +398,26 @@ M.new = function(opts)
     apply_keymaps(router, session, session["prompt-buf"], prompt_fallback_rules())
     return apply_keymaps(router, session, session.meta.buf.buffer, main_rules())
   end
-  local function trigger_prompt_update_21(router, session)
-    if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
-      if maybe_expand_history_shorthand_21(router, session) then
-        return nil
-      else
-        refresh_prompt_highlights_21(session)
-        return on_prompt_changed(session["prompt-buf"], false, nil)
-      end
-    else
-      return nil
-    end
-  end
-  local function schedule_prompt_update_21(router, session)
-    return trigger_prompt_update_21(router, session)
-  end
   local function register_21(router, session)
     local aug = vim.api.nvim_create_augroup(("MetaPrompt" .. session["prompt-buf"]), {clear = true})
     session.augroup = aug
-    local function _68_(_, _0, changedtick, _1, _2, _3, _4, _5)
-      if changedtick then
-        session["prompt-last-onlines-tick"] = changedtick
-      else
+    local function _66_(_, _0, changedtick, _1, _2, _3, _4, _5)
+      local function _67_()
+        if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
+          if maybe_expand_history_shorthand_21(router, session) then
+            return nil
+          else
+            refresh_prompt_highlights_21(session)
+            return on_prompt_changed(session["prompt-buf"], false, changedtick)
+          end
+        else
+          return nil
+        end
       end
-      local function _70_()
-        return schedule_prompt_update_21(router, session)
-      end
-      vim.defer_fn(_70_, 5)
+      vim.schedule(_67_)
       return nil
     end
-    local function _71_()
+    local function _70_()
       if session["prompt-buf"] then
         active_by_prompt[session["prompt-buf"]] = nil
         return nil
@@ -435,12 +425,17 @@ M.new = function(opts)
         return nil
       end
     end
-    vim.api.nvim_buf_attach(session["prompt-buf"], false, {on_lines = _68_, on_detach = _71_})
-    local function _73_(_)
-      session["prompt-last-textchanged-tick"] = vim.api.nvim_buf_get_changedtick(session["prompt-buf"])
-      return schedule_prompt_update_21(router, session)
+    vim.api.nvim_buf_attach(session["prompt-buf"], false, {on_lines = _66_, on_detach = _70_})
+    local function _72_(_)
+      if maybe_expand_history_shorthand_21(router, session) then
+        return nil
+      else
+        refresh_prompt_highlights_21(session)
+        session["prompt-last-textchanged-tick"] = vim.api.nvim_buf_get_changedtick(session["prompt-buf"])
+        return on_prompt_changed(session["prompt-buf"], false, session["prompt-last-textchanged-tick"])
+      end
     end
-    vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {group = aug, buffer = session["prompt-buf"], callback = _73_})
+    vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {group = aug, buffer = session["prompt-buf"], callback = _72_})
     local function _74_(_)
       local function _75_()
         disable_cmp(session)
