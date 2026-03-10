@@ -26,3 +26,4 @@ stack traceback:
 it_21'
         ...IM/LISTA/metabuffer/metabuffer/lua/metabuffer/router.lua:353: in function <...IM/LISTA/met
 abuffer/metabuffer/lua/metabuffer/router.lua:332>"
+- 20 [] Meta "takes over" the entire nvim tab instead of just the area around the active window. Everything should be window-local (but user togglable with a flag).
