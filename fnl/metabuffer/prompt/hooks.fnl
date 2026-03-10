@@ -5,6 +5,7 @@
   [opts]
   "Public API: M.new."
   (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
+         : default-main-keymaps
          : on-prompt-changed : update-info-window : maybe-sync-from-main!
          : schedule-scroll-sync!} opts]
     (fn disable-cmp
@@ -242,6 +243,34 @@
                      (router.prompt-yank session.prompt-buf))))
           opts)))
 
+    (fn resolve-main-map-action
+      [router session action]
+      (if
+        (= action "accept-main")
+        (fn [] (router.accept-main session.prompt-buf))
+        (= action "exclude-symbol-under-cursor")
+        (fn [] (router.exclude-symbol-under-cursor session.prompt-buf))
+        (= action "insert-symbol-under-cursor")
+        (fn [] (router.insert-symbol-under-cursor session.prompt-buf))
+        nil))
+
+    (fn apply-main-keymaps
+      [router session]
+      (let [base-opts {:buffer session.meta.buf.buffer :silent true :noremap true :nowait true}
+            rules (if (= (type vim.g.meta_main_keymaps) "table")
+                      vim.g.meta_main_keymaps
+                      default-main-keymaps)]
+        (each [_ r (ipairs rules)]
+          (let [mode (. r 1)
+                lhs (. r 2)
+                action (. r 3)
+                rhs (resolve-main-map-action router session action)]
+            (if rhs
+                (vim.keymap.set mode lhs rhs base-opts)
+                (vim.notify
+                  (.. "metabuffer: unknown main keymap action '" (tostring action) "' for " (tostring lhs))
+                  vim.log.levels.WARN))))))
+
     (fn register!
   [router session]
       (let [aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true})]
@@ -324,10 +353,7 @@
                        (schedule-when-valid session
                          (fn []
                            (maybe-sync-from-main! session))))})
-        (vim.keymap.set "n" "!"
-          (fn []
-            (router.exclude-symbol-under-cursor session.prompt-buf))
-          {:buffer session.meta.buf.buffer :silent true :noremap true})
+        (apply-main-keymaps router session)
         (vim.api.nvim_create_autocmd "WinScrolled"
           {:group aug
            :callback (fn [_]

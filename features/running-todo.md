@@ -19,7 +19,7 @@
 - 16 [] If do `!!` from an empty prompt, or running `:Meta !!`, the full settings used with that prompt (including `#deps` etc toggles) should be recalled. When cycling through prompts after this (with <Up> etc) the same should happen.
 - 17 [] History search suboptimal: typing `##` just gives a floating popup window (in the way of and hiding prompt input - should go above) saying "No history matches". 
 - 18 [] Prompt height changes get captured correctly and restore, but not if closing nvim and opening it again. Should be properly persistent.
-- 19 [] <CR> in results buffer results in "E5108: Error executing lua: ...IM/LISTA/metabuffer/metabuffer/lua/metabuffer/router.lua:329: attempt
+- 19 [x] <CR> in results buffer results in "E5108: Error executing lua: ...IM/LISTA/metabuffer/metabuffer/lua/metabuffer/router.lua:329: attempt
 to call local 'open_fn' (a nil value)
 stack traceback:
         ...IM/LISTA/metabuffer/metabuffer/lua/metabuffer/router.lua:329: in function 'open_selected_h

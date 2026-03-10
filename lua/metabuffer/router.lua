@@ -861,6 +861,40 @@ M["exclude-symbol-under-cursor"] = function(prompt_buf)
     return nil
   end
 end
+M["insert-symbol-under-cursor"] = function(prompt_buf)
+  local session = M["active-by-prompt"][prompt_buf]
+  if session then
+    local word
+    local function _120_()
+      return vim.fn.expand("<cword>")
+    end
+    word = vim.api.nvim_win_call(session.meta.win.window, _120_)
+    local token
+    if ((type(word) == "string") and (vim.trim(word) ~= "")) then
+      token = word
+    else
+      token = ""
+    end
+    if (token ~= "") then
+      local current = router_util_mod["prompt-text"](session)
+      local sep
+      if ((current == "") or vim.endswith(current, " ") or vim.endswith(current, "\n")) then
+        sep = ""
+      else
+        sep = " "
+      end
+      local next = (current .. sep .. token)
+      return router_util_mod["set-prompt-text!"](session, next)
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+M["accept-main"] = function(prompt_buf)
+  return M.accept(prompt_buf)
+end
 M["toggle-scan-option"] = function(prompt_buf, which)
   local session = M["active-by-prompt"][prompt_buf]
   if session then
@@ -898,7 +932,7 @@ M["toggle-project-mode"] = function(prompt_buf)
   end
 end
 local function register_prompt_hooks(session)
-  local hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = M["default-prompt-keymaps"], ["active-by-prompt"] = M["active-by-prompt"], ["on-prompt-changed"] = M["on-prompt-changed"], ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21})
+  local hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = M["default-prompt-keymaps"], ["default-main-keymaps"] = M["default-main-keymaps"], ["active-by-prompt"] = M["active-by-prompt"], ["on-prompt-changed"] = M["on-prompt-changed"], ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21})
   return hooks["register!"](M, session)
 end
 M.start = function(query, mode, _meta, project_mode)
@@ -981,19 +1015,19 @@ M.start = function(query, mode, _meta, project_mode)
   local prompt_win = prompt_window_mod.new(vim, {height = router_util_mod["prompt-height"]()})
   local prompt_buf = prompt_win.buffer
   local session
-  local _131_
+  local _136_
   if query_mod["query-lines-has-active?"](parsed_query.lines) then
-    _131_ = M["project-bootstrap-delay-ms"]
+    _136_ = M["project-bootstrap-delay-ms"]
   else
-    _131_ = M["project-bootstrap-idle-delay-ms"]
+    _136_ = M["project-bootstrap-idle-delay-ms"]
   end
-  local _133_
+  local _138_
   if (query1 and (query1 ~= "")) then
-    _133_ = vim.split(query1, "\n", {plain = true})
+    _138_ = vim.split(query1, "\n", {plain = true})
   else
-    _133_ = {""}
+    _138_ = {""}
   end
-  session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-win"] = prompt_win.window, ["prompt-buf"] = prompt_buf, ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["project-mode"] = (project_mode or false), ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _131_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["last-parsed-query"] = {lines = _133_, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, prefilter = start_prefilter, lazy = start_lazy}, ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
+  session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-win"] = prompt_win.window, ["prompt-buf"] = prompt_buf, ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["project-mode"] = (project_mode or false), ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _136_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["last-parsed-query"] = {lines = _138_, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, prefilter = start_prefilter, lazy = start_lazy}, ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
   local initial_query_active = session["initial-query-active"]
   if session["project-mode"] then
     project_source["apply-minimal-source-set!"](session)
@@ -1025,13 +1059,13 @@ M.start = function(query, mode, _meta, project_mode)
     pcall(vim.api.nvim_win_set_cursor, prompt_win.window, {row, col})
   end
   vim.cmd("startinsert")
-  local function _138_()
+  local function _143_()
     session["startup-initializing"] = false
     return nil
   end
-  vim.schedule(_138_)
+  vim.schedule(_143_)
   if (session["project-mode"] and not initial_query_active) then
-    local function _139_()
+    local function _144_()
       if (M["active-by-prompt"][session["prompt-buf"]] == session) then
         pcall(curr.refresh_statusline)
         return pcall(update_info_window, session)
@@ -1039,7 +1073,7 @@ M.start = function(query, mode, _meta, project_mode)
         return nil
       end
     end
-    vim.schedule(_139_)
+    vim.schedule(_144_)
   else
   end
   if (session["project-mode"] and not session["project-bootstrapped"]) then
@@ -1055,14 +1089,14 @@ M.sync = function(meta, query)
   else
   end
   if meta then
-    local function _144_()
+    local function _149_()
       if (query and (query ~= "")) then
         return {query}
       else
         return {}
       end
     end
-    meta["set-query-lines"](_144_())
+    meta["set-query-lines"](_149_())
     meta["on-update"](0)
     M._store_vars(meta)
     return meta

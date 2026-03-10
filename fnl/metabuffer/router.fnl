@@ -776,6 +776,32 @@
                 next (.. current sep token)]
             (router_util_mod.set-prompt-text! session next)))))))
 
+(fn M.insert-symbol-under-cursor
+  [prompt-buf]
+  "Append <cword> from main results window into prompt query."
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when session
+      (let [word (vim.api.nvim_win_call
+                   session.meta.win.window
+                   (fn [] (vim.fn.expand "<cword>")))
+            token (if (and (= (type word) "string") (~= (vim.trim word) ""))
+                      word
+                      "")]
+        (when (~= token "")
+          (let [current (router_util_mod.prompt-text session)
+                sep (if (or (= current "")
+                            (vim.endswith current " ")
+                            (vim.endswith current "\n"))
+                        ""
+                        " ")
+                next (.. current sep token)]
+            (router_util_mod.set-prompt-text! session next)))))))
+
+(fn M.accept-main
+  [prompt-buf]
+  "Accept current selection from the main results window."
+  (M.accept prompt-buf))
+
 (fn M.toggle-scan-option
   [prompt-buf which]
   "Toggle include-hidden/include-ignored/include-deps scan flags."
@@ -813,6 +839,7 @@
         (prompt_hooks_mod.new
           {:mark-prompt-buffer! router_util_mod.mark-prompt-buffer!
            :default-prompt-keymaps M.default-prompt-keymaps
+           :default-main-keymaps M.default-main-keymaps
            :active-by-prompt M.active-by-prompt
            :on-prompt-changed M.on-prompt-changed
            :update-info-window update-info-window
