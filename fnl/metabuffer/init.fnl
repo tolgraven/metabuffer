@@ -1,5 +1,6 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local router (require :metabuffer.router))
+(local config (require :metabuffer.config))
 
 (local M {})
 
@@ -159,12 +160,18 @@
       (set (. opts :fg) fg))
     opts))
 
+(fn apply-ui-config!
+  [opts]
+  (let [resolved (config.resolve opts)
+        ui (. resolved :ui)]
+    (set (. vim.g "meta#custom_mappings") (or (. ui :custom_mappings) {}))
+    (set (. vim.g "meta#highlight_groups") (or (. ui :highlight_groups) {:All "Title" :Fuzzy "Number" :Regex "Special"}))
+    (set (. vim.g "meta#syntax_on_init") (or (. ui :syntax_on_init) "buffer"))
+    (set (. vim.g "meta#prefix") (or (. ui :prefix) "#"))))
+
 (fn ensure-defaults-and-highlights!
-  []
-  (set (. vim.g "meta#custom_mappings") (or (. vim.g "meta#custom_mappings") {}))
-  (set (. vim.g "meta#highlight_groups") (or (. vim.g "meta#highlight_groups") {:All "Title" :Fuzzy "Number" :Regex "Special"}))
-  (set (. vim.g "meta#syntax_on_init") (or (. vim.g "meta#syntax_on_init") "buffer"))
-  (set (. vim.g "meta#prefix") (or (. vim.g "meta#prefix") "#"))
+  [opts]
+  (apply-ui-config! opts)
   (let [hi vim.api.nvim_set_hl]
     (hi 0 "MetaStatuslineModeInsert" (statusline-color-from "Tag"))
     (hi 0 "MetaStatuslineModeReplace" (statusline-color-from "Todo"))
@@ -259,9 +266,10 @@
     true))
 
 (fn M.setup
-  []
+  [opts]
   "Public API: M.setup."
-  (ensure-defaults-and-highlights!)
+  (router.configure opts)
+  (ensure-defaults-and-highlights! opts)
   (ensure-command "Meta"
     (fn [args] (router.entry_start args.args args.bang))
     {:nargs "?" :bang true})
@@ -294,5 +302,7 @@
     {:nargs 0 :bang true})
 
   true)
+
+(set M.defaults config.defaults)
 
 M

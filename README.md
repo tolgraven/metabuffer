@@ -6,6 +6,92 @@ Interactive buffer/project line filtering for Neovim, with a prompt-first workfl
 
 ## User Guide
 
+### Setup
+
+Use normal Lua setup options (no `vim.g` required):
+
+```lua
+require("metabuffer").setup({
+  options = {
+    prompt_update_debounce_ms = 170,
+    window_local_layout = true,
+    project_lazy_enabled = true,
+  },
+  keymaps = {
+    prompt = {
+      { { "n", "i" }, "<CR>", "accept" },
+      { "n", "<Esc>", "cancel" },
+      { "n", "<C-p>", "move-selection", -1 },
+      { "n", "<C-n>", "move-selection", 1 },
+      { "i", "<C-p>", "move-selection", -1 },
+      { "i", "<C-n>", "move-selection", 1 },
+      { "n", "<C-k>", "move-selection", -1 },
+      { "n", "<C-j>", "move-selection", 1 },
+      { "i", "<C-k>", "move-selection", -1 },
+      { "i", "<C-j>", "move-selection", 1 },
+      { "i", "<C-a>", "prompt-home" },
+      { "i", "<C-e>", "prompt-end" },
+      { "i", "<C-u>", "prompt-kill-backward" },
+      { "i", "<C-y>", "prompt-yank" },
+      { "i", "<Up>", "history-or-move", 1 },
+      { "i", "<Down>", "history-or-move", -1 },
+      { "n", "<Up>", "history-or-move", 1 },
+      { "n", "<Down>", "history-or-move", -1 },
+      { "i", "!!", "insert-last-prompt" },
+      { "n", "!!", "insert-last-prompt" },
+      { "i", "!$", "insert-last-token" },
+      { "n", "!$", "insert-last-token" },
+      { "i", "!^!", "insert-last-tail" },
+      { "n", "!^!", "insert-last-tail" },
+      { "i", "<LocalLeader>1", "negate-current-token" },
+      { "i", "<LocalLeader>!", "negate-current-token" },
+      { "n", "<LocalLeader>h", "merge-history" },
+      { "i", "<LocalLeader>h", "merge-history" },
+      { "i", "<C-r>", "history-searchback" },
+      { { "n", "i" }, "<C-^>", "switch-mode", "matcher" },
+      { { "n", "i" }, "<C-6>", "switch-mode", "matcher" },
+      { { "n", "i" }, "<C-_>", "switch-mode", "case" },
+      { { "n", "i" }, "<C-/>", "switch-mode", "case" },
+      { { "n", "i" }, "<C-?>", "switch-mode", "case" },
+      { { "n", "i" }, "<C-->", "switch-mode", "case" },
+      { { "n", "i" }, "<C-o>", "switch-mode", "case" },
+      { { "n", "i" }, "<C-s>", "switch-mode", "syntax" },
+      { "n", "<C-g>", "toggle-scan-option", "ignored" },
+      { "n", "<C-l>", "toggle-scan-option", "deps" },
+      { { "n", "i" }, "<C-d>", "scroll-main", "half-down" },
+      { "n", "<C-u>", "scroll-main", "half-up" },
+      { { "n", "i" }, "<C-f>", "scroll-main", "page-down" },
+      { { "n", "i" }, "<C-b>", "scroll-main", "page-up" },
+      { { "n", "i" }, "<C-t>", "toggle-project-mode" },
+    },
+    main = {
+      { "n", "!", "exclude-symbol-under-cursor" },
+      { "n", "<CR>", "accept-main" },
+      { "n", "<M-CR>", "insert-symbol-under-cursor" },
+      { "n", "<A-CR>", "insert-symbol-under-cursor" },
+    },
+    prompt_fallback = {
+      { "i", "<C-a>", "prompt-home" },
+      { "i", "<C-e>", "prompt-end" },
+      { "i", "<C-u>", "prompt-kill-backward" },
+      { "i", "<C-k>", "move-selection", -1 },
+      { "i", "<C-y>", "prompt-yank" },
+    },
+  },
+  ui = {
+    prefix = "#",
+    syntax_on_init = "buffer",
+    highlight_groups = { All = "Title", Fuzzy = "Number", Regex = "Special" },
+  },
+})
+```
+
+Inspect defaults from Lua:
+
+```lua
+require("metabuffer").defaults
+```
+
 ### Commands
 
 - `:Meta[!] [query]` (`!` starts repo-wide source mode)
@@ -32,7 +118,7 @@ Insert-mode editing:
 - `<C-a>` move to line start
 - `<C-e>` move to line end
 - `<C-u>` delete from line start to cursor
-- `<C-k>` delete from cursor to line end
+- `<C-k>` move selection up
 - `<C-y>` yank previously killed prompt text
 
 History insertion shorthands (insert + normal):

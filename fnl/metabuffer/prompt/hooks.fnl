@@ -194,9 +194,7 @@
     (fn apply-keymaps
       [router session]
       (let [base-opts {:buffer session.prompt-buf :silent true :noremap true :nowait true}
-            rules (if (= (type vim.g.meta_prompt_keymaps) "table")
-                      vim.g.meta_prompt_keymaps
-                      default-prompt-keymaps)]
+            rules (or session.prompt-keymaps default-prompt-keymaps)]
         (each [_ r (ipairs rules)]
           (let [mode (. r 1)
                 lhs (. r 2)
@@ -216,32 +214,16 @@
 
     (fn apply-emacs-insert-fallbacks
   [router session]
-      (let [opts {:buffer session.prompt-buf :silent true :noremap true :nowait true}]
-        (vim.keymap.set "i" "<C-a>"
-          (fn [] (schedule-when-valid session
-                   (fn []
-                     (router.prompt-home session.prompt-buf))))
-          opts)
-        (vim.keymap.set "i" "<C-e>"
-          (fn [] (schedule-when-valid session
-                   (fn []
-                     (router.prompt-end session.prompt-buf))))
-          opts)
-        (vim.keymap.set "i" "<C-u>"
-          (fn [] (schedule-when-valid session
-                   (fn []
-                     (router.prompt-kill-backward session.prompt-buf))))
-          opts)
-        (vim.keymap.set "i" "<C-k>"
-          (fn [] (schedule-when-valid session
-                   (fn []
-                     (router.move-selection session.prompt-buf -1))))
-          opts)
-        (vim.keymap.set "i" "<C-y>"
-          (fn [] (schedule-when-valid session
-                   (fn []
-                     (router.prompt-yank session.prompt-buf))))
-          opts)))
+      (let [base-opts {:buffer session.prompt-buf :silent true :noremap true :nowait true}
+            rules (or session.prompt-fallback-keymaps [])]
+        (each [_ r (ipairs rules)]
+          (let [mode (. r 1)
+                lhs (. r 2)
+                action (. r 3)
+                arg (. r 4)
+                rhs (resolve-map-action router session action arg)]
+            (when rhs
+              (vim.keymap.set mode lhs rhs base-opts))))))
 
     (fn resolve-main-map-action
       [router session action]
@@ -257,9 +239,7 @@
     (fn apply-main-keymaps
       [router session]
       (let [base-opts {:buffer session.meta.buf.buffer :silent true :noremap true :nowait true}
-            rules (if (= (type vim.g.meta_main_keymaps) "table")
-                      vim.g.meta_main_keymaps
-                      default-main-keymaps)]
+            rules (or session.main-keymaps default-main-keymaps)]
         (each [_ r (ipairs rules)]
           (let [mode (. r 1)
                 lhs (. r 2)
