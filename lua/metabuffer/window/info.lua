@@ -246,7 +246,7 @@ M.new = function(opts)
     if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
       local widths
       local function _34_(line)
-        return #line
+        return vim.fn.strdisplaywidth(line)
       end
       widths = vim.tbl_map(_34_, (lines or {}))
       local max_len = numeric_max(widths, 0)
