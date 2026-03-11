@@ -129,12 +129,18 @@
 
   (fn info-window-config
     [session width height]
+    (let [host-win (if (and session
+                            session.meta
+                            session.meta.win
+                            (vim.api.nvim_win_is_valid session.meta.win.window))
+                       session.meta.win.window
+                       session.prompt-win)]
     (if session.window-local-layout
         {:relative "win"
-         :win session.prompt-win
+         :win host-win
          :anchor "NE"
          :row 0
-         :col (vim.api.nvim_win_get_width session.prompt-win)
+         :col (vim.api.nvim_win_get_width host-win)
          :width width
          :height height}
         {:relative "editor"
@@ -142,7 +148,7 @@
          :row 1
          :col vim.o.columns
          :width width
-         :height height}))
+         :height height})))
 
   (fn ensure-info-window!
     [session]
@@ -174,9 +180,14 @@
       (let [widths (vim.tbl_map (fn [line] (# line)) (or lines []))
             max-len (numeric-max widths 0)
             needed max-len
-            host-width (if session.window-local-layout
-                           (vim.api.nvim_win_get_width session.prompt-win)
-                           vim.o.columns)
+            host-width (if (and session.window-local-layout
+                                session.meta
+                                session.meta.win
+                                (vim.api.nvim_win_is_valid session.meta.win.window))
+                           (vim.api.nvim_win_get_width session.meta.win.window)
+                           (if session.window-local-layout
+                               (vim.api.nvim_win_get_width session.prompt-win)
+                               vim.o.columns))
             max-available (math.max info-min-width (math.floor (* host-width 0.34)))
             upper (math.min info-max-width max-available)
             target (math.max info-min-width (math.min needed upper))
@@ -186,9 +197,15 @@
 
   (fn info-max-width-now
     [session]
-    (let [host-width (if (and session session.window-local-layout)
-                         (vim.api.nvim_win_get_width session.prompt-win)
-                         vim.o.columns)
+    (let [host-width (if (and session
+                              session.window-local-layout
+                              session.meta
+                              session.meta.win
+                              (vim.api.nvim_win_is_valid session.meta.win.window))
+                         (vim.api.nvim_win_get_width session.meta.win.window)
+                         (if (and session session.window-local-layout)
+                             (vim.api.nvim_win_get_width session.prompt-win)
+                             vim.o.columns))
           max-available (math.max info-min-width (math.floor (* host-width 0.34)))]
       (math.min info-max-width max-available)))
 

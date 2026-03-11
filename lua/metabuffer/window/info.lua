@@ -191,8 +191,14 @@ M.new = function(opts)
   local debug_log = opts["debug-log"]
   local update_preview = opts["update-preview"]
   local function info_window_config(session, width, height)
+    local host_win
+    if (session and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
+      host_win = session.meta.win.window
+    else
+      host_win = session["prompt-win"]
+    end
     if session["window-local-layout"] then
-      return {relative = "win", win = session["prompt-win"], anchor = "NE", row = 0, col = vim.api.nvim_win_get_width(session["prompt-win"]), width = width, height = height}
+      return {relative = "win", win = host_win, anchor = "NE", row = 0, col = vim.api.nvim_win_get_width(host_win), width = width, height = height}
     else
       return {relative = "editor", anchor = "NE", row = 1, col = vim.o.columns, width = width, height = height}
     end
@@ -229,17 +235,21 @@ M.new = function(opts)
   local function fit_info_width_21(session, lines)
     if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
       local widths
-      local function _33_(line)
+      local function _34_(line)
         return #line
       end
-      widths = vim.tbl_map(_33_, (lines or {}))
+      widths = vim.tbl_map(_34_, (lines or {}))
       local max_len = numeric_max(widths, 0)
       local needed = max_len
       local host_width
-      if session["window-local-layout"] then
-        host_width = vim.api.nvim_win_get_width(session["prompt-win"])
+      if (session["window-local-layout"] and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
+        host_width = vim.api.nvim_win_get_width(session.meta.win.window)
       else
-        host_width = vim.o.columns
+        if session["window-local-layout"] then
+          host_width = vim.api.nvim_win_get_width(session["prompt-win"])
+        else
+          host_width = vim.o.columns
+        end
       end
       local max_available = math.max(info_min_width, math.floor((host_width * 0.34)))
       local upper = math.min(info_max_width, max_available)
@@ -253,10 +263,14 @@ M.new = function(opts)
   end
   local function info_max_width_now(session)
     local host_width
-    if (session and session["window-local-layout"]) then
-      host_width = vim.api.nvim_win_get_width(session["prompt-win"])
+    if (session and session["window-local-layout"] and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
+      host_width = vim.api.nvim_win_get_width(session.meta.win.window)
     else
-      host_width = vim.o.columns
+      if (session and session["window-local-layout"]) then
+        host_width = vim.api.nvim_win_get_width(session["prompt-win"])
+      else
+        host_width = vim.o.columns
+      end
     end
     local max_available = math.max(info_min_width, math.floor((host_width * 0.34)))
     return math.min(info_max_width, max_available)
@@ -267,10 +281,10 @@ M.new = function(opts)
     else
       if (session and meta and meta.win and vim.api.nvim_win_is_valid(meta.win.window)) then
         local view
-        local function _37_()
+        local function _40_()
           return vim.fn.winsaveview()
         end
-        view = vim.api.nvim_win_call(meta.win.window, _37_)
+        view = vim.api.nvim_win_call(meta.win.window, _40_)
         local top = math.max(1, math.min(total, (view.topline or 1)))
         local height = math.max(1, vim.api.nvim_win_get_height(meta.win.window))
         local stop0 = math.min(total, (top + height + -1))
@@ -348,9 +362,9 @@ M.new = function(opts)
         local icon_prefix = iconf.text
         local icon_hl = (icon_info["icon-hl"] or file_hl)
         local icon_width = iconf.width
-        local _let_47_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
-        local dir = _let_47_[1]
-        local file0 = _let_47_[2]
+        local _let_50_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
+        local dir = _let_50_[1]
+        local file0 = _let_50_[2]
         local file = (icon_prefix .. file0)
         local this_file_hl = (icon_info["file-hl"] or file_hl)
         local row = #lines
@@ -462,9 +476,9 @@ M.new = function(opts)
     if (session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
       local meta = session.meta
       local selected1 = (meta.selected_index + 1)
-      local _let_58_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-      local wanted_start = _let_58_[1]
-      local wanted_stop = _let_58_[2]
+      local _let_61_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
+      local wanted_start = _let_61_[1]
+      local wanted_stop = _let_61_[2]
       local start_index = (session["info-start-index"] or 1)
       local stop_index = (session["info-stop-index"] or 0)
       local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
@@ -484,7 +498,7 @@ M.new = function(opts)
     end
     return update_preview(session)
   end
-  local function _62_(session, refresh_lines)
+  local function _65_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -497,6 +511,6 @@ M.new = function(opts)
       return update_regular_21(session)
     end
   end
-  return {["close-window!"] = close_info_window_21, ["update!"] = _62_}
+  return {["close-window!"] = close_info_window_21, ["update!"] = _65_}
 end
 return M
