@@ -15,7 +15,7 @@
           ["i" "<C-n>" "move-selection" 1]
           ["n" "<C-k>" "move-selection" -1]
           ["n" "<C-j>" "move-selection" 1]
-          ["i" "<C-k>" "prompt-kill-forward"]
+          ["i" "<C-k>" "move-selection" -1]
           ["i" "<C-j>" "move-selection" 1]
           ["i" "<C-a>" "prompt-home"]
           ["i" "<C-e>" "prompt-end"]
@@ -62,7 +62,7 @@
         [ ["i" "<C-a>" "prompt-home"]
           ["i" "<C-e>" "prompt-end"]
           ["i" "<C-u>" "prompt-kill-backward"]
-          ["i" "<C-k>" "prompt-kill-forward"]
+          ["i" "<C-k>" "move-selection" -1]
           ["i" "<C-y>" "prompt-yank"]]]
   (set router.history-max 100)
   (set router.project-max-file-bytes (or vim.g.meta_project_max_file_bytes (* 1024 1024)))

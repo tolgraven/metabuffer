@@ -235,7 +235,7 @@
         (vim.keymap.set "i" "<C-k>"
           (fn [] (schedule-when-valid session
                    (fn []
-                     (router.prompt-kill-forward session.prompt-buf))))
+                     (router.move-selection session.prompt-buf -1))))
           opts)
         (vim.keymap.set "i" "<C-y>"
           (fn [] (schedule-when-valid session

@@ -361,7 +361,7 @@ M.new = function(opts)
     vim.keymap.set("i", "<C-u>", _61_, opts0)
     local function _63_()
       local function _64_()
-        return router["prompt-kill-forward"](session["prompt-buf"])
+        return router["move-selection"](session["prompt-buf"], -1)
       end
       return schedule_when_valid(session, _64_)
     end
