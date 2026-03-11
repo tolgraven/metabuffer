@@ -26,8 +26,8 @@
             (let [line (. candidates idx)
                   line1 (if ignorecase (string.lower line) line)
                   pat1 (if ignorecase (string.lower pat) pat)
-                  ok (pcall string.find line1 pat1)]
-              (when (and ok (string.find line1 pat1))
+                  [ok s] [(pcall string.find line1 pat1)]]
+              (when (and ok s)
                 (table.insert out idx))))
           out))}))
 

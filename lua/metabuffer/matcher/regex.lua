@@ -36,9 +36,9 @@ M.new = function()
           else
           end
         end
+        active = next
       else
       end
-      active = next
     end
     return active
   end

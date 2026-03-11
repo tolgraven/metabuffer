@@ -185,7 +185,7 @@
   (fn fit-info-width!
     [session lines]
     (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
-      (let [widths (vim.tbl_map (fn [line] (# line)) (or lines []))
+      (let [widths (vim.tbl_map (fn [line] (vim.fn.strdisplaywidth line)) (or lines []))
             max-len (numeric-max widths 0)
             needed max-len
             host-width (if (and session.window-local-layout

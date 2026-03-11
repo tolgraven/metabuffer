@@ -31,8 +31,8 @@ M.new = function()
       else
         pat1 = pat
       end
-      local ok = pcall(string.find, line1, pat1)
-      if (ok and string.find(line1, pat1)) then
+      local ok,s = pcall(string.find, line1, pat1)
+      if (ok and s) then
         table.insert(out, idx)
       else
       end
