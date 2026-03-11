@@ -324,14 +324,10 @@
             info-lines (vim.api.nvim_buf_line_count session.info-buf)
             start-index (or session.info-start-index 1)
             stop-index (or session.info-stop-index (math.min (# idxs) info-max-lines))
-            hits-shown (if (>= stop-index start-index) (+ (- stop-index start-index) 1) 0)
-            hits-total (# idxs)
-            status (.. " Hits " hits-shown "/" hits-total " ")
             selected1 (+ meta.selected_index 1)
             row (if (> info-lines 0)
                     (math.max 1 (math.min (+ (- selected1 start-index) 1) info-lines))
                     1)]
-        (pcall vim.api.nvim_win_set_option session.info-win "statusline" status)
         (when (> info-lines 0)
           (let [[ok-cur err-cur] [(pcall vim.api.nvim_win_set_cursor session.info-win [row 0])]]
             (when-not ok-cur

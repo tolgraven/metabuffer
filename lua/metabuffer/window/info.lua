@@ -436,14 +436,6 @@ M.new = function(opts)
       local info_lines = vim.api.nvim_buf_line_count(session["info-buf"])
       local start_index = (session["info-start-index"] or 1)
       local stop_index = (session["info-stop-index"] or math.min(#idxs, info_max_lines))
-      local hits_shown
-      if (stop_index >= start_index) then
-        hits_shown = ((stop_index - start_index) + 1)
-      else
-        hits_shown = 0
-      end
-      local hits_total = #idxs
-      local status = (" Hits " .. hits_shown .. "/" .. hits_total .. " ")
       local selected1 = (meta.selected_index + 1)
       local row
       if (info_lines > 0) then
@@ -451,7 +443,6 @@ M.new = function(opts)
       else
         row = 1
       end
-      pcall(vim.api.nvim_win_set_option, session["info-win"], "statusline", status)
       if (info_lines > 0) then
         local ok_cur,err_cur = pcall(vim.api.nvim_win_set_cursor, session["info-win"], {row, 0})
         if not ok_cur then
@@ -476,9 +467,9 @@ M.new = function(opts)
     if (session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
       local meta = session.meta
       local selected1 = (meta.selected_index + 1)
-      local _let_61_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-      local wanted_start = _let_61_[1]
-      local wanted_stop = _let_61_[2]
+      local _let_60_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
+      local wanted_start = _let_60_[1]
+      local wanted_stop = _let_60_[2]
       local start_index = (session["info-start-index"] or 1)
       local stop_index = (session["info-stop-index"] or 0)
       local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
@@ -498,7 +489,7 @@ M.new = function(opts)
     end
     return update_preview(session)
   end
-  local function _65_(session, refresh_lines)
+  local function _64_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -511,6 +502,6 @@ M.new = function(opts)
       return update_regular_21(session)
     end
   end
-  return {["close-window!"] = close_info_window_21, ["update!"] = _65_}
+  return {["close-window!"] = close_info_window_21, ["update!"] = _64_}
 end
 return M
