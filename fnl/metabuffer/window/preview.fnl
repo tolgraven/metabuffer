@@ -1,6 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 (local lineno-mod (require :metabuffer.window.lineno))
+(local source-mod (require :metabuffer.source))
 
 (fn trim-or-pad-lines
   [lines target]
@@ -61,6 +62,8 @@
     (when (and win (vim.api.nvim_win_is_valid win))
       (pcall vim.api.nvim_set_option_value "number" false {:win win})
       (pcall vim.api.nvim_set_option_value "relativenumber" false {:win win})
+      (pcall vim.api.nvim_set_option_value "wrap" false {:win win})
+      (pcall vim.api.nvim_set_option_value "linebreak" false {:win win})
       (pcall vim.api.nvim_set_option_value "signcolumn" "no" {:win win})
       (pcall vim.api.nvim_set_option_value "foldcolumn" "0" {:win win})
       (pcall vim.api.nvim_set_option_value "statuscolumn" "" {:win win})
@@ -71,44 +74,6 @@
       (pcall vim.api.nvim_set_option_value "winhighlight"
              "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal"
              {:win win})))
-
-  (fn filetype-for-ref
-    [ref]
-    (if (and ref ref.buf (vim.api.nvim_buf_is_valid ref.buf))
-        (. (. vim.bo ref.buf) :filetype)
-        (if (and ref ref.path)
-            (let [[ok ft] [(pcall vim.filetype.match {:filename ref.path})]]
-              (if (and ok (= (type ft) "string")) ft ""))
-            "")))
-
-  (fn context-lines-for-ref
-    [session ref height]
-    (let [h (math.max 1 height)
-          lnum (math.max 1 (or (and ref ref.lnum) 1))
-          start (math.max 1 (- lnum 1))
-          stop (+ start h -1)]
-      (if (and ref ref.buf (vim.api.nvim_buf_is_valid ref.buf))
-          (let [lines (vim.api.nvim_buf_get_lines ref.buf (- start 1) stop false)]
-            (trim-or-pad-lines lines h))
-          (if (and ref ref.path (= 1 (vim.fn.filereadable ref.path)))
-              (let [cache (or session.preview-file-cache {})
-                    _ (set session.preview-file-cache cache)
-                    all0 (. cache ref.path)
-                    all (if (= (type all0) "table")
-                            all0
-                            (let [lines (read-file-lines-cached ref.path)]
-                              (if (= (type lines) "table")
-                                  (do
-                                    (set (. cache ref.path) lines)
-                                    lines)
-                                  [])))]
-                (if (= (type all) "table")
-                    (let [slice []]
-                      (for [i start stop]
-                        (table.insert slice (or (. all i) "")))
-                      (trim-or-pad-lines slice h))
-                    (trim-or-pad-lines [] h)))
-              (trim-or-pad-lines [] h)))))
 
   (fn ensure-preview-window!
     [session]
@@ -134,6 +99,8 @@
         (let [wo (. vim.wo win.window)]
           (set (. wo :number) false)
           (set (. wo :relativenumber) false)
+          (set (. wo :wrap) false)
+          (set (. wo :linebreak) false)
           (set (. wo :cursorline) true)
           (set (. wo :signcolumn) "no"))
         (mark-preview-buffer! buf))
@@ -165,12 +132,13 @@
           p-height (vim.api.nvim_win_get_height session.prompt-win)
           width (math.max 36 (math.min 128 (math.floor (* p-width 0.58))))
           cfg (preview-window-config session width p-height)
-          ft (filetype-for-ref ref)
-          lines (context-lines-for-ref session ref p-height)
-          start-lnum (if ref (math.max 1 (- (or ref.lnum 1) 1)) 1)
+          preview-data (source-mod.preview-lines session ref p-height read-file-lines-cached)
+          ft (source-mod.preview-filetype ref)
+          lines (or preview-data.lines (trim-or-pad-lines [] p-height))
+          src-lnum (math.max 1 (or preview-data.focus-lnum (and ref (or ref.preview-lnum ref.lnum)) 1))
+          start-lnum (math.max 1 (or preview-data.start-lnum (if ref (- src-lnum 1) 1)))
           focus-row (if ref
-                        (let [src-lnum (math.max 1 (or ref.lnum 1))
-                              row (+ (- src-lnum start-lnum) 1)]
+                        (let [row (+ (- src-lnum start-lnum) 1)]
                           (math.max 1 (math.min row p-height)))
                         1)]
       {:ref ref
@@ -225,7 +193,9 @@
         (set session.preview-hl-ns ns)
         (vim.api.nvim_buf_clear_namespace session.preview-buf ns 0 -1)
         (each [_ h (ipairs highlights)]
-          (vim.api.nvim_buf_add_highlight session.preview-buf ns (. h 2) (. h 1) (. h 3) (. h 4)))))
+          (vim.api.nvim_buf_add_highlight session.preview-buf ns (. h 2) (. h 1) (. h 3) (. h 4)))
+        (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0])
+        (pcall vim.fn.winrestview {:leftcol target-leftcol})))
     (let [bo (. vim.bo session.preview-buf)
           ft (. ctx :ft)]
       (set (. bo :modifiable) false)
@@ -233,9 +203,7 @@
                         ft
                         "text")]
         (when (~= (. bo :filetype) next-ft)
-          (set (. bo :filetype) next-ft))))
-    (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0])
-    (pcall vim.fn.winrestview {:leftcol target-leftcol}))
+          (set (. bo :filetype) next-ft)))))
 
   (fn update-preview-window!
     [session]

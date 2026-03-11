@@ -20,6 +20,29 @@ T['parse-query-lines consumes project flags and keeps search text'] = function()
   eq(parsed.lines, { 'alpha beta' })
 end
 
+T['parse-query-lines consumes file flag and captures file token on that line only'] = function()
+  local parsed = query['parse-query-lines']({ 'alpha #file README.md', 'beta' })
+  eq(parsed.files, true)
+  eq(parsed['include-files'], true)
+  eq(parsed['file-lines'], { 'README.md' })
+  eq(parsed.lines, { 'alpha', 'beta' })
+end
+
+T['parse-query-lines keeps additional tokens after file filter in normal query'] = function()
+  local parsed = query['parse-query-lines']({ '#file query lua', 'meta #file src now' })
+  eq(parsed['file-lines'], { 'query', 'src' })
+  eq(parsed.lines, { 'lua', 'meta now' })
+end
+
+T['parse-query-lines consumes lone token after file flag as file query'] = function()
+  local prev = vim.g['meta#prefix']
+  vim.g['meta#prefix'] = '#'
+  local parsed = query['parse-query-lines']({ '#file lua' })
+  vim.g['meta#prefix'] = prev
+  eq(parsed['file-lines'], { 'lua' })
+  eq(parsed.lines, { '' })
+end
+
 T['parse-query-lines supports saved tag tokens and history token'] = function()
   local parsed = query['parse-query-lines']({ '#history #save:quick ##foo body' })
   eq(parsed.history, true)
@@ -37,8 +60,16 @@ end
 T['parse-query-text merges multiline settings and returns stripped query'] = function()
   local parsed = query['parse-query-text']('alpha\n#deps\n#nohidden beta')
   eq(parsed.query, 'alpha\n\nbeta')
+  eq(parsed.lines, { 'alpha', '', 'beta' })
   eq(parsed['include-deps'], true)
   eq(parsed['include-hidden'], false)
+end
+
+T['parse-query-text includes file directives'] = function()
+  local parsed = query['parse-query-text']('#file README.md\nmeta')
+  eq(parsed['include-files'], true)
+  eq(parsed['file-lines'], { 'README.md' })
+  eq(parsed.query, '\nmeta')
 end
 
 T['parse-query-lines honors custom prefix for options'] = function()

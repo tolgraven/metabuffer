@@ -37,4 +37,12 @@ T['project mode clear query broadens and keeps source pool'] = H.timed_case(func
   H.wait_for(function() return H.session_source_path_count() == all_sources end, 6000)
 end)
 
+T['project mode bootstraps source expansion without prompt input'] = H.timed_case(function()
+  H.open_project_meta_from_file('README.md')
+  local initial_paths = H.session_source_path_count()
+  H.wait_for(function()
+    return H.session_source_path_count() > initial_paths
+  end, 6000)
+end)
+
 return T

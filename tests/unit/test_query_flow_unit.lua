@@ -11,9 +11,11 @@ local function mk_session(prompt_buf)
     ['include-hidden'] = false,
     ['include-ignored'] = false,
     ['include-deps'] = false,
+    ['include-files'] = false,
     ['effective-include-hidden'] = false,
     ['effective-include-ignored'] = false,
     ['effective-include-deps'] = false,
+    ['effective-include-files'] = false,
     ['prefilter-mode'] = true,
     ['lazy-mode'] = true,
     ['prompt-last-applied-text'] = '',
@@ -112,7 +114,7 @@ T['apply-prompt-lines invalidates filter cache when project flags transition'] =
   eq(deps._state.apply_calls >= 1, true)
 end
 
-T['apply-prompt-lines refreshes project source on text broadening under prefilter'] = function()
+T['apply-prompt-lines does not rebuild project source on text-only changes'] = function()
   local prompt_buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(prompt_buf, 0, -1, false, { 'meta token' })
 
@@ -121,13 +123,12 @@ T['apply-prompt-lines refreshes project source on text broadening under prefilte
 
   query_flow['apply-prompt-lines!'](deps, session)
   local first_calls = deps._state.apply_calls
-  eq(first_calls >= 1, true)
 
   vim.api.nvim_buf_set_lines(prompt_buf, 0, -1, false, { 'meta' })
   query_flow['apply-prompt-lines!'](deps, session)
 
   eq(session['prompt-last-applied-text'], 'meta')
-  eq(deps._state.apply_calls > first_calls, true)
+  eq(deps._state.apply_calls, first_calls)
 end
 
 return T

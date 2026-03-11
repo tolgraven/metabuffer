@@ -32,3 +32,8 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 23 [x] if type filter like "lua", then deleting it, then "lua" again, selected line gets reset to line 1, should be recalled properly.
 - 24 [] lazy file reading regression, when narrowing a search it does a full re-run and all the sources except the original when Meta! started disappear for a short while then reappear. Remember when narrowing (making word longer, or making negation shorter) we want to keep all the sources loaded and only re-run filter on those lines actually present. 
 - 25 [] both the floating info window and the preview window get regular statuslines after moving to a different tmux split (and stay as such when go back to focusing nvim split)
+- 26 [] a small floating window popup showing keybinds, all possible #commands and #toggles and #flags (full names unlike the prompt statusline), options etc. `#?` in prompt should be consumed and open/focus it. q or <Esc> close it.
+- 27 [] even just inserting a space (which does nothing but separate tokens) full filtering re-runs (or at least sources get reloaded). Shouldn't happen.
+- 28 [] project mode gets opened with only about 2000 total possible lines, but project has many many more (even excluding deps, hidden etc). Something is wrong. Faulty prefilter when doing straight `:Meta!`?
+- 29 [] fake preview window line number column has line numbers after end of file.
+- 29 [] preview window should anchor one line higher so gets 8 lines by default.

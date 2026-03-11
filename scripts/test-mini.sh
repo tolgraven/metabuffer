@@ -48,9 +48,17 @@ if [[ "${TEST_FAILED_ONLY:-0}" == "1" ]]; then
   fi
 fi
 
+FILTERS=("$@")
 if [[ -n "${TEST_ONLY:-}" ]]; then
+  echo "[mini-runner] note: TEST_ONLY is deprecated; pass selectors as script args instead"
+  IFS=',' read -r -a LEGACY_FILTERS <<< "${TEST_ONLY}"
+  for f in "${LEGACY_FILTERS[@]}"; do
+    [[ -n "$f" ]] && FILTERS+=("$f")
+  done
+fi
+
+if [[ ${#FILTERS[@]} -gt 0 ]]; then
   FILTERED=()
-  IFS=',' read -r -a FILTERS <<< "${TEST_ONLY}"
   for file in "${TEST_FILES[@]}"; do
     for f in "${FILTERS[@]}"; do
       [[ -z "$f" ]] && continue
@@ -68,7 +76,7 @@ if [[ -n "${TEST_ONLY:-}" ]]; then
 fi
 
 if [[ ${#TEST_FILES[@]} -eq 0 ]]; then
-  echo "error: no tests selected after TEST_ONLY/TEST_FAILED_ONLY filtering" >&2
+  echo "error: no tests selected after filtering" >&2
   exit 2
 fi
 
@@ -130,6 +138,7 @@ run_worker() {
   {
     echo "[worker $idx] FILE START $file"
     TEST_FILE="$file" NVIM_APPNAME="$appname" \
+      TMPDIR="/tmp" \
       XDG_DATA_HOME="$xdg_root/data" \
       XDG_STATE_HOME="$xdg_root/state" \
       XDG_CACHE_HOME="$xdg_root/cache" \
@@ -185,7 +194,7 @@ echo "[mini-runner] TOTAL ${#TEST_FILES[@]} file(s) | failed=$FAIL_FILES | elaps
 
 if (( FAIL_FILES > 0 )); then
   echo "[mini-runner] rerun failed only: TEST_FAILED_ONLY=1 ./scripts/test-mini.sh"
-  echo "[mini-runner] rerun one file:    TEST_ONLY='tests/unit/test_query_unit.lua' ./scripts/test-mini.sh"
+  echo "[mini-runner] rerun one file:    ./scripts/test-mini.sh tests/unit/test_query_unit.lua"
   echo "[mini-runner] failed list path:  $FAIL_LIST_FILE"
   exit 1
 fi

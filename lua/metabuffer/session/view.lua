@@ -96,7 +96,7 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
   local active_by_prompt = _let_15_["active-by-prompt"]
   local schedule_source_syntax_refresh_21 = _let_15_["schedule-source-syntax-refresh!"]
   local update_info_window = _let_15_["update-info-window"]
-  if (session and not session["startup-initializing"] and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (vim.api.nvim_get_current_win() == session.meta.win.window) and (active_by_prompt[session["prompt-buf"]] == session)) then
+  if (session and not session["startup-initializing"] and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
     local before = session.meta.selected_index
     M["sync-selected-from-main-cursor!"](session)
     if force_refresh then

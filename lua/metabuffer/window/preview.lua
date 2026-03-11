@@ -1,6 +1,7 @@
 -- [nfnl] fnl/metabuffer/window/preview.fnl
 local M = {}
 local lineno_mod = require("metabuffer.window.lineno")
+local source_mod = require("metabuffer.source")
 local function trim_or_pad_lines(lines, target)
   local out = {}
   for _, line in ipairs((lines or {})) do
@@ -53,6 +54,8 @@ M.new = function(opts)
     if (win and vim.api.nvim_win_is_valid(win)) then
       pcall(vim.api.nvim_set_option_value, "number", false, {win = win})
       pcall(vim.api.nvim_set_option_value, "relativenumber", false, {win = win})
+      pcall(vim.api.nvim_set_option_value, "wrap", false, {win = win})
+      pcall(vim.api.nvim_set_option_value, "linebreak", false, {win = win})
       pcall(vim.api.nvim_set_option_value, "signcolumn", "no", {win = win})
       pcall(vim.api.nvim_set_option_value, "foldcolumn", "0", {win = win})
       pcall(vim.api.nvim_set_option_value, "statuscolumn", "", {win = win})
@@ -62,63 +65,6 @@ M.new = function(opts)
       return pcall(vim.api.nvim_set_option_value, "winhighlight", "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal", {win = win})
     else
       return nil
-    end
-  end
-  local function filetype_for_ref(ref)
-    if (ref and ref.buf and vim.api.nvim_buf_is_valid(ref.buf)) then
-      return vim.bo[ref.buf].filetype
-    else
-      if (ref and ref.path) then
-        local ok,ft = pcall(vim.filetype.match, {filename = ref.path})
-        if (ok and (type(ft) == "string")) then
-          return ft
-        else
-          return ""
-        end
-      else
-        return ""
-      end
-    end
-  end
-  local function context_lines_for_ref(session, ref, height)
-    local h = math.max(1, height)
-    local lnum = math.max(1, ((ref and ref.lnum) or 1))
-    local start = math.max(1, (lnum - 1))
-    local stop = (start + h + -1)
-    if (ref and ref.buf and vim.api.nvim_buf_is_valid(ref.buf)) then
-      local lines = vim.api.nvim_buf_get_lines(ref.buf, (start - 1), stop, false)
-      return trim_or_pad_lines(lines, h)
-    else
-      if (ref and ref.path and (1 == vim.fn.filereadable(ref.path))) then
-        local cache = (session["preview-file-cache"] or {})
-        local _
-        session["preview-file-cache"] = cache
-        _ = nil
-        local all0 = cache[ref.path]
-        local all
-        if (type(all0) == "table") then
-          all = all0
-        else
-          local lines = read_file_lines_cached(ref.path)
-          if (type(lines) == "table") then
-            cache[ref.path] = lines
-            all = lines
-          else
-            all = {}
-          end
-        end
-        if (type(all) == "table") then
-          local slice = {}
-          for i = start, stop do
-            table.insert(slice, (all[i] or ""))
-          end
-          return trim_or_pad_lines(slice, h)
-        else
-          return trim_or_pad_lines({}, h)
-        end
-      else
-        return trim_or_pad_lines({}, h)
-      end
     end
   end
   local function ensure_preview_window_21(session)
@@ -146,6 +92,8 @@ M.new = function(opts)
           local wo = vim.wo[win.window]
           wo["number"] = false
           wo["relativenumber"] = false
+          wo["wrap"] = false
+          wo["linebreak"] = false
           wo["cursorline"] = true
           wo["signcolumn"] = "no"
         end
@@ -187,17 +135,22 @@ M.new = function(opts)
     local p_height = vim.api.nvim_win_get_height(session["prompt-win"])
     local width = math.max(36, math.min(128, math.floor((p_width * 0.58))))
     local cfg = preview_window_config(session, width, p_height)
-    local ft = filetype_for_ref(ref)
-    local lines = context_lines_for_ref(session, ref, p_height)
+    local preview_data = source_mod["preview-lines"](session, ref, p_height, read_file_lines_cached)
+    local ft = source_mod["preview-filetype"](ref)
+    local lines = (preview_data.lines or trim_or_pad_lines({}, p_height))
+    local src_lnum = math.max(1, (preview_data["focus-lnum"] or (ref and (ref["preview-lnum"] or ref.lnum)) or 1))
     local start_lnum
-    if ref then
-      start_lnum = math.max(1, ((ref.lnum or 1) - 1))
-    else
-      start_lnum = 1
+    local or_8_ = preview_data["start-lnum"]
+    if not or_8_ then
+      if ref then
+        or_8_ = (src_lnum - 1)
+      else
+        or_8_ = 1
+      end
     end
+    start_lnum = math.max(1, or_8_)
     local focus_row
     if ref then
-      local src_lnum = math.max(1, (ref.lnum or 1))
       local row = ((src_lnum - start_lnum) + 1)
       focus_row = math.max(1, math.min(row, p_height))
     else
@@ -251,24 +204,24 @@ M.new = function(opts)
       for _, h in ipairs(highlights) do
         vim.api.nvim_buf_add_highlight(session["preview-buf"], ns, h[2], h[1], h[3], h[4])
       end
+      pcall(vim.api.nvim_win_set_cursor, session["preview-win"], {ctx["focus-row"], 0})
+      pcall(vim.fn.winrestview, {leftcol = target_leftcol})
     end
-    do
-      local bo = vim.bo[session["preview-buf"]]
-      local ft = ctx.ft
-      bo["modifiable"] = false
-      local next_ft
-      if ((type(ft) == "string") and (ft ~= "")) then
-        next_ft = ft
-      else
-        next_ft = "text"
-      end
-      if (bo.filetype ~= next_ft) then
-        bo["filetype"] = next_ft
-      else
-      end
+    local bo = vim.bo[session["preview-buf"]]
+    local ft = ctx.ft
+    bo["modifiable"] = false
+    local next_ft
+    if ((type(ft) == "string") and (ft ~= "")) then
+      next_ft = ft
+    else
+      next_ft = "text"
     end
-    pcall(vim.api.nvim_win_set_cursor, session["preview-win"], {ctx["focus-row"], 0})
-    return pcall(vim.fn.winrestview, {leftcol = __fnl_global__target_2dleftcol})
+    if (bo.filetype ~= next_ft) then
+      bo["filetype"] = next_ft
+      return nil
+    else
+      return nil
+    end
   end
   local function update_preview_window_21(session)
     ensure_preview_window_21(session)
@@ -326,7 +279,7 @@ M.new = function(opts)
       local target_path = selected_preview_path(session)
       local timer = vim.loop.new_timer()
       session["preview-update-timer"] = timer
-      local function _28_()
+      local function _21_()
         if (session["preview-update-timer"] and (session["preview-update-timer"] == timer)) then
           local stopf = timer.stop
           local closef = timer.close
@@ -348,7 +301,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return timer.start(timer, math.max(0, (wait_ms or 0)), 0, vim.schedule_wrap(_28_))
+      return timer.start(timer, math.max(0, (wait_ms or 0)), 0, vim.schedule_wrap(_21_))
     else
       return nil
     end

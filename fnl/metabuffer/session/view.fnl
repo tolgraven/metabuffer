@@ -79,7 +79,6 @@
                (not session.startup-initializing)
                (vim.api.nvim_win_is_valid session.meta.win.window)
                (vim.api.nvim_buf_is_valid session.prompt-buf)
-               (= (vim.api.nvim_get_current_win) session.meta.win.window)
                (= (. active-by-prompt session.prompt-buf) session))
       (let [before session.meta.selected_index]
         (M.sync-selected-from-main-cursor! session)

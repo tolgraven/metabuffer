@@ -1,6 +1,8 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 (local lineno-mod (require :metabuffer.window.lineno))
+(local source-mod (require :metabuffer.source))
+(local path-hl (require :metabuffer.path_highlight))
 
 (fn ext-from-path
   [path]
@@ -125,7 +127,8 @@
   [opts]
   "Create right-side info window renderer/synchronizer."
   (let [{: floating-window-mod : info-min-width : info-max-width
-         : info-max-lines : info-height : debug-log : update-preview} opts]
+         : info-max-lines : info-height : debug-log : update-preview
+         : read-file-lines-cached} opts]
 
   (fn info-window-config
     [session width height]
@@ -171,6 +174,8 @@
           (set (. wo :winbar) "")
           (set (. wo :number) false)
           (set (. wo :relativenumber) false)
+          (set (. wo :wrap) false)
+          (set (. wo :linebreak) false)
           (set (. wo :signcolumn) "no")
           (set (. wo :foldcolumn) "0")
           (set (. wo :spell) false)))))
@@ -185,7 +190,7 @@
   (fn fit-info-width!
     [session lines]
     (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
-      (let [widths (vim.tbl_map (fn [line] (vim.fn.strdisplaywidth line)) (or lines []))
+      (let [widths (vim.tbl_map (fn [line] (vim.fn.strdisplaywidth (or line ""))) (or lines []))
             max-len (numeric-max widths 0)
             needed max-len
             host-width (if (and session.window-local-layout
@@ -236,11 +241,9 @@
             (info-range meta.selected_index total cap))))
 
   (fn build-info-lines
-    [meta refs idxs target-width start-index stop-index]
+    [session meta refs idxs target-width start-index stop-index read-file-lines-cached]
     (let [line-hl "LineNr"
-          dir-hl (if (= 1 (vim.fn.hlexists "NERDTreeDir"))
-                     "NERDTreeDir"
-                     (if (= 1 (vim.fn.hlexists "NetrwDir")) "NetrwDir" "Directory"))
+          signcol-display-width 2
           file-hl (if (= 1 (vim.fn.hlexists "NERDTreeFile"))
                       "NERDTreeFile"
                       (if (= 1 (vim.fn.hlexists "NetrwPlain"))
@@ -260,7 +263,7 @@
                                             1)]
                        (lineno-mod.digit-width-from-max-len max-lnum-len))
           lnum-field-width (+ lnum-digit-width 1)
-          path-width (math.max 1 (- target-width lnum-field-width))
+          path-width (math.max 1 (- target-width lnum-field-width signcol-display-width))
           lines []
           highlights []]
       (if (= (# idxs) 0)
@@ -269,33 +272,82 @@
             (for [i start-index stop-index]
               (let [src-idx (. idxs i)
                     ref (. refs src-idx)
+                    view-mode (or session.info-file-entry-view "meta")
                     lnum (tostring (or (and ref ref.lnum) src-idx))
                     lnum-cell0 (lineno-mod.lnum-cell lnum lnum-digit-width)
-                    path (vim.fn.fnamemodify (or (and ref ref.path) "[Current Buffer]") ":~:.")
-                    icon-info (devicon-for-path path file-hl)
+                    base-path (vim.fn.fnamemodify (or (and ref ref.path) "[Current Buffer]") ":~:.")
+                    info-view (source-mod.info-view
+                               session
+                               ref
+                               {:mode view-mode
+                                :path-width path-width
+                                :read-file-lines-cached read-file-lines-cached})
+                    sign (or (. info-view :sign) {:text "  " :hl "LineNr"})
+                    sign-raw (or (. sign :text) "")
+                    sign-pad (math.max 0 (- signcol-display-width (vim.fn.strdisplaywidth sign-raw)))
+                    sign-prefix (.. sign-raw (string.rep " " sign-pad))
+                    sign-hl (or (. sign :hl) "LineNr")
+                    sign-width (# sign-prefix)
+                    sign-glyph-start1 (or (string.find sign-prefix "%S") 0)
+                    sign-glyph (vim.trim sign-prefix)
+                    sign-glyph-start (if (> sign-glyph-start1 0)
+                                         (- sign-glyph-start1 1)
+                                         -1)
+                    sign-glyph-end (if (and (> sign-glyph-start1 0) (> (# sign-glyph) 0))
+                                       (+ sign-glyph-start (# sign-glyph))
+                                       -1)
+                    path (or (. info-view :path) base-path)
+                    icon-path (or (. info-view :icon-path) path)
+                    show-icon? (if (= (. info-view :show-icon) nil) true (. info-view :show-icon))
+                    highlight-dir? (if (= (. info-view :highlight-dir) nil) true (. info-view :highlight-dir))
+                    highlight-file? (if (= (. info-view :highlight-file) nil) true (. info-view :highlight-file))
+                    suffix0 (or (. info-view :suffix) "")
+                    suffix-prefix (if (> (# suffix0) 0)
+                                      (or (. info-view :suffix-prefix) "  ")
+                                      "")
+                    suffix-hls (or (. info-view :suffix-highlights) [])
+                    icon-info (devicon-for-path icon-path file-hl)
                     icon (or (. icon-info :icon) "")
                     iconf (icon-field icon)
-                    icon-prefix (. iconf :text)
+                    icon-prefix (if show-icon? (. iconf :text) "")
                     icon-hl (or (. icon-info :icon-hl) file-hl)
-                    icon-width (. iconf :width)
+                    icon-width (if show-icon? (. iconf :width) 0)
                     [dir file0] (fit-path-into-width path (math.max 1 (- path-width icon-width)))
-                    file (.. icon-prefix file0)
                     this-file-hl (or (. icon-info :file-hl) file-hl)
                     row (# lines)
-                    line (.. lnum-cell0 icon-prefix dir file0)
-                    num-start 0
+                    line (.. sign-prefix lnum-cell0 icon-prefix dir file0 suffix-prefix suffix0)
+                    sign-start 0
+                    sign-end (+ sign-start sign-width)
+                    num-start sign-end
                     num-end (+ num-start (# lnum-cell0))
                     icon-start num-end
                     icon-end (+ icon-start (# icon-prefix))
                     dir-start icon-end
-                    file-start (+ dir-start (# dir))]
+                    file-start (+ dir-start (# dir))
+                    suffix-start (+ file-start (# file0) (# suffix-prefix))]
                 (table.insert lines line)
+                (when (> sign-width 0)
+                  ;; Fake signcolumn base to keep stable background even for empty rows.
+                  (table.insert highlights [row "SignColumn" sign-start sign-end]))
+                (when (and (> sign-glyph-end sign-glyph-start) (> sign-width 0))
+                  (table.insert highlights [row sign-hl
+                                            (+ sign-start sign-glyph-start)
+                                            (+ sign-start sign-glyph-end)]))
                 (table.insert highlights [row line-hl num-start num-end])
                 (when (> (# icon-prefix) 0)
                   (table.insert highlights [row icon-hl icon-start icon-end]))
-                (when (> (# dir) 0)
-                  (table.insert highlights [row dir-hl dir-start (+ dir-start (# dir))]))
-                (table.insert highlights [row this-file-hl file-start (+ file-start (# file0))])))))
+                (when (and highlight-dir? (> (# dir) 0))
+                  (each [_ dr (ipairs (path-hl.ranges-for-dir dir dir-start))]
+                    (table.insert highlights [row dr.hl dr.start dr.end])))
+                (when (and highlight-file? (> (# file0) 0))
+                  (table.insert highlights [row this-file-hl file-start (+ file-start (# file0))]))
+                (when (> (# suffix0) 0)
+                  (table.insert highlights [row "Comment" suffix-start (+ suffix-start (# suffix0))]))
+                (each [_ sh (ipairs suffix-hls)]
+                  (let [s (+ suffix-start (or sh.start 0))
+                        e (+ suffix-start (or sh.end 0))]
+                    (when (> e s)
+                      (table.insert highlights [row (or sh.hl "Comment") s e]))))))))
       {:lines lines :highlights highlights}))
 
   (fn render-info-lines!
@@ -304,7 +356,7 @@
           idxs (or meta.buf.indices [])
           _ (set session.info-start-index start-index)
           _ (set session.info-stop-index stop-index)
-          built (build-info-lines meta refs idxs (info-max-width-now session) start-index stop-index)
+          built (build-info-lines session meta refs idxs (info-max-width-now session) start-index stop-index read-file-lines-cached)
           raw-lines (. built :lines)
           lines (if (= (type raw-lines) "table")
                     (vim.tbl_map tostring raw-lines)

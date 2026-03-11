@@ -114,6 +114,39 @@
       (set meta.buf.all-indices all-indices)
       (set meta.buf.indices (vim.deepcopy all-indices))))
 
+  (fn push-file-entry-into-pool!
+    [session path lines]
+    (let [meta session.meta
+          content meta.buf.content
+          refs meta.buf.source-refs
+          rel (vim.fn.fnamemodify path ":.")
+          line ""
+          total-lines (if (= (type lines) "table") (# lines) 0)]
+      (table.insert content line)
+      (table.insert refs {:path path
+                          :lnum total-lines
+                          :line (if (and (= (type rel) "string") (~= rel ""))
+                                    rel
+                                    path)
+                          :kind "file-entry"
+                          :open-lnum 1
+                          :preview-lnum 1})))
+
+  (fn all-project-file-paths
+    [session include-hidden include-ignored include-deps]
+    (let [root (vim.fn.getcwd)
+          seen {}
+          out []]
+      (each [_ p (ipairs (project-file-list root include-hidden include-ignored include-deps))]
+        (let [path (canonical-path p)]
+          (when (and path
+                     (= 1 (vim.fn.filereadable path))
+                     (path-under-root? path root)
+                     (not (. seen path)))
+            (set (. seen path) true)
+            (table.insert out path))))
+      out))
+
   (fn set-single-source-content!
     [session show-separators]
     (let [meta session.meta]
@@ -256,7 +289,7 @@
     (math.floor (/ bytes 80)))
 
   (fn collect-project-sources
-    [session include-hidden include-ignored include-deps]
+    [session include-hidden include-ignored include-deps include-files]
     (let [root (vim.fn.getcwd)
           current-path (current-buffer-path session.source-buf)
           file-cache (or session.preview-file-cache {})
@@ -273,6 +306,13 @@
         (push-line! (or current-path "[Current Buffer]") i line))
       (when (and current-path (= (type session.single-content) "table"))
         (set (. file-cache current-path) (vim.deepcopy session.single-content)))
+      (when include-files
+        (each [_ path (ipairs (all-project-file-paths
+                                session
+                                include-hidden
+                                include-ignored
+                                include-deps))]
+          (push-file-entry-into-pool! session path (read-file-lines-cached path))))
       (each [_ path (ipairs (project-file-list root include-hidden include-ignored include-deps))]
         (let [rel (vim.fn.fnamemodify path ":.")]
           (when (and (< total-lines settings.project-max-total-lines)
@@ -292,15 +332,25 @@
   (fn init-project-pool!
     [session prefilter]
     (set-single-source-content! session session.project-mode)
-    (let [root (vim.fn.getcwd)
+      (let [root (vim.fn.getcwd)
           include-hidden session.effective-include-hidden
           include-ignored session.effective-include-ignored
           include-deps session.effective-include-deps
+          include-files session.effective-include-files
           current (canonical-path (current-buffer-path session.source-buf))
           open-paths (open-project-buffer-paths session root include-hidden include-deps)
           all-paths (project-file-list root include-hidden include-ignored include-deps)
+          file-entry-paths (if include-files
+                               (all-project-file-paths
+                                 session
+                                 include-hidden
+                                 include-ignored
+                                 include-deps)
+                               [])
           deferred []
           deferred-seen {}]
+      (each [_ path (ipairs file-entry-paths)]
+        (push-file-entry-into-pool! session path (read-file-lines-cached path)))
       ;; Prioritize nearby context by materializing already-open buffers first.
       (each [_ path (ipairs open-paths)]
         (let [p (canonical-path path)]
@@ -376,16 +426,14 @@
                        (math.max 1 (meta.selected_line))
                        (math.max 1 (or session.initial-source-line 1)))]
     (if session.project-mode
-        (let [prefilter-active (and (truthy? settings.project-lazy-prefilter-enabled)
-                                    (~= session.prefilter-mode false))
-              prefilter (when prefilter-active
-                          {:groups (parse-prefilter-terms (or (. session.last-parsed-query :lines) [])
-                                                          (session.meta.ignorecase))
-                           :ignorecase (session.meta.ignorecase)})
-              init (init-project-pool! session prefilter)]
+        (let [init (init-project-pool! session nil)]
           (if (lazy-preferred? session (or (. init :estimated-lines) 0))
-              (start-project-stream! session prefilter init)
-              (let [pool (collect-project-sources session session.effective-include-hidden session.effective-include-ignored session.effective-include-deps)]
+              (start-project-stream! session nil init)
+              (let [pool (collect-project-sources session
+                                                  session.effective-include-hidden
+                                                  session.effective-include-ignored
+                                                  session.effective-include-deps
+                                                  session.effective-include-files)]
                 (set meta.buf.content pool.content)
                 (set meta.buf.source-refs pool.refs)
                 (set session.lazy-stream-done true))))
@@ -393,9 +441,8 @@
           (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
           (set session.lazy-stream-done true)
           (set-single-source-content! session false)))
-    ;; Keep main results buffer as pure content lines; source context is shown
-    ;; in the right floating info window.
-    (set meta.buf.show-source-prefix false)
+    ;; Show source prefixes only when explicit file mode is enabled.
+    (set meta.buf.show-source-prefix (and session.project-mode session.effective-include-files))
     (set meta.buf.show-source-separators session.project-mode)
     (reset-meta-indices! meta)
     (if session.project-mode

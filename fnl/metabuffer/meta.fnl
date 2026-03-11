@@ -15,6 +15,77 @@
   [buf idx]
   (or (. buf.indices (+ idx 1)) 1))
 
+(fn ref-is-file-entry?
+  [ref]
+  (= (or (and ref ref.kind) "") "file-entry"))
+
+(fn file-query-matches?
+  [path q ignorecase]
+  (let [probe0 (or path "")
+        probe (if ignorecase (string.lower probe0) probe0)
+        query0 (vim.trim (or q ""))
+        query (if ignorecase (string.lower query0) query0)]
+    (if (= query "")
+        true
+        (not (not (string.find probe query 1 true))))))
+
+(fn apply-file-entry-filter
+  [indices refs file-query-lines regular-queries ignorecase include-files regular-query-active?]
+  (if (not include-files)
+      indices
+  (let [queries0 []]
+    (each [_ q (ipairs (or file-query-lines []))]
+      (let [trimmed (vim.trim (or q ""))]
+        (when (~= trimmed "")
+          (table.insert queries0 trimmed))))
+    (let [queries (if (> (# queries0) 0)
+                      queries0
+                      (let [fallback []]
+                        (each [_ q (ipairs (or regular-queries []))]
+                          (let [trimmed (vim.trim (or q ""))]
+                            (when (~= trimmed "")
+                              (table.insert fallback trimmed))))
+                        fallback))]
+    (let [matches-all-queries? (fn [path]
+                                 (if (= (# queries) 0)
+                                     true
+                                     (let [path0 (or path "")
+                                           rel (if (~= path0 "") (vim.fn.fnamemodify path0 ":.") "")
+                                           probe (if (~= rel "")
+                                                     (.. rel " " path0)
+                                                     path0)
+                                           ok0 true]
+                                       (var ok ok0)
+                                       (each [_ q (ipairs queries)]
+                                         (when (and ok (not (file-query-matches? probe q ignorecase)))
+                                           (set ok false)))
+                                       ok)))
+          regular-set {}
+          file-set {}
+          regular-allowed? regular-query-active?]
+      (each [_ idx (ipairs (or indices []))]
+        (let [ref (. refs idx)]
+          (if (ref-is-file-entry? ref)
+              nil
+              (when regular-allowed?
+                (when (matches-all-queries? (and ref ref.path))
+                  (set (. regular-set idx) true))))))
+      (for [idx 1 (# refs)]
+        (let [ref (. refs idx)]
+          (when (ref-is-file-entry? ref)
+            (if (= (# queries) 0)
+                (set (. file-set idx) true)
+                (let [path0 (or (and ref ref.path) "")
+                      rel (if (~= path0 "") (vim.fn.fnamemodify path0 ":.") "")
+                      path (or (and ref ref.line) rel path0 "")]
+                  (when (matches-all-queries? path)
+                    (set (. file-set idx) true)))))))
+      (let [next []]
+        (for [idx 1 (# refs)]
+          (when (or (. regular-set idx) (. file-set idx))
+            (table.insert next idx)))
+        next))))))
+
 (fn metabuffer-display-name
   [model-buf]
   (let [original-name (vim.api.nvim_buf_get_name model-buf)
@@ -409,7 +480,17 @@
                          {:indices (vim.deepcopy self.buf.indices)
                           :line-count line-count
                           :full true}))))))
-      (let [hits-changed (if (= prev-hits self.buf.indices)
+      (let [refs (or self.buf.source-refs [])
+            file-filtered (apply-file-entry-filter
+                            self.buf.indices
+                            refs
+                            self.file-query-lines
+                            queries
+                            ignorecase
+                            self.include-files
+                            (> (# queries) 0))
+            _ (set self.buf.indices file-filtered)
+            hits-changed (if (= prev-hits self.buf.indices)
                              false
                              (if (~= (# prev-hits) (# self.buf.indices))
                                  true

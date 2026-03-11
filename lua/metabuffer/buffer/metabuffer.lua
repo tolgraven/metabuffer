@@ -1,8 +1,61 @@
 -- [nfnl] fnl/metabuffer/buffer/metabuffer.fnl
 local base = require("metabuffer.buffer.base")
 local ui = require("metabuffer.buffer.ui")
+local source_mod = require("metabuffer.source")
 local M = {}
 M["default-opts"] = {bufhidden = "hide", buftype = "nofile", buflisted = false}
+local function ext_from_path(path)
+  local file = vim.fn.fnamemodify((path or ""), ":t")
+  local dot = string.match(file, ".*()%.")
+  if (dot and (dot > 0) and (dot < #file)) then
+    return string.sub(file, (dot + 1))
+  else
+    return ""
+  end
+end
+local function devicon_for_path(path, fallback_hl)
+  local file = vim.fn.fnamemodify((path or ""), ":t")
+  local ext = ext_from_path(path)
+  local ok_web,web = pcall(require, "nvim-web-devicons")
+  if (ok_web and web) then
+    local ok_i,icon,icon_hl = pcall(web.get_icon, file, ext, {default = true})
+    local file_hl = fallback_hl
+    local _2_
+    if (ok_i and (type(icon) == "string") and (icon ~= "")) then
+      _2_ = icon
+    else
+      _2_ = ""
+    end
+    local _4_
+    if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
+      _4_ = icon_hl
+    else
+      _4_ = fallback_hl
+    end
+    return {icon = _2_, ["icon-hl"] = _4_, ["file-hl"] = file_hl}
+  else
+    if (1 == vim.fn.exists("*WebDevIconsGetFileTypeSymbol")) then
+      local icon = vim.fn.WebDevIconsGetFileTypeSymbol(file)
+      local _6_
+      if ((type(icon) == "string") and (icon ~= "")) then
+        _6_ = icon
+      else
+        _6_ = ""
+      end
+      return {icon = _6_, ["icon-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
+    else
+      return {icon = "", ["icon-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
+    end
+  end
+end
+local function icon_field(icon)
+  if ((type(icon) == "string") and (icon ~= "")) then
+    local text = (icon .. " ")
+    return {text = text, width = vim.fn.strdisplaywidth(text)}
+  else
+    return {text = "", width = 0}
+  end
+end
 local function split_source_path(path)
   local p = (path or "")
   local rel
@@ -22,12 +75,7 @@ local function split_source_path(path)
   return {dir = dir_part, file = file}
 end
 local function source_prefix(ref)
-  local lnum = (ref.lnum or 0)
-  local parts = split_source_path(ref.path)
-  local lnum_str = string.format("%6d", lnum)
-  local dir = (parts.dir or "")
-  local file = (parts.file or "")
-  return {text = (lnum_str .. "  " .. dir .. file .. "  "), ["lnum-end"] = #lnum_str, ["dir-start"] = (#lnum_str + 2), ["dir-end"] = ((#lnum_str + 2) + #dir), ["file-start"] = ((#lnum_str + 2) + #dir), ["file-end"] = (((#lnum_str + 2) + #dir) + #file)}
+  return source_mod["hit-prefix"](ref)
 end
 local function sanitize_syntax_id(s)
   local base0 = (s or "text")
@@ -50,6 +98,13 @@ local function syntax_files_for_ft(ft)
   end
   return files
 end
+local function normalize_render_line(line)
+  local txt = tostring((line or ""))
+  local s1 = string.gsub(txt, "\r\n", " ")
+  local s2 = string.gsub(s1, "\n", " ")
+  local s3 = string.gsub(s2, "\r", " ")
+  return s3
+end
 M.new = function(nvim, model)
   local self = base.new(nvim, {model = model, name = "meta", ["default-opts"] = M["default-opts"]})
   self["syntax-type"] = "buffer"
@@ -64,6 +119,7 @@ M.new = function(nvim, model)
     return (self.model and vim.api.nvim_buf_is_valid(self.model))
   end
   self["ref-filetype"] = function(ref)
+    local kind = (ref and ref.kind)
     local path = (ref and ref.path)
     local ft
     if ((type(path) == "string") and (path ~= "")) then
@@ -71,21 +127,25 @@ M.new = function(nvim, model)
     else
       ft = nil
     end
-    if ((type(ft) == "string") and (ft ~= "")) then
-      return ft
-    else
+    if (kind == "file-entry") then
       return "text"
+    else
+      if ((type(ft) == "string") and (ft ~= "")) then
+        return ft
+      else
+        return "text"
+      end
     end
   end
   self["clear-source-syntax"] = function()
     if (self["source-syntax-groups"] and (#self["source-syntax-groups"] > 0)) then
-      local function _6_()
+      local function _17_()
         for _, g in ipairs(self["source-syntax-groups"]) do
           vim.cmd(("silent! syntax clear " .. g))
         end
         return nil
       end
-      vim.api.nvim_buf_call(self.buffer, _6_)
+      vim.api.nvim_buf_call(self.buffer, _17_)
     else
     end
     self["source-syntax-groups"] = {}
@@ -99,7 +159,7 @@ M.new = function(nvim, model)
       local included = {}
       local groups = {}
       self["clear-source-syntax"]()
-      local function _8_()
+      local function _19_()
         vim.cmd("silent! syntax clear")
         pcall(vim.api.nvim_buf_del_var, self.buffer, "current_syntax")
         local function add_block(start, stop, ft)
@@ -151,7 +211,7 @@ M.new = function(nvim, model)
         end
         return vim.cmd("silent! syntax sync fromstart")
       end
-      vim.api.nvim_buf_call(self.buffer, _8_)
+      vim.api.nvim_buf_call(self.buffer, _19_)
       self["source-syntax-groups"] = groups
       return nil
     end
@@ -204,10 +264,10 @@ M.new = function(nvim, model)
     local ranges = {}
     for _, win in ipairs(vim.fn.win_findbuf(self.buffer)) do
       if vim.api.nvim_win_is_valid(win) then
-        local function _22_()
+        local function _33_()
           return vim.fn.winsaveview()
         end
-        win_views[win] = vim.api.nvim_win_call(win, _22_)
+        win_views[win] = vim.api.nvim_win_call(win, _33_)
       else
       end
     end
@@ -221,11 +281,28 @@ M.new = function(nvim, model)
         local ref = self["source-refs"][idx]
         local pfx = source_prefix(ref)
         local row = (#out + 1)
-        table.insert(out, (pfx.text .. line))
-        table.insert(ranges, {row = row, ["lnum-end"] = pfx["lnum-end"], ["dir-start"] = pfx["dir-start"], ["dir-end"] = pfx["dir-end"], ["file-start"] = pfx["file-start"], ["file-end"] = pfx["file-end"]})
+        local function _36_()
+          if ((pfx.text or "") == "") then
+            return normalize_render_line(line)
+          else
+            if ((line or "") == "") then
+              return normalize_render_line(pfx.text)
+            else
+              return normalize_render_line((pfx.text .. "  " .. line))
+            end
+          end
+        end
+        table.insert(out, _36_())
+        table.insert(ranges, {row = row, ["lnum-end"] = pfx["lnum-end"], ["icon-start"] = pfx["icon-start"], ["icon-end"] = pfx["icon-end"], ["icon-hl"] = pfx["icon-hl"], ["dir-ranges"] = (pfx["dir-ranges"] or {}), ["file-start"] = pfx["file-start"], ["file-end"] = pfx["file-end"], ["file-hl"] = pfx["file-hl"], ["ext-start"] = pfx["ext-start"], ["ext-end"] = pfx["ext-end"], ["ext-hl"] = pfx["ext-hl"]})
       else
-        table.insert(out, line)
+        table.insert(out, normalize_render_line(line))
       end
+    end
+    for i = 1, #out do
+      local line0 = out[i]
+      local line1 = tostring((line0 or ""))
+      local line2 = string.gsub(line1, "[\r\n\v\f]", "")
+      out[i] = line2
     end
     vim.api.nvim_buf_set_lines(self.buffer, 0, -1, false, out)
     vim.api.nvim_buf_clear_namespace(self.buffer, self["source-hl-ns"], 0, -1)
@@ -234,13 +311,23 @@ M.new = function(nvim, model)
     if self["show-source-prefix"] then
       for _, r in ipairs(ranges) do
         local row0 = (r.row - 1)
-        vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], "MetaSourceLineNr", row0, 0, r["lnum-end"])
-        if ((r["dir-end"] - r["dir-start"]) > 0) then
-          vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], "MetaSourceDir", row0, r["dir-start"], r["dir-end"])
+        if ((r["lnum-end"] or 0) > 0) then
+          vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], "MetaSourceLineNr", row0, 0, r["lnum-end"])
         else
         end
+        if ((r["icon-end"] - r["icon-start"]) > 0) then
+          vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], (r["icon-hl"] or "MetaSourceFile"), row0, r["icon-start"], r["icon-end"])
+        else
+        end
+        for _0, dr in ipairs((r["dir-ranges"] or {})) do
+          vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], dr.hl, row0, dr.start, dr["end"])
+        end
         if ((r["file-end"] - r["file-start"]) > 0) then
-          vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], "MetaSourceFile", row0, r["file-start"], r["file-end"])
+          vim.api.nvim_buf_set_extmark(self.buffer, self["source-hl-ns"], row0, r["file-start"], {end_row = row0, end_col = r["file-end"], hl_group = (r["file-hl"] or "Normal"), hl_mode = "combine", priority = 220})
+        else
+        end
+        if (((r["ext-end"] or 0) - (r["ext-start"] or 0)) > 0) then
+          vim.api.nvim_buf_set_extmark(self.buffer, self["source-hl-ns"], row0, r["ext-start"], {end_row = row0, end_col = r["ext-end"], hl_group = (r["ext-hl"] or r["file-hl"] or "Normal"), hl_mode = "combine", priority = 230})
         else
         end
       end
@@ -275,7 +362,7 @@ M.new = function(nvim, model)
         local next_ref = (next_idx and self["source-refs"][next_idx])
         local cur_path = (cur_ref and cur_ref.path)
         local next_path = (next_ref and next_ref.path)
-        if ((cur_path or "") ~= (next_path or "")) then
+        if (((cur_path or "") ~= (next_path or "")) and ((cur_ref and cur_ref.kind) ~= "file-entry") and ((next_ref and next_ref.kind) ~= "file-entry")) then
           vim.api.nvim_buf_set_extmark(self.buffer, self["source-sep-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceBoundary", hl_eol = true, hl_mode = "combine", priority = 120})
         else
         end
@@ -289,10 +376,10 @@ M.new = function(nvim, model)
     end
     for win, view in pairs(win_views) do
       if vim.api.nvim_win_is_valid(win) then
-        local function _33_()
+        local function _48_()
           return pcall(vim.fn.winrestview, view)
         end
-        vim.api.nvim_win_call(win, _33_)
+        vim.api.nvim_win_call(win, _48_)
       else
       end
     end

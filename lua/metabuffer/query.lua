@@ -28,6 +28,8 @@ local function parse_option_token(tok)
   local prefilter_on = ((tok == "#prefilter") or (tok == "+prefilter") or (tok == "#+prefilter") or (tok == (prefix .. "prefilter")))
   local lazy_off = ((tok == "#nolazy") or (tok == "-lazy") or (tok == "#-lazy") or (tok == (prefix .. "nolazy")))
   local lazy_on = ((tok == "#lazy") or (tok == "+lazy") or (tok == "#+lazy") or (tok == (prefix .. "lazy")))
+  local files_off = ((tok == "#nofile") or (tok == "-file") or (tok == "#-file") or (tok == (prefix .. "nofile")))
+  local files_on = ((tok == "#file") or (tok == "+file") or (tok == "#+file") or (tok == (prefix .. "file")))
   local history_merge_3f = (tok == "#history")
   local save_tag = (string.match(tok, "^#save:(.+)$") or string.match(tok, ("^" .. vim.pesc(prefix) .. "save:(.+)$")))
   local saved_tag = string.match(tok, "^##(.+)$")
@@ -52,6 +54,10 @@ local function parse_option_token(tok)
     return {"lazy", false}
   elseif lazy_on then
     return {"lazy", true}
+  elseif files_off then
+    return {"files", false}
+  elseif files_on then
+    return {"files", true}
   elseif history_merge_3f then
     return {"history", true}
   elseif save_tag then
@@ -69,6 +75,21 @@ local function assoc_option(acc, k, v)
   next[k] = v
   return next
 end
+local function unquote_token(tok)
+  local t = (tok or "")
+  local n = #t
+  if (n >= 2) then
+    local lead = string.sub(t, 1, 1)
+    local tail = string.sub(t, n, n)
+    if (((lead == "\"") and (tail == "\"")) or ((lead == "'") and (tail == "'"))) then
+      return string.sub(t, 2, (n - 1))
+    else
+      return t
+    end
+  else
+    return t
+  end
+end
 local function parse_parts(parts, idx, state)
   if (idx > #parts) then
     return state
@@ -77,11 +98,23 @@ local function parse_parts(parts, idx, state)
     local val_111_auto = parse_option_token(tok)
     if val_111_auto then
       local parsed = val_111_auto
-      return parse_parts(parts, (idx + 1), assoc_option(state, parsed[1], parsed[2]))
+      local next = assoc_option(state, parsed[1], parsed[2])
+      if (parsed[1] == "files") then
+        return parse_parts(parts, (idx + 1), assoc_option(next, "file-await-token", true))
+      else
+        return parse_parts(parts, (idx + 1), next)
+      end
     else
-      local next = vim.deepcopy(state)
-      table.insert(next.keep, tok)
-      return parse_parts(parts, (idx + 1), next)
+      if (state["file-await-token"] and (vim.trim(tok) ~= "")) then
+        local next = vim.deepcopy(state)
+        table.insert(next["file-lines"], unquote_token(tok))
+        next["file-await-token"] = false
+        return parse_parts(parts, (idx + 1), next)
+      else
+        local next = vim.deepcopy(state)
+        table.insert(next.keep, tok)
+        return parse_parts(parts, (idx + 1), next)
+      end
     end
   end
 end
@@ -97,6 +130,7 @@ local function parse_line(acc, line)
     local next = vim.deepcopy(state)
     table.insert(next.lines, table.concat(state.keep, " "))
     next["keep"] = nil
+    next["file-await-token"] = false
     return next
   end
 end
@@ -108,16 +142,27 @@ local function parse_lines(lines, idx, state)
   end
 end
 M["parse-query-lines"] = function(lines)
-  local init = {lines = {}, hidden = nil, ignored = nil, deps = nil, prefilter = nil, lazy = nil, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil}
-  return parse_lines((lines or {}), 1, init)
+  local init = {lines = {}, hidden = nil, ignored = nil, deps = nil, prefilter = nil, lazy = nil, files = nil, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil, ["file-lines"] = {}, ["file-await-token"] = false}
+  local parsed = parse_lines((lines or {}), 1, init)
+  parsed["include-hidden"] = parsed.hidden
+  parsed["include-ignored"] = parsed.ignored
+  parsed["include-deps"] = parsed.deps
+  parsed["include-files"] = parsed.files
+  return parsed
 end
 M["parse-query-text"] = function(query)
   if ((type(query) == "string") and (query ~= "")) then
     local lines = vim.split(query, "\n", {plain = true})
     local parsed = M["parse-query-lines"](lines)
-    return {query = table.concat(parsed.lines, "\n"), ["include-hidden"] = parsed.hidden, ["include-ignored"] = parsed.ignored, ["include-deps"] = parsed.deps, prefilter = parsed.prefilter, lazy = parsed.lazy, history = parsed.history, ["save-tag"] = parsed["save-tag"], ["saved-tag"] = parsed["saved-tag"], ["saved-browser"] = parsed["saved-browser"]}
+    return {query = table.concat(parsed.lines, "\n"), lines = (parsed.lines or {}), ["include-hidden"] = parsed.hidden, ["include-ignored"] = parsed.ignored, ["include-deps"] = parsed.deps, ["include-files"] = parsed.files, prefilter = parsed.prefilter, lazy = parsed.lazy, ["file-lines"] = (parsed["file-lines"] or {}), history = parsed.history, ["save-tag"] = parsed["save-tag"], ["saved-tag"] = parsed["saved-tag"], ["saved-browser"] = parsed["saved-browser"]}
   else
-    return {query = query, ["include-hidden"] = nil, ["include-ignored"] = nil, ["include-deps"] = nil, prefilter = nil, lazy = nil, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil}
+    local _12_
+    if ((type(query) == "string") and (query ~= "")) then
+      _12_ = vim.split(query, "\n", {plain = true})
+    else
+      _12_ = {}
+    end
+    return {query = query, lines = _12_, ["include-hidden"] = nil, ["include-ignored"] = nil, ["include-deps"] = nil, ["include-files"] = nil, prefilter = nil, lazy = nil, ["file-lines"] = {}, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil}
   end
 end
 local function lines_has_active_3f(lines, idx)

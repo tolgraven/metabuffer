@@ -1,10 +1,44 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local base (require :metabuffer.buffer.base))
 (local ui (require :metabuffer.buffer.ui))
+(local source-mod (require :metabuffer.source))
 
 (local M {})
 
 (set M.default-opts {:buflisted false :bufhidden "hide" :buftype "nofile"})
+
+(fn ext-from-path
+  [path]
+  (let [file (vim.fn.fnamemodify (or path "") ":t")
+        dot (string.match file ".*()%.")]
+    (if (and dot (> dot 0) (< dot (# file)))
+        (string.sub file (+ dot 1))
+        "")))
+
+(fn devicon-for-path
+  [path fallback-hl]
+  (let [file (vim.fn.fnamemodify (or path "") ":t")
+        ext (ext-from-path path)
+        [ok-web web] [(pcall require :nvim-web-devicons)]]
+    (if (and ok-web web)
+        (let [[ok-i icon icon-hl] [(pcall web.get_icon file ext {:default true})]
+              file-hl fallback-hl]
+          {:icon (if (and ok-i (= (type icon) "string") (~= icon "")) icon "")
+           :icon-hl (if (and ok-i (= (type icon-hl) "string") (~= icon-hl "")) icon-hl fallback-hl)
+           :file-hl file-hl})
+        (if (= 1 (vim.fn.exists "*WebDevIconsGetFileTypeSymbol"))
+            (let [icon (vim.fn.WebDevIconsGetFileTypeSymbol file)]
+              {:icon (if (and (= (type icon) "string") (~= icon "")) icon "")
+               :icon-hl fallback-hl
+               :file-hl fallback-hl})
+            {:icon "" :icon-hl fallback-hl :file-hl fallback-hl}))))
+
+(fn icon-field
+  [icon]
+  (if (and (= (type icon) "string") (~= icon ""))
+      (let [text (.. icon " ")]
+        {:text text :width (vim.fn.strdisplaywidth text)})
+      {:text "" :width 0}))
 
 (fn split-source-path
   [path]
@@ -17,17 +51,7 @@
 
 (fn source-prefix
   [ref]
-  (let [lnum (or ref.lnum 0)
-        parts (split-source-path ref.path)
-        lnum-str (string.format "%6d" lnum)
-        dir (or parts.dir "")
-        file (or parts.file "")]
-    {:text (.. lnum-str "  " dir file "  ")
-     :lnum-end (# lnum-str)
-     :dir-start (+ (# lnum-str) 2)
-     :dir-end (+ (+ (# lnum-str) 2) (# dir))
-     :file-start (+ (+ (# lnum-str) 2) (# dir))
-     :file-end (+ (+ (+ (# lnum-str) 2) (# dir)) (# file))}))
+  (source-mod.hit-prefix ref))
 
 (fn sanitize-syntax-id
   [s]
@@ -45,6 +69,14 @@
     (each [_ f (ipairs after)]
       (table.insert files f))
     files))
+
+(fn normalize-render-line
+  [line]
+  (let [txt (tostring (or line ""))]
+    (let [s1 (string.gsub txt "\r\n" " ")
+          s2 (string.gsub s1 "\n" " ")
+          s3 (string.gsub s2 "\r" " ")]
+      s3)))
 
 (fn M.new
   [nvim model]
@@ -65,13 +97,16 @@
 
   (fn self.ref-filetype
   [ref]
-    (let [path (and ref ref.path)
+    (let [kind (and ref ref.kind)
+          path (and ref ref.path)
           ft (when (and (= (type path) "string") (~= path ""))
                (or (vim.filetype.match {:filename (vim.fn.fnamemodify path ":t")})
                    (vim.filetype.match {:filename path})))]
-      (if (and (= (type ft) "string") (~= ft ""))
+      (if (= kind "file-entry")
+          "text"
+          (if (and (= (type ft) "string") (~= ft ""))
           ft
-          "text")))
+          "text"))))
 
   (fn self.clear-source-syntax
   []
@@ -193,14 +228,29 @@
               (let [ref (. self.source-refs idx)
                     pfx (source-prefix ref)
                     row (+ (# out) 1)]
-                (table.insert out (.. pfx.text line))
+                (table.insert out (if (= (or pfx.text "") "")
+                                      (normalize-render-line line)
+                                      (if (= (or line "") "")
+                                        (normalize-render-line pfx.text)
+                                        (normalize-render-line (.. pfx.text "  " line)))))
                 (table.insert ranges {:row row
                                       :lnum-end pfx.lnum-end
-                                      :dir-start pfx.dir-start
-                                      :dir-end pfx.dir-end
+                                      :icon-start pfx.icon-start
+                                      :icon-end pfx.icon-end
+                                      :icon-hl pfx.icon-hl
+                                      :dir-ranges (or pfx.dir-ranges [])
                                       :file-start pfx.file-start
-                                      :file-end pfx.file-end}))
-              (table.insert out line))))
+                                      :file-end pfx.file-end
+                                      :file-hl pfx.file-hl
+                                      :ext-start pfx.ext-start
+                                      :ext-end pfx.ext-end
+                                      :ext-hl pfx.ext-hl}))
+              (table.insert out (normalize-render-line line)))))
+      (for [i 1 (# out)]
+        (let [line0 (. out i)
+              line1 (tostring (or line0 ""))
+              line2 (string.gsub line1 "[\r\n\v\f]" "")]
+          (set (. out i) line2)))
       (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
       (vim.api.nvim_buf_clear_namespace self.buffer self.source-hl-ns 0 -1)
       (vim.api.nvim_buf_clear_namespace self.buffer self.source-sep-ns 0 -1)
@@ -208,11 +258,34 @@
       (when self.show-source-prefix
         (each [_ r (ipairs ranges)]
           (let [row0 (- r.row 1)]
-            (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns "MetaSourceLineNr" row0 0 r.lnum-end)
-            (when (> (- r.dir-end r.dir-start) 0)
-              (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns "MetaSourceDir" row0 r.dir-start r.dir-end))
+            (when (> (or r.lnum-end 0) 0)
+              (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns "MetaSourceLineNr" row0 0 r.lnum-end))
+            (when (> (- r.icon-end r.icon-start) 0)
+              (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns (or r.icon-hl "MetaSourceFile") row0 r.icon-start r.icon-end))
+            (each [_ dr (ipairs (or r.dir-ranges []))]
+              (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns dr.hl row0 dr.start dr.end))
             (when (> (- r.file-end r.file-start) 0)
-              (vim.api.nvim_buf_add_highlight self.buffer self.source-hl-ns "MetaSourceFile" row0 r.file-start r.file-end)))))
+              (vim.api.nvim_buf_set_extmark
+                self.buffer
+                self.source-hl-ns
+                row0
+                r.file-start
+                {:end_row row0
+                 :end_col r.file-end
+                 :hl_group (or r.file-hl "Normal")
+                 :hl_mode "combine"
+                 :priority 220}))
+            (when (> (- (or r.ext-end 0) (or r.ext-start 0)) 0)
+              (vim.api.nvim_buf_set_extmark
+                self.buffer
+                self.source-hl-ns
+                row0
+                r.ext-start
+                {:end_row row0
+                 :end_col r.ext-end
+                 :hl_group (or r.ext-hl r.file-hl "Normal")
+                 :hl_mode "combine"
+                 :priority 230})))))
       (when (and self.show-source-separators self.source-refs)
         (let [n (# self.indices)]
           (var alt false)
@@ -246,7 +319,9 @@
                   next-ref (and next-idx (. self.source-refs next-idx))
                   cur-path (and cur-ref cur-ref.path)
                   next-path (and next-ref next-ref.path)]
-              (when (~= (or cur-path "") (or next-path ""))
+              (when (and (~= (or cur-path "") (or next-path ""))
+                         (~= (and cur-ref cur-ref.kind) "file-entry")
+                         (~= (and next-ref next-ref.kind) "file-entry"))
                 (vim.api.nvim_buf_set_extmark
                   self.buffer
                   self.source-sep-ns

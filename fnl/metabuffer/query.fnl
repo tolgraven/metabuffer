@@ -33,6 +33,8 @@
         prefilter-on (or (= tok "#prefilter") (= tok "+prefilter") (= tok "#+prefilter") (= tok (.. prefix "prefilter")))
         lazy-off (or (= tok "#nolazy") (= tok "-lazy") (= tok "#-lazy") (= tok (.. prefix "nolazy")))
         lazy-on (or (= tok "#lazy") (= tok "+lazy") (= tok "#+lazy") (= tok (.. prefix "lazy")))
+        files-off (or (= tok "#nofile") (= tok "-file") (= tok "#-file") (= tok (.. prefix "nofile")))
+        files-on (or (= tok "#file") (= tok "+file") (= tok "#+file") (= tok (.. prefix "file")))
         history-merge? (= tok "#history")
         save-tag (or (string.match tok "^#save:(.+)$")
                      (string.match tok (.. "^" (vim.pesc prefix) "save:(.+)$")))
@@ -49,6 +51,8 @@
       prefilter-on [:prefilter true]
       lazy-off [:lazy false]
       lazy-on [:lazy true]
+      files-off [:files false]
+      files-on [:files true]
       history-merge? [:history true]
       save-tag [:save-tag save-tag]
       (and saved-tag (~= (vim.trim saved-tag) "")) [:saved-tag (vim.trim saved-tag)]
@@ -60,16 +64,37 @@
     (set (. next k) v)
     next))
 
+(fn unquote-token
+  [tok]
+  (let [t (or tok "")
+        n (# t)]
+    (if (>= n 2)
+      (let [lead (string.sub t 1 1)
+            tail (string.sub t n n)]
+        (if (or (and (= lead "\"") (= tail "\""))
+                (and (= lead "'") (= tail "'")))
+          (string.sub t 2 (- n 1))
+          t))
+      t)))
+
 (fn parse-parts
   [parts idx state]
   (if (> idx (# parts))
     state
     (let [tok (. parts idx)]
       (if-let [parsed (parse-option-token tok)]
-        (parse-parts parts (+ idx 1) (assoc-option state (. parsed 1) (. parsed 2)))
-        (let [next (vim.deepcopy state)]
-          (table.insert (. next :keep) tok)
-          (parse-parts parts (+ idx 1) next))))))
+        (let [next (assoc-option state (. parsed 1) (. parsed 2))]
+          (if (= (. parsed 1) :files)
+            (parse-parts parts (+ idx 1) (assoc-option next :file-await-token true))
+            (parse-parts parts (+ idx 1) next)))
+        (if (and (. state :file-await-token) (~= (vim.trim tok) ""))
+          (let [next (vim.deepcopy state)]
+            (table.insert (. next :file-lines) (unquote-token tok))
+            (set (. next :file-await-token) false)
+            (parse-parts parts (+ idx 1) next))
+          (let [next (vim.deepcopy state)]
+            (table.insert (. next :keep) tok)
+            (parse-parts parts (+ idx 1) next)))))))
 
 (fn parse-line
   [acc line]
@@ -83,6 +108,7 @@
             next (vim.deepcopy state)]
         (table.insert (. next :lines) (table.concat (. state :keep) " "))
         (set (. next :keep) nil)
+        (set (. next :file-await-token) false)
         next))))
 
 (fn parse-lines
@@ -100,11 +126,19 @@
               :deps nil
               :prefilter nil
               :lazy nil
+              :files nil
               :history nil
               :save-tag nil
               :saved-tag nil
-              :saved-browser nil}]
-    (parse-lines (or lines []) 1 init)))
+              :saved-browser nil
+              :file-lines []
+              :file-await-token false}]
+    (let [parsed (parse-lines (or lines []) 1 init)]
+      (set (. parsed :include-hidden) (. parsed :hidden))
+      (set (. parsed :include-ignored) (. parsed :ignored))
+      (set (. parsed :include-deps) (. parsed :deps))
+      (set (. parsed :include-files) (. parsed :files))
+      parsed)))
 
 (fn M.parse-query-text
   [query]
@@ -113,21 +147,29 @@
     (let [lines (vim.split query "\n" {:plain true})
           parsed (M.parse-query-lines lines)]
       {:query (table.concat (. parsed :lines) "\n")
+       :lines (or (. parsed :lines) [])
        :include-hidden (. parsed :hidden)
        :include-ignored (. parsed :ignored)
        :include-deps (. parsed :deps)
+       :include-files (. parsed :files)
        :prefilter (. parsed :prefilter)
        :lazy (. parsed :lazy)
+       :file-lines (or (. parsed :file-lines) [])
        :history (. parsed :history)
        :save-tag (. parsed :save-tag)
        :saved-tag (. parsed :saved-tag)
        :saved-browser (. parsed :saved-browser)})
     {:query query
+     :lines (if (and (= (type query) "string") (~= query ""))
+                (vim.split query "\n" {:plain true})
+                [])
      :include-hidden nil
      :include-ignored nil
      :include-deps nil
+     :include-files nil
      :prefilter nil
      :lazy nil
+     :file-lines []
      :history nil
      :save-tag nil
      :saved-tag nil

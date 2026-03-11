@@ -43,7 +43,13 @@ M.new = function(nvim, opts)
     wo["signcolumn"] = "no"
     wo["foldcolumn"] = "0"
     wo["spell"] = false
+    wo["wrap"] = true
+    wo["linebreak"] = false
   end
+  local function _4_()
+    return pcall(vim.fn.winrestview, {leftcol = 0})
+  end
+  vim.api.nvim_win_call(win, _4_)
   self.buffer = buf
   return self
 end

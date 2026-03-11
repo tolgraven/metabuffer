@@ -173,6 +173,18 @@ function M.session_query_text()
   ]])
 end
 
+function M.session_prompt_text()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not s then return '' end
+      local lines = vim.api.nvim_buf_get_lines(s['prompt-buf'], 0, -1, false)
+      return table.concat(lines or {}, '\n')
+    end)()
+  ]])
+end
+
 function M.session_hit_count()
   return M.child.lua_get([[
     (function()
@@ -203,6 +215,46 @@ function M.session_source_path_count()
         end
       end
       return n
+    end)()
+  ]])
+end
+
+function M.session_file_entry_hit_count()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not s then return -1 end
+      local idxs = s.meta.buf.indices or {}
+      local refs = s.meta.buf['source-refs'] or {}
+      local n = 0
+      for _, src_idx in ipairs(idxs) do
+        local ref = refs[src_idx]
+        if ref and ref.kind == 'file-entry' then
+          n = n + 1
+        end
+      end
+      return n
+    end)()
+  ]])
+end
+
+function M.session_first_file_entry_line()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not s then return '' end
+      local idxs = s.meta.buf.indices or {}
+      local refs = s.meta.buf['source-refs'] or {}
+      local lines = s.meta.buf.content or {}
+      for _, src_idx in ipairs(idxs) do
+        local ref = refs[src_idx]
+        if ref and ref.kind == 'file-entry' then
+          return lines[src_idx] or ''
+        end
+      end
+      return ''
     end)()
   ]])
 end

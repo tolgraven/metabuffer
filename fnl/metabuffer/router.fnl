@@ -83,15 +83,22 @@
      :source-switch-debounce-ms M.preview-source-switch-debounce-ms}))
 
 (set info-window
-  (info_window_mod.new
-    {:floating-window-mod floating_window_mod
-     :info-min-width M.info-min-width
-     :info-max-width M.info-max-width
-     :info-max-lines M.info-max-lines
-     :info-height router_util_mod.info-height
-     :debug-log debug-log
-     :update-preview (fn [session]
-                       (preview-window.maybe-update-for-selection! session))}))
+  (let [candidate
+        (info_window_mod.new
+          {:floating-window-mod floating_window_mod
+           :info-min-width M.info-min-width
+           :info-max-width M.info-max-width
+           :info-max-lines M.info-max-lines
+           :info-height router_util_mod.info-height
+           :debug-log debug-log
+           :read-file-lines-cached (fn [path]
+                                     (router_util_mod.read-file-lines-cached M path))
+           :update-preview (fn [session]
+                             (preview-window.maybe-update-for-selection! session))})]
+    (if (= (type candidate) "function")
+        {:update! candidate
+         :close-window! (fn [_] nil)}
+        candidate)))
 
 (set history-browser-window
   (history_browser_window_mod.new
@@ -99,7 +106,8 @@
 
 (set update-info-window
   (fn [session refresh-lines]
-    (info-window.update! session refresh-lines)))
+    (when (and info-window info-window.update!)
+      (info-window.update! session refresh-lines))))
 
 (local project-source
   (project_source_mod.new
@@ -291,6 +299,7 @@
                      [(project-setting-token "hidden" session.effective-include-hidden)
                       (project-setting-token "ignored" session.effective-include-ignored)
                       (project-setting-token "deps" session.effective-include-deps)
+                      (project-setting-token "file" session.effective-include-files)
                       (project-setting-token "prefilter" session.prefilter-mode)
                       (project-setting-token "lazy" session.lazy-mode)]
                      " ")
@@ -375,7 +384,7 @@
         (let [ref (router_util_mod.selected-ref curr)]
           (when (and ref ref.path)
             (vim.cmd (.. "edit " (vim.fn.fnameescape ref.path)))
-            (vim.api.nvim_win_set_cursor 0 [(math.max 1 (or ref.lnum 1)) 0])))
+            (vim.api.nvim_win_set_cursor 0 [(math.max 1 (or ref.open-lnum ref.lnum 1)) 0])))
         (do
           (base_buffer.switch-buf curr.buf.model)
           (let [row (curr.selected_line)]
@@ -504,8 +513,12 @@
                                win-height (math.max 1 (vim.api.nvim_win_get_height session.meta.win.window))
                                half-step (math.max 1 (math.floor (/ win-height 2)))
                                page-step (math.max 1 (- win-height 2))
-                               step (if (or (= action "half-down") (= action "half-up")) half-step page-step)
-                               dir (if (or (= action "half-down") (= action "page-down")) 1 -1)
+                               step (if (or (= action "line-down") (= action "line-up"))
+                                        1
+                                        (or (= action "half-down") (= action "half-up"))
+                                        half-step
+                                        page-step)
+                               dir (if (or (= action "line-down") (= action "half-down") (= action "page-down")) 1 -1)
                                max-top (math.max 1 (+ (- line-count win-height) 1))
                                view (vim.fn.winsaveview)
                                old-top (. view :topline)
@@ -881,6 +894,18 @@
       (project-source.apply-source-set! session)
       (apply-prompt-lines session))))
 
+(fn M.toggle-info-file-entry-view
+  [prompt-buf]
+  "Cycle info-window file-entry rendering mode."
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when session
+      (set session.info-file-entry-view
+           (if (= (or session.info-file-entry-view "meta") "content")
+               "meta"
+               "content"))
+      (set session.info-render-sig nil)
+      (pcall update-info-window session true))))
+
 (fn register-prompt-hooks
   [session]
   (let [hooks
@@ -919,6 +944,9 @@
         start-deps (if-some [v (. parsed-query :include-deps)]
                            v
                            (query_mod.truthy? M.default-include-deps))
+        start-files (if-some [v (. parsed-query :include-files)]
+                            v
+                            (query_mod.truthy? M.default-include-files))
         start-prefilter (if-some [v (. parsed-query :prefilter)]
                                 v
                                 (query_mod.truthy? M.project-lazy-prefilter-enabled))
@@ -958,6 +986,7 @@
                    :prompt-keymaps M.prompt-keymaps
                    :main-keymaps M.main-keymaps
                    :prompt-fallback-keymaps M.prompt-fallback-keymaps
+                   :info-file-entry-view (or M.info-file-entry-view "meta")
                    :initial-prompt-text (table.concat initial-lines "\n")
                    :last-prompt-text (table.concat initial-lines "\n")
                    :last-history-text ""
@@ -974,9 +1003,11 @@
                    :include-hidden start-hidden
                    :include-ignored start-ignored
                    :include-deps start-deps
+                   :include-files start-files
                    :effective-include-hidden start-hidden
                    :effective-include-ignored start-ignored
                    :effective-include-deps start-deps
+                   :effective-include-files start-files
                    :project-bootstrap-pending false
                    :project-bootstrap-token 0
                    :project-bootstrap-delay-ms (if (query_mod.query-lines-has-active? (. parsed-query :lines))
@@ -991,8 +1022,11 @@
                                        :include-hidden start-hidden
                                        :include-ignored start-ignored
                                        :include-deps start-deps
+                                       :include-files start-files
+                                       :file-lines (or (. parsed-query :file-lines) [])
                                        :prefilter start-prefilter
                                        :lazy start-lazy}
+                   :file-query-lines (or (. parsed-query :file-lines) [])
                    :single-content (vim.deepcopy curr.buf.content)
                    :single-refs (vim.deepcopy (or curr.buf.source-refs []))
                    :meta curr}]
@@ -1024,7 +1058,13 @@
               col (# line)]
           (pcall vim.api.nvim_win_set_cursor prompt-win.window [row col]))
         (vim.cmd "startinsert")
-        (vim.schedule (fn [] (set session.startup-initializing false)))
+        (vim.schedule
+          (fn []
+            (set session.startup-initializing false)
+            (when (and session.project-mode (not session.project-bootstrapped))
+              ;; Start project lazy/eager expansion as soon as UI is ready,
+              ;; independent of prompt input.
+              (project-source.schedule-project-bootstrap! session 0))))
         (when (and session.project-mode (not initial-query-active))
           ;; Keep startup critical path lean; refresh auxiliary UI right after.
           (vim.schedule
@@ -1032,8 +1072,6 @@
               (when (= (. M.active-by-prompt session.prompt-buf) session)
                 (pcall curr.refresh_statusline)
                 (pcall update-info-window session)))))
-        (when (and session.project-mode (not session.project-bootstrapped))
-          (project-source.schedule-project-bootstrap! session session.project-bootstrap-delay-ms))
         (set (. M.instances source-buf) curr)
         curr))))))
 

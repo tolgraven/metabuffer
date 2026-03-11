@@ -35,4 +35,15 @@ T['resolve preserves debounce defaults when options absent'] = function()
   eq(resolved.options.prompt_update_debounce_ms >= 0, true)
 end
 
+T['defaults treat deps directory as dependency content'] = function()
+  local resolved = config.resolve({})
+  eq(resolved.options.dep_dir_names.deps, true)
+  local globs = resolved.options.project_rg_deps_exclude_globs
+  local found = false
+  for _, g in ipairs(globs) do
+    if g == '!deps/**' then found = true end
+  end
+  eq(found, true)
+end
+
 return T

@@ -49,6 +49,7 @@ Key helper coverage:
 
 ### `tests/screen/test_screen_project_flags.lua`
 - `#hidden/#deps/#nolazy` consumption + status/debug reflection.
+- `#file <token>` consumption and file-entry hit activation.
 
 ### `tests/screen/test_screen_project_info_sync.lua`
 - Hit-buffer and info-window sync/alignment while typing/deleting.

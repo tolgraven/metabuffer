@@ -1,6 +1,8 @@
 -- [nfnl] fnl/metabuffer/window/info.fnl
 local M = {}
 local lineno_mod = require("metabuffer.window.lineno")
+local source_mod = require("metabuffer.source")
+local path_hl = require("metabuffer.path_highlight")
 local function ext_from_path(path)
   local file = vim.fn.fnamemodify((path or ""), ":t")
   local dot = string.match(file, ".*()%.")
@@ -190,6 +192,7 @@ M.new = function(opts)
   local info_height = opts["info-height"]
   local debug_log = opts["debug-log"]
   local update_preview = opts["update-preview"]
+  local read_file_lines_cached = opts["read-file-lines-cached"]
   local function info_window_config(session, width, height)
     local host_win
     if (session and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
@@ -225,6 +228,8 @@ M.new = function(opts)
       wo["winbar"] = ""
       wo["number"] = false
       wo["relativenumber"] = false
+      wo["wrap"] = false
+      wo["linebreak"] = false
       wo["signcolumn"] = "no"
       wo["foldcolumn"] = "0"
       wo["spell"] = false
@@ -246,7 +251,7 @@ M.new = function(opts)
     if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
       local widths
       local function _34_(line)
-        return vim.fn.strdisplaywidth(line)
+        return vim.fn.strdisplaywidth((line or ""))
       end
       widths = vim.tbl_map(_34_, (lines or {}))
       local max_len = numeric_max(widths, 0)
@@ -309,18 +314,9 @@ M.new = function(opts)
       end
     end
   end
-  local function build_info_lines(meta, refs, idxs, target_width, start_index, stop_index)
+  local function build_info_lines(session, meta, refs, idxs, target_width, start_index, stop_index, read_file_lines_cached0)
     local line_hl = "LineNr"
-    local dir_hl
-    if (1 == vim.fn.hlexists("NERDTreeDir")) then
-      dir_hl = "NERDTreeDir"
-    else
-      if (1 == vim.fn.hlexists("NetrwDir")) then
-        dir_hl = "NetrwDir"
-      else
-        dir_hl = "Directory"
-      end
-    end
+    local signcol_display_width = 2
     local file_hl
     if (1 == vim.fn.hlexists("NERDTreeFile")) then
       file_hl = "NERDTreeFile"
@@ -354,7 +350,7 @@ M.new = function(opts)
       lnum_digit_width = lineno_mod["digit-width-from-max-len"](max_lnum_len)
     end
     local lnum_field_width = (lnum_digit_width + 1)
-    local path_width = math.max(1, (target_width - lnum_field_width))
+    local path_width = math.max(1, (target_width - lnum_field_width - signcol_display_width))
     local lines = {}
     local highlights = {}
     if (#idxs == 0) then
@@ -363,39 +359,126 @@ M.new = function(opts)
       for i = start_index, stop_index do
         local src_idx = idxs[i]
         local ref = refs[src_idx]
+        local view_mode = (session["info-file-entry-view"] or "meta")
         local lnum = tostring(((ref and ref.lnum) or src_idx))
         local lnum_cell0 = lineno_mod["lnum-cell"](lnum, lnum_digit_width)
-        local path = vim.fn.fnamemodify(((ref and ref.path) or "[Current Buffer]"), ":~:.")
-        local icon_info = devicon_for_path(path, file_hl)
+        local base_path = vim.fn.fnamemodify(((ref and ref.path) or "[Current Buffer]"), ":~:.")
+        local info_view = source_mod["info-view"](session, ref, {mode = view_mode, ["path-width"] = path_width, ["read-file-lines-cached"] = read_file_lines_cached0})
+        local sign = (info_view.sign or {text = "  ", hl = "LineNr"})
+        local sign_raw = (sign.text or "")
+        local sign_pad = math.max(0, (signcol_display_width - vim.fn.strdisplaywidth(sign_raw)))
+        local sign_prefix = (sign_raw .. string.rep(" ", sign_pad))
+        local sign_hl = (sign.hl or "LineNr")
+        local sign_width = #sign_prefix
+        local sign_glyph_start1 = (string.find(sign_prefix, "%S") or 0)
+        local sign_glyph = vim.trim(sign_prefix)
+        local sign_glyph_start
+        if (sign_glyph_start1 > 0) then
+          sign_glyph_start = (sign_glyph_start1 - 1)
+        else
+          sign_glyph_start = -1
+        end
+        local sign_glyph_end
+        if ((sign_glyph_start1 > 0) and (#sign_glyph > 0)) then
+          sign_glyph_end = (sign_glyph_start + #sign_glyph)
+        else
+          sign_glyph_end = -1
+        end
+        local path = (info_view.path or base_path)
+        local icon_path = (info_view["icon-path"] or path)
+        local show_icon_3f
+        if (info_view["show-icon"] == nil) then
+          show_icon_3f = true
+        else
+          show_icon_3f = info_view["show-icon"]
+        end
+        local highlight_dir_3f
+        if (info_view["highlight-dir"] == nil) then
+          highlight_dir_3f = true
+        else
+          highlight_dir_3f = info_view["highlight-dir"]
+        end
+        local highlight_file_3f
+        if (info_view["highlight-file"] == nil) then
+          highlight_file_3f = true
+        else
+          highlight_file_3f = info_view["highlight-file"]
+        end
+        local suffix0 = (info_view.suffix or "")
+        local suffix_prefix
+        if (#suffix0 > 0) then
+          suffix_prefix = (info_view["suffix-prefix"] or "  ")
+        else
+          suffix_prefix = ""
+        end
+        local suffix_hls = (info_view["suffix-highlights"] or {})
+        local icon_info = devicon_for_path(icon_path, file_hl)
         local icon = (icon_info.icon or "")
         local iconf = icon_field(icon)
-        local icon_prefix = iconf.text
+        local icon_prefix
+        if show_icon_3f then
+          icon_prefix = iconf.text
+        else
+          icon_prefix = ""
+        end
         local icon_hl = (icon_info["icon-hl"] or file_hl)
-        local icon_width = iconf.width
-        local _let_50_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
-        local dir = _let_50_[1]
-        local file0 = _let_50_[2]
-        local file = (icon_prefix .. file0)
+        local icon_width
+        if show_icon_3f then
+          icon_width = iconf.width
+        else
+          icon_width = 0
+        end
+        local _let_56_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
+        local dir = _let_56_[1]
+        local file0 = _let_56_[2]
         local this_file_hl = (icon_info["file-hl"] or file_hl)
         local row = #lines
-        local line = (lnum_cell0 .. icon_prefix .. dir .. file0)
-        local num_start = 0
+        local line = (sign_prefix .. lnum_cell0 .. icon_prefix .. dir .. file0 .. suffix_prefix .. suffix0)
+        local sign_start = 0
+        local sign_end = (sign_start + sign_width)
+        local num_start = sign_end
         local num_end = (num_start + #lnum_cell0)
         local icon_start = num_end
         local icon_end = (icon_start + #icon_prefix)
         local dir_start = icon_end
         local file_start = (dir_start + #dir)
+        local suffix_start = (file_start + #file0 + #suffix_prefix)
         table.insert(lines, line)
+        if (sign_width > 0) then
+          table.insert(highlights, {row, "SignColumn", sign_start, sign_end})
+        else
+        end
+        if ((sign_glyph_end > sign_glyph_start) and (sign_width > 0)) then
+          table.insert(highlights, {row, sign_hl, (sign_start + sign_glyph_start), (sign_start + sign_glyph_end)})
+        else
+        end
         table.insert(highlights, {row, line_hl, num_start, num_end})
         if (#icon_prefix > 0) then
           table.insert(highlights, {row, icon_hl, icon_start, icon_end})
         else
         end
-        if (#dir > 0) then
-          table.insert(highlights, {row, dir_hl, dir_start, (dir_start + #dir)})
+        if (highlight_dir_3f and (#dir > 0)) then
+          for _, dr in ipairs(path_hl["ranges-for-dir"](dir, dir_start)) do
+            table.insert(highlights, {row, dr.hl, dr.start, dr["end"]})
+          end
         else
         end
-        table.insert(highlights, {row, this_file_hl, file_start, (file_start + #file0)})
+        if (highlight_file_3f and (#file0 > 0)) then
+          table.insert(highlights, {row, this_file_hl, file_start, (file_start + #file0)})
+        else
+        end
+        if (#suffix0 > 0) then
+          table.insert(highlights, {row, "Comment", suffix_start, (suffix_start + #suffix0)})
+        else
+        end
+        for _, sh in ipairs(suffix_hls) do
+          local s = (suffix_start + (sh.start or 0))
+          local e = (suffix_start + (sh["end"] or 0))
+          if (e > s) then
+            table.insert(highlights, {row, (sh.hl or "Comment"), s, e})
+          else
+          end
+        end
       end
     end
     return {lines = lines, highlights = highlights}
@@ -409,7 +492,7 @@ M.new = function(opts)
     local _0
     session["info-stop-index"] = stop_index
     _0 = nil
-    local built = build_info_lines(meta, refs, idxs, info_max_width_now(session), start_index, stop_index)
+    local built = build_info_lines(session, meta, refs, idxs, info_max_width_now(session), start_index, stop_index, read_file_lines_cached)
     local raw_lines = built.lines
     local lines
     if (type(raw_lines) == "table") then
@@ -482,9 +565,9 @@ M.new = function(opts)
     if (session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
       local meta = session.meta
       local selected1 = (meta.selected_index + 1)
-      local _let_61_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-      local wanted_start = _let_61_[1]
-      local wanted_stop = _let_61_[2]
+      local _let_72_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
+      local wanted_start = _let_72_[1]
+      local wanted_stop = _let_72_[2]
       local start_index = (session["info-start-index"] or 1)
       local stop_index = (session["info-stop-index"] or 0)
       local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
@@ -504,7 +587,7 @@ M.new = function(opts)
     end
     return update_preview(session)
   end
-  local function _65_(session, refresh_lines)
+  local function _76_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -517,6 +600,6 @@ M.new = function(opts)
       return update_regular_21(session)
     end
   end
-  return {["close-window!"] = close_info_window_21, ["update!"] = _65_}
+  return {["close-window!"] = close_info_window_21, ["update!"] = _76_}
 end
 return M

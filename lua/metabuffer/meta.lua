@@ -12,6 +12,134 @@ local M = {}
 local function line_of_index(buf, idx)
   return (buf.indices[(idx + 1)] or 1)
 end
+local function ref_is_file_entry_3f(ref)
+  return (((ref and ref.kind) or "") == "file-entry")
+end
+local function file_query_matches_3f(path, q, ignorecase)
+  local probe0 = (path or "")
+  local probe
+  if ignorecase then
+    probe = string.lower(probe0)
+  else
+    probe = probe0
+  end
+  local query0 = vim.trim((q or ""))
+  local query
+  if ignorecase then
+    query = string.lower(query0)
+  else
+    query = query0
+  end
+  if (query == "") then
+    return true
+  else
+    return not not string.find(probe, query, 1, true)
+  end
+end
+local function apply_file_entry_filter(indices, refs, file_query_lines, regular_queries, ignorecase, include_files, regular_query_active_3f)
+  if not include_files then
+    return indices
+  else
+    local queries0 = {}
+    for _, q in ipairs((file_query_lines or {})) do
+      local trimmed = vim.trim((q or ""))
+      if (trimmed ~= "") then
+        table.insert(queries0, trimmed)
+      else
+      end
+    end
+    local queries
+    if (#queries0 > 0) then
+      queries = queries0
+    else
+      local fallback = {}
+      for _, q in ipairs((regular_queries or {})) do
+        local trimmed = vim.trim((q or ""))
+        if (trimmed ~= "") then
+          table.insert(fallback, trimmed)
+        else
+        end
+      end
+      queries = fallback
+    end
+    local matches_all_queries_3f
+    local function _7_(path)
+      if (#queries == 0) then
+        return true
+      else
+        local path0 = (path or "")
+        local rel
+        if (path0 ~= "") then
+          rel = vim.fn.fnamemodify(path0, ":.")
+        else
+          rel = ""
+        end
+        local probe
+        if (rel ~= "") then
+          probe = (rel .. " " .. path0)
+        else
+          probe = path0
+        end
+        local ok0 = true
+        local ok = ok0
+        for _, q in ipairs(queries) do
+          if (ok and not file_query_matches_3f(probe, q, ignorecase)) then
+            ok = false
+          else
+          end
+        end
+        return ok
+      end
+    end
+    matches_all_queries_3f = _7_
+    local regular_set = {}
+    local file_set = {}
+    local regular_allowed_3f = regular_query_active_3f
+    for _, idx in ipairs((indices or {})) do
+      local ref = refs[idx]
+      if ref_is_file_entry_3f(ref) then
+      else
+        if regular_allowed_3f then
+          if matches_all_queries_3f((ref and ref.path)) then
+            regular_set[idx] = true
+          else
+          end
+        else
+        end
+      end
+    end
+    for idx = 1, #refs do
+      local ref = refs[idx]
+      if ref_is_file_entry_3f(ref) then
+        if (#queries == 0) then
+          file_set[idx] = true
+        else
+          local path0 = ((ref and ref.path) or "")
+          local rel
+          if (path0 ~= "") then
+            rel = vim.fn.fnamemodify(path0, ":.")
+          else
+            rel = ""
+          end
+          local path = ((ref and ref.line) or rel or path0 or "")
+          if matches_all_queries_3f(path) then
+            file_set[idx] = true
+          else
+          end
+        end
+      else
+      end
+    end
+    local next = {}
+    for idx = 1, #refs do
+      if (regular_set[idx] or file_set[idx]) then
+        table.insert(next, idx)
+      else
+      end
+    end
+    return next
+  end
+end
 local function metabuffer_display_name(model_buf)
   local original_name = vim.api.nvim_buf_get_name(model_buf)
   local base_name
@@ -31,29 +159,29 @@ end
 local function statusline_mode_state()
   local m = (vim.api.nvim_get_mode().mode or "")
   if vim.startswith(m, "R") then
-    local _2_
+    local _22_
     if nerd_font_enabled_3f() then
-      _2_ = "R"
+      _22_ = "R"
     else
-      _2_ = "Replace"
+      _22_ = "Replace"
     end
-    return {group = "Replace", label = _2_}
+    return {group = "Replace", label = _22_}
   elseif vim.startswith(m, "i") then
-    local _4_
+    local _24_
     if nerd_font_enabled_3f() then
-      _4_ = "\240\157\144\136"
+      _24_ = "\240\157\144\136"
     else
-      _4_ = "Insert"
+      _24_ = "Insert"
     end
-    return {group = "Insert", label = _4_}
+    return {group = "Insert", label = _24_}
   else
-    local _6_
+    local _26_
     if nerd_font_enabled_3f() then
-      _6_ = "\240\157\151\161"
+      _26_ = "\240\157\151\161"
     else
-      _6_ = "Normal"
+      _26_ = "Normal"
     end
-    return {group = "Normal", label = _6_}
+    return {group = "Normal", label = _26_}
   end
 end
 local function selected_preview_file(self)
@@ -92,21 +220,21 @@ local function bang_token_completed_3f(prev, next)
   local next0 = (next or "")
   local prev_n = #prev0
   local next_n = #next0
-  local and_13_ = (prev_n > 0) and (next_n > prev_n) and vim.startswith(next0, prev0) and (string.sub(prev0, prev_n, prev_n) == "!")
-  if and_13_ then
+  local and_33_ = (prev_n > 0) and (next_n > prev_n) and vim.startswith(next0, prev0) and (string.sub(prev0, prev_n, prev_n) == "!")
+  if and_33_ then
     local before
     if (prev_n > 1) then
       before = string.sub(prev0, (prev_n - 1), (prev_n - 1))
     else
       before = ""
     end
-    and_13_ = ((before ~= "\\") and ((prev_n == 1) or not not string.find(before, "%s")))
+    and_33_ = ((before ~= "\\") and ((prev_n == 1) or not not string.find(before, "%s")))
   end
-  if and_13_ then
+  if and_33_ then
     local added = string.sub(next0, (prev_n + 1), (prev_n + 1))
-    and_13_ = not not string.find(added, "%S")
+    and_33_ = not not string.find(added, "%S")
   end
-  return and_13_
+  return and_33_
 end
 local function ends_with_space_3f(s)
   local txt = (s or "")
@@ -186,17 +314,17 @@ M.new = function(nvim, condition)
       return nil
     end
   end
-  local function _22_(idx)
-    local function _23_()
+  local function _42_(idx)
+    local function _43_()
       if (idx.current() == "meta") then
         return "meta"
       else
         return "buffer"
       end
     end
-    return self.buf["apply-syntax"](_23_())
+    return self.buf["apply-syntax"](_43_())
   end
-  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state.cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state["syntax-types"], (cond["syntax-index"] or 1), {["on-active"] = _22_})}
+  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state.cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state["syntax-types"], (cond["syntax-index"] or 1), {["on-active"] = _42_})}
   self.text = (cond.text or "")
   if (self.text ~= "") then
     self["query-lines"] = {self.text}
@@ -275,24 +403,24 @@ M.new = function(nvim, condition)
     return vim.cmd("redrawstatus")
   end
   self["on-init"] = function()
-    local function _30_()
+    local function _50_()
       if self["project-mode"] then
         return project_display_name()
       else
         return metabuffer_display_name(self.buf.model)
       end
     end
-    self.buf["set-name"](_30_())
+    self.buf["set-name"](_50_())
     do
       local init_syntax = (vim.g["meta#syntax_on_init"] or "buffer")
-      local function _31_()
+      local function _51_()
         if (init_syntax == "meta") then
           return "meta"
         else
           return "buffer"
         end
       end
-      self.buf["apply-syntax"](_31_())
+      self.buf["apply-syntax"](_51_())
     end
     clear_all_highlights()
     self.buf.render()
@@ -344,25 +472,25 @@ M.new = function(nvim, condition)
       end
       local prev_matcher_name = (self["_prev-matcher"] or matcher_name)
       local prev_cache_key
-      local _36_
+      local _56_
       if prev_ignorecase then
-        _36_ = "1"
+        _56_ = "1"
       else
-        _36_ = "0"
+        _56_ = "0"
       end
-      prev_cache_key = (prev_matcher_name .. "|" .. _36_ .. "|" .. (prev_text or ""))
+      prev_cache_key = (prev_matcher_name .. "|" .. _56_ .. "|" .. (prev_text or ""))
       local line_count = #self.buf.content
       local cache_grew_3f = (line_count > self["_filter-cache-line-count"])
       local cache_shrank_3f = (line_count < self["_filter-cache-line-count"])
       local cache_reset_3f = cache_shrank_3f
       local cache_key
-      local _38_
+      local _58_
       if ignorecase then
-        _38_ = "1"
+        _58_ = "1"
       else
-        _38_ = "0"
+        _58_ = "0"
       end
-      cache_key = (matcher_name .. "|" .. _38_ .. "|" .. effective_query)
+      cache_key = (matcher_name .. "|" .. _58_ .. "|" .. effective_query)
       local reset0_3f = ((prev_text == "") or not vim.startswith(self.text, prev_text) or bang_token_completed_3f(prev_text, self.text) or cache_grew_3f or cache_reset_3f or (self["_prev-ignorecase"] ~= ignorecase) or (self["_prev-matcher"] ~= matcher_name))
       local narrow_reuse_threshold = (vim.g.meta_narrow_reuse_threshold or 400)
       local narrow_reuse_3f = (reset0_3f and vim.startswith(self.text, prev_text) and (matcher_name == "all") and not negation_growth_broadens_3f(prev_text, self.text) and (#prev_text > 0) and (#self.text > #prev_text) and (#prev_hits <= narrow_reuse_threshold))
@@ -444,6 +572,11 @@ M.new = function(nvim, condition)
           end
         end
       end
+      local refs = (self.buf["source-refs"] or {})
+      local file_filtered = apply_file_entry_filter(self.buf.indices, refs, self["file-query-lines"], queries, ignorecase, self["include-files"], (#queries > 0))
+      local _
+      self.buf.indices = file_filtered
+      _ = nil
       local hits_changed
       if (prev_hits == self.buf.indices) then
         hits_changed = false
@@ -484,7 +617,7 @@ M.new = function(nvim, condition)
       else
       end
       local matcher = self.matcher()
-      for _, m in ipairs(self.mode.matcher.candidates) do
+      for _0, m in ipairs(self.mode.matcher.candidates) do
         if (m and (m ~= matcher)) then
           m["remove-highlight"](m)
         else

@@ -88,6 +88,34 @@
     (set session.meta._filter-cache {})
     (set session.meta._filter-cache-line-count (# session.meta.buf.content))))
 
+(fn consume-visible-control-token?
+  [query-mod tok]
+  (let [parsed (query-mod.parse-query-lines [(or tok "")])]
+    (and (or (~= (. parsed :include-hidden) nil)
+             (~= (. parsed :include-ignored) nil)
+             (~= (. parsed :include-deps) nil)
+             (~= (. parsed :prefilter) nil)
+             (~= (. parsed :lazy) nil)
+             (. parsed :history)
+             (. parsed :saved-browser)
+             (and (= (type (. parsed :save-tag)) "string")
+                  (~= (vim.trim (. parsed :save-tag)) ""))
+             (and (= (type (. parsed :saved-tag)) "string")
+                  (~= (vim.trim (. parsed :saved-tag)) "")))
+         (= (. parsed :include-files) nil))))
+
+(fn consume-visible-controls-lines
+  [query-mod raw-lines]
+  (let [out []]
+    (each [_ line (ipairs (or raw-lines []))]
+      (let [parts (vim.split (or line "") "%s+" {:trimempty true})
+            kept []]
+        (each [_ tok (ipairs parts)]
+          (when-not (consume-visible-control-token? query-mod tok)
+            (table.insert kept tok)))
+        (table.insert out (table.concat kept " "))))
+    out))
+
 (fn M.apply-prompt-lines!
   [deps session]
   (let [{: query-mod
@@ -99,13 +127,17 @@
          : restore-saved-prompt-tag!
          : open-saved-browser!}
         deps]
-    (when (and session (not session.closing) (vim.api.nvim_buf_is_valid session.prompt-buf))
+    (when (and session
+               (not session.closing)
+               (vim.api.nvim_buf_is_valid session.prompt-buf)
+               (not session._rewriting-visible-controls))
       (let [raw-lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
         (let [parsed (query-mod.parse-query-lines raw-lines)
               lines (. parsed :lines)
               consume-controls? (or (~= (. parsed :include-hidden) nil)
                                     (~= (. parsed :include-ignored) nil)
                                     (~= (. parsed :include-deps) nil)
+                                    (~= (. parsed :include-files) nil)
                                     (~= (. parsed :prefilter) nil)
                                     (~= (. parsed :lazy) nil)
                                     (. parsed :history)
@@ -114,23 +146,20 @@
                                          (~= (vim.trim (. parsed :save-tag)) ""))
                                     (and (= (type (. parsed :saved-tag)) "string")
                                          (~= (vim.trim (. parsed :saved-tag)) "")))
+              consume-visible-controls? (or (~= (. parsed :include-hidden) nil)
+                                            (~= (. parsed :include-ignored) nil)
+                                            (~= (. parsed :include-deps) nil)
+                                            (~= (. parsed :prefilter) nil)
+                                            (~= (. parsed :lazy) nil)
+                                            (. parsed :history)
+                                            (. parsed :saved-browser)
+                                            (and (= (type (. parsed :save-tag)) "string")
+                                                 (~= (vim.trim (. parsed :save-tag)) ""))
+                                            (and (= (type (. parsed :saved-tag)) "string")
+                                                 (~= (vim.trim (. parsed :saved-tag)) "")))
               effective-lines (if consume-controls? lines raw-lines)
               effective-text (table.concat effective-lines "\n")
-              prompt-text (table.concat lines "\n")
-              raw-text (table.concat raw-lines "\n")
-              stripped? (and consume-controls? (~= prompt-text raw-text))
-              _ (when stripped?
-                  (let [cursor (if (and session.prompt-win
-                                        (vim.api.nvim_win_is_valid session.prompt-win))
-                                   (vim.api.nvim_win_get_cursor session.prompt-win)
-                                   [1 0])
-                        row (. cursor 1)
-                        col (. cursor 2)]
-                    (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false effective-lines)
-                    (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
-                      (let [line (or (. effective-lines row) "")
-                            max-col (# line)]
-                        (pcall vim.api.nvim_win_set_cursor session.prompt-win [row (math.min col max-col)])))))
+              _ false
               _ (when (and (. parsed :history) merge-history-into-session!)
                   (merge-history-into-session! session))
               _ (when (and (= (type (. parsed :save-tag)) "string")
@@ -147,29 +176,47 @@
               next-hidden (choose-current-when-nil (. parsed :include-hidden) session.include-hidden)
               next-ignored (choose-current-when-nil (. parsed :include-ignored) session.include-ignored)
               next-deps (choose-current-when-nil (. parsed :include-deps) session.include-deps)
+              next-files (choose-current-when-nil (. parsed :include-files) session.include-files)
               next-prefilter (choose-current-when-nil (. parsed :prefilter) session.prefilter-mode)
               next-lazy (choose-current-when-nil (. parsed :lazy) session.lazy-mode)
               prev-effective-text (or session.prompt-last-applied-text "")
               text-changed? (~= effective-text prev-effective-text)
-              has-active-query? (query-mod.query-lines-has-active? effective-lines)
               changed (or (~= next-hidden session.effective-include-hidden)
                           (~= next-ignored session.effective-include-ignored)
                           (~= next-deps session.effective-include-deps)
+                          (~= next-files session.effective-include-files)
                           (~= next-prefilter session.prefilter-mode)
                           (~= next-lazy session.lazy-mode))]
           (set session.effective-include-hidden next-hidden)
           (set session.effective-include-ignored next-ignored)
           (set session.effective-include-deps next-deps)
+          (set session.effective-include-files next-files)
+          (set session.include-hidden next-hidden)
+          (set session.include-ignored next-ignored)
+          (set session.include-deps next-deps)
+          (set session.include-files next-files)
           (set session.prefilter-mode next-prefilter)
           (set session.lazy-mode next-lazy)
           (set session.last-parsed-query parsed)
+          (set session.file-query-lines (or (. parsed :file-lines) []))
           (set session.last-prompt-text effective-text)
           (set session.prompt-last-applied-text effective-text)
+          (set session.meta.file-query-lines (or (. parsed :file-lines) []))
+          (set session.meta.include-files next-files)
+          (when consume-visible-controls?
+            (let [visible-lines (consume-visible-controls-lines query-mod raw-lines)
+                  visible-text (table.concat visible-lines "\n")
+                  raw-text (table.concat raw-lines "\n")]
+              (when (~= visible-text raw-text)
+                (set session._rewriting-visible-controls true)
+                (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false visible-lines)
+                (set session._rewriting-visible-controls false))))
           (set session.meta.debug_out
             (if session.project-mode
                 (let [flags [(if session.effective-include-hidden "+hid" "-hid")
                              (if session.effective-include-ignored "+ig" "-ig")
                              (if session.effective-include-deps "+dep" "-dep")
+                             (if session.effective-include-files "+fil" "-fil")
                              (if session.prefilter-mode "+prf" "-prf")]]
                   (when-not session.lazy-mode
                     (table.insert flags "nlz"))
@@ -177,15 +224,6 @@
                 ""))
           (when (or changed text-changed?)
             (invalidate-filter-cache! session))
-          (when (and session.project-mode
-                     text-changed?
-                     has-active-query?
-                     (query-mod.truthy? settings.project-lazy-prefilter-enabled)
-                     session.prefilter-mode)
-            ;; Lazy prefilter depends on query terms at stream-build time.
-            ;; If query text changes, rebuild pool so broaden/delete can
-            ;; recover omitted lines from earlier prefilter terms.
-            (project-source.apply-source-set! session))
           (when (and session.project-mode changed)
             (project-source.apply-source-set! session))
           (session.meta.set-query-lines effective-lines))

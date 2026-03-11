@@ -189,6 +189,8 @@
         (fn [] (router.scroll-main session.prompt-buf arg))
         (= action "toggle-project-mode")
         (fn [] (router.toggle-project-mode session.prompt-buf))
+        (= action "toggle-info-file-entry-view")
+        (fn [] (router.toggle-info-file-entry-view session.prompt-buf))
         nil))
 
     (fn apply-keymaps
@@ -226,7 +228,7 @@
               (vim.keymap.set mode lhs rhs base-opts))))))
 
     (fn resolve-main-map-action
-      [router session action]
+      [router session action arg]
       (if
         (= action "accept-main")
         (fn [] (router.accept-main session.prompt-buf))
@@ -234,6 +236,10 @@
         (fn [] (router.exclude-symbol-under-cursor session.prompt-buf))
         (= action "insert-symbol-under-cursor")
         (fn [] (router.insert-symbol-under-cursor session.prompt-buf))
+        (= action "scroll-main")
+        (fn [] (router.scroll-main session.prompt-buf arg))
+        (= action "toggle-info-file-entry-view")
+        (fn [] (router.toggle-info-file-entry-view session.prompt-buf))
         nil))
 
     (fn apply-main-keymaps
@@ -244,7 +250,8 @@
           (let [mode (. r 1)
                 lhs (. r 2)
                 action (. r 3)
-                rhs (resolve-main-map-action router session action)]
+                arg (. r 4)
+                rhs (resolve-main-map-action router session action arg)]
             (if rhs
                 (vim.keymap.set mode lhs rhs base-opts)
                 (vim.notify

@@ -41,6 +41,7 @@
     [["n" "i"] "<C-s>" "switch-mode" "syntax"]
     ["n" "<C-g>" "toggle-scan-option" "ignored"]
     ["n" "<C-l>" "toggle-scan-option" "deps"]
+    [["n" "i"] "<LocalLeader>i" "toggle-info-file-entry-view"]
     [["n" "i"] "<C-d>" "scroll-main" "half-down"]
     ["n" "<C-u>" "scroll-main" "half-up"]
     [["n" "i"] "<C-f>" "scroll-main" "page-down"]
@@ -50,6 +51,9 @@
 (local default-main-keymaps
   [ ["n" "!" "exclude-symbol-under-cursor"]
     ["n" "<CR>" "accept-main"]
+    ["n" "<LocalLeader>i" "toggle-info-file-entry-view"]
+    ["n" "<ScrollWheelDown>" "scroll-main" "line-down"]
+    ["n" "<ScrollWheelUp>" "scroll-main" "line-up"]
     ["n" "<M-CR>" "insert-symbol-under-cursor"]
     ["n" "<A-CR>" "insert-symbol-under-cursor"]])
 
@@ -68,14 +72,16 @@
     :default_include_hidden false
     :default_include_ignored false
     :default_include_deps false
+    :default_include_files false
     :project_rg_bin "rg"
     :project_rg_base_args ["--files" "--glob" "!.git"]
     :project_rg_include_ignored_args ["--no-ignore" "--no-ignore-vcs" "--no-ignore-parent"]
-    :project_rg_deps_exclude_globs ["!node_modules/**" "!vendor/**" "!.venv/**" "!venv/**" "!dist/**" "!build/**" "!target/**"]
+    :project_rg_deps_exclude_globs ["!node_modules/**" "!vendor/**" "!deps/**" "!.venv/**" "!venv/**" "!dist/**" "!build/**" "!target/**"]
     :project_fallback_glob_pattern "**/*"
     :info_max_lines 10000
     :info_min_width 28
     :info_max_width 52
+    :info_file_entry_view "meta"
     :prompt_update_debounce_ms 170
     :prompt_update_idle_ms 90
     :prompt_short_query_extra_ms [180 120 70]
@@ -100,6 +106,7 @@
      ".venv" true
      "venv" true
      "vendor" true
+     "deps" true
      "dist" true
      "build" true
      "target" true
@@ -183,6 +190,7 @@
       :default_include_hidden (opt-value opts :default_include_hidden :meta_project_include_hidden (. defaults :default_include_hidden))
       :default_include_ignored (opt-value opts :default_include_ignored :meta_project_include_ignored (. defaults :default_include_ignored))
       :default_include_deps (opt-value opts :default_include_deps :meta_project_include_deps (. defaults :default_include_deps))
+      :default_include_files (opt-value opts :default_include_files :meta_project_include_files (. defaults :default_include_files))
       :project_rg_bin (opt-value opts :project_rg_bin :meta_project_rg_bin (. defaults :project_rg_bin))
       :project_rg_base_args (opt-value opts :project_rg_base_args :meta_project_rg_base_args (. defaults :project_rg_base_args))
       :project_rg_include_ignored_args (opt-value opts :project_rg_include_ignored_args :meta_project_rg_include_ignored_args (. defaults :project_rg_include_ignored_args))
@@ -191,6 +199,7 @@
       :info_max_lines (opt-value opts :info_max_lines :meta_info_max_lines (. defaults :info_max_lines))
       :info_min_width (opt-value opts :info_min_width :meta_info_width (. defaults :info_min_width))
       :info_max_width (opt-value opts :info_max_width :meta_info_max_width (. defaults :info_max_width))
+      :info_file_entry_view (opt-value opts :info_file_entry_view :meta_info_file_entry_view (. defaults :info_file_entry_view))
       :prompt_update_debounce_ms (opt-value opts :prompt_update_debounce_ms :meta_prompt_update_debounce_ms (. defaults :prompt_update_debounce_ms))
       :prompt_update_idle_ms (opt-value opts :prompt_update_idle_ms :meta_prompt_update_idle_ms (. defaults :prompt_update_idle_ms))
       :prompt_short_query_extra_ms (opt-value opts :prompt_short_query_extra_ms :meta_prompt_short_query_extra_ms (. defaults :prompt_short_query_extra_ms))
@@ -230,6 +239,7 @@
     (set router.default-include-hidden (. options :default_include_hidden))
     (set router.default-include-ignored (. options :default_include_ignored))
     (set router.default-include-deps (. options :default_include_deps))
+    (set router.default-include-files (. options :default_include_files))
     (set router.project-rg-bin (. options :project_rg_bin))
     (set router.project-rg-base-args (. options :project_rg_base_args))
     (set router.project-rg-include-ignored-args (. options :project_rg_include_ignored_args))
@@ -238,6 +248,7 @@
     (set router.info-max-lines (. options :info_max_lines))
     (set router.info-min-width (. options :info_min_width))
     (set router.info-max-width (. options :info_max_width))
+    (set router.info-file-entry-view (. options :info_file_entry_view))
     (set router.prompt-update-debounce-ms (. options :prompt_update_debounce_ms))
     (set router.prompt-update-idle-ms (. options :prompt_update_idle_ms))
     (set router.prompt-short-query-extra-ms (. options :prompt_short_query_extra_ms))
