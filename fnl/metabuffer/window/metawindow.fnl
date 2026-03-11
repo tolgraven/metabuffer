@@ -15,6 +15,11 @@
       (.. (string.upper (string.sub s 1 1)) (string.lower (string.sub s 2)))
       ""))
 
+(fn escape-statusline
+  [s]
+  "Escape % in s to prevent statusline metacharacter injection (e.g. %{expr})."
+  (: s :gsub "%%" "%%%%"))
+
 (fn M.new
   [nvim win]
   "Create the main Meta results window wrapper and statusline renderer."
@@ -27,7 +32,7 @@
             text (string.format M.statusline
                    mode-group mode-label
                    num-hits num-lines (or debug-out "")
-                   (or preview-file "")
+                   (escape-statusline (or preview-file ""))
                    matcher-suffix matcher "C^"
                    case-suffix case-mode "C-o"
                    hl-prefix syntax "Cs")]
