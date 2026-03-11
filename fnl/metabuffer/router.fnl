@@ -117,8 +117,12 @@
 
 (set update-info-window
   (fn [session refresh-lines]
-    (when (and info-window info-window.update!)
-      (info-window.update! session refresh-lines))))
+    (when session
+      (if session.ui-hidden
+          (when (and info-window info-window.close-window!)
+            (info-window.close-window! session))
+          (when (and info-window info-window.update!)
+            (info-window.update! session refresh-lines))))))
 
 (local project-source
   (project_source_mod.new
@@ -203,6 +207,8 @@
    :active-by-prompt M.active-by-prompt
    :history-api history-api
    :history-store history_store
+   :prompt-window-mod prompt_window_mod
+   :meta-window-mod meta_window_mod
    :router-util-mod router_util_mod
    :router-prompt-mod router_prompt_mod
    :session-view session_view
@@ -255,7 +261,11 @@
    :schedule-scroll-sync! (fn [session]
                             (router_navigation_mod.schedule-scroll-sync!
                               navigation-deps
-                              session))})
+                              session))
+   :maybe-restore-hidden-ui! (fn [session]
+                               (router_actions_mod.maybe-restore-ui!
+                                 actions-deps
+                                 session.prompt-buf))})
 
 (fn M.on-prompt-changed
   [prompt-buf force event-tick]
@@ -405,6 +415,11 @@
   [prompt-buf]
   "Accept current selection from the main results window."
   (router_actions_mod.accept-main! actions-deps prompt-buf))
+
+(fn M.maybe-restore-hidden-ui
+  [prompt-buf]
+  "Restore hidden prompt/info UI when revisiting a preserved results buffer."
+  (router_actions_mod.maybe-restore-ui! actions-deps prompt-buf))
 
 (fn M.toggle-scan-option
   [prompt-buf which]

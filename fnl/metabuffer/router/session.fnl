@@ -13,6 +13,7 @@
         update-info-window (. deps :update-info-window)
         maybe-sync-from-main! (. deps :maybe-sync-from-main!)
         schedule-scroll-sync! (. deps :schedule-scroll-sync!)
+        maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)
         router-api (. deps :router-api)
         hooks
         (prompt-hooks-mod.new
@@ -23,7 +24,8 @@
            :on-prompt-changed on-prompt-changed
            :update-info-window update-info-window
            :maybe-sync-from-main! maybe-sync-from-main!
-           :schedule-scroll-sync! schedule-scroll-sync!})]
+           :schedule-scroll-sync! schedule-scroll-sync!
+           :maybe-restore-hidden-ui! maybe-restore-hidden-ui!})]
     (hooks.register! router-api session)))
 
 (fn M.start!

@@ -7,7 +7,7 @@
   (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
          : default-main-keymaps
          : on-prompt-changed : update-info-window : maybe-sync-from-main!
-         : schedule-scroll-sync!} opts]
+         : schedule-scroll-sync! : maybe-restore-hidden-ui!} opts]
     (fn disable-cmp
   [session]
       (mark-prompt-buffer! session.prompt-buf)
@@ -340,6 +340,19 @@
                        (schedule-when-valid session
                          (fn []
                            (maybe-sync-from-main! session))))})
+        (vim.api.nvim_create_autocmd "BufEnter"
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       (when maybe-restore-hidden-ui!
+                         ;; Defer UI restoration until after the jump/BufEnter
+                         ;; command stack settles; restoring windows directly
+                         ;; inside BufEnter can surface invalid mark jumps.
+                         (vim.schedule
+                           (fn []
+                             (when (and session.prompt-buf
+                                        (= (. active-by-prompt session.prompt-buf) session))
+                               (pcall maybe-restore-hidden-ui! session))))))})
         (apply-main-keymaps router session)
         (vim.api.nvim_create_autocmd "WinScrolled"
           {:group aug

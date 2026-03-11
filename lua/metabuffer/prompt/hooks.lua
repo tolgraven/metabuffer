@@ -9,6 +9,7 @@ M.new = function(opts)
   local update_info_window = opts["update-info-window"]
   local maybe_sync_from_main_21 = opts["maybe-sync-from-main!"]
   local schedule_scroll_sync_21 = opts["schedule-scroll-sync!"]
+  local maybe_restore_hidden_ui_21 = opts["maybe-restore-hidden-ui!"]
   local function disable_cmp(session)
     mark_prompt_buffer_21(session["prompt-buf"])
     local ok,cmp = pcall(require, "cmp")
@@ -472,11 +473,26 @@ M.new = function(opts)
       return schedule_when_valid(session, _82_)
     end
     vim.api.nvim_create_autocmd({"CursorMoved", "CursorMovedI"}, {group = aug, buffer = session.meta.buf.buffer, callback = _81_})
-    apply_main_keymaps(router, session)
     local function _83_(_)
+      if maybe_restore_hidden_ui_21 then
+        local function _84_()
+          if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
+            return pcall(maybe_restore_hidden_ui_21, session)
+          else
+            return nil
+          end
+        end
+        return vim.schedule(_84_)
+      else
+        return nil
+      end
+    end
+    vim.api.nvim_create_autocmd("BufEnter", {group = aug, buffer = session.meta.buf.buffer, callback = _83_})
+    apply_main_keymaps(router, session)
+    local function _87_(_)
       return schedule_scroll_sync_21(session)
     end
-    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _83_})
+    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _87_})
     disable_cmp(session)
     mark_prompt_buffer_21(session["prompt-buf"])
     refresh_prompt_highlights_21(session)

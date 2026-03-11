@@ -10,8 +10,9 @@ local function register_prompt_hooks_21(deps, session)
   local update_info_window = deps["update-info-window"]
   local maybe_sync_from_main_21 = deps["maybe-sync-from-main!"]
   local schedule_scroll_sync_21 = deps["schedule-scroll-sync!"]
+  local maybe_restore_hidden_ui_21 = deps["maybe-restore-hidden-ui!"]
   local router_api = deps["router-api"]
-  local hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = default_prompt_keymaps, ["default-main-keymaps"] = default_main_keymaps, ["active-by-prompt"] = active_by_prompt, ["on-prompt-changed"] = on_prompt_changed, ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21})
+  local hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = default_prompt_keymaps, ["default-main-keymaps"] = default_main_keymaps, ["active-by-prompt"] = active_by_prompt, ["on-prompt-changed"] = on_prompt_changed, ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21, ["maybe-restore-hidden-ui!"] = maybe_restore_hidden_ui_21})
   return hooks["register!"](router_api, session)
 end
 M["start!"] = function(deps, query, mode, _meta, project_mode)

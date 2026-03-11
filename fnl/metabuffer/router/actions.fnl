@@ -42,6 +42,96 @@
     (when matcher
       (pcall matcher.remove-highlight matcher))))
 
+(fn apply-prompt-window-opts!
+  [win]
+  (when (and win (vim.api.nvim_win_is_valid win))
+    (let [wo (. vim.wo win)]
+      (set (. wo :winfixheight) true)
+      (set (. wo :number) false)
+      (set (. wo :relativenumber) false)
+      (set (. wo :signcolumn) "no")
+      (set (. wo :foldcolumn) "0")
+      (set (. wo :spell) false)
+      (set (. wo :wrap) true)
+      (set (. wo :linebreak) false))))
+
+(fn hide-session-ui!
+  [deps session]
+  (let [router-util-mod (. deps :router-util-mod)
+        info-window (. deps :info-window)
+        preview-window (. deps :preview-window)
+        history-api (. deps :history-api)]
+    (set session.ui-hidden true)
+    (set session.ui-last-insert-mode (vim.startswith (. (vim.api.nvim_get_mode) :mode) "i"))
+    (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [[ok cur] [(pcall vim.api.nvim_win_get_cursor session.prompt-win)]]
+        (when (and ok (= (type cur) "table"))
+          (set session.hidden-prompt-cursor [(or (. cur 1) 1) (or (. cur 2) 0)])))
+      (router-util-mod.persist-prompt-height! session)
+      (set session.hidden-prompt-height (vim.api.nvim_win_get_height session.prompt-win))
+      (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
+        (let [bo (. vim.bo session.prompt-buf)]
+          (set (. bo :bufhidden) "hide")))
+      (pcall vim.api.nvim_win_close session.prompt-win true))
+    (set session.prompt-win nil)
+    (info-window.close-window! session)
+    (preview-window.close-window! session)
+    (history-api.close-history-browser! session)))
+
+(fn restore-session-ui!
+  [deps session]
+  (let [prompt-window-mod (. deps :prompt-window-mod)
+        meta-window-mod (. deps :meta-window-mod)
+        sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
+        router-util-mod (. deps :router-util-mod)
+        update-info-window (. deps :update-info-window)
+        curr session.meta]
+    (when (and session.ui-hidden
+               session.prompt-buf
+               (vim.api.nvim_buf_is_valid session.prompt-buf)
+               curr
+               curr.win
+               (vim.api.nvim_win_is_valid curr.win.window))
+      (let [height (or session.hidden-prompt-height (router-util-mod.prompt-height))
+            local-layout? (if (= session.window-local-layout nil) true session.window-local-layout)
+            prompt-win (if (and local-layout? (vim.api.nvim_win_is_valid curr.win.window))
+                           (vim.api.nvim_win_call
+                             curr.win.window
+                             (fn []
+                               (vim.cmd (.. "belowright " (tostring height) "new"))
+                               (vim.api.nvim_get_current_win)))
+                           (do
+                             (vim.cmd (.. "botright " (tostring height) "new"))
+                             (vim.api.nvim_get_current_win)))]
+        (set session.prompt-win prompt-win)
+        (pcall vim.api.nvim_win_set_height prompt-win height)
+        (pcall vim.api.nvim_win_set_buf prompt-win session.prompt-buf)
+        (let [bo (. vim.bo session.prompt-buf)]
+          (set (. bo :buftype) "nofile")
+          (set (. bo :bufhidden) "hide")
+          (set (. bo :swapfile) false)
+          (set (. bo :modifiable) true)
+          (set (. bo :filetype) "metabufferprompt"))
+        (apply-prompt-window-opts! prompt-win)
+        (sync-prompt-buffer-name! session)
+        (set curr.status-win (meta-window-mod.new vim prompt-win))
+        (set session.ui-hidden false)
+        (vim.cmd "silent! nohlsearch")
+        (let [cursor (or session.hidden-prompt-cursor [1 0])
+              row (math.max 1 (or (. cursor 1) 1))
+              col (math.max 0 (or (. cursor 2) 0))
+              line-count (math.max 1 (vim.api.nvim_buf_line_count session.prompt-buf))
+              row* (math.min row line-count)
+              line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf (- row* 1) row* false) 1) "")
+              col* (math.min col (# line))]
+          (pcall vim.api.nvim_win_set_cursor prompt-win [row* col*]))
+        (pcall curr.refresh_statusline)
+        (pcall update-info-window session true)
+        (vim.api.nvim_set_current_win prompt-win)
+        (if session.ui-last-insert-mode
+            (vim.cmd "startinsert")
+            (vim.cmd "stopinsert"))))))
+
 (fn finish-accept
   [deps session]
   (let [active-by-prompt (. deps :active-by-prompt)
@@ -91,11 +181,11 @@
         (set vim.o.hlsearch true)))
     (if session.project-mode
         (do
-          ;; Keep the Meta session alive so jumplist <C-o> can return to the
-          ;; exact results/prompt/info state after opening a project hit.
+          ;; Accept should exit visible Meta UI, but keep resumable state so
+          ;; returning to the results buffer restores prompt/info/selection.
           (pcall vim.cmd "stopinsert")
-          (pcall curr.refresh_statusline)
-          (pcall deps.update-info-window session false))
+          (clear-hit-highlight! curr)
+          (hide-session-ui! deps session))
         (vim.schedule
           (fn []
             (when (= (. active-by-prompt session.prompt-buf) session)
@@ -275,5 +365,16 @@
 (fn M.remove-session!
   [deps session]
   (remove-session! deps session))
+
+(fn M.maybe-restore-ui!
+  [deps prompt-buf]
+  (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+    (when (and session
+               session.ui-hidden
+               session.meta
+               session.meta.buf
+               (= (vim.api.nvim_get_current_buf) session.meta.buf.buffer))
+      (set session.meta.win.window (vim.api.nvim_get_current_win))
+      (restore-session-ui! deps session))))
 
 M
