@@ -7,17 +7,19 @@ repo_root="$(cd "$script_dir/../../.." && pwd)"
 usage() {
   cat <<'EOF'
 Usage:
-  run-checks.sh [--with-headless] [--profile] [project-dir]
+  run-checks.sh [--with-headless] [--profile] [--failed-tests-only] [project-dir]
 
 Flags:
   --with-headless  Also run a basic headless nvim setup + Meta/Meta! invocation check.
   --profile        Write basic profiling artifacts for startup and Meta/Meta! timings.
+  --failed-tests-only  Run only tests that failed in the previous run (if any).
   -h, --help       Show this help.
 EOF
 }
 
 with_headless=0
 with_profile=0
+failed_tests_only=0
 target_dir=""
 
 while [[ $# -gt 0 ]]; do
@@ -29,6 +31,10 @@ while [[ $# -gt 0 ]]; do
     --profile)
       with_profile=1
       with_headless=1
+      shift
+      ;;
+    --failed-tests-only)
+      failed_tests_only=1
       shift
       ;;
     -h|--help)
@@ -144,6 +150,14 @@ echo "[metabuffer-checks] compile: ./scripts/compile-fennel.sh"
 
 echo "[metabuffer-checks] smoke: ./scripts/smoke-meta.sh"
 ./scripts/smoke-meta.sh
+
+if [[ "$failed_tests_only" -eq 1 ]]; then
+  echo "[metabuffer-checks] tests: TEST_FAILED_ONLY=1 ./scripts/test-mini.sh"
+  TEST_FAILED_ONLY=1 ./scripts/test-mini.sh
+else
+  echo "[metabuffer-checks] tests: ./scripts/test-mini.sh"
+  ./scripts/test-mini.sh
+fi
 
 if [[ "$with_headless" -eq 1 ]]; then
   run_headless_meta_check

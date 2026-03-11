@@ -37,6 +37,12 @@
 - Optional compile logging:
   - default: quiet (`NVIM_LOG_FILE` defaults to `/dev/null`)
   - debug: `NVIM_LOG_FILE=.nvimlog ./scripts/compile-fennel.sh`
+- Run full test suite (screen + unit, parallel):
+  - `./scripts/test-mini.sh`
+- Rerun single failing file quickly while iterating:
+  - `TEST_ONLY='tests/unit/test_query_unit.lua' ./scripts/test-mini.sh`
+- Rerun only files that failed on previous run:
+  - `TEST_FAILED_ONLY=1 ./scripts/test-mini.sh`
 
 ## Important Session Notes
 
@@ -73,6 +79,11 @@
 
 - When appropriate, update this file with new learnings, conventions, information, but make sure it is important enough, and ensure anything outdated is replaced rather than just countinously appending.
 - Always update docs when new functionality is added or changed. Both README and vim docs should be comprehensive.
+- Always update/extend tests when functionality changes:
+  - unit tests under `tests/unit/` for pure logic and parser/matcher behavior.
+  - screen/integration tests under `tests/screen/` for end-to-end prompt/router/window behavior.
+  - keep `tests/testing.md` synchronized with current test coverage and rerun workflows.
+  - when multiple tests fail, use `.cache/metabuffer-tests/failed-files.txt` and parallel sub-agents (one per failing file) to investigate/fix in parallel, then run a full suite check.
 
 ## Agent behavior
 
