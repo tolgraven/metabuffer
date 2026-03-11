@@ -16,16 +16,8 @@ local function statusline_color_from(group)
   local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
   local nok,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
   if (ok and (type(hl) == "table")) then
-    local fg = hl.fg
-    local cfg = hl.ctermfg
-    if (not fg and hl.reverse) then
-      fg = hl.bg
-    else
-    end
-    if (not cfg and (hl.reverse or (hl.cterm and hl.cterm.reverse))) then
-      cfg = hl.ctermbg
-    else
-    end
+    local fg = (hl.fg or (hl.reverse and hl.bg))
+    local cfg = (hl.ctermfg or ((hl.reverse or (hl.cterm and hl.cterm.reverse)) and hl.ctermbg))
     if fg then
       opts["bg"] = fg
     else
@@ -323,42 +315,42 @@ M.reload = function(opts)
   clear_module_cache()
   clear_plugin_loaded_flags_21()
   source_plugin_bootstrap_21()
-  local _44_
+  local _42_
   if do_compile then
-    _44_ = "[metabuffer] reloaded (compiled)"
+    _42_ = "[metabuffer] reloaded (compiled)"
   else
-    _44_ = "[metabuffer] reloaded"
+    _42_ = "[metabuffer] reloaded"
   end
-  vim.notify(_44_, vim.log.levels.INFO)
+  vim.notify(_42_, vim.log.levels.INFO)
   return true
 end
 M.setup = function()
   ensure_defaults_and_highlights_21()
-  local function _46_(args)
+  local function _44_(args)
     return router.entry_start(args.args, args.bang)
   end
-  ensure_command("Meta", _46_, {nargs = "?", bang = true})
-  local function _47_(args)
+  ensure_command("Meta", _44_, {nargs = "?", bang = true})
+  local function _45_(args)
     return router.entry_resume(args.args)
   end
-  ensure_command("MetaResume", _47_, {nargs = "?"})
-  local function _48_()
+  ensure_command("MetaResume", _45_, {nargs = "?"})
+  local function _46_()
     return router.entry_cursor_word(false)
   end
-  ensure_command("MetaCursorWord", _48_, {nargs = 0})
-  local function _49_()
+  ensure_command("MetaCursorWord", _46_, {nargs = 0})
+  local function _47_()
     return router.entry_cursor_word(true)
   end
-  ensure_command("MetaResumeCursorWord", _49_, {nargs = 0})
-  local function _50_(args)
+  ensure_command("MetaResumeCursorWord", _47_, {nargs = 0})
+  local function _48_(args)
     return router.entry_sync(args.args)
   end
-  ensure_command("MetaSync", _50_, {nargs = "?"})
-  local function _51_()
+  ensure_command("MetaSync", _48_, {nargs = "?"})
+  local function _49_()
     return router.entry_push()
   end
-  ensure_command("MetaPush", _51_, {nargs = 0})
-  local function _52_(args)
+  ensure_command("MetaPush", _49_, {nargs = 0})
+  local function _50_(args)
     local ok,err = pcall(M.reload, {compile = args.bang})
     if not ok then
       return vim.notify(("[metabuffer] reload failed: " .. tostring(err)), vim.log.levels.ERROR)
@@ -366,7 +358,7 @@ M.setup = function()
       return nil
     end
   end
-  ensure_command("MetaReload", _52_, {nargs = 0, bang = true})
+  ensure_command("MetaReload", _50_, {nargs = 0, bang = true})
   return true
 end
 return M

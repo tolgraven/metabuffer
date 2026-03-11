@@ -12,11 +12,38 @@
       (table.insert out ""))
     out))
 
+(fn leading-indent-width
+  [line]
+  (let [txt (or line "")
+        ws (or (string.match txt "^(%s*)") "")]
+    (vim.fn.strdisplaywidth ws)))
+
 (fn M.new
   [opts]
   "Create preview window manager for selected source refs."
   (let [{: floating-window-mod : selected-ref : read-file-lines-cached
          : is-active-session : debug-log : source-switch-debounce-ms} opts]
+
+  (fn preview-window-config
+    [session width height]
+    (let [p-row-col (vim.api.nvim_win_get_position session.prompt-win)
+          p-row (. p-row-col 1)
+          p-col (. p-row-col 2)
+          p-width (vim.api.nvim_win_get_width session.prompt-win)]
+      (if session.window-local-layout
+          {:relative "win"
+           :win session.prompt-win
+           :anchor "NW"
+           :row 0
+           :col p-width
+           :width width
+           :height height}
+          {:relative "editor"
+           :anchor "NE"
+           :row p-row
+           :col (+ p-col p-width)
+           :width width
+           :height height})))
 
   (fn mark-preview-buffer!
     [buf]
@@ -43,8 +70,7 @@
       (pcall vim.api.nvim_set_option_value "winblend" 0 {:win win})
       (pcall vim.api.nvim_set_option_value "winhighlight"
              "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal"
-             {:win win})
-      (pcall vim.api.nvim_set_option_value "statusline" " Preview " {:win win})))
+             {:win win})))
 
   (fn filetype-for-ref
     [ref]
@@ -88,14 +114,11 @@
     [session]
     (when-not (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
       (let [buf (vim.api.nvim_create_buf false true)
-            p-row-col (vim.api.nvim_win_get_position session.prompt-win)
-            p-row (. p-row-col 1)
-            p-col (. p-row-col 2)
             p-width (vim.api.nvim_win_get_width session.prompt-win)
             p-height (vim.api.nvim_win_get_height session.prompt-win)
             width (math.max 36 (math.min 128 (math.floor (* p-width 0.58))))
-            col (+ p-col p-width)
-            win (floating-window-mod.new vim buf {:width width :height p-height :col col :row p-row})]
+            cfg (preview-window-config session width p-height)
+            win (floating-window-mod.new vim buf cfg)]
         (set session.preview-buf buf)
         (set session.preview-win win.window)
         (set session.preview-layout nil)
@@ -138,19 +161,10 @@
   (fn preview-context
     [session]
     (let [ref (selected-ref session.meta)
-          p-row-col (vim.api.nvim_win_get_position session.prompt-win)
-          p-row (. p-row-col 1)
-          p-col (. p-row-col 2)
           p-width (vim.api.nvim_win_get_width session.prompt-win)
           p-height (vim.api.nvim_win_get_height session.prompt-win)
           width (math.max 36 (math.min 128 (math.floor (* p-width 0.58))))
-          col (+ p-col p-width)
-          cfg {:relative "editor"
-               :anchor "NE"
-               :row p-row
-               :col col
-               :width width
-               :height p-height}
+          cfg (preview-window-config session width p-height)
           ft (filetype-for-ref ref)
           lines (context-lines-for-ref session ref p-height)
           start-lnum (if ref (math.max 1 (- (or ref.lnum 1) 1)) 1)
@@ -160,10 +174,10 @@
                           (math.max 1 (math.min row p-height)))
                         1)]
       {:ref ref
-       :p-row p-row
+       :p-row (. cfg :row)
        :p-height p-height
        :width width
-       :col col
+       :col (. cfg :col)
        :cfg cfg
        :ft ft
        :lines lines
@@ -194,6 +208,10 @@
           stop (+ start (math.max 0 (- (# (. ctx :lines)) 1)))
           digit-width (lineno-mod.digit-width-from-max-value stop)
           field-width (+ digit-width 1)
+          focus-row (math.max 1 (or (. ctx :focus-row) 1))
+          focus-line (or (. (. ctx :lines) focus-row) "")
+          indent (leading-indent-width focus-line)
+          target-leftcol (math.max 0 (+ field-width (math.max 0 (- indent 2))))
           rendered []
           highlights []]
       (each [i line (ipairs (. ctx :lines))]
@@ -216,7 +234,8 @@
                         "text")]
         (when (~= (. bo :filetype) next-ft)
           (set (. bo :filetype) next-ft))))
-    (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0]))
+    (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0])
+    (pcall vim.fn.winrestview {:leftcol target-leftcol}))
 
   (fn update-preview-window!
     [session]

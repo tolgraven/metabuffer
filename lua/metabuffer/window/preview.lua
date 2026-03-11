@@ -14,6 +14,11 @@ local function trim_or_pad_lines(lines, target)
   end
   return out
 end
+local function leading_indent_width(line)
+  local txt = (line or "")
+  local ws = (string.match(txt, "^(%s*)") or "")
+  return vim.fn.strdisplaywidth(ws)
+end
 M.new = function(opts)
   local floating_window_mod = opts["floating-window-mod"]
   local selected_ref = opts["selected-ref"]
@@ -21,6 +26,17 @@ M.new = function(opts)
   local is_active_session = opts["is-active-session"]
   local debug_log = opts["debug-log"]
   local source_switch_debounce_ms = opts["source-switch-debounce-ms"]
+  local function preview_window_config(session, width, height)
+    local p_row_col = vim.api.nvim_win_get_position(session["prompt-win"])
+    local p_row = p_row_col[1]
+    local p_col = p_row_col[2]
+    local p_width = vim.api.nvim_win_get_width(session["prompt-win"])
+    if session["window-local-layout"] then
+      return {relative = "win", win = session["prompt-win"], anchor = "NW", row = 0, col = p_width, width = width, height = height}
+    else
+      return {relative = "editor", anchor = "NE", row = p_row, col = (p_col + p_width), width = width, height = height}
+    end
+  end
   local function mark_preview_buffer_21(buf)
     if (buf and vim.api.nvim_buf_is_valid(buf)) then
       pcall(vim.api.nvim_buf_set_var, buf, "conjure_disable", true)
@@ -43,8 +59,7 @@ M.new = function(opts)
       pcall(vim.api.nvim_set_option_value, "spell", false, {win = win})
       pcall(vim.api.nvim_set_option_value, "cursorline", true, {win = win})
       pcall(vim.api.nvim_set_option_value, "winblend", 0, {win = win})
-      pcall(vim.api.nvim_set_option_value, "winhighlight", "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal", {win = win})
-      return pcall(vim.api.nvim_set_option_value, "statusline", " Preview ", {win = win})
+      return pcall(vim.api.nvim_set_option_value, "winhighlight", "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal", {win = win})
     else
       return nil
     end
@@ -110,14 +125,11 @@ M.new = function(opts)
     if not (session["preview-win"] and vim.api.nvim_win_is_valid(session["preview-win"])) then
       do
         local buf = vim.api.nvim_create_buf(false, true)
-        local p_row_col = vim.api.nvim_win_get_position(session["prompt-win"])
-        local p_row = p_row_col[1]
-        local p_col = p_row_col[2]
         local p_width = vim.api.nvim_win_get_width(session["prompt-win"])
         local p_height = vim.api.nvim_win_get_height(session["prompt-win"])
         local width = math.max(36, math.min(128, math.floor((p_width * 0.58))))
-        local col = (p_col + p_width)
-        local win = floating_window_mod.new(vim, buf, {width = width, height = p_height, col = col, row = p_row})
+        local cfg = preview_window_config(session, width, p_height)
+        local win = floating_window_mod.new(vim, buf, cfg)
         session["preview-buf"] = buf
         session["preview-win"] = win.window
         session["preview-layout"] = nil
@@ -171,14 +183,10 @@ M.new = function(opts)
   end
   local function preview_context(session)
     local ref = selected_ref(session.meta)
-    local p_row_col = vim.api.nvim_win_get_position(session["prompt-win"])
-    local p_row = p_row_col[1]
-    local p_col = p_row_col[2]
     local p_width = vim.api.nvim_win_get_width(session["prompt-win"])
     local p_height = vim.api.nvim_win_get_height(session["prompt-win"])
     local width = math.max(36, math.min(128, math.floor((p_width * 0.58))))
-    local col = (p_col + p_width)
-    local cfg = {relative = "editor", anchor = "NE", row = p_row, col = col, width = width, height = p_height}
+    local cfg = preview_window_config(session, width, p_height)
     local ft = filetype_for_ref(ref)
     local lines = context_lines_for_ref(session, ref, p_height)
     local start_lnum
@@ -195,7 +203,7 @@ M.new = function(opts)
     else
       focus_row = 1
     end
-    return {ref = ref, ["p-row"] = p_row, ["p-height"] = p_height, width = width, col = col, cfg = cfg, ft = ft, lines = lines, ["start-lnum"] = start_lnum, ["focus-row"] = focus_row}
+    return {ref = ref, ["p-row"] = cfg.row, ["p-height"] = p_height, width = width, col = cfg.col, cfg = cfg, ft = ft, lines = lines, ["start-lnum"] = start_lnum, ["focus-row"] = focus_row}
   end
   local function maybe_update_preview_layout_21(session, ctx)
     local row = ctx["p-row"]
@@ -223,6 +231,10 @@ M.new = function(opts)
       local stop = (start + math.max(0, (#ctx.lines - 1)))
       local digit_width = lineno_mod["digit-width-from-max-value"](stop)
       local field_width = (digit_width + 1)
+      local focus_row = math.max(1, (ctx["focus-row"] or 1))
+      local focus_line = (ctx.lines[focus_row] or "")
+      local indent = leading_indent_width(focus_line)
+      local target_leftcol = math.max(0, (field_width + math.max(0, (indent - 2))))
       local rendered = {}
       local highlights = {}
       for i, line in ipairs(ctx.lines) do
@@ -255,7 +267,8 @@ M.new = function(opts)
       else
       end
     end
-    return pcall(vim.api.nvim_win_set_cursor, session["preview-win"], {ctx["focus-row"], 0})
+    pcall(vim.api.nvim_win_set_cursor, session["preview-win"], {ctx["focus-row"], 0})
+    return pcall(vim.fn.winrestview, {leftcol = __fnl_global__target_2dleftcol})
   end
   local function update_preview_window_21(session)
     ensure_preview_window_21(session)
@@ -313,7 +326,7 @@ M.new = function(opts)
       local target_path = selected_preview_path(session)
       local timer = vim.loop.new_timer()
       session["preview-update-timer"] = timer
-      local function _27_()
+      local function _28_()
         if (session["preview-update-timer"] and (session["preview-update-timer"] == timer)) then
           local stopf = timer.stop
           local closef = timer.close
@@ -335,7 +348,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return timer.start(timer, math.max(0, (wait_ms or 0)), 0, vim.schedule_wrap(_27_))
+      return timer.start(timer, math.max(0, (wait_ms or 0)), 0, vim.schedule_wrap(_28_))
     else
       return nil
     end

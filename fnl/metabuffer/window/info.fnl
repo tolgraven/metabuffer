@@ -127,15 +127,37 @@
   (let [{: floating-window-mod : info-min-width : info-max-width
          : info-max-lines : info-height : debug-log : update-preview} opts]
 
+  (fn info-window-config
+    [session width height]
+    (let [host-win (if (and session
+                            session.meta
+                            session.meta.win
+                            (vim.api.nvim_win_is_valid session.meta.win.window))
+                       session.meta.win.window
+                       session.prompt-win)]
+    (if session.window-local-layout
+        {:relative "win"
+         :win host-win
+         :anchor "NE"
+         :row 0
+         :col (vim.api.nvim_win_get_width host-win)
+         :width width
+         :height height}
+        {:relative "editor"
+         :anchor "NE"
+         :row 1
+         :col vim.o.columns
+         :width width
+         :height height})))
+
   (fn ensure-info-window!
     [session]
     (when-not (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
       (let [buf (vim.api.nvim_create_buf false true)
             width info-min-width
             height (info-height session)
-            col vim.o.columns
-            row 1
-            win (floating-window-mod.new vim buf {:width width :height height :col col :row row})]
+            cfg (info-window-config session width height)
+            win (floating-window-mod.new vim buf cfg)]
         (set session.info-buf buf)
         (set session.info-win win.window)
         (let [bo (. vim.bo buf)]
@@ -158,21 +180,33 @@
       (let [widths (vim.tbl_map (fn [line] (# line)) (or lines []))
             max-len (numeric-max widths 0)
             needed max-len
-            max-available (math.max info-min-width (math.floor (* vim.o.columns 0.34)))
+            host-width (if (and session.window-local-layout
+                                session.meta
+                                session.meta.win
+                                (vim.api.nvim_win_is_valid session.meta.win.window))
+                           (vim.api.nvim_win_get_width session.meta.win.window)
+                           (if session.window-local-layout
+                               (vim.api.nvim_win_get_width session.prompt-win)
+                               vim.o.columns))
+            max-available (math.max info-min-width (math.floor (* host-width 0.34)))
             upper (math.min info-max-width max-available)
             target (math.max info-min-width (math.min needed upper))
             height (info-height session)
-            cfg {:relative "editor"
-                 :anchor "NE"
-                 :row 1
-                 :col vim.o.columns
-                 :width target
-                 :height height}]
+            cfg (info-window-config session target height)]
         (pcall vim.api.nvim_win_set_config session.info-win cfg))))
 
   (fn info-max-width-now
-    []
-    (let [max-available (math.max info-min-width (math.floor (* vim.o.columns 0.34)))]
+    [session]
+    (let [host-width (if (and session
+                              session.window-local-layout
+                              session.meta
+                              session.meta.win
+                              (vim.api.nvim_win_is_valid session.meta.win.window))
+                         (vim.api.nvim_win_get_width session.meta.win.window)
+                         (if (and session session.window-local-layout)
+                             (vim.api.nvim_win_get_width session.prompt-win)
+                             vim.o.columns))
+          max-available (math.max info-min-width (math.floor (* host-width 0.34)))]
       (math.min info-max-width max-available)))
 
   (fn info-visible-range
@@ -262,7 +296,7 @@
           idxs (or meta.buf.indices [])
           _ (set session.info-start-index start-index)
           _ (set session.info-stop-index stop-index)
-          built (build-info-lines meta refs idxs (info-max-width-now) start-index stop-index)
+          built (build-info-lines meta refs idxs (info-max-width-now session) start-index stop-index)
           raw-lines (. built :lines)
           lines (if (= (type raw-lines) "table")
                     (vim.tbl_map tostring raw-lines)
@@ -290,14 +324,10 @@
             info-lines (vim.api.nvim_buf_line_count session.info-buf)
             start-index (or session.info-start-index 1)
             stop-index (or session.info-stop-index (math.min (# idxs) info-max-lines))
-            hits-shown (if (>= stop-index start-index) (+ (- stop-index start-index) 1) 0)
-            hits-total (# idxs)
-            status (.. " Hits " hits-shown "/" hits-total " ")
             selected1 (+ meta.selected_index 1)
             row (if (> info-lines 0)
                     (math.max 1 (math.min (+ (- selected1 start-index) 1) info-lines))
                     1)]
-        (pcall vim.api.nvim_win_set_option session.info-win "statusline" status)
         (when (> info-lines 0)
           (let [[ok-cur err-cur] [(pcall vim.api.nvim_win_set_cursor session.info-win [row 0])]]
             (when-not ok-cur
@@ -333,7 +363,7 @@
                           "|"
                           (tostring wanted-stop)
                           "|"
-                          (tostring (info-max-width-now))
+                          (tostring (info-max-width-now session))
                           "|"
                           (tostring (info-height session))
                           "|"

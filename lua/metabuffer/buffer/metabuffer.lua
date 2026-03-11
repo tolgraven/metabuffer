@@ -128,6 +128,7 @@ M.new = function(nvim, model)
         end
         local start = 1
         local prev_ft = nil
+        local prev_src_idx = nil
         for i = 1, n do
           local idx = self.indices[i]
           local ref = (idx and self["source-refs"][idx])
@@ -136,12 +137,13 @@ M.new = function(nvim, model)
             prev_ft = ft
           else
           end
-          if (ft ~= prev_ft) then
+          if ((ft ~= prev_ft) or (prev_src_idx and (idx ~= (prev_src_idx + 1)))) then
             add_block(start, (i - 1), prev_ft)
             start = i
             prev_ft = ft
           else
           end
+          prev_src_idx = idx
         end
         if prev_ft then
           add_block(start, n, prev_ft)
@@ -262,7 +264,7 @@ M.new = function(nvim, model)
         else
         end
         if alt then
-          vim.api.nvim_buf_set_extmark(self.buffer, self["source-alt-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceAltBg", hl_eol = true, priority = 1})
+          vim.api.nvim_buf_set_extmark(self.buffer, self["source-alt-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceAltBg", hl_eol = true, hl_mode = "combine", priority = 1})
         else
         end
       end
@@ -274,7 +276,7 @@ M.new = function(nvim, model)
         local cur_path = (cur_ref and cur_ref.path)
         local next_path = (next_ref and next_ref.path)
         if ((cur_path or "") ~= (next_path or "")) then
-          vim.api.nvim_buf_set_extmark(self.buffer, self["source-sep-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceBoundary", hl_eol = true, priority = 120})
+          vim.api.nvim_buf_set_extmark(self.buffer, self["source-sep-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceBoundary", hl_eol = true, hl_mode = "combine", priority = 120})
         else
         end
       end

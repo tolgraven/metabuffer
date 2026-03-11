@@ -18,12 +18,12 @@
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
         [nok normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
     (when (and ok (= (type hl) "table"))
-      (var fg (. hl :fg))
-      (var cfg (. hl :ctermfg))
-      (when (and (not fg) (. hl :reverse))
-        (set fg (. hl :bg)))
-      (when (and (not cfg) (or (. hl :reverse) (and (. hl :cterm) (. (. hl :cterm) :reverse))))
-        (set cfg (. hl :ctermbg)))
+      (let [fg (or (. hl :fg)
+                   (and (. hl :reverse) (. hl :bg)))
+            cfg (or (. hl :ctermfg)
+                    (and (or (. hl :reverse)
+                             (and (. hl :cterm) (. (. hl :cterm) :reverse)))
+                         (. hl :ctermbg)))]
       (if fg
           (set (. opts :bg) fg)
           (when (and nok (= (type normal) "table") (. normal :bg))
@@ -33,7 +33,7 @@
           (when (and nok (= (type normal) "table") (. normal :ctermbg))
             (set (. opts :ctermbg) (. normal :ctermbg))))
       (when (. hl :bold)
-        (set (. opts :bold) (. hl :bold))))
+        (set (. opts :bold) (. hl :bold)))))
     (let [bl (rgb-luma (. opts :bg))]
       (if (and bl (> bl 128))
           (set (. opts :fg) 0x000000)

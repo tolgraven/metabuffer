@@ -18,6 +18,13 @@ local router_util_mod = require("metabuffer.router.util")
 local router_prompt_mod = require("metabuffer.router.prompt")
 local router_query_flow_mod = require("metabuffer.router.query_flow")
 local M = {}
+local function sync_prompt_buffer_name_21(session)
+  if (session and session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and session.meta and session.meta.buf and (type(session.meta.buf.name) == "string") and (session.meta.buf.name ~= "")) then
+    return pcall(vim.api.nvim_buf_set_name, session["prompt-buf"], (session.meta.buf.name .. " [Prompt]"))
+  else
+    return nil
+  end
+end
 M.instances = {}
 M["active-by-source"] = {}
 M["active-by-prompt"] = {}
@@ -29,66 +36,66 @@ local history_browser_window = nil
 local query_flow_deps = nil
 config["apply-router-defaults"](M, vim)
 local push_history_21
-local function _1_(text)
+local function _2_(text)
   return history_store["push!"](text, M["history-max"])
 end
-push_history_21 = _1_
+push_history_21 = _2_
 local function debug_log(msg)
   return debug.log("router", msg)
 end
 local prompt_scheduler_ctx
-local function _2_(session)
+local function _3_(session)
   return apply_prompt_lines(session)
 end
-local function _3_(session)
+local function _4_(session)
   return router_prompt_mod["prompt-update-delay-ms"](M, query_mod, router_util_mod["prompt-lines"], session)
 end
-prompt_scheduler_ctx = {["active-by-prompt"] = M["active-by-prompt"], ["apply-prompt-lines"] = _2_, ["prompt-update-delay-ms"] = _3_, ["now-ms"] = router_prompt_mod["now-ms"], ["cancel-prompt-update!"] = router_prompt_mod["cancel-prompt-update!"]}
-local function _4_(path)
+prompt_scheduler_ctx = {["active-by-prompt"] = M["active-by-prompt"], ["apply-prompt-lines"] = _3_, ["prompt-update-delay-ms"] = _4_, ["now-ms"] = router_prompt_mod["now-ms"], ["cancel-prompt-update!"] = router_prompt_mod["cancel-prompt-update!"]}
+local function _5_(path)
   return router_util_mod["read-file-lines-cached"](M, path)
 end
-local function _5_(session)
+local function _6_(session)
   return (session and session["prompt-buf"] and (M["active-by-prompt"][session["prompt-buf"]] == session))
 end
-preview_window = preview_window_mod.new({["floating-window-mod"] = floating_window_mod, ["selected-ref"] = router_util_mod["selected-ref"], ["read-file-lines-cached"] = _4_, ["is-active-session"] = _5_, ["debug-log"] = debug_log, ["source-switch-debounce-ms"] = M["preview-source-switch-debounce-ms"]})
-local function _6_(session)
+preview_window = preview_window_mod.new({["floating-window-mod"] = floating_window_mod, ["selected-ref"] = router_util_mod["selected-ref"], ["read-file-lines-cached"] = _5_, ["is-active-session"] = _6_, ["debug-log"] = debug_log, ["source-switch-debounce-ms"] = M["preview-source-switch-debounce-ms"]})
+local function _7_(session)
   return preview_window["maybe-update-for-selection!"](session)
 end
-info_window = info_window_mod.new({["floating-window-mod"] = floating_window_mod, ["info-min-width"] = M["info-min-width"], ["info-max-width"] = M["info-max-width"], ["info-max-lines"] = M["info-max-lines"], ["info-height"] = router_util_mod["info-height"], ["debug-log"] = debug_log, ["update-preview"] = _6_})
+info_window = info_window_mod.new({["floating-window-mod"] = floating_window_mod, ["info-min-width"] = M["info-min-width"], ["info-max-width"] = M["info-max-width"], ["info-max-lines"] = M["info-max-lines"], ["info-height"] = router_util_mod["info-height"], ["debug-log"] = debug_log, ["update-preview"] = _7_})
 history_browser_window = history_browser_window_mod.new({["floating-window-mod"] = floating_window_mod})
-local function _7_(session, refresh_lines)
+local function _8_(session, refresh_lines)
   return info_window["update!"](session, refresh_lines)
 end
-update_info_window = _7_
+update_info_window = _8_
 local project_source
-local function _8_(rel, include_hidden, include_deps)
+local function _9_(rel, include_hidden, include_deps)
   return router_util_mod["allow-project-path?"](M, rel, include_hidden, include_deps)
 end
-local function _9_(root, include_hidden, include_ignored, include_deps)
+local function _10_(root, include_hidden, include_ignored, include_deps)
   return router_util_mod["project-file-list"](M, root, include_hidden, include_ignored, include_deps)
 end
-local function _10_(path)
+local function _11_(path)
   return router_util_mod["read-file-lines-cached"](M, path)
 end
-local function _11_(session)
+local function _12_(session)
   return router_util_mod["session-active?"](M["active-by-prompt"], session)
 end
-local function _12_(session)
+local function _13_(session)
   return router_util_mod["lazy-streaming-allowed?"](M, query_mod, session)
 end
-local function _13_(prompt_buf, force)
+local function _14_(prompt_buf, force)
   return M["on-prompt-changed"](prompt_buf, force)
 end
-local function _14_(session)
+local function _15_(session)
   return router_prompt_mod["prompt-has-active-query?"](query_mod, router_util_mod["prompt-lines"], session)
 end
-local function _15_(session)
+local function _16_(session)
   return router_prompt_mod["prompt-update-delay-ms"](M, query_mod, router_util_mod["prompt-lines"], session)
 end
-local function _16_(session, wait_ms)
+local function _17_(session, wait_ms)
   return router_prompt_mod["schedule-prompt-update!"](prompt_scheduler_ctx, session, wait_ms)
 end
-project_source = project_source_mod.new({settings = M, ["truthy?"] = query_mod["truthy?"], ["selected-ref"] = router_util_mod["selected-ref"], ["canonical-path"] = router_util_mod["canonical-path"], ["current-buffer-path"] = router_util_mod["current-buffer-path"], ["path-under-root?"] = router_util_mod["path-under-root?"], ["allow-project-path?"] = _8_, ["project-file-list"] = _9_, ["read-file-lines-cached"] = _10_, ["session-active?"] = _11_, ["lazy-streaming-allowed?"] = _12_, ["on-prompt-changed"] = _13_, ["prompt-has-active-query?"] = _14_, ["now-ms"] = router_prompt_mod["now-ms"], ["prompt-update-delay-ms"] = _15_, ["schedule-prompt-update!"] = _16_, ["restore-meta-view!"] = session_view["restore-meta-view!"], ["update-info-window"] = update_info_window})
+project_source = project_source_mod.new({settings = M, ["truthy?"] = query_mod["truthy?"], ["selected-ref"] = router_util_mod["selected-ref"], ["canonical-path"] = router_util_mod["canonical-path"], ["current-buffer-path"] = router_util_mod["current-buffer-path"], ["path-under-root?"] = router_util_mod["path-under-root?"], ["allow-project-path?"] = _9_, ["project-file-list"] = _10_, ["read-file-lines-cached"] = _11_, ["session-active?"] = _12_, ["lazy-streaming-allowed?"] = _13_, ["on-prompt-changed"] = _14_, ["prompt-has-active-query?"] = _15_, ["now-ms"] = router_prompt_mod["now-ms"], ["prompt-update-delay-ms"] = _16_, ["schedule-prompt-update!"] = _17_, ["restore-meta-view!"] = session_view["restore-meta-view!"], ["update-info-window"] = update_info_window})
 local function merge_history_into_session_21(session)
   local local0 = (session["history-cache"] or {})
   local merged = vim.deepcopy(local0)
@@ -207,13 +214,13 @@ local function apply_history_browser_selection_21(session)
     return nil
   end
 end
-local function _31_(session)
+local function _32_(session)
   return open_history_browser_21(session, "saved")
 end
-local function _32_(session)
+local function _33_(session)
   return apply_prompt_lines(session)
 end
-query_flow_deps = {["active-by-prompt"] = M["active-by-prompt"], ["query-mod"] = query_mod, ["project-source"] = project_source, ["update-info-window"] = update_info_window, settings = M, ["prompt-scheduler-ctx"] = prompt_scheduler_ctx, ["merge-history-into-session!"] = merge_history_into_session_21, ["save-current-prompt-tag!"] = save_current_prompt_tag_21, ["restore-saved-prompt-tag!"] = restore_saved_prompt_tag_21, ["open-saved-browser!"] = _31_, ["apply-prompt-lines"] = _32_}
+query_flow_deps = {["active-by-prompt"] = M["active-by-prompt"], ["query-mod"] = query_mod, ["project-source"] = project_source, ["update-info-window"] = update_info_window, settings = M, ["prompt-scheduler-ctx"] = prompt_scheduler_ctx, ["merge-history-into-session!"] = merge_history_into_session_21, ["save-current-prompt-tag!"] = save_current_prompt_tag_21, ["restore-saved-prompt-tag!"] = restore_saved_prompt_tag_21, ["open-saved-browser!"] = _32_, ["apply-prompt-lines"] = _33_}
 M._store_vars = function(meta)
   vim.b._meta_context = meta.store()
   vim.b._meta_indexes = meta.buf.indices
@@ -225,17 +232,67 @@ M._wrapup = function(meta)
   vim.cmd("redraw|redrawstatus")
   return M._store_vars(meta)
 end
+local function project_setting_token(name, enabled)
+  local _34_
+  if enabled then
+    _34_ = "+"
+  else
+    _34_ = "-"
+  end
+  return ("#" .. _34_ .. name)
+end
+local function history_entry_query(entry)
+  local parsed = query_mod["parse-query-text"]((entry or ""))
+  return (parsed.query or "")
+end
+local function history_entry_token(entry)
+  local parts = vim.split(history_entry_query(entry), "%s+", {trimempty = true})
+  if (#parts > 0) then
+    return parts[#parts]
+  else
+    return ""
+  end
+end
+local function history_entry_tail(entry)
+  local parts = vim.split(history_entry_query(entry), "%s+", {trimempty = true})
+  if (#parts > 1) then
+    return table.concat(vim.list_slice(parts, 2), " ")
+  else
+    return ""
+  end
+end
+local function history_entry_with_settings(session, prompt)
+  local query_text = (prompt or "")
+  local prefix
+  if (session and session["project-mode"]) then
+    prefix = table.concat({project_setting_token("hidden", session["effective-include-hidden"]), project_setting_token("ignored", session["effective-include-ignored"]), project_setting_token("deps", session["effective-include-deps"]), project_setting_token("prefilter", session["prefilter-mode"]), project_setting_token("lazy", session["lazy-mode"])}, " ")
+  else
+    prefix = ""
+  end
+  if (prefix == "") then
+    return query_text
+  else
+    if (query_text == "") then
+      return prefix
+    else
+      return (prefix .. " " .. query_text)
+    end
+  end
+end
+local function push_history_entry_21(session, text)
+  return push_history_21(history_entry_with_settings(session, text))
+end
 local function remove_session(session)
   if session then
-    local or_33_ = session["last-prompt-text"]
-    if not or_33_ then
+    local or_41_ = session["last-prompt-text"]
+    if not or_41_ then
       if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
-        or_33_ = router_util_mod["prompt-text"](session)
+        or_41_ = router_util_mod["prompt-text"](session)
       else
-        or_33_ = ""
+        or_41_ = ""
       end
     end
-    push_history_21(or_33_)
+    push_history_entry_21(session, or_41_)
     router_util_mod["persist-prompt-height!"](session)
     if session.augroup then
       pcall(vim.api.nvim_del_augroup_by_id, session.augroup)
@@ -266,10 +323,10 @@ local function remove_session(session)
     return nil
   end
 end
-local function _41_(session)
+local function _49_(session)
   return router_query_flow_mod["apply-prompt-lines!"](query_flow_deps, session)
 end
-apply_prompt_lines = _41_
+apply_prompt_lines = _49_
 M["on-prompt-changed"] = function(prompt_buf, force, event_tick)
   router_query_flow_mod["on-prompt-changed!"](query_flow_deps, prompt_buf, force, event_tick)
   local session = M["active-by-prompt"][prompt_buf]
@@ -298,18 +355,8 @@ end
 local function finish_accept(session)
   local curr = session.meta
   session["last-prompt-text"] = router_util_mod["prompt-text"](session)
-  push_history_21(session["last-prompt-text"])
+  push_history_entry_21(session, session["last-prompt-text"])
   apply_prompt_lines(session)
-  router_prompt_mod["begin-session-close!"](session, router_prompt_mod["cancel-prompt-update!"])
-  pcall(vim.cmd, "stopinsert")
-  do
-    local matcher = curr.matcher()
-    if matcher then
-      pcall(matcher["remove-highlight"], matcher)
-    else
-    end
-  end
-  pcall(vim.cmd, ("sign unplace * buffer=" .. curr.buf.buffer))
   if (vim.api.nvim_win_is_valid(session["origin-win"]) and vim.api.nvim_buf_is_valid(session["origin-buf"])) then
     pcall(vim.api.nvim_set_current_win, session["origin-win"])
     pcall(vim.api.nvim_win_set_buf, session["origin-win"], session["origin-buf"])
@@ -348,16 +395,33 @@ local function finish_accept(session)
     else
     end
   end
-  session_view["wipe-temp-buffers"](curr)
-  remove_session(session)
-  M._wrapup(curr)
+  local function _59_()
+    if (M["active-by-prompt"][session["prompt-buf"]] == session) then
+      router_prompt_mod["begin-session-close!"](session, router_prompt_mod["cancel-prompt-update!"])
+      pcall(vim.cmd, "stopinsert")
+      do
+        local matcher = curr.matcher()
+        if matcher then
+          pcall(matcher["remove-highlight"], matcher)
+        else
+        end
+      end
+      pcall(vim.cmd, ("sign unplace * buffer=" .. curr.buf.buffer))
+      session_view["wipe-temp-buffers"](curr)
+      remove_session(session)
+      return M._wrapup(curr)
+    else
+      return nil
+    end
+  end
+  vim.schedule(_59_)
   return curr
 end
 local function finish_cancel(session)
   local curr = session.meta
   router_prompt_mod["begin-session-close!"](session, router_prompt_mod["cancel-prompt-update!"])
   session["last-prompt-text"] = router_util_mod["prompt-text"](session)
-  push_history_21(session["last-prompt-text"])
+  push_history_entry_21(session, session["last-prompt-text"])
   pcall(vim.cmd, "stopinsert")
   do
     local matcher = curr.matcher()
@@ -395,7 +459,7 @@ M["move-selection"] = function(prompt_buf, delta)
   local session = M["active-by-prompt"][prompt_buf]
   if session then
     local runner
-    local function _56_()
+    local function _66_()
       local meta = session.meta
       local max = #meta.buf.indices
       if (max > 0) then
@@ -413,7 +477,7 @@ M["move-selection"] = function(prompt_buf, delta)
         return nil
       end
     end
-    runner = _56_
+    runner = _66_
     local mode = vim.api.nvim_get_mode().mode
     if ((type(mode) == "string") and vim.startswith(mode, "i")) then
       return vim.schedule(runner)
@@ -433,7 +497,7 @@ local function schedule_source_syntax_refresh_21(session)
     session["syntax-refresh-dirty"] = true
     if not session["syntax-refresh-pending"] then
       session["syntax-refresh-pending"] = true
-      local function _61_()
+      local function _71_()
         session["syntax-refresh-pending"] = false
         if (session and session["prompt-buf"] and (M["active-by-prompt"][session["prompt-buf"]] == session)) then
           if session["syntax-refresh-dirty"] then
@@ -450,7 +514,7 @@ local function schedule_source_syntax_refresh_21(session)
           return nil
         end
       end
-      return vim.defer_fn(_61_, (M["source-syntax-refresh-debounce-ms"] or 80))
+      return vim.defer_fn(_71_, (M["source-syntax-refresh-debounce-ms"] or 80))
     else
       return nil
     end
@@ -462,8 +526,8 @@ M["scroll-main"] = function(prompt_buf, action)
   local session = M["active-by-prompt"][prompt_buf]
   if (session and vim.api.nvim_win_is_valid(session.meta.win.window)) then
     local runner
-    local function _67_()
-      local function _68_()
+    local function _77_()
+      local function _78_()
         local line_count = vim.api.nvim_buf_line_count(session.meta.buf.buffer)
         local win_height = math.max(1, vim.api.nvim_win_get_height(session.meta.win.window))
         local half_step = math.max(1, math.floor((win_height / 2)))
@@ -493,12 +557,12 @@ M["scroll-main"] = function(prompt_buf, action)
         view["col"] = old_col
         return vim.fn.winrestview(view)
       end
-      vim.api.nvim_win_call(session.meta.win.window, _68_)
+      vim.api.nvim_win_call(session.meta.win.window, _78_)
       session_view["sync-selected-from-main-cursor!"](session)
       pcall(session.meta.refresh_statusline)
       return pcall(update_info_window, session, false)
     end
-    runner = _67_
+    runner = _77_
     local mode = vim.api.nvim_get_mode().mode
     if ((type(mode) == "string") and vim.startswith(mode, "i")) then
       return vim.schedule(runner)
@@ -522,7 +586,7 @@ M["history-or-move"] = function(prompt_buf, delta)
       return history_browser_window["move!"](session, delta)
     else
       local txt = router_util_mod["prompt-text"](session)
-      local can_history = ((txt == "") or (txt == session["initial-prompt-text"]) or (txt == session["last-history-text"]))
+      local can_history = ((txt == "") or (txt == session["initial-prompt-text"]) or (txt == session["last-history-text"]) or (txt == history_entry_query(session["last-history-text"])))
       if can_history then
         local h = (session["history-cache"] or history_store.list())
         local n = #h
@@ -561,22 +625,10 @@ local function history_latest(session)
   end
 end
 local function history_latest_token(session)
-  local entry = history_latest(session)
-  local parts = vim.split((entry or ""), "%s+", {trimempty = true})
-  if (#parts > 0) then
-    return parts[#parts]
-  else
-    return ""
-  end
+  return history_entry_token(history_latest(session))
 end
 local function history_latest_tail(session)
-  local entry = history_latest(session)
-  local parts = vim.split((entry or ""), "%s+", {trimempty = true})
-  if (#parts > 1) then
-    return table.concat(vim.list_slice(parts, 2), " ")
-  else
-    return ""
-  end
+  return history_entry_tail(history_latest(session))
 end
 M["last-prompt-entry"] = function(prompt_buf)
   return history_latest(M["active-by-prompt"][prompt_buf])
@@ -592,9 +644,9 @@ M["saved-prompt-entry"] = function(tag)
 end
 local function prompt_insert_at_cursor_21(session, text)
   if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"]) and (type(text) == "string") and (text ~= "")) then
-    local _let_82_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
-    local row = _let_82_[1]
-    local col = _let_82_[2]
+    local _let_90_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
+    local row = _let_90_[1]
+    local col = _let_90_[2]
     local row0 = math.max(0, (row - 1))
     local chunks = vim.split(text, "\n", {plain = true})
     local last_line = chunks[#chunks]
@@ -613,9 +665,9 @@ local function prompt_insert_at_cursor_21(session, text)
 end
 local function prompt_row_col(session)
   if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_85_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
-    local row = _let_85_[1]
-    local col = _let_85_[2]
+    local _let_93_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
+    local row = _let_93_[1]
+    local col = _let_93_[2]
     return {row = math.max(1, row), row0 = math.max(0, (row - 1)), col = math.max(0, col)}
   else
     return {row = 1, row0 = 0, col = 0}
@@ -628,8 +680,8 @@ end
 M["prompt-home"] = function(prompt_buf)
   local session = M["active-by-prompt"][prompt_buf]
   if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_87_ = prompt_row_col(session)
-    local row = _let_87_.row
+    local _let_95_ = prompt_row_col(session)
+    local row = _let_95_.row
     return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, 0})
   else
     return nil
@@ -638,9 +690,9 @@ end
 M["prompt-end"] = function(prompt_buf)
   local session = M["active-by-prompt"][prompt_buf]
   if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_89_ = prompt_row_col(session)
-    local row = _let_89_.row
-    local row0 = _let_89_.row0
+    local _let_97_ = prompt_row_col(session)
+    local row = _let_97_.row
+    local row0 = _let_97_.row0
     local line = prompt_line_text(session, row0)
     return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, #line})
   else
@@ -650,10 +702,10 @@ end
 M["prompt-kill-backward"] = function(prompt_buf)
   local session = M["active-by-prompt"][prompt_buf]
   if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_91_ = prompt_row_col(session)
-    local row = _let_91_.row
-    local row0 = _let_91_.row0
-    local col = _let_91_.col
+    local _let_99_ = prompt_row_col(session)
+    local row = _let_99_.row
+    local row0 = _let_99_.row0
+    local col = _let_99_.col
     if (col > 0) then
       local line = prompt_line_text(session, row0)
       local killed = string.sub(line, 1, col)
@@ -670,10 +722,10 @@ end
 M["prompt-kill-forward"] = function(prompt_buf)
   local session = M["active-by-prompt"][prompt_buf]
   if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_94_ = prompt_row_col(session)
-    local row = _let_94_.row
-    local row0 = _let_94_.row0
-    local col = _let_94_.col
+    local _let_102_ = prompt_row_col(session)
+    local row = _let_102_.row
+    local row0 = _let_102_.row0
+    local col = _let_102_.col
     local line = prompt_line_text(session, row0)
     local len = #line
     if (col < len) then
@@ -767,9 +819,9 @@ end
 M["negate-current-token"] = function(prompt_buf)
   local session = M["active-by-prompt"][prompt_buf]
   if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_105_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
-    local row = _let_105_[1]
-    local col = _let_105_[2]
+    local _let_113_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
+    local row = _let_113_[1]
+    local col = _let_113_[2]
     local row0 = math.max(0, (row - 1))
     local line = (vim.api.nvim_buf_get_lines(session["prompt-buf"], row0, (row0 + 1), false)[1] or "")
     local val_110_auto = find_token_span(line, col)
@@ -788,13 +840,13 @@ M["negate-current-token"] = function(prompt_buf)
       local delta = (#next_token - #token)
       local s0 = (s - 1)
       vim.api.nvim_buf_set_text(session["prompt-buf"], row0, s0, row0, e, {next_token})
-      local _107_
+      local _115_
       if (col >= s0) then
-        _107_ = delta
+        _115_ = delta
       else
-        _107_ = 0
+        _115_ = 0
       end
-      return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, math.max(0, (col + _107_))})
+      return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, math.max(0, (col + _115_))})
     else
       return nil
     end
@@ -827,10 +879,10 @@ M["exclude-symbol-under-cursor"] = function(prompt_buf)
   local session = M["active-by-prompt"][prompt_buf]
   if session then
     local word
-    local function _114_()
+    local function _122_()
       return vim.fn.expand("<cword>")
     end
-    word = vim.api.nvim_win_call(session.meta.win.window, _114_)
+    word = vim.api.nvim_win_call(session.meta.win.window, _122_)
     local token
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       token = ("!" .. word)
@@ -853,6 +905,40 @@ M["exclude-symbol-under-cursor"] = function(prompt_buf)
   else
     return nil
   end
+end
+M["insert-symbol-under-cursor"] = function(prompt_buf)
+  local session = M["active-by-prompt"][prompt_buf]
+  if session then
+    local word
+    local function _127_()
+      return vim.fn.expand("<cword>")
+    end
+    word = vim.api.nvim_win_call(session.meta.win.window, _127_)
+    local token
+    if ((type(word) == "string") and (vim.trim(word) ~= "")) then
+      token = word
+    else
+      token = ""
+    end
+    if (token ~= "") then
+      local current = router_util_mod["prompt-text"](session)
+      local sep
+      if ((current == "") or vim.endswith(current, " ") or vim.endswith(current, "\n")) then
+        sep = ""
+      else
+        sep = " "
+      end
+      local next = (current .. sep .. token)
+      return router_util_mod["set-prompt-text!"](session, next)
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+M["accept-main"] = function(prompt_buf)
+  return M.accept(prompt_buf)
 end
 M["toggle-scan-option"] = function(prompt_buf, which)
   local session = M["active-by-prompt"][prompt_buf]
@@ -883,6 +969,7 @@ M["toggle-project-mode"] = function(prompt_buf)
     session["project-mode"] = not session["project-mode"]
     session.meta["project-mode"] = session["project-mode"]
     session.meta.buf["set-name"](router_util_mod["meta-buffer-name"](session))
+    sync_prompt_buffer_name_21(session)
     project_source["apply-source-set!"](session)
     return apply_prompt_lines(session)
   else
@@ -890,11 +977,24 @@ M["toggle-project-mode"] = function(prompt_buf)
   end
 end
 local function register_prompt_hooks(session)
-  local hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = M["default-prompt-keymaps"], ["active-by-prompt"] = M["active-by-prompt"], ["on-prompt-changed"] = M["on-prompt-changed"], ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21})
+  local hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = M["default-prompt-keymaps"], ["default-main-keymaps"] = M["default-main-keymaps"], ["active-by-prompt"] = M["active-by-prompt"], ["on-prompt-changed"] = M["on-prompt-changed"], ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21})
   return hooks["register!"](M, session)
 end
 M.start = function(query, mode, _meta, project_mode)
-  local parsed_query = query_mod["parse-query-text"](query)
+  pcall(vim.cmd, "silent! nohlsearch")
+  local start_query = (query or "")
+  local latest_history = history_latest(nil)
+  local expanded_query
+  if (start_query == "!!") then
+    expanded_query = latest_history
+  elseif (start_query == "!$") then
+    expanded_query = history_entry_token(latest_history)
+  elseif (start_query == "!^!") then
+    expanded_query = history_entry_tail(latest_history)
+  else
+    expanded_query = start_query
+  end
+  local parsed_query = query_mod["parse-query-text"](expanded_query)
   local query0 = parsed_query.query
   local start_hidden
   do
@@ -969,22 +1069,22 @@ M.start = function(query, mode, _meta, project_mode)
   else
     initial_lines = {""}
   end
-  local prompt_win = prompt_window_mod.new(vim, {height = router_util_mod["prompt-height"]()})
+  local prompt_win = prompt_window_mod.new(vim, {height = router_util_mod["prompt-height"](), ["window-local-layout"] = M["window-local-layout"], ["origin-win"] = origin_win})
   local prompt_buf = prompt_win.buffer
   local session
-  local _130_
+  local _144_
   if query_mod["query-lines-has-active?"](parsed_query.lines) then
-    _130_ = M["project-bootstrap-delay-ms"]
+    _144_ = M["project-bootstrap-delay-ms"]
   else
-    _130_ = M["project-bootstrap-idle-delay-ms"]
+    _144_ = M["project-bootstrap-idle-delay-ms"]
   end
-  local _132_
+  local _146_
   if (query1 and (query1 ~= "")) then
-    _132_ = vim.split(query1, "\n", {plain = true})
+    _146_ = vim.split(query1, "\n", {plain = true})
   else
-    _132_ = {""}
+    _146_ = {""}
   end
-  session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-win"] = prompt_win.window, ["prompt-buf"] = prompt_buf, ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["project-mode"] = (project_mode or false), ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _130_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["last-parsed-query"] = {lines = _132_, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, prefilter = start_prefilter, lazy = start_lazy}, ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
+  session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-win"] = prompt_win.window, ["prompt-buf"] = prompt_buf, ["window-local-layout"] = M["window-local-layout"], ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["project-mode"] = (project_mode or false), ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _144_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["last-parsed-query"] = {lines = _146_, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, prefilter = start_prefilter, lazy = start_lazy}, ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
   local initial_query_active = session["initial-query-active"]
   if session["project-mode"] then
     project_source["apply-minimal-source-set!"](session)
@@ -994,6 +1094,7 @@ M.start = function(query, mode, _meta, project_mode)
   curr["status-win"] = meta_window_mod.new(vim, prompt_win.window)
   curr.win["set-statusline"]("")
   curr["on-init"]()
+  sync_prompt_buffer_name_21(session)
   if session["project-mode"] then
     session_view["restore-meta-view!"](curr, session["source-view"])
   else
@@ -1008,14 +1109,20 @@ M.start = function(query, mode, _meta, project_mode)
   else
   end
   vim.api.nvim_set_current_win(prompt_win.window)
+  do
+    local row = math.max(1, #initial_lines)
+    local line = (initial_lines[row] or "")
+    local col = #line
+    pcall(vim.api.nvim_win_set_cursor, prompt_win.window, {row, col})
+  end
   vim.cmd("startinsert")
-  local function _137_()
+  local function _151_()
     session["startup-initializing"] = false
     return nil
   end
-  vim.schedule(_137_)
+  vim.schedule(_151_)
   if (session["project-mode"] and not initial_query_active) then
-    local function _138_()
+    local function _152_()
       if (M["active-by-prompt"][session["prompt-buf"]] == session) then
         pcall(curr.refresh_statusline)
         return pcall(update_info_window, session)
@@ -1023,7 +1130,7 @@ M.start = function(query, mode, _meta, project_mode)
         return nil
       end
     end
-    vim.schedule(_138_)
+    vim.schedule(_152_)
   else
   end
   if (session["project-mode"] and not session["project-bootstrapped"]) then
@@ -1039,14 +1146,14 @@ M.sync = function(meta, query)
   else
   end
   if meta then
-    local function _143_()
+    local function _157_()
       if (query and (query ~= "")) then
         return {query}
       else
         return {}
       end
     end
-    meta["set-query-lines"](_143_())
+    meta["set-query-lines"](_157_())
     meta["on-update"](0)
     M._store_vars(meta)
     return meta

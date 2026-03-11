@@ -166,12 +166,12 @@
           (set session.prompt-last-applied-text effective-text)
           (set session.meta.debug_out
             (if session.project-mode
-                (let [flags [(if session.effective-include-hidden "+hidden" "-hidden")
-                             (if session.effective-include-ignored "+ignored" "-ignored")
-                             (if session.effective-include-deps "+deps" "-deps")
-                             (if session.prefilter-mode "+prefilter" "-prefilter")]]
+                (let [flags [(if session.effective-include-hidden "+hid" "-hid")
+                             (if session.effective-include-ignored "+ig" "-ig")
+                             (if session.effective-include-deps "+dep" "-dep")
+                             (if session.prefilter-mode "+prf" "-prf")]]
                   (when-not session.lazy-mode
-                    (table.insert flags "-lazy"))
+                    (table.insert flags "nlz"))
                   (.. " [" (table.concat flags " ") "]"))
                 ""))
           (when (or changed text-changed?)

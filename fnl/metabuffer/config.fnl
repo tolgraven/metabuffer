@@ -15,7 +15,7 @@
           ["i" "<C-n>" "move-selection" 1]
           ["n" "<C-k>" "move-selection" -1]
           ["n" "<C-j>" "move-selection" 1]
-          ["i" "<C-k>" "prompt-kill-forward"]
+          ["i" "<C-k>" "move-selection" -1]
           ["i" "<C-j>" "move-selection" 1]
           ["i" "<C-a>" "prompt-home"]
           ["i" "<C-e>" "prompt-end"]
@@ -62,7 +62,7 @@
         [ ["i" "<C-a>" "prompt-home"]
           ["i" "<C-e>" "prompt-end"]
           ["i" "<C-u>" "prompt-kill-backward"]
-          ["i" "<C-k>" "prompt-kill-forward"]
+          ["i" "<C-k>" "move-selection" -1]
           ["i" "<C-y>" "prompt-yank"]]]
   (set router.history-max 100)
   (set router.project-max-file-bytes (or vim.g.meta_project_max_file_bytes (* 1024 1024)))
@@ -106,6 +106,7 @@
   (set router.preview-source-switch-debounce-ms (or vim.g.meta_preview_source_switch_debounce_ms 60))
   (set router.source-syntax-refresh-debounce-ms (or vim.g.meta_source_syntax_refresh_debounce_ms 80))
   (set router.scroll-sync-debounce-ms (or vim.g.meta_scroll_sync_debounce_ms 20))
+  (set router.window-local-layout (if (= vim.g.meta_window_local_layout nil) true vim.g.meta_window_local_layout))
   (set router.default-prompt-keymaps default-prompt-keymaps)
   (set router.default-main-keymaps default-main-keymaps)
   (set router.default-prompt-fallback-keymaps default-prompt-fallback-keymaps)

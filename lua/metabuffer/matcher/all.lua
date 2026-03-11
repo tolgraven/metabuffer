@@ -206,7 +206,7 @@ M.new = function()
     else
     end
     for _0, idx in ipairs(indices) do
-      local line = candidates[idx]
+      local line = (candidates[idx] or "")
       local probe
       if ignorecase then
         probe = string.lower(line)

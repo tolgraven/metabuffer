@@ -1,7 +1,36 @@
 -- [nfnl] fnl/metabuffer/router/util.fnl
 local M = {}
+local prompt_height_state_file = (vim.fn.stdpath("state") .. "/metabuffer_prompt_height")
+local function read_prompt_height_state()
+  local ok,fh = pcall(io.open, prompt_height_state_file, "r")
+  if (ok and fh) then
+    local line = fh:read("*l")
+    local _ = fh:close()
+    local n = tonumber((line or ""))
+    if (n and (n > 0)) then
+      return n
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+local function write_prompt_height_state_21(h)
+  if (h and (h > 0)) then
+    local ok,fh = pcall(io.open, prompt_height_state_file, "w")
+    if (ok and fh) then
+      fh:write(tostring(h))
+      return fh:close()
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
 M["prompt-height"] = function()
-  return (tonumber(vim.g.meta_prompt_height) or tonumber(vim.g["meta#prompt_height"]) or 7)
+  return (tonumber(vim.g.meta_prompt_height) or tonumber(vim.g["meta#prompt_height"]) or read_prompt_height_state() or 7)
 end
 M["persist-prompt-height!"] = function(session)
   if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
@@ -9,7 +38,7 @@ M["persist-prompt-height!"] = function(session)
     if (ok and h and (h > 0)) then
       vim.g.meta_prompt_height = h
       vim.g["meta#prompt_height"] = h
-      return nil
+      return write_prompt_height_state_21(h)
     else
       return nil
     end
@@ -67,16 +96,16 @@ M["set-prompt-text!"] = function(session, text)
   end
 end
 M["current-buffer-path"] = function(buf)
-  local and_8_ = buf and vim.api.nvim_buf_is_valid(buf)
-  if and_8_ then
+  local and_12_ = buf and vim.api.nvim_buf_is_valid(buf)
+  if and_12_ then
     local ok,name = pcall(vim.api.nvim_buf_get_name, buf)
     if (ok and (type(name) == "string") and (name ~= "")) then
-      and_8_ = name
+      and_12_ = name
     else
-      and_8_ = nil
+      and_12_ = nil
     end
   end
-  return and_8_
+  return and_12_
 end
 M["meta-buffer-name"] = function(session)
   if session["project-mode"] then
@@ -190,10 +219,10 @@ M["project-file-list"] = function(settings, root, include_hidden, include_ignore
       _2 = nil
     end
     local rel = vim.fn.systemlist(cmd)
-    local function _21_(p)
+    local function _25_(p)
       return vim.fn.fnamemodify((root .. "/" .. p), ":p")
     end
-    return vim.tbl_map(_21_, (rel or {}))
+    return vim.tbl_map(_25_, (rel or {}))
   else
     return vim.fn.globpath(root, (settings["project-fallback-glob-pattern"] or "**/*"), true, true)
   end

@@ -1,6 +1,30 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
+(fn last-non-empty-trimmed
+  [lines]
+  (let [n (# (or lines []))]
+    (let [step (fn step [idx]
+                 (if (<= idx 0)
+                     ""
+                     (let [trimmed (vim.trim (or (. lines idx) ""))]
+                       (if (~= trimmed "")
+                           trimmed
+                           (step (- idx 1))))))]
+      (step n))))
+
+(fn any-active-line?
+  [lines]
+  (let [n (# (or lines []))]
+    (let [step (fn step [idx]
+                 (if (> idx n)
+                     false
+                     (let [trimmed (vim.trim (or (. lines idx) ""))]
+                       (if (~= trimmed "")
+                           true
+                           (step (+ idx 1))))))]
+      (step 1))))
+
 (fn M.now-ms
   []
   (/ (vim.loop.hrtime) 1000000))
@@ -18,13 +42,7 @@
                    parsed (if session.project-mode
                               (query-mod.parse-query-lines lines)
                               {:lines lines})
-                   last-active (do
-                                 (var s "")
-                                 (each [_ line (ipairs (or (. parsed :lines) []))]
-                                   (let [trimmed (vim.trim (or line ""))]
-                                     (when (~= trimmed "")
-                                       (set s trimmed))))
-                                 s)]
+                   last-active (last-non-empty-trimmed (or (. parsed :lines) []))]
                (# (or last-active "")))
         short-extra (if (<= qlen 1)
                         (or (. short-extra-ms 1) 180)
@@ -44,11 +62,7 @@
 (fn M.prompt-has-active-query?
   [query-mod prompt-lines session]
   (let [parsed (query-mod.parse-query-lines (prompt-lines session))]
-    (var has false)
-    (each [_ line (ipairs (or (. parsed :lines) []))]
-      (when (and (not has) (~= (vim.trim (or line "")) ""))
-        (set has true)))
-    has))
+    (any-active-line? (or (. parsed :lines) []))))
 
 (fn M.cancel-prompt-update!
   [session]

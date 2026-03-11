@@ -19,6 +19,21 @@
 (local router_query_flow_mod (require :metabuffer.router.query_flow))
 
 (local M {})
+
+(fn sync-prompt-buffer-name!
+  [session]
+  (when (and session
+             session.prompt-buf
+             (vim.api.nvim_buf_is_valid session.prompt-buf)
+             session.meta
+             session.meta.buf
+             (= (type session.meta.buf.name) "string")
+             (~= session.meta.buf.name ""))
+    (pcall
+      vim.api.nvim_buf_set_name
+      session.prompt-buf
+      (.. session.meta.buf.name " [Prompt]"))))
+
 (set M.instances {})
 (set M.active-by-source {})
 (set M.active-by-prompt {})
@@ -240,13 +255,60 @@
   (vim.cmd "redraw|redrawstatus")
   (M._store_vars meta))
 
+(fn project-setting-token
+  [name enabled]
+  (.. "#" (if enabled "+" "-") name))
+
+(fn history-entry-query
+  [entry]
+  (let [parsed (query_mod.parse-query-text (or entry ""))]
+    (or (. parsed :query) "")))
+
+(fn history-entry-token
+  [entry]
+  (let [parts (vim.split (history-entry-query entry) "%s+" {:trimempty true})]
+    (if (> (# parts) 0)
+        (. parts (# parts))
+        "")))
+
+(fn history-entry-tail
+  [entry]
+  (let [parts (vim.split (history-entry-query entry) "%s+" {:trimempty true})]
+    (if (> (# parts) 1)
+        (table.concat (vim.list_slice parts 2) " ")
+        "")))
+
+(fn history-entry-with-settings
+  [session prompt]
+  (let [query-text (or prompt "")
+        prefix (if (and session session.project-mode)
+                   (table.concat
+                     [(project-setting-token "hidden" session.effective-include-hidden)
+                      (project-setting-token "ignored" session.effective-include-ignored)
+                      (project-setting-token "deps" session.effective-include-deps)
+                      (project-setting-token "prefilter" session.prefilter-mode)
+                      (project-setting-token "lazy" session.lazy-mode)]
+                     " ")
+                   "")]
+    (if (= prefix "")
+        query-text
+        (if (= query-text "")
+            prefix
+            (.. prefix " " query-text)))))
+
+(fn push-history-entry!
+  [session text]
+  (push-history! (history-entry-with-settings session text)))
+
 (fn remove-session
   [session]
   (when session
-    (push-history! (or session.last-prompt-text
-                       (if (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
-                           (router_util_mod.prompt-text session)
-                           "")))
+    (push-history-entry!
+      session
+      (or session.last-prompt-text
+          (if (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
+              (router_util_mod.prompt-text session)
+              "")))
     (router_util_mod.persist-prompt-height! session)
     (when session.augroup
       (pcall vim.api.nvim_del_augroup_by_id session.augroup))
@@ -298,16 +360,8 @@
   [session]
   (let [curr session.meta]
     (set session.last-prompt-text (router_util_mod.prompt-text session))
-    (push-history! session.last-prompt-text)
+    (push-history-entry! session session.last-prompt-text)
     (apply-prompt-lines session)
-    (router_prompt_mod.begin-session-close!
-      session
-      router_prompt_mod.cancel-prompt-update!)
-    (pcall vim.cmd "stopinsert")
-    (let [matcher (curr.matcher)]
-      (when matcher
-        (pcall matcher.remove-highlight matcher)))
-    (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
     (when (and (vim.api.nvim_win_is_valid session.origin-win)
                (vim.api.nvim_buf_is_valid session.origin-buf))
       (pcall vim.api.nvim_set_current_win session.origin-win)
@@ -334,9 +388,20 @@
       (when (~= vq "")
         (vim.fn.setreg "/" vq)
         (set vim.o.hlsearch true)))
-    (session_view.wipe-temp-buffers curr)
-    (remove-session session)
-    (M._wrapup curr)
+    (vim.schedule
+      (fn []
+        (when (= (. M.active-by-prompt session.prompt-buf) session)
+          (router_prompt_mod.begin-session-close!
+            session
+            router_prompt_mod.cancel-prompt-update!)
+          (pcall vim.cmd "stopinsert")
+          (let [matcher (curr.matcher)]
+            (when matcher
+              (pcall matcher.remove-highlight matcher)))
+          (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
+          (session_view.wipe-temp-buffers curr)
+          (remove-session session)
+          (M._wrapup curr))))
     curr))
 
 (fn finish-cancel
@@ -346,7 +411,7 @@
       session
       router_prompt_mod.cancel-prompt-update!)
     (set session.last-prompt-text (router_util_mod.prompt-text session))
-    (push-history! session.last-prompt-text)
+    (push-history-entry! session session.last-prompt-text)
     (pcall vim.cmd "stopinsert")
     (let [matcher (curr.matcher)]
       (when matcher
@@ -482,7 +547,8 @@
           (let [txt (router_util_mod.prompt-text session)
                 can-history (or (= txt "")
                                 (= txt session.initial-prompt-text)
-                                (= txt session.last-history-text))]
+                                (= txt session.last-history-text)
+                                (= txt (history-entry-query session.last-history-text)))]
             (if can-history
                 (let [h (or session.history-cache (history_store.list))
                       n (# h)]
@@ -506,19 +572,11 @@
 
 (fn history-latest-token
   [session]
-  (let [entry (history-latest session)
-        parts (vim.split (or entry "") "%s+" {:trimempty true})]
-    (if (> (# parts) 0)
-        (. parts (# parts))
-        "")))
+  (history-entry-token (history-latest session)))
 
 (fn history-latest-tail
   [session]
-  (let [entry (history-latest session)
-        parts (vim.split (or entry "") "%s+" {:trimempty true})]
-    (if (> (# parts) 1)
-        (table.concat (vim.list_slice parts 2) " ")
-        "")))
+  (history-entry-tail (history-latest session)))
 
 (fn M.last-prompt-entry
   [prompt-buf]
@@ -761,6 +819,32 @@
                 next (.. current sep token)]
             (router_util_mod.set-prompt-text! session next)))))))
 
+(fn M.insert-symbol-under-cursor
+  [prompt-buf]
+  "Append <cword> from main results window into prompt query."
+  (let [session (. M.active-by-prompt prompt-buf)]
+    (when session
+      (let [word (vim.api.nvim_win_call
+                   session.meta.win.window
+                   (fn [] (vim.fn.expand "<cword>")))
+            token (if (and (= (type word) "string") (~= (vim.trim word) ""))
+                      word
+                      "")]
+        (when (~= token "")
+          (let [current (router_util_mod.prompt-text session)
+                sep (if (or (= current "")
+                            (vim.endswith current " ")
+                            (vim.endswith current "\n"))
+                        ""
+                        " ")
+                next (.. current sep token)]
+            (router_util_mod.set-prompt-text! session next)))))))
+
+(fn M.accept-main
+  [prompt-buf]
+  "Accept current selection from the main results window."
+  (M.accept prompt-buf))
+
 (fn M.toggle-scan-option
   [prompt-buf which]
   "Toggle include-hidden/include-ignored/include-deps scan flags."
@@ -788,6 +872,7 @@
       (set session.project-mode (not session.project-mode))
       (set session.meta.project-mode session.project-mode)
       (session.meta.buf.set-name (router_util_mod.meta-buffer-name session))
+      (sync-prompt-buffer-name! session)
       (project-source.apply-source-set! session)
       (apply-prompt-lines session))))
 
@@ -797,6 +882,7 @@
         (prompt_hooks_mod.new
           {:mark-prompt-buffer! router_util_mod.mark-prompt-buffer!
            :default-prompt-keymaps M.default-prompt-keymaps
+           :default-main-keymaps M.default-main-keymaps
            :active-by-prompt M.active-by-prompt
            :on-prompt-changed M.on-prompt-changed
            :update-info-window update-info-window
@@ -807,7 +893,17 @@
 (fn M.start
   [query mode _meta project-mode]
   "Create a Meta session and wire prompt/result/project orchestration."
-  (let [parsed-query (query_mod.parse-query-text query)
+  (pcall vim.cmd "silent! nohlsearch")
+  (let [start-query (or query "")
+        latest-history (history-latest nil)
+        expanded-query (if (= start-query "!!")
+                           latest-history
+                           (= start-query "!$")
+                           (history-entry-token latest-history)
+                           (= start-query "!^!")
+                           (history-entry-tail latest-history)
+                           start-query)
+        parsed-query (query_mod.parse-query-text expanded-query)
         query0 (. parsed-query :query)
         start-hidden (if-some [v (. parsed-query :include-hidden)]
                              v
@@ -840,7 +936,11 @@
     (let [initial-lines (if (and query (~= query ""))
                             (vim.split query "\n" {:plain true})
                             [""])
-          prompt-win (prompt_window_mod.new vim {:height (router_util_mod.prompt-height)})
+          prompt-win (prompt_window_mod.new
+                       vim
+                       {:height (router_util_mod.prompt-height)
+                        :window-local-layout M.window-local-layout
+                        :origin-win origin-win})
           prompt-buf prompt-win.buffer
           session {:source-buf source-buf
                    :origin-win origin-win
@@ -849,6 +949,7 @@
                    :initial-source-line (math.max 1 (or (. source-view :lnum) (+ (or condition.selected-index 0) 1)))
                    :prompt-win prompt-win.window
                    :prompt-buf prompt-buf
+                   :window-local-layout M.window-local-layout
                    :initial-prompt-text (table.concat initial-lines "\n")
                    :last-prompt-text (table.concat initial-lines "\n")
                    :last-history-text ""
@@ -897,6 +998,7 @@
         ;; Initialize/render after prompt split exists so we avoid an extra
         ;; post-split view correction pass that can visually "flash" scroll.
         (curr.on-init)
+        (sync-prompt-buffer-name! session)
         ;; Ensure initial selection/view is anchored before attaching prompt
         ;; hooks that may sync from main-window cursor events.
         (when session.project-mode
@@ -909,6 +1011,10 @@
         (when-not (and session.project-mode (not initial-query-active))
           (apply-prompt-lines session))
         (vim.api.nvim_set_current_win prompt-win.window)
+        (let [row (math.max 1 (# initial-lines))
+              line (or (. initial-lines row) "")
+              col (# line)]
+          (pcall vim.api.nvim_win_set_cursor prompt-win.window [row col]))
         (vim.cmd "startinsert")
         (vim.schedule (fn [] (set session.startup-initializing false)))
         (when (and session.project-mode (not initial-query-active))
