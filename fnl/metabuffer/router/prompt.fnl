@@ -136,4 +136,182 @@
                        (set session.prompt-last-apply-ms now)
                        (apply-prompt-lines session))))))))))))
 
+(fn session-by-prompt
+  [active-by-prompt prompt-buf]
+  (. active-by-prompt prompt-buf))
+
+(fn M.prompt-insert-at-cursor!
+  [active-by-prompt prompt-buf text]
+  (let [session (session-by-prompt active-by-prompt prompt-buf)]
+    (when (and session
+               session.prompt-buf
+               session.prompt-win
+               (vim.api.nvim_buf_is_valid session.prompt-buf)
+               (vim.api.nvim_win_is_valid session.prompt-win)
+               (= (type text) "string")
+               (~= text ""))
+      (let [[row col] (vim.api.nvim_win_get_cursor session.prompt-win)
+            row0 (math.max 0 (- row 1))
+            chunks (vim.split text "\n" {:plain true})
+            last-line (. chunks (# chunks))
+            next-row (+ row0 (# chunks))
+            next-col (if (= (# chunks) 1)
+                         (+ col (# last-line))
+                         (# last-line))]
+        (vim.api.nvim_buf_set_text session.prompt-buf row0 col row0 col chunks)
+        (pcall vim.api.nvim_win_set_cursor session.prompt-win [next-row next-col])))))
+
+(fn prompt-row-col
+  [session]
+  (if (and session
+           session.prompt-win
+           (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [[row col] (vim.api.nvim_win_get_cursor session.prompt-win)]
+        {:row (math.max 1 row)
+         :row0 (math.max 0 (- row 1))
+         :col (math.max 0 col)})
+      {:row 1 :row0 0 :col 0}))
+
+(fn prompt-line-text
+  [session row0]
+  (let [lines (vim.api.nvim_buf_get_lines session.prompt-buf row0 (+ row0 1) false)]
+    (or (. lines 1) "")))
+
+(fn M.prompt-home!
+  [active-by-prompt prompt-buf]
+  (let [session (session-by-prompt active-by-prompt prompt-buf)]
+    (when (and session
+               session.prompt-win
+               (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [{: row} (prompt-row-col session)]
+        (pcall vim.api.nvim_win_set_cursor session.prompt-win [row 0])))))
+
+(fn M.prompt-end!
+  [active-by-prompt prompt-buf]
+  (let [session (session-by-prompt active-by-prompt prompt-buf)]
+    (when (and session
+               session.prompt-buf
+               session.prompt-win
+               (vim.api.nvim_buf_is_valid session.prompt-buf)
+               (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [{: row : row0} (prompt-row-col session)
+            line (prompt-line-text session row0)]
+        (pcall vim.api.nvim_win_set_cursor session.prompt-win [row (# line)])))))
+
+(fn M.prompt-kill-backward!
+  [active-by-prompt prompt-buf]
+  (let [session (session-by-prompt active-by-prompt prompt-buf)]
+    (when (and session
+               session.prompt-buf
+               session.prompt-win
+               (vim.api.nvim_buf_is_valid session.prompt-buf)
+               (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [{: row : row0 : col} (prompt-row-col session)]
+        (when (> col 0)
+          (let [line (prompt-line-text session row0)
+                killed (string.sub line 1 col)]
+            (set session.prompt-yank-register (or killed ""))
+            (vim.api.nvim_buf_set_text session.prompt-buf row0 0 row0 col [""])
+            (pcall vim.api.nvim_win_set_cursor session.prompt-win [row 0])))))))
+
+(fn M.prompt-kill-forward!
+  [active-by-prompt prompt-buf]
+  (let [session (session-by-prompt active-by-prompt prompt-buf)]
+    (when (and session
+               session.prompt-buf
+               session.prompt-win
+               (vim.api.nvim_buf_is_valid session.prompt-buf)
+               (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [{: row : row0 : col} (prompt-row-col session)
+            line (prompt-line-text session row0)
+            len (# line)]
+        (when (< col len)
+          (let [killed (string.sub line (+ col 1))]
+            (set session.prompt-yank-register (or killed ""))
+            (vim.api.nvim_buf_set_text session.prompt-buf row0 col row0 len [""])
+            (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col])))))))
+
+(fn M.prompt-yank!
+  [active-by-prompt prompt-buf]
+  (let [session (session-by-prompt active-by-prompt prompt-buf)
+        text (or (and session session.prompt-yank-register) "")]
+    (when (~= text "")
+      (M.prompt-insert-at-cursor! active-by-prompt prompt-buf text))))
+
+(fn M.prompt-insert-text!
+  [active-by-prompt prompt-buf text]
+  (M.prompt-insert-at-cursor! active-by-prompt prompt-buf text))
+
+(fn M.insert-last-prompt!
+  [active-by-prompt history-api prompt-buf]
+  (let [session (session-by-prompt active-by-prompt prompt-buf)
+        entry (history-api.history-latest session)]
+    (M.prompt-insert-at-cursor! active-by-prompt prompt-buf entry)
+    (when (and session (~= entry ""))
+      (set session.last-history-text entry))))
+
+(fn M.insert-last-token!
+  [active-by-prompt history-api prompt-buf]
+  (let [session (session-by-prompt active-by-prompt prompt-buf)
+        token (history-api.history-latest-token session)
+        entry (history-api.history-latest session)]
+    (M.prompt-insert-at-cursor! active-by-prompt prompt-buf token)
+    (when (and session (~= token ""))
+      (set session.last-history-text entry))))
+
+(fn M.insert-last-tail!
+  [active-by-prompt history-api prompt-buf]
+  (let [session (session-by-prompt active-by-prompt prompt-buf)
+        tail (history-api.history-latest-tail session)
+        entry (history-api.history-latest session)]
+    (M.prompt-insert-at-cursor! active-by-prompt prompt-buf tail)
+    (when (and session (~= tail ""))
+      (set session.last-history-text entry))))
+
+(fn find-token-span
+  [line col]
+  (var pos 1)
+  (var before nil)
+  (while (<= pos (# line))
+    (let [[s e] [(string.find line "%S+" pos)]]
+      (if (and s e)
+          (let [s0 (- s 1)
+                token (string.sub line s e)]
+            (if (and (<= s0 col) (<= col e))
+                (do
+                  (set before {:s s :e e :token token})
+                  (set pos (+ (# line) 1)))
+                (do
+                  (when (and (not before) (< col s0))
+                    (set before {:s s :e e :token token})
+                    (set pos (+ (# line) 1)))
+                  (when (<= pos (# line))
+                    (set pos (+ e 1))))))
+          (set pos (+ (# line) 1)))))
+  before)
+
+(fn M.negate-current-token!
+  [active-by-prompt prompt-buf]
+  (let [session (session-by-prompt active-by-prompt prompt-buf)]
+    (when (and session
+               session.prompt-buf
+               session.prompt-win
+               (vim.api.nvim_buf_is_valid session.prompt-buf)
+               (vim.api.nvim_win_is_valid session.prompt-win))
+      (let [[row col] (vim.api.nvim_win_get_cursor session.prompt-win)
+            row0 (math.max 0 (- row 1))
+            line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf row0 (+ row0 1) false) 1) "")]
+        (when-let [span (find-token-span line col)]
+          (let [s (. span :s)
+                e (. span :e)
+                token (. span :token)
+                negated (and (> (# token) 1) (= (string.sub token 1 1) "!"))
+                next-token (if negated (string.sub token 2) (.. "!" token))
+                delta (- (# next-token) (# token))
+                s0 (- s 1)]
+            (vim.api.nvim_buf_set_text session.prompt-buf row0 s0 row0 e [next-token])
+            (pcall vim.api.nvim_win_set_cursor
+                   session.prompt-win
+                   [row (math.max 0 (+ col (if (>= col s0) delta 0)))])))))))
+
 M

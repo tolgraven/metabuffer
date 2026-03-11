@@ -192,4 +192,219 @@ M["schedule-prompt-update!"] = function(ctx, session, wait_ms)
     return nil
   end
 end
+local function session_by_prompt(active_by_prompt, prompt_buf)
+  return active_by_prompt[prompt_buf]
+end
+M["prompt-insert-at-cursor!"] = function(active_by_prompt, prompt_buf, text)
+  local session = session_by_prompt(active_by_prompt, prompt_buf)
+  if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"]) and (type(text) == "string") and (text ~= "")) then
+    local _let_26_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
+    local row = _let_26_[1]
+    local col = _let_26_[2]
+    local row0 = math.max(0, (row - 1))
+    local chunks = vim.split(text, "\n", {plain = true})
+    local last_line = chunks[#chunks]
+    local next_row = (row0 + #chunks)
+    local next_col
+    if (#chunks == 1) then
+      next_col = (col + #last_line)
+    else
+      next_col = #last_line
+    end
+    vim.api.nvim_buf_set_text(session["prompt-buf"], row0, col, row0, col, chunks)
+    return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {next_row, next_col})
+  else
+    return nil
+  end
+end
+local function prompt_row_col(session)
+  if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+    local _let_29_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
+    local row = _let_29_[1]
+    local col = _let_29_[2]
+    return {row = math.max(1, row), row0 = math.max(0, (row - 1)), col = math.max(0, col)}
+  else
+    return {row = 1, row0 = 0, col = 0}
+  end
+end
+local function prompt_line_text(session, row0)
+  local lines = vim.api.nvim_buf_get_lines(session["prompt-buf"], row0, (row0 + 1), false)
+  return (lines[1] or "")
+end
+M["prompt-home!"] = function(active_by_prompt, prompt_buf)
+  local session = session_by_prompt(active_by_prompt, prompt_buf)
+  if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+    local _let_31_ = prompt_row_col(session)
+    local row = _let_31_.row
+    return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, 0})
+  else
+    return nil
+  end
+end
+M["prompt-end!"] = function(active_by_prompt, prompt_buf)
+  local session = session_by_prompt(active_by_prompt, prompt_buf)
+  if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+    local _let_33_ = prompt_row_col(session)
+    local row = _let_33_.row
+    local row0 = _let_33_.row0
+    local line = prompt_line_text(session, row0)
+    return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, #line})
+  else
+    return nil
+  end
+end
+M["prompt-kill-backward!"] = function(active_by_prompt, prompt_buf)
+  local session = session_by_prompt(active_by_prompt, prompt_buf)
+  if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+    local _let_35_ = prompt_row_col(session)
+    local row = _let_35_.row
+    local row0 = _let_35_.row0
+    local col = _let_35_.col
+    if (col > 0) then
+      local line = prompt_line_text(session, row0)
+      local killed = string.sub(line, 1, col)
+      session["prompt-yank-register"] = (killed or "")
+      vim.api.nvim_buf_set_text(session["prompt-buf"], row0, 0, row0, col, {""})
+      return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, 0})
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+M["prompt-kill-forward!"] = function(active_by_prompt, prompt_buf)
+  local session = session_by_prompt(active_by_prompt, prompt_buf)
+  if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+    local _let_38_ = prompt_row_col(session)
+    local row = _let_38_.row
+    local row0 = _let_38_.row0
+    local col = _let_38_.col
+    local line = prompt_line_text(session, row0)
+    local len = #line
+    if (col < len) then
+      local killed = string.sub(line, (col + 1))
+      session["prompt-yank-register"] = (killed or "")
+      vim.api.nvim_buf_set_text(session["prompt-buf"], row0, col, row0, len, {""})
+      return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, col})
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+M["prompt-yank!"] = function(active_by_prompt, prompt_buf)
+  local session = session_by_prompt(active_by_prompt, prompt_buf)
+  local text = ((session and session["prompt-yank-register"]) or "")
+  if (text ~= "") then
+    return M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, text)
+  else
+    return nil
+  end
+end
+M["prompt-insert-text!"] = function(active_by_prompt, prompt_buf, text)
+  return M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, text)
+end
+M["insert-last-prompt!"] = function(active_by_prompt, history_api, prompt_buf)
+  local session = session_by_prompt(active_by_prompt, prompt_buf)
+  local entry = history_api["history-latest"](session)
+  M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, entry)
+  if (session and (entry ~= "")) then
+    session["last-history-text"] = entry
+    return nil
+  else
+    return nil
+  end
+end
+M["insert-last-token!"] = function(active_by_prompt, history_api, prompt_buf)
+  local session = session_by_prompt(active_by_prompt, prompt_buf)
+  local token = history_api["history-latest-token"](session)
+  local entry = history_api["history-latest"](session)
+  M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, token)
+  if (session and (token ~= "")) then
+    session["last-history-text"] = entry
+    return nil
+  else
+    return nil
+  end
+end
+M["insert-last-tail!"] = function(active_by_prompt, history_api, prompt_buf)
+  local session = session_by_prompt(active_by_prompt, prompt_buf)
+  local tail = history_api["history-latest-tail"](session)
+  local entry = history_api["history-latest"](session)
+  M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, tail)
+  if (session and (tail ~= "")) then
+    session["last-history-text"] = entry
+    return nil
+  else
+    return nil
+  end
+end
+local function find_token_span(line, col)
+  local pos = 1
+  local before = nil
+  while (pos <= #line) do
+    local s,e = string.find(line, "%S+", pos)
+    if (s and e) then
+      local s0 = (s - 1)
+      local token = string.sub(line, s, e)
+      if ((s0 <= col) and (col <= e)) then
+        before = {s = s, e = e, token = token}
+        pos = (#line + 1)
+      else
+        if (not before and (col < s0)) then
+          before = {s = s, e = e, token = token}
+          pos = (#line + 1)
+        else
+        end
+        if (pos <= #line) then
+          pos = (e + 1)
+        else
+        end
+      end
+    else
+      pos = (#line + 1)
+    end
+  end
+  return before
+end
+M["negate-current-token!"] = function(active_by_prompt, prompt_buf)
+  local session = session_by_prompt(active_by_prompt, prompt_buf)
+  if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+    local _let_49_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
+    local row = _let_49_[1]
+    local col = _let_49_[2]
+    local row0 = math.max(0, (row - 1))
+    local line = (vim.api.nvim_buf_get_lines(session["prompt-buf"], row0, (row0 + 1), false)[1] or "")
+    local val_110_auto = find_token_span(line, col)
+    if val_110_auto then
+      local span = val_110_auto
+      local s = span.s
+      local e = span.e
+      local token = span.token
+      local negated = ((#token > 1) and (string.sub(token, 1, 1) == "!"))
+      local next_token
+      if negated then
+        next_token = string.sub(token, 2)
+      else
+        next_token = ("!" .. token)
+      end
+      local delta = (#next_token - #token)
+      local s0 = (s - 1)
+      vim.api.nvim_buf_set_text(session["prompt-buf"], row0, s0, row0, e, {next_token})
+      local _51_
+      if (col >= s0) then
+        _51_ = delta
+      else
+        _51_ = 0
+      end
+      return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, math.max(0, (col + _51_))})
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
 return M
