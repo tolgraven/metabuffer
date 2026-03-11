@@ -71,19 +71,35 @@ local function finish_accept(deps, session)
   session["last-prompt-text"] = router_util_mod["prompt-text"](session)
   history_api["push-history-entry!"](session, session["last-prompt-text"])
   apply_prompt_lines(session)
-  if (vim.api.nvim_win_is_valid(session["origin-win"]) and vim.api.nvim_buf_is_valid(session["origin-buf"])) then
-    pcall(vim.api.nvim_set_current_win, session["origin-win"])
-    pcall(vim.api.nvim_win_set_buf, session["origin-win"], session["origin-buf"])
-  else
-  end
   if session["project-mode"] then
+    local _
+    if vim.api.nvim_win_is_valid(curr.win.window) then
+      _ = pcall(vim.api.nvim_set_current_win, curr.win.window)
+    else
+      _ = nil
+    end
     local ref = router_util_mod["selected-ref"](curr)
     if (ref and ref.path) then
-      vim.cmd(("edit " .. vim.fn.fnameescape(ref.path)))
+      do
+        local path = (ref.path or "")
+        local rel = vim.fn.fnamemodify(path, ":.")
+        local target
+        if ((type(rel) == "string") and (rel ~= "")) then
+          target = rel
+        else
+          target = path
+        end
+        vim.cmd(("edit " .. vim.fn.fnameescape(target)))
+      end
       vim.api.nvim_win_set_cursor(0, {math.max(1, (ref["open-lnum"] or ref.lnum or 1)), 0})
     else
     end
   else
+    if (vim.api.nvim_win_is_valid(session["origin-win"]) and vim.api.nvim_buf_is_valid(session["origin-buf"])) then
+      pcall(vim.api.nvim_set_current_win, session["origin-win"])
+      pcall(vim.api.nvim_win_set_buf, session["origin-win"], session["origin-buf"])
+    else
+    end
     base_buffer["switch-buf"](curr.buf.model)
     local row = curr.selected_line()
     curr.win["set-row"](row, true)
@@ -109,20 +125,26 @@ local function finish_accept(deps, session)
     else
     end
   end
-  local function _16_()
-    if (active_by_prompt[session["prompt-buf"]] == session) then
-      router_prompt_mod["begin-session-close!"](session, router_prompt_mod["cancel-prompt-update!"])
-      pcall(vim.cmd, "stopinsert")
-      clear_hit_highlight_21(curr)
-      pcall(vim.cmd, ("sign unplace * buffer=" .. curr.buf.buffer))
-      session_view["wipe-temp-buffers"](curr)
-      remove_session_21(deps, session)
-      return wrapup(curr)
-    else
-      return nil
+  if session["project-mode"] then
+    pcall(vim.cmd, "stopinsert")
+    pcall(curr.refresh_statusline)
+    pcall(deps["update-info-window"], session, false)
+  else
+    local function _18_()
+      if (active_by_prompt[session["prompt-buf"]] == session) then
+        router_prompt_mod["begin-session-close!"](session, router_prompt_mod["cancel-prompt-update!"])
+        pcall(vim.cmd, "stopinsert")
+        clear_hit_highlight_21(curr)
+        pcall(vim.cmd, ("sign unplace * buffer=" .. curr.buf.buffer))
+        session_view["wipe-temp-buffers"](curr)
+        remove_session_21(deps, session)
+        return wrapup(curr)
+      else
+        return nil
+      end
     end
+    vim.schedule(_18_)
   end
-  vim.schedule(_16_)
   return curr
 end
 local function finish_cancel(deps, session)
@@ -215,10 +237,10 @@ local function append_current_symbol_21(deps, prompt_buf, f)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if session then
     local word
-    local function _26_()
+    local function _29_()
       return vim.fn.expand("<cword>")
     end
-    word = vim.api.nvim_win_call(session.meta.win.window, _26_)
+    word = vim.api.nvim_win_call(session.meta.win.window, _29_)
     local token = f(word)
     if (token ~= "") then
       local current = router_util_mod["prompt-text"](session)
@@ -238,24 +260,24 @@ local function append_current_symbol_21(deps, prompt_buf, f)
   end
 end
 M["exclude-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _30_(word)
+  local function _33_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return ("!" .. word)
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _30_)
+  return append_current_symbol_21(deps, prompt_buf, _33_)
 end
 M["insert-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _32_(word)
+  local function _35_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return word
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _32_)
+  return append_current_symbol_21(deps, prompt_buf, _35_)
 end
 M["toggle-scan-option!"] = function(deps, prompt_buf, which)
   local project_source = deps["project-source"]

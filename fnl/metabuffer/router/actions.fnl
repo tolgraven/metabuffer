@@ -56,16 +56,23 @@
     (set session.last-prompt-text (router-util-mod.prompt-text session))
     (history-api.push-history-entry! session session.last-prompt-text)
     (apply-prompt-lines session)
-    (when (and (vim.api.nvim_win_is_valid session.origin-win)
-               (vim.api.nvim_buf_is_valid session.origin-buf))
-      (pcall vim.api.nvim_set_current_win session.origin-win)
-      (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
     (if session.project-mode
-        (let [ref (router-util-mod.selected-ref curr)]
+        (let [_ (when (vim.api.nvim_win_is_valid curr.win.window)
+                  (pcall vim.api.nvim_set_current_win curr.win.window))
+              ref (router-util-mod.selected-ref curr)]
           (when (and ref ref.path)
-            (vim.cmd (.. "edit " (vim.fn.fnameescape ref.path)))
+            (let [path (or ref.path "")
+                  rel (vim.fn.fnamemodify path ":.")
+                  target (if (and (= (type rel) "string") (~= rel ""))
+                             rel
+                             path)]
+              (vim.cmd (.. "edit " (vim.fn.fnameescape target))))
             (vim.api.nvim_win_set_cursor 0 [(math.max 1 (or ref.open-lnum ref.lnum 1)) 0])))
         (do
+          (when (and (vim.api.nvim_win_is_valid session.origin-win)
+                     (vim.api.nvim_buf_is_valid session.origin-buf))
+            (pcall vim.api.nvim_set_current_win session.origin-win)
+            (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
           (base-buffer.switch-buf curr.buf.model)
           (let [row (curr.selected_line)]
             (curr.win.set-row row true)
@@ -82,18 +89,25 @@
       (when (~= vq "")
         (vim.fn.setreg "/" vq)
         (set vim.o.hlsearch true)))
-    (vim.schedule
-      (fn []
-        (when (= (. active-by-prompt session.prompt-buf) session)
-          (router-prompt-mod.begin-session-close!
-            session
-            router-prompt-mod.cancel-prompt-update!)
+    (if session.project-mode
+        (do
+          ;; Keep the Meta session alive so jumplist <C-o> can return to the
+          ;; exact results/prompt/info state after opening a project hit.
           (pcall vim.cmd "stopinsert")
-          (clear-hit-highlight! curr)
-          (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
-          (session-view.wipe-temp-buffers curr)
-          (remove-session! deps session)
-          (wrapup curr))))
+          (pcall curr.refresh_statusline)
+          (pcall deps.update-info-window session false))
+        (vim.schedule
+          (fn []
+            (when (= (. active-by-prompt session.prompt-buf) session)
+              (router-prompt-mod.begin-session-close!
+                session
+                router-prompt-mod.cancel-prompt-update!)
+              (pcall vim.cmd "stopinsert")
+              (clear-hit-highlight! curr)
+              (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
+              (session-view.wipe-temp-buffers curr)
+              (remove-session! deps session)
+              (wrapup curr)))))
     curr))
 
 (fn finish-cancel
