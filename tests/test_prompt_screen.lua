@@ -1,6 +1,8 @@
 local child = MiniTest.new_child_neovim()
 local eq = MiniTest.expect.equality
 
+local debug_dump_path = "/tmp/metabuffer-mini-integration.log"
+
 local function wait_for(pred, timeout_ms)
   local ok = vim.wait(timeout_ms or 3000, pred, 20)
   eq(ok, true)
@@ -15,6 +17,11 @@ local function child_setup()
   child.o.hidden = true
   child.o.swapfile = false
   child.cmd("cd " .. root)
+  child.lua(string.format([[
+    _G.__meta_debug_dump_path = %q
+    local ok = pcall(vim.fn.delete, _G.__meta_debug_dump_path)
+    if not ok then end
+  ]], debug_dump_path))
 end
 
 local function open_meta_with_lines(lines)
@@ -55,12 +62,74 @@ local function session_hit_count()
   ]])
 end
 
+local function session_source_path_count()
+  return child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not s then return -1 end
+      local idxs = s.meta.buf.indices or {}
+      local refs = s.meta.buf['source-refs'] or {}
+      local seen = {}
+      local n = 0
+      for _, src_idx in ipairs(idxs) do
+        local ref = refs[src_idx]
+        local path = ref and ref.path or ''
+        if path ~= '' and not seen[path] then
+          seen[path] = true
+          n = n + 1
+        end
+      end
+      return n
+    end)()
+  ]])
+end
+
+local function dump_state(tag)
+  child.lua(string.format([[
+    (function()
+      local path = _G.__meta_debug_dump_path
+      if not path then return end
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      local out = {}
+      out[#out + 1] = ("--- %s ---")
+      if not s then
+        out[#out + 1] = "session=nil"
+      else
+        local q = table.concat((s.meta['query-lines'] or {}), "\\n")
+        local hits = #(s.meta.buf.indices or {})
+        local refs = s.meta.buf['source-refs'] or {}
+        local seen, src = {}, 0
+        for _, src_idx in ipairs(s.meta.buf.indices or {}) do
+          local ref = refs[src_idx]
+          local p = ref and ref.path or ''
+          if p ~= '' and not seen[p] then
+            seen[p] = true
+            src = src + 1
+          end
+        end
+        out[#out + 1] = ("query=" .. q)
+        out[#out + 1] = ("hits=" .. tostring(hits))
+        out[#out + 1] = ("sources=" .. tostring(src))
+        local lines = vim.api.nvim_buf_get_lines(s.meta.buf.buffer, 0, math.min(25, vim.api.nvim_buf_line_count(s.meta.buf.buffer)), false)
+        for i, line in ipairs(lines) do
+          out[#out + 1] = (string.format("%%03d: %%s", i, line))
+        end
+      end
+      vim.fn.writefile(out, path, "a")
+    end)()
+  ]], tag))
+end
+
 local function type_prompt(keys)
   child.type_keys(0, keys)
+  dump_state("type " .. keys)
 end
 
 local function type_prompt_slow(keys, per_key_ms)
   child.type_keys(per_key_ms or 80, keys)
+  dump_state("type_slow " .. keys)
 end
 
 local function open_project_meta_from_file(path)
@@ -145,6 +214,23 @@ T["filters on short tokens with real typing"] = function()
   type_prompt("<C-u>")
   wait_for(function() return session_query_text() == "" end)
   wait_for(function() return session_hit_count() == 6 end)
+end
+
+T["Meta with initial query argument applies immediately"] = function()
+  child.cmd("enew")
+  child.api.nvim_buf_set_lines(0, 0, -1, false, {
+    "alpha",
+    "meta plugin",
+    "metamorph",
+    "other",
+  })
+  child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
+  child.cmd("Meta meta")
+  wait_for(function()
+    return child.lua_get("require('metabuffer.router')['active-by-source'][_G.__meta_source_buf] ~= nil")
+  end)
+  wait_for(function() return session_query_text() == "meta" end)
+  wait_for(function() return session_hit_count() == 2 end)
 end
 
 T["meta query applies and metam narrows further"] = function()
@@ -281,6 +367,24 @@ T["project mode reproducer cadence: meta delayed, metam applies, backspace widen
   type_prompt("<BS>")
   wait_for(function() return session_query_text() == "" end, 6000)
   wait_for(function() return session_hit_count() == all_hits end, 6000)
+end
+
+T["project mode clear query broadens while keeping multi-source context"] = function()
+  local root = make_temp_project()
+  open_project_meta_in_dir(root, "main.txt")
+  wait_for(function() return session_hit_count() > 0 end, 6000)
+  local all_hits = session_hit_count()
+  wait_for(function() return session_source_path_count() > 1 end, 6000)
+  local all_sources = session_source_path_count()
+
+  type_prompt("metam")
+  wait_for(function() return session_query_text() == "metam" end, 6000)
+  wait_for(function() return session_hit_count() < all_hits end, 6000)
+
+  type_prompt("<C-u>")
+  wait_for(function() return session_query_text() == "" end, 6000)
+  wait_for(function() return session_hit_count() == all_hits end, 6000)
+  wait_for(function() return session_source_path_count() == all_sources end, 6000)
 end
 
 return T
