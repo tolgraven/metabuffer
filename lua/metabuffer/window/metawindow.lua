@@ -11,12 +11,15 @@ local function title_case(s)
     return ""
   end
 end
+local function escape_statusline(s)
+  return (s:gsub("%%", "%%%%"))
+end
 M.new = function(nvim, win)
   local self = base.new(nvim, (win or vim.api.nvim_get_current_win()), M["opts-to-stash"], M["default-opts"])
   self["set-statusline-state"] = function(mode_group, mode_label, name, num_hits, num_lines, line_nr, debug_out, preview_file, matcher, case_mode, hl_prefix, syntax)
     local matcher_suffix = title_case(matcher)
     local case_suffix = title_case(case_mode)
-    local text = string.format(M.statusline, mode_group, mode_label, num_hits, num_lines, (debug_out or ""), (preview_file or ""), matcher_suffix, matcher, "C^", case_suffix, case_mode, "C-o", hl_prefix, syntax, "Cs")
+    local text = string.format(M.statusline, mode_group, mode_label, num_hits, num_lines, (debug_out or ""), escape_statusline((preview_file or "")), matcher_suffix, matcher, "C^", case_suffix, case_mode, "C-o", hl_prefix, syntax, "Cs")
     return self["set-statusline"](text)
   end
   return self
