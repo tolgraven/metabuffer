@@ -25,8 +25,8 @@
                   (let [line (. candidates idx)
                         [s _e] [(rx:match_str line)]]
                     (when s
-                      (table.insert next idx)))))
-              (set active next)))
+                      (table.insert next idx))))
+                (set active next)))
           active))}))
 
 M
