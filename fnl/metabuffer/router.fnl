@@ -416,6 +416,16 @@
   "Accept current selection from the main results window."
   (router_actions_mod.accept-main! actions-deps prompt-buf))
 
+(fn M.enter-edit-mode
+  [prompt-buf]
+  "Hide prompt/info and switch to editable results buffer."
+  (router_actions_mod.enter-edit-mode! actions-deps prompt-buf))
+
+(fn M.write-results
+  [prompt-buf]
+  "Propagate edited results lines back to their source files."
+  (router_actions_mod.write-results! actions-deps prompt-buf))
+
 (fn M.maybe-restore-hidden-ui
   [prompt-buf]
   "Restore hidden prompt/info UI when revisiting a preserved results buffer."

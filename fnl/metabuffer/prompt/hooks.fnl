@@ -131,6 +131,8 @@
       (if
         (= action "accept")
         (fn [] (router.accept session.prompt-buf))
+        (= action "enter-edit-mode")
+        (fn [] (router.enter-edit-mode session.prompt-buf))
         (= action "cancel")
         (fn [] (router.cancel session.prompt-buf))
         (= action "move-selection")
@@ -232,6 +234,8 @@
       (if
         (= action "accept-main")
         (fn [] (router.accept-main session.prompt-buf))
+        (= action "enter-edit-mode")
+        (fn [] (router.enter-edit-mode session.prompt-buf))
         (= action "exclude-symbol-under-cursor")
         (fn [] (router.exclude-symbol-under-cursor session.prompt-buf))
         (= action "insert-symbol-under-cursor")
@@ -358,6 +362,11 @@
           {:group aug
            :callback (fn [_]
                        (schedule-scroll-sync! session))})
+        (vim.api.nvim_create_autocmd "BufWriteCmd"
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       (router.write-results session.prompt-buf))})
         (disable-cmp session)
         (mark-prompt-buffer! session.prompt-buf)
         (refresh-prompt-highlights! session)

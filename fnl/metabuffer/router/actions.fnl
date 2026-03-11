@@ -33,6 +33,8 @@
       (history-api.close-history-browser! session)
       (when session.source-buf
         (set (. active-by-source session.source-buf) nil))
+      (when (and session.meta session.meta.buf session.meta.buf.buffer)
+        (set (. active-by-source session.meta.buf.buffer) nil))
       (when session.prompt-buf
         (set (. active-by-prompt session.prompt-buf) nil)))))
 
@@ -60,7 +62,8 @@
   (let [router-util-mod (. deps :router-util-mod)
         info-window (. deps :info-window)
         preview-window (. deps :preview-window)
-        history-api (. deps :history-api)]
+        history-api (. deps :history-api)
+        active-by-source (. deps :active-by-source)]
     (set session.ui-hidden true)
     (set session.ui-last-insert-mode (vim.startswith (. (vim.api.nvim_get_mode) :mode) "i"))
     (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
@@ -76,7 +79,9 @@
     (set session.prompt-win nil)
     (info-window.close-window! session)
     (preview-window.close-window! session)
-    (history-api.close-history-browser! session)))
+    (history-api.close-history-browser! session)
+    (when (and session.meta session.meta.buf session.meta.buf.buffer)
+      (set (. active-by-source session.meta.buf.buffer) session))))
 
 (fn restore-session-ui!
   [deps session]
@@ -116,6 +121,12 @@
         (sync-prompt-buffer-name! session)
         (set curr.status-win (meta-window-mod.new vim prompt-win))
         (set session.ui-hidden false)
+        (set session.results-edit-mode false)
+        (when (and curr curr.buf curr.buf.buffer (vim.api.nvim_buf_is_valid curr.buf.buffer))
+          (let [bo (. vim.bo curr.buf.buffer)]
+            (set (. bo :buftype) "nofile")
+            (set (. bo :modifiable) false))
+          (pcall curr.buf.render))
         (vim.cmd "silent! nohlsearch")
         (let [cursor (or session.hidden-prompt-cursor [1 0])
               row (math.max 1 (or (. cursor 1) 1))
@@ -185,6 +196,7 @@
           ;; returning to the results buffer restores prompt/info/selection.
           (pcall vim.cmd "stopinsert")
           (clear-hit-highlight! curr)
+          (set session.results-edit-mode false)
           (hide-session-ui! deps session))
         (vim.schedule
           (fn []
@@ -365,6 +377,121 @@
 (fn M.remove-session!
   [deps session]
   (remove-session! deps session))
+
+(fn set-results-edit-buffer!
+  [session]
+  (let [buf session.meta.buf.buffer
+        bo (. vim.bo buf)]
+    (set (. bo :buftype) "acwrite")
+    (set (. bo :bufhidden) "hide")
+    (set (. bo :modifiable) true)
+    (set (. bo :readonly) false)
+    (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})))
+
+(fn ensure-session-for-results-buf!
+  [deps session]
+  (let [active-by-source (. deps :active-by-source)
+        buf session.meta.buf.buffer]
+    (set (. active-by-source buf) session)))
+
+(fn path-updates-from-visible
+  [session]
+  (let [meta session.meta
+        visible (vim.api.nvim_buf_get_lines meta.buf.buffer 0 -1 false)
+        idxs (or meta.buf.indices [])
+        refs (or meta.buf.source-refs [])
+        content meta.buf.content
+        updates {}]
+    (for [i 1 (math.min (# visible) (# idxs))]
+      (let [src-idx (. idxs i)
+            ref (. refs src-idx)
+            kind (or (and ref ref.kind) "")
+            path (and ref ref.path)
+            lnum (and ref ref.lnum)
+            old (or (. content src-idx) "")
+            new (or (. visible i) "")]
+        (when (and ref
+                   (~= kind "file-entry")
+                   (= (type path) "string")
+                   (~= path "")
+                   (= (type lnum) "number")
+                   (> lnum 0)
+                   (~= old new))
+          (let [per-file (or (. updates path) {})]
+            (set (. per-file lnum) {:new new :src-idx src-idx})
+            (set (. updates path) per-file)))))
+    updates))
+
+(fn apply-path-updates!
+  [session updates]
+  (let [meta session.meta
+        any-written false
+        writes 0]
+    (var wrote any-written)
+    (var changed writes)
+    (each [path per-file (pairs updates)]
+      (let [[ok-read lines] [(pcall vim.fn.readfile path)]]
+        (when (and ok-read (= (type lines) "table"))
+          (var local-change false)
+          (each [lnum payload (pairs per-file)]
+            (when (and (>= lnum 1) (<= lnum (# lines)))
+              (let [next-line (. payload :new)
+                    src-idx (. payload :src-idx)]
+                (when (~= (. lines lnum) next-line)
+                  (set (. lines lnum) next-line)
+                  (set (. meta.buf.content src-idx) next-line)
+                  (when (and meta.buf.source-refs (. meta.buf.source-refs src-idx))
+                    (let [src-ref (. meta.buf.source-refs src-idx)]
+                      (set (. src-ref :line) next-line)))
+                  (set local-change true)
+                  (set changed (+ changed 1))))))
+          (when local-change
+            (let [[ok-write] [(pcall vim.fn.writefile lines path)]]
+              (when ok-write
+                (set wrote true)
+                (let [bufnr (vim.fn.bufnr path)]
+                  (when (and bufnr (> bufnr 0) (vim.api.nvim_buf_is_loaded bufnr))
+                    (each [lnum payload (pairs per-file)]
+                      (when (and (>= lnum 1) (<= lnum (# lines)))
+                        (pcall vim.api.nvim_buf_set_lines bufnr (- lnum 1) lnum false [(. payload :new)])))))))))))
+    {:wrote wrote :changed changed}))
+
+(fn M.write-results!
+  [deps prompt-buf]
+  (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)
+        update-info-window (. deps :update-info-window)]
+    (when session
+      (if (not session.results-edit-mode)
+          (vim.notify "Meta results are not in edit mode (<M-CR>)." vim.log.levels.WARN)
+          (let [updates (path-updates-from-visible session)
+                result (apply-path-updates! session updates)
+                buf session.meta.buf.buffer]
+            (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
+            (pcall session.meta.refresh_statusline)
+            (pcall update-info-window session true)
+            (vim.notify
+              (if (> result.changed 0)
+                  (.. "metabuffer: wrote " (tostring result.changed) " change(s)")
+                  "metabuffer: no changes")
+              vim.log.levels.INFO))))))
+
+(fn M.enter-edit-mode!
+  [deps prompt-buf]
+  (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)
+        router-util-mod (. deps :router-util-mod)
+        history-api (. deps :history-api)
+        apply-prompt-lines (. deps :apply-prompt-lines)]
+    (when session
+      (set session.last-prompt-text (router-util-mod.prompt-text session))
+      (history-api.push-history-entry! session session.last-prompt-text)
+      (apply-prompt-lines session)
+      (set session.results-edit-mode true)
+      (hide-session-ui! deps session)
+      (ensure-session-for-results-buf! deps session)
+      (set-results-edit-buffer! session)
+      (when (and session.meta session.meta.win (vim.api.nvim_win_is_valid session.meta.win.window))
+        (pcall vim.api.nvim_set_current_win session.meta.win.window)
+        (pcall vim.api.nvim_win_set_buf session.meta.win.window session.meta.buf.buffer)))))
 
 (fn M.maybe-restore-ui!
   [deps prompt-buf]

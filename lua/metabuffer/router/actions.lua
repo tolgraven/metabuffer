@@ -40,6 +40,10 @@ local function remove_session_21(deps, session)
       active_by_source[session["source-buf"]] = nil
     else
     end
+    if (session.meta and session.meta.buf and session.meta.buf.buffer) then
+      active_by_source[session.meta.buf.buffer] = nil
+    else
+    end
     if session["prompt-buf"] then
       active_by_prompt[session["prompt-buf"]] = nil
       return nil
@@ -79,6 +83,7 @@ local function hide_session_ui_21(deps, session)
   local info_window = deps["info-window"]
   local preview_window = deps["preview-window"]
   local history_api = deps["history-api"]
+  local active_by_source = deps["active-by-source"]
   session["ui-hidden"] = true
   session["ui-last-insert-mode"] = vim.startswith(vim.api.nvim_get_mode().mode, "i")
   if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
@@ -102,7 +107,13 @@ local function hide_session_ui_21(deps, session)
   session["prompt-win"] = nil
   info_window["close-window!"](session)
   preview_window["close-window!"](session)
-  return history_api["close-history-browser!"](session)
+  history_api["close-history-browser!"](session)
+  if (session.meta and session.meta.buf and session.meta.buf.buffer) then
+    active_by_source[session.meta.buf.buffer] = session
+    return nil
+  else
+    return nil
+  end
 end
 local function restore_session_ui_21(deps, session)
   local prompt_window_mod = deps["prompt-window-mod"]
@@ -121,11 +132,11 @@ local function restore_session_ui_21(deps, session)
     end
     local prompt_win
     if (local_layout_3f and vim.api.nvim_win_is_valid(curr.win.window)) then
-      local function _15_()
+      local function _17_()
         vim.cmd(("belowright " .. tostring(height) .. "new"))
         return vim.api.nvim_get_current_win()
       end
-      prompt_win = vim.api.nvim_win_call(curr.win.window, _15_)
+      prompt_win = vim.api.nvim_win_call(curr.win.window, _17_)
     else
       vim.cmd(("botright " .. tostring(height) .. "new"))
       prompt_win = vim.api.nvim_get_current_win()
@@ -145,6 +156,16 @@ local function restore_session_ui_21(deps, session)
     sync_prompt_buffer_name_21(session)
     curr["status-win"] = meta_window_mod.new(vim, prompt_win)
     session["ui-hidden"] = false
+    session["results-edit-mode"] = false
+    if (curr and curr.buf and curr.buf.buffer and vim.api.nvim_buf_is_valid(curr.buf.buffer)) then
+      do
+        local bo = vim.bo[curr.buf.buffer]
+        bo["buftype"] = "nofile"
+        bo["modifiable"] = false
+      end
+      pcall(curr.buf.render)
+    else
+    end
     vim.cmd("silent! nohlsearch")
     do
       local cursor = (session["hidden-prompt-cursor"] or {1, 0})
@@ -238,9 +259,10 @@ local function finish_accept(deps, session)
   if session["project-mode"] then
     pcall(vim.cmd, "stopinsert")
     clear_hit_highlight_21(curr)
+    session["results-edit-mode"] = false
     hide_session_ui_21(deps, session)
   else
-    local function _27_()
+    local function _30_()
       if (active_by_prompt[session["prompt-buf"]] == session) then
         router_prompt_mod["begin-session-close!"](session, router_prompt_mod["cancel-prompt-update!"])
         pcall(vim.cmd, "stopinsert")
@@ -253,7 +275,7 @@ local function finish_accept(deps, session)
         return nil
       end
     end
-    vim.schedule(_27_)
+    vim.schedule(_30_)
   end
   return curr
 end
@@ -347,10 +369,10 @@ local function append_current_symbol_21(deps, prompt_buf, f)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if session then
     local word
-    local function _38_()
+    local function _41_()
       return vim.fn.expand("<cword>")
     end
-    word = vim.api.nvim_win_call(session.meta.win.window, _38_)
+    word = vim.api.nvim_win_call(session.meta.win.window, _41_)
     local token = f(word)
     if (token ~= "") then
       local current = router_util_mod["prompt-text"](session)
@@ -370,24 +392,24 @@ local function append_current_symbol_21(deps, prompt_buf, f)
   end
 end
 M["exclude-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _42_(word)
+  local function _45_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return ("!" .. word)
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _42_)
+  return append_current_symbol_21(deps, prompt_buf, _45_)
 end
 M["insert-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _44_(word)
+  local function _47_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return word
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _44_)
+  return append_current_symbol_21(deps, prompt_buf, _47_)
 end
 M["toggle-scan-option!"] = function(deps, prompt_buf, which)
   local project_source = deps["project-source"]
@@ -448,6 +470,145 @@ M["toggle-info-file-entry-view!"] = function(deps, prompt_buf)
 end
 M["remove-session!"] = function(deps, session)
   return remove_session_21(deps, session)
+end
+local function set_results_edit_buffer_21(session)
+  local buf = session.meta.buf.buffer
+  local bo = vim.bo[buf]
+  bo["buftype"] = "acwrite"
+  bo["bufhidden"] = "hide"
+  bo["modifiable"] = true
+  bo["readonly"] = false
+  return pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
+end
+local function ensure_session_for_results_buf_21(deps, session)
+  local active_by_source = deps["active-by-source"]
+  local buf = session.meta.buf.buffer
+  active_by_source[buf] = session
+  return nil
+end
+local function path_updates_from_visible(session)
+  local meta = session.meta
+  local visible = vim.api.nvim_buf_get_lines(meta.buf.buffer, 0, -1, false)
+  local idxs = (meta.buf.indices or {})
+  local refs = (meta.buf["source-refs"] or {})
+  local content = meta.buf.content
+  local updates = {}
+  for i = 1, math.min(#visible, #idxs) do
+    local src_idx = idxs[i]
+    local ref = refs[src_idx]
+    local kind = ((ref and ref.kind) or "")
+    local path = (ref and ref.path)
+    local lnum = (ref and ref.lnum)
+    local old = (content[src_idx] or "")
+    local new = (visible[i] or "")
+    if (ref and (kind ~= "file-entry") and (type(path) == "string") and (path ~= "") and (type(lnum) == "number") and (lnum > 0) and (old ~= new)) then
+      local per_file = (updates[path] or {})
+      per_file[lnum] = {new = new, ["src-idx"] = src_idx}
+      updates[path] = per_file
+    else
+    end
+  end
+  return updates
+end
+local function apply_path_updates_21(session, updates)
+  local meta = session.meta
+  local any_written = false
+  local writes = 0
+  local wrote = any_written
+  local changed = writes
+  for path, per_file in pairs(updates) do
+    local ok_read,lines = pcall(vim.fn.readfile, path)
+    if (ok_read and (type(lines) == "table")) then
+      local local_change = false
+      for lnum, payload in pairs(per_file) do
+        if ((lnum >= 1) and (lnum <= #lines)) then
+          local next_line = payload.new
+          local src_idx = payload["src-idx"]
+          if (lines[lnum] ~= next_line) then
+            lines[lnum] = next_line
+            meta.buf.content[src_idx] = next_line
+            if (meta.buf["source-refs"] and meta.buf["source-refs"][src_idx]) then
+              local src_ref = meta.buf["source-refs"][src_idx]
+              src_ref["line"] = next_line
+            else
+            end
+            local_change = true
+            changed = (changed + 1)
+          else
+          end
+        else
+        end
+      end
+      if local_change then
+        local ok_write = pcall(vim.fn.writefile, lines, path)
+        if ok_write then
+          wrote = true
+          local bufnr = vim.fn.bufnr(path)
+          if (bufnr and (bufnr > 0) and vim.api.nvim_buf_is_loaded(bufnr)) then
+            for lnum, payload in pairs(per_file) do
+              if ((lnum >= 1) and (lnum <= #lines)) then
+                pcall(vim.api.nvim_buf_set_lines, bufnr, (lnum - 1), lnum, false, {payload.new})
+              else
+              end
+            end
+          else
+          end
+        else
+        end
+      else
+      end
+    else
+    end
+  end
+  return {wrote = wrote, changed = changed}
+end
+M["write-results!"] = function(deps, prompt_buf)
+  local session = session_by_prompt(deps["active-by-prompt"], prompt_buf)
+  local update_info_window = deps["update-info-window"]
+  if session then
+    if not session["results-edit-mode"] then
+      return vim.notify("Meta results are not in edit mode (<M-CR>).", vim.log.levels.WARN)
+    else
+      local updates = path_updates_from_visible(session)
+      local result = apply_path_updates_21(session, updates)
+      local buf = session.meta.buf.buffer
+      pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
+      pcall(session.meta.refresh_statusline)
+      pcall(update_info_window, session, true)
+      local _64_
+      if (result.changed > 0) then
+        _64_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+      else
+        _64_ = "metabuffer: no changes"
+      end
+      return vim.notify(_64_, vim.log.levels.INFO)
+    end
+  else
+    return nil
+  end
+end
+M["enter-edit-mode!"] = function(deps, prompt_buf)
+  local session = session_by_prompt(deps["active-by-prompt"], prompt_buf)
+  local router_util_mod = deps["router-util-mod"]
+  local history_api = deps["history-api"]
+  local apply_prompt_lines = deps["apply-prompt-lines"]
+  if session then
+    session["last-prompt-text"] = router_util_mod["prompt-text"](session)
+    history_api["push-history-entry!"](session, session["last-prompt-text"])
+    apply_prompt_lines(session)
+    session["results-edit-mode"] = true
+    hide_session_ui_21(deps, session)
+    ensure_session_for_results_buf_21(deps, session)
+    set_results_edit_buffer_21(session)
+    if (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
+      pcall(vim.api.nvim_set_current_win, session.meta.win.window)
+      return pcall(vim.api.nvim_win_set_buf, session.meta.win.window, session.meta.buf.buffer)
+    else
+      return nil
+    end
+  else
+    return nil
+  end
 end
 M["maybe-restore-ui!"] = function(deps, prompt_buf)
   local session = session_by_prompt(deps["active-by-prompt"], prompt_buf)

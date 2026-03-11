@@ -263,6 +263,12 @@ end
 M["accept-main"] = function(prompt_buf)
   return router_actions_mod["accept-main!"](actions_deps, prompt_buf)
 end
+M["enter-edit-mode"] = function(prompt_buf)
+  return router_actions_mod["enter-edit-mode!"](actions_deps, prompt_buf)
+end
+M["write-results"] = function(prompt_buf)
+  return router_actions_mod["write-results!"](actions_deps, prompt_buf)
+end
 M["maybe-restore-hidden-ui"] = function(prompt_buf)
   return router_actions_mod["maybe-restore-ui!"](actions_deps, prompt_buf)
 end
