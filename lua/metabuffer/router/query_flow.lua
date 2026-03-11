@@ -149,6 +149,7 @@ M["apply-prompt-lines!"] = function(deps, session)
       local next_lazy = choose_current_when_nil(parsed.lazy, session["lazy-mode"])
       local prev_effective_text = (session["prompt-last-applied-text"] or "")
       local text_changed_3f = (effective_text ~= prev_effective_text)
+      local has_active_query_3f = query_mod["query-lines-has-active?"](effective_lines)
       local changed = ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]))
       session["effective-include-hidden"] = next_hidden
       session["effective-include-ignored"] = next_ignored
@@ -198,7 +199,7 @@ M["apply-prompt-lines!"] = function(deps, session)
         invalidate_filter_cache_21(session)
       else
       end
-      if (session["project-mode"] and text_changed_3f and query_mod["truthy?"](settings["project-lazy-prefilter-enabled"]) and session["prefilter-mode"]) then
+      if (session["project-mode"] and text_changed_3f and has_active_query_3f and query_mod["truthy?"](settings["project-lazy-prefilter-enabled"]) and session["prefilter-mode"]) then
         project_source["apply-source-set!"](session)
       else
       end

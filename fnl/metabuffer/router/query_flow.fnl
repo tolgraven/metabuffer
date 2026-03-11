@@ -151,6 +151,7 @@
               next-lazy (choose-current-when-nil (. parsed :lazy) session.lazy-mode)
               prev-effective-text (or session.prompt-last-applied-text "")
               text-changed? (~= effective-text prev-effective-text)
+              has-active-query? (query-mod.query-lines-has-active? effective-lines)
               changed (or (~= next-hidden session.effective-include-hidden)
                           (~= next-ignored session.effective-include-ignored)
                           (~= next-deps session.effective-include-deps)
@@ -178,6 +179,7 @@
             (invalidate-filter-cache! session))
           (when (and session.project-mode
                      text-changed?
+                     has-active-query?
                      (query-mod.truthy? settings.project-lazy-prefilter-enabled)
                      session.prefilter-mode)
             ;; Lazy prefilter depends on query terms at stream-build time.
