@@ -165,7 +165,15 @@
           (set (. bo :bufhidden) "wipe")
           (set (. bo :swapfile) false)
           (set (. bo :modifiable) false)
-          (set (. bo :filetype) "metabuffer")))))
+          (set (. bo :filetype) "metabuffer"))
+        (let [wo (. vim.wo win.window)]
+          (set (. wo :statusline) "")
+          (set (. wo :winbar) "")
+          (set (. wo :number) false)
+          (set (. wo :relativenumber) false)
+          (set (. wo :signcolumn) "no")
+          (set (. wo :foldcolumn) "0")
+          (set (. wo :spell) false)))))
 
   (fn close-info-window!
     [session]
@@ -341,6 +349,9 @@
   (fn update-project!
     [session refresh-lines]
     (ensure-info-window! session)
+    (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
+      (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
+      (pcall vim.api.nvim_set_option_value "winbar" "" {:win session.info-win}))
     (debug-log (.. "info enter refresh=" (tostring refresh-lines)
                    " selected=" (tostring session.meta.selected_index)
                    " info-win=" (tostring session.info-win)

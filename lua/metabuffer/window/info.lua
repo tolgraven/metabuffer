@@ -212,12 +212,22 @@ M.new = function(opts)
       local win = floating_window_mod.new(vim, buf, cfg)
       session["info-buf"] = buf
       session["info-win"] = win.window
-      local bo = vim.bo[buf]
-      bo["buftype"] = "nofile"
-      bo["bufhidden"] = "wipe"
-      bo["swapfile"] = false
-      bo["modifiable"] = false
-      bo["filetype"] = "metabuffer"
+      do
+        local bo = vim.bo[buf]
+        bo["buftype"] = "nofile"
+        bo["bufhidden"] = "wipe"
+        bo["swapfile"] = false
+        bo["modifiable"] = false
+        bo["filetype"] = "metabuffer"
+      end
+      local wo = vim.wo[win.window]
+      wo["statusline"] = ""
+      wo["winbar"] = ""
+      wo["number"] = false
+      wo["relativenumber"] = false
+      wo["signcolumn"] = "no"
+      wo["foldcolumn"] = "0"
+      wo["spell"] = false
       return nil
     else
       return nil
@@ -463,13 +473,18 @@ M.new = function(opts)
   end
   local function update_project_21(session, refresh_lines)
     ensure_info_window_21(session)
+    if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
+      pcall(vim.api.nvim_set_option_value, "statusline", "", {win = session["info-win"]})
+      pcall(vim.api.nvim_set_option_value, "winbar", "", {win = session["info-win"]})
+    else
+    end
     debug_log(("info enter refresh=" .. tostring(refresh_lines) .. " selected=" .. tostring(session.meta.selected_index) .. " info-win=" .. tostring(session["info-win"]) .. " info-buf=" .. tostring(session["info-buf"])))
     if (session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
       local meta = session.meta
       local selected1 = (meta.selected_index + 1)
-      local _let_60_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-      local wanted_start = _let_60_[1]
-      local wanted_stop = _let_60_[2]
+      local _let_61_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
+      local wanted_start = _let_61_[1]
+      local wanted_stop = _let_61_[2]
       local start_index = (session["info-start-index"] or 1)
       local stop_index = (session["info-stop-index"] or 0)
       local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
@@ -489,7 +504,7 @@ M.new = function(opts)
     end
     return update_preview(session)
   end
-  local function _64_(session, refresh_lines)
+  local function _65_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -502,6 +517,6 @@ M.new = function(opts)
       return update_regular_21(session)
     end
   end
-  return {["close-window!"] = close_info_window_21, ["update!"] = _64_}
+  return {["close-window!"] = close_info_window_21, ["update!"] = _65_}
 end
 return M
