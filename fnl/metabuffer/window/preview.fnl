@@ -70,8 +70,7 @@
       (pcall vim.api.nvim_set_option_value "winblend" 0 {:win win})
       (pcall vim.api.nvim_set_option_value "winhighlight"
              "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal"
-             {:win win})
-      (pcall vim.api.nvim_set_option_value "statusline" " Preview " {:win win})))
+             {:win win})))
 
   (fn filetype-for-ref
     [ref]
