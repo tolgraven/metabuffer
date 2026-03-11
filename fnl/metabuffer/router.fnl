@@ -15,6 +15,7 @@
 (local history_store (require :metabuffer.history_store))
 (local prompt_hooks_mod (require :metabuffer.prompt.hooks))
 (local router_util_mod (require :metabuffer.router.util))
+(local router_history_mod (require :metabuffer.router.history))
 (local router_prompt_mod (require :metabuffer.router.prompt))
 (local router_query_flow_mod (require :metabuffer.router.query_flow))
 
@@ -42,6 +43,7 @@
 (var preview-window nil)
 (var info-window nil)
 (var history-browser-window nil)
+(var history-api nil)
 (var query-flow-deps nil)
 (fn M.configure
   [opts]
@@ -49,12 +51,9 @@
   (config.apply-router-defaults M vim opts))
 
 (M.configure nil)
-(local push-history! (fn [text]
-                       (history_store.push! text M.history-max)))
+(local push-history! (fn [text] (history_store.push! text M.history-max)))
 
-(fn debug-log
-  [msg]
-  (debug.log "router" msg))
+(fn debug-log [msg] (debug.log "router" msg))
 
 (local prompt-scheduler-ctx
   {:active-by-prompt M.active-by-prompt
@@ -104,6 +103,14 @@
   (history_browser_window_mod.new
     {:floating-window-mod floating_window_mod}))
 
+(set history-api
+  (router_history_mod.new
+    {:history-store history_store
+     :router-util-mod router_util_mod
+     :query-mod query_mod
+     :history-browser-window history-browser-window
+     :settings M}))
+
 (set update-info-window
   (fn [session refresh-lines]
     (when (and info-window info-window.update!)
@@ -149,95 +156,6 @@
      :restore-meta-view! session_view.restore-meta-view!
      :update-info-window update-info-window}))
 
-(fn merge-history-into-session!
-  [session]
-  (let [local0 (or session.history-cache [])
-        merged (vim.deepcopy local0)
-        incoming (history_store.list)
-        seen {}]
-    (each [_ item (ipairs merged)]
-      (when (= (type item) "string")
-        (set (. seen item) true)))
-    (each [_ item (ipairs incoming)]
-      (when (and (= (type item) "string")
-                 (~= (vim.trim item) "")
-                 (not (. seen item)))
-        (table.insert merged item)
-        (set (. seen item) true)))
-    (while (> (# merged) M.history-max)
-      (table.remove merged 1))
-    (set session.history-cache merged)))
-
-(fn save-current-prompt-tag!
-  [session tag prompt]
-  (when (and (= (type tag) "string")
-             (~= (vim.trim tag) "")
-             (= (type prompt) "string")
-             (~= (vim.trim prompt) ""))
-    (history_store.save-tag! tag prompt)))
-
-(fn restore-saved-prompt-tag!
-  [session tag]
-  (when (and session
-             (= (type tag) "string")
-             (~= (vim.trim tag) ""))
-    (when-let [saved (history_store.saved-entry tag)]
-      (router_util_mod.set-prompt-text! session saved)
-      true)))
-
-(fn history-browser-filter
-  [session]
-  (vim.trim (or (router_util_mod.prompt-text session) "")))
-
-(fn history-browser-items
-  [session]
-  (let [mode (or session.history-browser-mode "history")
-        filter0 (string.lower (history-browser-filter session))
-        out []]
-    (if (= mode "saved")
-        (each [_ item (ipairs (history_store.saved-items))]
-          (let [tag (or (. item :tag) "")
-                prompt (or (. item :prompt) "")
-                hay (string.lower (.. tag " " prompt))]
-            (when (or (= filter0 "")
-                      (not (not (string.find hay filter0 1 true))))
-              (table.insert out {:label (.. "##" tag "  " prompt)
-                                 :prompt prompt
-                                 :tag tag}))))
-        (let [h (or session.history-cache (history_store.list))]
-          (for [i (# h) 1 -1]
-            (let [entry (or (. h i) "")
-                  hay (string.lower entry)]
-              (when (or (= filter0 "")
-                        (not (not (string.find hay filter0 1 true))))
-                (table.insert out {:label entry :prompt entry}))))))
-    out))
-
-(fn refresh-history-browser!
-  [session]
-  (when (and session history-browser-window session.history-browser-active)
-    (set session.history-browser-filter (history-browser-filter session))
-    (history-browser-window.refresh! session (history-browser-items session))))
-
-(fn close-history-browser!
-  [session]
-  (when history-browser-window
-    (history-browser-window.close! session)))
-
-(fn open-history-browser!
-  [session mode]
-  (when history-browser-window
-    (history-browser-window.open! session (or mode "history"))
-    (refresh-history-browser! session)))
-
-(fn apply-history-browser-selection!
-  [session]
-  (when (and history-browser-window session.history-browser-active)
-    (when-let [selected (history-browser-window.selected! session)]
-      (when-let [prompt (. selected :prompt)]
-        (router_util_mod.set-prompt-text! session prompt)))
-    (close-history-browser! session)))
-
 (set query-flow-deps
   {:active-by-prompt M.active-by-prompt
    :query-mod query_mod
@@ -245,11 +163,11 @@
    :update-info-window update-info-window
    :settings M
    :prompt-scheduler-ctx prompt-scheduler-ctx
-   :merge-history-into-session! merge-history-into-session!
-   :save-current-prompt-tag! save-current-prompt-tag!
-   :restore-saved-prompt-tag! restore-saved-prompt-tag!
+   :merge-history-into-session! history-api.merge-history-into-session!
+   :save-current-prompt-tag! history-api.save-current-prompt-tag!
+   :restore-saved-prompt-tag! history-api.restore-saved-prompt-tag!
    :open-saved-browser! (fn [session]
-                          (open-history-browser! session "saved"))
+                          (history-api.open-history-browser! session "saved"))
    :apply-prompt-lines (fn [session]
                          (apply-prompt-lines session))})
 
@@ -272,52 +190,10 @@
   [name enabled]
   (.. "#" (if enabled "+" "-") name))
 
-(fn history-entry-query
-  [entry]
-  (let [parsed (query_mod.parse-query-text (or entry ""))]
-    (or (. parsed :query) "")))
-
-(fn history-entry-token
-  [entry]
-  (let [parts (vim.split (history-entry-query entry) "%s+" {:trimempty true})]
-    (if (> (# parts) 0)
-        (. parts (# parts))
-        "")))
-
-(fn history-entry-tail
-  [entry]
-  (let [parts (vim.split (history-entry-query entry) "%s+" {:trimempty true})]
-    (if (> (# parts) 1)
-        (table.concat (vim.list_slice parts 2) " ")
-        "")))
-
-(fn history-entry-with-settings
-  [session prompt]
-  (let [query-text (or prompt "")
-        prefix (if (and session session.project-mode)
-                   (table.concat
-                     [(project-setting-token "hidden" session.effective-include-hidden)
-                      (project-setting-token "ignored" session.effective-include-ignored)
-                      (project-setting-token "deps" session.effective-include-deps)
-                      (project-setting-token "file" session.effective-include-files)
-                      (project-setting-token "prefilter" session.prefilter-mode)
-                      (project-setting-token "lazy" session.lazy-mode)]
-                     " ")
-                   "")]
-    (if (= prefix "")
-        query-text
-        (if (= query-text "")
-            prefix
-            (.. prefix " " query-text)))))
-
-(fn push-history-entry!
-  [session text]
-  (push-history! (history-entry-with-settings session text)))
-
 (fn remove-session
   [session]
   (when session
-    (push-history-entry!
+    (history-api.push-history-entry!
       session
       (or session.last-prompt-text
           (if (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
@@ -332,7 +208,7 @@
       (pcall vim.api.nvim_buf_delete session.prompt-buf {:force true}))
     (info-window.close-window! session)
     (preview-window.close-window! session)
-    (close-history-browser! session)
+    (history-api.close-history-browser! session)
     (when session.source-buf
       (set (. M.active-by-source session.source-buf) nil))
     (when session.prompt-buf
@@ -352,14 +228,14 @@
     event-tick)
   (let [session (. M.active-by-prompt prompt-buf)]
     (when (and session session.history-browser-active)
-      (refresh-history-browser! session))))
+      (history-api.refresh-history-browser! session))))
 
 (fn M.accept
   [prompt-buf]
   "Accept prompt or apply selected history-browser item."
   (let [session (. M.active-by-prompt prompt-buf)]
     (if (and session session.history-browser-active)
-        (apply-history-browser-selection! session)
+        (history-api.apply-history-browser-selection! session)
         (M.finish "accept" prompt-buf))))
 
 (fn M.cancel
@@ -367,14 +243,14 @@
   "Close history-browser first, otherwise cancel Meta prompt."
   (let [session (. M.active-by-prompt prompt-buf)]
     (if (and session session.history-browser-active)
-        (close-history-browser! session)
+        (history-api.close-history-browser! session)
         (M.finish "cancel" prompt-buf))))
 
 (fn finish-accept
   [session]
   (let [curr session.meta]
     (set session.last-prompt-text (router_util_mod.prompt-text session))
-    (push-history-entry! session session.last-prompt-text)
+    (history-api.push-history-entry! session session.last-prompt-text)
     (apply-prompt-lines session)
     (when (and (vim.api.nvim_win_is_valid session.origin-win)
                (vim.api.nvim_buf_is_valid session.origin-buf))
@@ -425,7 +301,7 @@
       session
       router_prompt_mod.cancel-prompt-update!)
     (set session.last-prompt-text (router_util_mod.prompt-text session))
-    (push-history-entry! session session.last-prompt-text)
+    (history-api.push-history-entry! session session.last-prompt-text)
     (pcall vim.cmd "stopinsert")
     (let [matcher (curr.matcher)]
       (when matcher
@@ -558,63 +434,31 @@
 (fn M.history-or-move
   [prompt-buf delta]
   "Public API: M.history-or-move."
-  (let [session (. M.active-by-prompt prompt-buf)]
-    (when session
-      (if session.history-browser-active
-          (history-browser-window.move! session delta)
-          (let [txt (router_util_mod.prompt-text session)
-                can-history (or (= txt "")
-                                (= txt session.initial-prompt-text)
-                                (= txt session.last-history-text)
-                                (= txt (history-entry-query session.last-history-text)))]
-            (if can-history
-                (let [h (or session.history-cache (history_store.list))
-                      n (# h)]
-                  (when (> n 0)
-                    (set session.history-index (math.max 0 (math.min (+ session.history-index delta) n)))
-                    (if (= session.history-index 0)
-                        (do
-                          (set session.last-history-text "")
-                          (router_util_mod.set-prompt-text! session session.initial-prompt-text))
-                        (let [entry (. h (+ (- n session.history-index) 1))]
-                          (when entry
-                            (set session.last-history-text entry)
-                            (router_util_mod.set-prompt-text! session entry))))))
-                (M.move-selection prompt-buf delta)))))))
-
-(fn history-latest
-  [session]
-  (let [h (or (and session session.history-cache) (history_store.list))
-        n (# h)]
-    (if (> n 0) (. h n) "")))
-
-(fn history-latest-token
-  [session]
-  (history-entry-token (history-latest session)))
-
-(fn history-latest-tail
-  [session]
-  (history-entry-tail (history-latest session)))
+  (history-api.history-or-move
+    prompt-buf
+    delta
+    M.active-by-prompt
+    M.move-selection))
 
 (fn M.last-prompt-entry
   [prompt-buf]
   "Return most recent prompt history entry."
-  (history-latest (. M.active-by-prompt prompt-buf)))
+  (history-api.last-prompt-entry prompt-buf M.active-by-prompt))
 
 (fn M.last-prompt-token
   [prompt-buf]
   "Return final token of most recent prompt history entry."
-  (history-latest-token (. M.active-by-prompt prompt-buf)))
+  (history-api.last-prompt-token prompt-buf M.active-by-prompt))
 
 (fn M.last-prompt-tail
   [prompt-buf]
   "Return latest prompt entry except its first token."
-  (history-latest-tail (. M.active-by-prompt prompt-buf)))
+  (history-api.last-prompt-tail prompt-buf M.active-by-prompt))
 
 (fn M.saved-prompt-entry
   [tag]
   "Return saved prompt text by tag."
-  (history_store.saved-entry tag))
+  (history-api.saved-prompt-entry tag))
 
 (fn prompt-insert-at-cursor!
   [session text]
@@ -728,7 +572,7 @@
   [prompt-buf]
   "Insert most recent prompt history entry at cursor."
   (let [session (. M.active-by-prompt prompt-buf)
-        entry (history-latest session)]
+        entry (history-api.history-latest session)]
     (prompt-insert-at-cursor! session entry)
     (when (and session (~= entry ""))
       (set session.last-history-text entry))))
@@ -737,8 +581,8 @@
   [prompt-buf]
   "Insert last token from most recent prompt history entry at cursor."
   (let [session (. M.active-by-prompt prompt-buf)
-        token (history-latest-token session)
-        entry (history-latest session)]
+        token (history-api.history-latest-token session)
+        entry (history-api.history-latest session)]
     (prompt-insert-at-cursor! session token)
     (when (and session (~= token ""))
       (set session.last-history-text entry))))
@@ -747,8 +591,8 @@
   [prompt-buf]
   "Insert most recent prompt entry except first token."
   (let [session (. M.active-by-prompt prompt-buf)
-        tail (history-latest-tail session)
-        entry (history-latest session)]
+        tail (history-api.history-latest-tail session)
+        entry (history-api.history-latest session)]
     (prompt-insert-at-cursor! session tail)
     (when (and session (~= tail ""))
       (set session.last-history-text entry))))
@@ -806,15 +650,15 @@
     (when session
       (when-not session.history-cache
         (set session.history-cache (vim.deepcopy (history_store.list))))
-      (open-history-browser! session "history"))))
+      (history-api.open-history-browser! session "history"))))
 
 (fn M.merge-history-cache
   [prompt-buf]
   "Merge persisted prompt history into this session's private history cache."
   (let [session (. M.active-by-prompt prompt-buf)]
     (when session
-      (merge-history-into-session! session)
-      (refresh-history-browser! session))))
+      (history-api.merge-history-into-session! session)
+      (history-api.refresh-history-browser! session))))
 
 (fn M.exclude-symbol-under-cursor
   [prompt-buf]
@@ -925,13 +769,13 @@
   "Create a Meta session and wire prompt/result/project orchestration."
   (pcall vim.cmd "silent! nohlsearch")
   (let [start-query (or query "")
-        latest-history (history-latest nil)
+        latest-history (history-api.history-latest nil)
         expanded-query (if (= start-query "!!")
                            latest-history
                            (= start-query "!$")
-                           (history-entry-token latest-history)
+                           (history-api.history-entry-token latest-history)
                            (= start-query "!^!")
-                           (history-entry-tail latest-history)
+                           (history-api.history-entry-tail latest-history)
                            start-query)
         parsed-query (query_mod.parse-query-text expanded-query)
         query0 (. parsed-query :query)
