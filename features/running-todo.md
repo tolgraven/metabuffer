@@ -30,3 +30,5 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 21 [x] lua error when trying to filter a buffer that's already empty (such as :enew)
 - 22 [x] info window with hit source info updates correctly when deleting filter, and updates, but hit buffer does not update.
 - 23 [x] if type filter like "lua", then deleting it, then "lua" again, selected line gets reset to line 1, should be recalled properly.
+- 24 [] lazy file reading regression, when narrowing a search it does a full re-run and all the sources except the original when Meta! started disappear for a short while then reappear. Remember when narrowing (making word longer, or making negation shorter) we want to keep all the sources loaded and only re-run filter on those lines actually present. 
+- 25 [] both the floating info window and the preview window get regular statuslines after moving to a different tmux split (and stay as such when go back to focusing nvim split)

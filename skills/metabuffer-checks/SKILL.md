@@ -1,6 +1,6 @@
 ---
 name: metabuffer-checks
-description: Run the metabuffer plugin quality checks (lint, Fennel compile, and smoke test). Use when working in this repository and you need a fast verification pass before or after edits, or while debugging regressions.
+description: Run the metabuffer plugin quality checks (lint, Fennel compile, smoke test, and mini test suites). Use when working in this repository and you need a fast verification pass before or after edits, or while debugging regressions.
 ---
 
 # Metabuffer Checks
@@ -29,10 +29,11 @@ Options:
 ```bash
 ./skills/metabuffer-checks/scripts/run-checks.sh --with-headless
 ./skills/metabuffer-checks/scripts/run-checks.sh --profile
+./skills/metabuffer-checks/scripts/run-checks.sh --failed-tests-only
 ```
 
 4. Report results concisely.
-If all steps pass, report success for `lint`, `compile`, and `smoke`.
+If all steps pass, report success for `lint`, `compile`, `smoke`, and `tests`.
 If a step fails, stop and report:
 - failing step
 - command run
@@ -45,11 +46,22 @@ Runs these commands in order inside the target project:
 1. `./scripts/watch-fennel.sh --once`
 2. `./scripts/compile-fennel.sh`
 3. `./scripts/smoke-meta.sh`
+4. `./scripts/test-mini.sh` (runs unit + screen suites in parallel)
 Optional:
-4. `--with-headless`: run headless `nvim` startup plus `Meta` and `Meta!` invocation checks
-5. `--profile`: write startup and Meta timing profiles to `.cache/metabuffer-checks/`
+5. `--with-headless`: run headless `nvim` startup plus `Meta` and `Meta!` invocation checks
+6. `--profile`: write startup and Meta timing profiles to `.cache/metabuffer-checks/`
+7. `--failed-tests-only`: run only previously failing tests via `TEST_FAILED_ONLY=1 ./scripts/test-mini.sh`
 
 - `scripts/init-venv.sh`
 Creates and activates a skill-local Python venv and installs `PyYAML` so `quick_validate.py` works.
 
 Do not skip steps unless the user explicitly asks.
+
+## Fast test reruns
+
+When tests fail, use one of:
+- `TEST_FAILED_ONLY=1 ./scripts/test-mini.sh`
+- `TEST_ONLY='tests/unit/test_query_unit.lua' ./scripts/test-mini.sh`
+
+The failed test list is stored at:
+- `.cache/metabuffer-tests/failed-files.txt`
