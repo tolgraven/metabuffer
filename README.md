@@ -6,6 +6,36 @@ Interactive buffer/project line filtering for Neovim, with a prompt-first workfl
 
 ## User Guide
 
+### Setup
+
+Use normal Lua setup options (no `vim.g` required):
+
+```lua
+require("metabuffer").setup({
+  options = {
+    prompt_update_debounce_ms = 170,
+    window_local_layout = true,
+    project_lazy_enabled = true,
+  },
+  keymaps = {
+    prompt = nil, -- set full custom prompt keymap table
+    main = nil, -- set full custom main/results keymap table
+    prompt_fallback = nil, -- optional insert fallback mappings
+  },
+  ui = {
+    prefix = "#",
+    syntax_on_init = "buffer",
+    highlight_groups = { All = "Title", Fuzzy = "Number", Regex = "Special" },
+  },
+})
+```
+
+Inspect defaults from Lua:
+
+```lua
+require("metabuffer").defaults
+```
+
 ### Commands
 
 - `:Meta[!] [query]` (`!` starts repo-wide source mode)
@@ -32,7 +62,7 @@ Insert-mode editing:
 - `<C-a>` move to line start
 - `<C-e>` move to line end
 - `<C-u>` delete from line start to cursor
-- `<C-k>` delete from cursor to line end
+- `<C-k>` move selection up
 - `<C-y>` yank previously killed prompt text
 
 History insertion shorthands (insert + normal):

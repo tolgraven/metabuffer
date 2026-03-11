@@ -1,5 +1,6 @@
 -- [nfnl] fnl/metabuffer/init.fnl
 local router = require("metabuffer.router")
+local config = require("metabuffer.config")
 local M = {}
 local function rgb_luma(n)
   if not n then
@@ -213,11 +214,17 @@ local function prompt_text_hl()
   end
   return opts
 end
-local function ensure_defaults_and_highlights_21()
-  vim.g["meta#custom_mappings"] = (vim.g["meta#custom_mappings"] or {})
-  vim.g["meta#highlight_groups"] = (vim.g["meta#highlight_groups"] or {All = "Title", Fuzzy = "Number", Regex = "Special"})
-  vim.g["meta#syntax_on_init"] = (vim.g["meta#syntax_on_init"] or "buffer")
-  vim.g["meta#prefix"] = (vim.g["meta#prefix"] or "#")
+local function apply_ui_config_21(opts)
+  local resolved = config.resolve(opts)
+  local ui = resolved.ui
+  vim.g["meta#custom_mappings"] = (ui.custom_mappings or {})
+  vim.g["meta#highlight_groups"] = (ui.highlight_groups or {All = "Title", Fuzzy = "Number", Regex = "Special"})
+  vim.g["meta#syntax_on_init"] = (ui.syntax_on_init or "buffer")
+  vim.g["meta#prefix"] = (ui.prefix or "#")
+  return nil
+end
+local function ensure_defaults_and_highlights_21(opts)
+  apply_ui_config_21(opts)
   local hi = vim.api.nvim_set_hl
   hi(0, "MetaStatuslineModeInsert", statusline_color_from("Tag"))
   hi(0, "MetaStatuslineModeReplace", statusline_color_from("Todo"))
@@ -324,8 +331,9 @@ M.reload = function(opts)
   vim.notify(_42_, vim.log.levels.INFO)
   return true
 end
-M.setup = function()
-  ensure_defaults_and_highlights_21()
+M.setup = function(opts)
+  router.configure(opts)
+  ensure_defaults_and_highlights_21(opts)
   local function _44_(args)
     return router.entry_start(args.args, args.bang)
   end
@@ -361,4 +369,5 @@ M.setup = function()
   ensure_command("MetaReload", _50_, {nargs = 0, bang = true})
   return true
 end
+M.defaults = config.defaults
 return M

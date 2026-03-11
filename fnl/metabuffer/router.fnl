@@ -43,7 +43,12 @@
 (var info-window nil)
 (var history-browser-window nil)
 (var query-flow-deps nil)
-(config.apply-router-defaults M vim)
+(fn M.configure
+  [opts]
+  "Public API: M.configure."
+  (config.apply-router-defaults M vim opts))
+
+(M.configure nil)
 (local push-history! (fn [text]
                        (history_store.push! text M.history-max)))
 
@@ -881,8 +886,8 @@
   (let [hooks
         (prompt_hooks_mod.new
           {:mark-prompt-buffer! router_util_mod.mark-prompt-buffer!
-           :default-prompt-keymaps M.default-prompt-keymaps
-           :default-main-keymaps M.default-main-keymaps
+           :default-prompt-keymaps M.prompt-keymaps
+           :default-main-keymaps M.main-keymaps
            :active-by-prompt M.active-by-prompt
            :on-prompt-changed M.on-prompt-changed
            :update-info-window update-info-window
@@ -950,6 +955,9 @@
                    :prompt-win prompt-win.window
                    :prompt-buf prompt-buf
                    :window-local-layout M.window-local-layout
+                   :prompt-keymaps M.prompt-keymaps
+                   :main-keymaps M.main-keymaps
+                   :prompt-fallback-keymaps M.prompt-fallback-keymaps
                    :initial-prompt-text (table.concat initial-lines "\n")
                    :last-prompt-text (table.concat initial-lines "\n")
                    :last-history-text ""
