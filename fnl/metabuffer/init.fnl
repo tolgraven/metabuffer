@@ -17,7 +17,7 @@
   [group]
   (let [opts {:reverse false :cterm {:reverse false}}
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
-        [nok normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
+        [ok-normal normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
     (when (and ok (= (type hl) "table"))
       (let [fg (or (. hl :fg)
                    (and (. hl :reverse) (. hl :bg)))
@@ -27,11 +27,11 @@
                          (. hl :ctermbg)))]
       (if fg
           (set (. opts :bg) fg)
-          (when (and nok (= (type normal) "table") (. normal :bg))
+          (when (and ok-normal (= (type normal) "table") (. normal :bg))
             (set (. opts :bg) (. normal :bg))))
       (if cfg
           (set (. opts :ctermbg) cfg)
-          (when (and nok (= (type normal) "table") (. normal :ctermbg))
+          (when (and ok-normal (= (type normal) "table") (. normal :ctermbg))
             (set (. opts :ctermbg) (. normal :ctermbg))))
       (when (. hl :bold)
         (set (. opts :bold) (. hl :bold)))))

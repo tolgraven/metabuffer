@@ -15,14 +15,14 @@ end
 local function statusline_color_from(group)
   local opts = {cterm = {reverse = false}, reverse = false}
   local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
-  local nok,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
+  local ok_normal,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
   if (ok and (type(hl) == "table")) then
     local fg = (hl.fg or (hl.reverse and hl.bg))
     local cfg = (hl.ctermfg or ((hl.reverse or (hl.cterm and hl.cterm.reverse)) and hl.ctermbg))
     if fg then
       opts["bg"] = fg
     else
-      if (nok and (type(normal) == "table") and normal.bg) then
+      if (ok_normal and (type(normal) == "table") and normal.bg) then
         opts["bg"] = normal.bg
       else
       end
@@ -30,7 +30,7 @@ local function statusline_color_from(group)
     if cfg then
       opts["ctermbg"] = cfg
     else
-      if (nok and (type(normal) == "table") and normal.ctermbg) then
+      if (ok_normal and (type(normal) == "table") and normal.ctermbg) then
         opts["ctermbg"] = normal.ctermbg
       else
       end
