@@ -31,6 +31,7 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
   local project_source = deps["project-source"]
   local meta_window_mod = deps["meta-window-mod"]
   local history_store = deps["history-store"]
+  local sign_mod = deps["sign-mod"]
   local settings = deps.settings
   local sync_prompt_buffer_name_21 = deps["sync-prompt-buffer-name!"]
   local apply_prompt_lines = deps["apply-prompt-lines"]
@@ -186,6 +187,10 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
     curr["status-win"] = meta_window_mod.new(vim, prompt_win.window)
     curr.win["set-statusline"]("")
     curr["on-init"]()
+    if sign_mod then
+      pcall(sign_mod["capture-baseline!"], session)
+    else
+    end
     sync_prompt_buffer_name_21(session)
     if session["project-mode"] then
       session_view["restore-meta-view!"](curr, session["source-view"])
@@ -208,7 +213,7 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
       pcall(vim.api.nvim_win_set_cursor, prompt_win.window, {row, col})
     end
     vim.cmd("startinsert")
-    local function _19_()
+    local function _20_()
       session["startup-initializing"] = false
       if (session["project-mode"] and not session["project-bootstrapped"]) then
         return project_source["schedule-project-bootstrap!"](session, 0)
@@ -216,9 +221,9 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
         return nil
       end
     end
-    vim.schedule(_19_)
+    vim.schedule(_20_)
     if (session["project-mode"] and not initial_query_active) then
-      local function _21_()
+      local function _22_()
         if (active_by_prompt[session["prompt-buf"]] == session) then
           pcall(curr.refresh_statusline)
           return pcall(update_info_window, session)
@@ -226,7 +231,7 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
           return nil
         end
       end
-      vim.schedule(_21_)
+      vim.schedule(_22_)
     else
     end
     instances[source_buf] = curr

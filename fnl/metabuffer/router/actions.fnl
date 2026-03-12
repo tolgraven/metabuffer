@@ -403,67 +403,179 @@
         buf session.meta.buf.buffer]
     (set (. active-by-source buf) session)))
 
-(fn path-updates-from-visible
+(fn diff-hunks
+  [old-lines new-lines]
+  (let [old-text (table.concat (or old-lines []) "\n")
+        new-text (table.concat (or new-lines []) "\n")
+        [ok out] [(pcall vim.diff old-text new-text {:result_type "indices" :algorithm "histogram"})]]
+    (if (and ok (= (type out) "table")) out [])))
+
+(fn hunk-indices
+  [h]
+  [(or (. h 1) 1) (or (. h 2) 0) (or (. h 3) 1) (or (. h 4) 0)])
+
+(fn slice-lines
+  [lines start count]
+  (let [out []]
+    (for [i start (+ start count -1)]
+      (when (and (>= i 1) (<= i (# lines)))
+        (table.insert out (. lines i))))
+    out))
+
+(fn valid-row?
+  [row]
+  (and row
+       (= (type (. row :path)) "string")
+       (~= (. row :path) "")
+       (= (type (. row :lnum)) "number")
+       (> (. row :lnum) 0)
+       (~= (. row :kind) "file-entry")))
+
+(fn append-op!
+  [ops path op]
+  (let [per-file (or (. ops path) [])]
+    (table.insert per-file op)
+    (set (. ops path) per-file)))
+
+(fn collect-file-ops
   [session]
   (let [meta session.meta
-        visible (vim.api.nvim_buf_get_lines meta.buf.buffer 0 -1 false)
-        idxs (or meta.buf.indices [])
-        refs (or meta.buf.source-refs [])
-        content meta.buf.content
-        updates {}]
-    (for [i 1 (math.min (# visible) (# idxs))]
-      (let [src-idx (. idxs i)
-            ref (. refs src-idx)
-            kind (or (and ref ref.kind) "")
-            path (and ref ref.path)
-            lnum (and ref ref.lnum)
-            old (or (. content src-idx) "")
-            new (or (. visible i) "")]
-        (when (and ref
-                   (~= kind "file-entry")
-                   (= (type path) "string")
-                   (~= path "")
-                   (= (type lnum) "number")
-                   (> lnum 0)
-                   (~= old new))
-          (let [per-file (or (. updates path) {})]
-            (set (. per-file lnum) {:new new :src-idx src-idx})
-            (set (. updates path) per-file)))))
-    updates))
+        buf meta.buf.buffer
+        baseline-lines (or session.edit-baseline-lines (vim.api.nvim_buf_get_lines buf 0 -1 false))
+        baseline-rows (or session.edit-baseline-rows [])
+        current-lines (vim.api.nvim_buf_get_lines buf 0 -1 false)
+        hunks (diff-hunks baseline-lines current-lines)
+        ops {}]
+    (each [_ h (ipairs hunks)]
+      (let [[a-start a-count b-start b-count] (hunk-indices h)
+            common (math.min a-count b-count)
+            old-rows (slice-lines baseline-rows a-start a-count)
+            new-lines (slice-lines current-lines b-start b-count)]
+        (if (> a-count 0)
+            (do
+              (for [i 1 common]
+                (let [row (. old-rows i)
+                      text (or (. new-lines i) "")]
+                  (when (and (valid-row? row) (~= (or (. row :text) "") text))
+                    (append-op! ops (. row :path) {:kind :replace :lnum (. row :lnum) :text text}))))
+              (when (> a-count b-count)
+                (for [i (+ common 1) a-count]
+                  (let [row (. old-rows i)]
+                    (when (valid-row? row)
+                      (append-op! ops (. row :path) {:kind :delete :lnum (. row :lnum)})))))
+              (when (> b-count a-count)
+                (let [extra (slice-lines new-lines (+ common 1) (- b-count common))
+                      anchor-row (. old-rows a-count)]
+                  (when (and (valid-row? anchor-row) (> (# extra) 0))
+                    (append-op! ops (. anchor-row :path)
+                      {:kind :insert-after :lnum (. anchor-row :lnum) :lines extra}))))
+              )
+            (let [extra (slice-lines new-lines 1 b-count)
+                  prev-row (. baseline-rows a-start)
+                  next-row (. baseline-rows (+ a-start 1))]
+              (when (> (# extra) 0)
+                (if (valid-row? prev-row)
+                    (append-op! ops (. prev-row :path)
+                      {:kind :insert-after :lnum (. prev-row :lnum) :lines extra})
+                    (when (valid-row? next-row)
+                      (append-op! ops (. next-row :path)
+                        {:kind :insert-before :lnum (. next-row :lnum) :lines extra}))))))))
+    {:ops ops :current-lines current-lines}))
 
-(fn apply-path-updates!
-  [session updates]
+(fn apply-file-ops!
+  [session ops]
+  (let [post-lines {}
+        touched-paths {}]
+    (var total 0)
+    (var any-write false)
+    (each [path per-file (pairs (or ops {}))]
+      (let [[ok-read lines0] [(pcall vim.fn.readfile path)]]
+        (when (and ok-read (= (type lines0) "table"))
+          (let [lines (vim.deepcopy lines0)]
+            (var delta 0)
+            (var changed? false)
+            (each [_ op (ipairs (or per-file []))]
+              (if (= (. op :kind) :replace)
+                  (let [lnum (+ (. op :lnum) delta)]
+                    (when (and (>= lnum 1) (<= lnum (# lines))
+                               (~= (. lines lnum) (. op :text)))
+                      (set (. lines lnum) (. op :text))
+                      (set total (+ total 1))
+                      (set changed? true)))
+                  (= (. op :kind) :delete)
+                  (let [lnum (+ (. op :lnum) delta)]
+                    (when (and (>= lnum 1) (<= lnum (# lines)))
+                      (table.remove lines lnum)
+                      (set delta (- delta 1))
+                      (set total (+ total 1))
+                      (set changed? true)))
+                  (= (. op :kind) :insert-before)
+                  (let [ins (or (. op :lines) [])
+                        lnum (+ (. op :lnum) delta)
+                        pos (math.max 1 (math.min (+ (# lines) 1) lnum))]
+                    (when (> (# ins) 0)
+                      (for [i 1 (# ins)]
+                        (table.insert lines (+ pos i -1) (. ins i)))
+                      (set delta (+ delta (# ins)))
+                      (set total (+ total (# ins)))
+                      (set changed? true)))
+                  (let [ins (or (. op :lines) [])
+                        lnum (+ (. op :lnum) delta)
+                        pos (math.max 0 (math.min (# lines) lnum))]
+                    (when (> (# ins) 0)
+                      (for [i 1 (# ins)]
+                        (table.insert lines (+ pos i) (. ins i)))
+                      (set delta (+ delta (# ins)))
+                      (set total (+ total (# ins)))
+                      (set changed? true)))))
+            (when changed?
+              (let [[ok-write] [(pcall vim.fn.writefile lines path)]]
+                (when ok-write
+                  (set any-write true)
+                  (set (. touched-paths path) true)
+                  (set (. post-lines path) lines)
+                  (let [bufnr (vim.fn.bufnr path)]
+                    (when (and bufnr (> bufnr 0) (vim.api.nvim_buf_is_loaded bufnr))
+                      (pcall vim.api.nvim_buf_set_lines bufnr 0 -1 false lines))))))))))
+    {:wrote any-write :changed total :post-lines post-lines :paths touched-paths}))
+
+(fn update-session-refs-after-ops!
+  [session ops post-lines]
   (let [meta session.meta
-        any-written false
-        writes 0]
-    (var wrote any-written)
-    (var changed writes)
-    (each [path per-file (pairs updates)]
-      (let [[ok-read lines] [(pcall vim.fn.readfile path)]]
-        (when (and ok-read (= (type lines) "table"))
-          (var local-change false)
-          (each [lnum payload (pairs per-file)]
-            (when (and (>= lnum 1) (<= lnum (# lines)))
-              (let [next-line (. payload :new)
-                    src-idx (. payload :src-idx)]
-                (when (~= (. lines lnum) next-line)
-                  (set (. lines lnum) next-line)
-                  (set (. meta.buf.content src-idx) next-line)
-                  (when (and meta.buf.source-refs (. meta.buf.source-refs src-idx))
-                    (let [src-ref (. meta.buf.source-refs src-idx)]
-                      (set (. src-ref :line) next-line)))
-                  (set local-change true)
-                  (set changed (+ changed 1))))))
-          (when local-change
-            (let [[ok-write] [(pcall vim.fn.writefile lines path)]]
-              (when ok-write
-                (set wrote true)
-                (let [bufnr (vim.fn.bufnr path)]
-                  (when (and bufnr (> bufnr 0) (vim.api.nvim_buf_is_loaded bufnr))
-                    (each [lnum payload (pairs per-file)]
-                      (when (and (>= lnum 1) (<= lnum (# lines)))
-                        (pcall vim.api.nvim_buf_set_lines bufnr (- lnum 1) lnum false [(. payload :new)])))))))))))
-    {:wrote wrote :changed changed}))
+        refs (or meta.buf.source-refs [])
+        content (or meta.buf.content [])]
+    (each [src-idx ref (ipairs refs)]
+      (when (and ref (= (type ref.path) "string") (~= ref.path ""))
+        (let [path ref.path
+              per-file (. ops path)]
+          (when per-file
+            (let [lnum0 (if (and (= (type ref.lnum) "number") (> ref.lnum 0)) ref.lnum 1)]
+              (var lnum lnum0)
+              (each [_ op (ipairs per-file)]
+                (if (= (. op :kind) :insert-before)
+                    (when (>= lnum (. op :lnum))
+                      (set lnum (+ lnum (# (or (. op :lines) [])))))
+                    (= (. op :kind) :insert-after)
+                    (when (> lnum (. op :lnum))
+                      (set lnum (+ lnum (# (or (. op :lines) [])))))
+                    (= (. op :kind) :delete)
+                    (when (> lnum (. op :lnum))
+                      (set lnum (- lnum 1)))
+                    nil))
+              (when (< lnum 1)
+                (set lnum 1))
+              (set (. ref :lnum) lnum)
+              (let [lines (. post-lines path)
+                    line (or (and lines
+                                  (>= lnum 1)
+                                  (<= lnum (# lines))
+                                  (. lines lnum))
+                             ref.line
+                             "")]
+                (set (. ref :line) line)
+                (when src-idx
+                  (set (. content src-idx) line))))))))
+    (set meta.buf.content content)))
 
 (fn invalidate-caches-for-paths!
   [deps session updates]
@@ -489,10 +601,12 @@
         update-info-window (. deps :update-info-window)
         preview-window (. deps :preview-window)]
     (when session
-      (let [updates (path-updates-from-visible session)
-            result (apply-path-updates! session updates)
+      (let [collected (collect-file-ops session)
+            ops (. collected :ops)
+            result (apply-file-ops! session ops)
             buf session.meta.buf.buffer]
-        (invalidate-caches-for-paths! deps session updates)
+        (update-session-refs-after-ops! session ops (. result :post-lines))
+        (invalidate-caches-for-paths! deps session (. result :paths))
         (when (> result.changed 0)
           (pcall session.meta.on-update 0))
         (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
@@ -501,6 +615,7 @@
         (pcall update-info-window session true)
         (pcall preview-window.maybe-update-for-selection! session)
         (when sign-mod
+          (pcall sign-mod.capture-baseline! session)
           (pcall sign-mod.refresh-change-signs! session))
         (vim.notify
           (if (> result.changed 0)

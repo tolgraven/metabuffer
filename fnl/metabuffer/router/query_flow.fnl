@@ -122,6 +122,7 @@
          : project-source
          : update-info-window
          : refresh-change-signs!
+         : capture-sign-baseline!
          : settings
          : merge-history-into-session!
          : save-current-prompt-tag!
@@ -166,7 +167,7 @@
               _ (when (and (= (type (. parsed :save-tag)) "string")
                            (~= (vim.trim (. parsed :save-tag)) "")
                            save-current-prompt-tag!)
-                  (save-current-prompt-tag! session (. parsed :save-tag) prompt-text))
+                  (save-current-prompt-tag! session (. parsed :save-tag) effective-text))
               _ (when (and (= (type (. parsed :saved-tag)) "string")
                            (~= (vim.trim (. parsed :saved-tag)) "")
                            restore-saved-prompt-tag!)
@@ -236,7 +237,9 @@
                 (session.meta.refresh_statusline)
                 (update-info-window session)
                 (when refresh-change-signs!
-                  (refresh-change-signs! session)))
+                  (refresh-change-signs! session))
+                (when capture-sign-baseline!
+                  (capture-sign-baseline! session)))
               (when (string.find (tostring err) "E565")
                 ;; Textlock race: retry right after current input cycle.
                 (vim.defer_fn
@@ -247,7 +250,9 @@
                       (pcall session.meta.refresh_statusline)
                       (pcall update-info-window session)
                       (when refresh-change-signs!
-                        (pcall refresh-change-signs! session))))
+                        (pcall refresh-change-signs! session))
+                      (when capture-sign-baseline!
+                        (pcall capture-sign-baseline! session))))
                   1))))))))
 
 (fn M.on-prompt-changed!

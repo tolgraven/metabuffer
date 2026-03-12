@@ -63,6 +63,19 @@ T['editing results buffer directly and :write propagates edits to source files']
   eq(file_line, replacement)
   H.wait_for(function() return H.session_preview_contains('[edited-by-meta]') end, 3000)
 
+  child.type_keys('gg')
+  child.type_keys('o')
+  child.type_keys('inserted-from-meta')
+  child.type_keys('<Esc>')
+  child.cmd('write')
+  local inserted = child.lua_get(string.format([[
+    (function()
+      local lines = vim.fn.readfile(%q)
+      return lines[%d] or ''
+    end)()
+  ]], target.path, target.lnum + 1))
+  eq(inserted, 'inserted-from-meta')
+
   child.cmd('Meta')
   H.wait_for(function() return H.session_active() end, 3000)
   H.wait_for(function() return H.session_prompt_text() == 'meta' end, 3000)

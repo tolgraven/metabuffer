@@ -17,41 +17,68 @@
   (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf name)]]
     (if ok v default)))
 
+(fn current-lines
+  [buf]
+  (if (and buf (vim.api.nvim_buf_is_valid buf))
+      (vim.api.nvim_buf_get_lines buf 0 -1 false)
+      []))
+
 (fn place-sign!
   [buf id name lnum]
   (when (and buf (vim.api.nvim_buf_is_valid buf) (> lnum 0))
     (pcall vim.fn.sign_place id change-sign-group name buf {:lnum lnum :priority 20})))
 
-(fn ref-baseline-line
-  [session src-idx]
-  (let [refs (and session session.meta session.meta.buf session.meta.buf.source-refs)
-        ref (and refs src-idx (. refs src-idx))
-        line (and ref ref.line)]
-    (if (= (type line) "string")
-        line
-        (let [content (and session session.meta session.meta.buf session.meta.buf.content)]
-          (or (and content src-idx (. content src-idx)) "")))))
+(fn snapshot-rows
+  [session]
+  (let [meta (and session session.meta)
+        idxs (or (and meta meta.buf meta.buf.indices) [])
+        refs (or (and meta meta.buf meta.buf.source-refs) [])
+        content (or (and meta meta.buf meta.buf.content) [])
+        rows []]
+    (each [_ src-idx (ipairs idxs)]
+      (let [ref (and src-idx (. refs src-idx))]
+        (table.insert rows
+          {:src-idx src-idx
+           :kind (or (and ref ref.kind) "")
+           :path (or (and ref ref.path) "")
+           :lnum (and ref ref.lnum)
+           :text (or (and ref ref.line)
+                     (and src-idx (. content src-idx))
+                     "")})))
+    rows))
 
-(fn diff-sign-events
-  [session buf]
-  (let [lines (vim.api.nvim_buf_get_lines buf 0 -1 false)
-        idxs (or (and session session.meta session.meta.buf session.meta.buf.indices) [])
-        line-count (# lines)
-        idx-count (# idxs)
-        max-count (math.max line-count idx-count)
-        out []]
-    (for [i 1 max-count]
-      (if (> i line-count)
-        (when (> line-count 0)
-          (table.insert out {:kind :removed :lnum line-count}))
-        (> i idx-count)
-        (table.insert out {:kind :added :lnum i})
-        (let [src-idx (. idxs i)
-              baseline (ref-baseline-line session src-idx)
-              shown (or (. lines i) "")]
-          (when (~= shown baseline)
-            (table.insert out {:kind :modified :lnum i})))))
-    out))
+(fn hunk-indices
+  [h]
+  (let [a-start (or (. h 1) 1)
+        a-count (or (. h 2) 0)
+        b-start (or (. h 3) 1)
+        b-count (or (. h 4) 0)]
+    [a-start a-count b-start b-count]))
+
+(fn diff-hunks
+  [old-lines new-lines]
+  (let [old-text (table.concat (or old-lines []) "\n")
+        new-text (table.concat (or new-lines []) "\n")
+        [ok out] [(pcall vim.diff old-text new-text {:result_type "indices" :algorithm "histogram"})]]
+    (if (and ok (= (type out) "table")) out [])))
+
+(fn place-hunk-signs!
+  [buf line-count id-start h]
+  (let [[a-start a-count b-start b-count] (hunk-indices h)
+        common (math.min a-count b-count)]
+    (var next-id id-start)
+    (for [i 0 (- common 1)]
+      (place-sign! buf next-id sign-modified (+ b-start i))
+      (set next-id (+ next-id 1)))
+    (when (> b-count a-count)
+      (for [i common (- b-count 1)]
+        (place-sign! buf next-id sign-added (+ b-start i))
+        (set next-id (+ next-id 1))))
+    (when (> a-count b-count)
+      (let [row (math.max 1 (math.min (math.max 1 line-count) (+ b-start common)))]
+        (place-sign! buf next-id sign-removed row)
+        (set next-id (+ next-id 1))))
+    next-id))
 
 (fn M.buf-has-signs?
   [buf]
@@ -74,16 +101,21 @@
                (not (bvar buf "meta_internal_render" false)))
       (ensure-change-signs-defined!)
       (M.clear-change-signs! buf)
-      (let [events (diff-sign-events session buf)
-            id 1]
-        (var next-id id)
-        (each [_ ev (ipairs events)]
-          (if (= ev.kind :added)
-              (place-sign! buf next-id sign-added ev.lnum)
-              (= ev.kind :removed)
-              (place-sign! buf next-id sign-removed ev.lnum)
-              (place-sign! buf next-id sign-modified ev.lnum))
-          (set next-id (+ next-id 1)))))))
+      (let [old-lines (or session.edit-baseline-lines [])
+            new-lines (current-lines buf)
+            hunks (diff-hunks old-lines new-lines)]
+        (var next-id 1)
+        (each [_ h (ipairs hunks)]
+          (set next-id (place-hunk-signs! buf (# new-lines) next-id h)))))))
+
+(fn M.capture-baseline!
+  [session]
+  "Public API: M.capture-baseline!."
+  (let [meta (and session session.meta)
+        buf (and meta meta.buf meta.buf.buffer)]
+    (when (and buf (vim.api.nvim_buf_is_valid buf))
+      (set session.edit-baseline-lines (vim.deepcopy (current-lines buf)))
+      (set session.edit-baseline-rows (snapshot-rows session)))))
 
 (fn M.refresh-dummy
   [buf]

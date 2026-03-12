@@ -501,71 +501,168 @@ local function ensure_session_for_results_buf_21(deps, session)
   active_by_source[buf] = session
   return nil
 end
-local function path_updates_from_visible(session)
-  local meta = session.meta
-  local visible = vim.api.nvim_buf_get_lines(meta.buf.buffer, 0, -1, false)
-  local idxs = (meta.buf.indices or {})
-  local refs = (meta.buf["source-refs"] or {})
-  local content = meta.buf.content
-  local updates = {}
-  for i = 1, math.min(#visible, #idxs) do
-    local src_idx = idxs[i]
-    local ref = refs[src_idx]
-    local kind = ((ref and ref.kind) or "")
-    local path = (ref and ref.path)
-    local lnum = (ref and ref.lnum)
-    local old = (content[src_idx] or "")
-    local new = (visible[i] or "")
-    if (ref and (kind ~= "file-entry") and (type(path) == "string") and (path ~= "") and (type(lnum) == "number") and (lnum > 0) and (old ~= new)) then
-      local per_file = (updates[path] or {})
-      per_file[lnum] = {new = new, ["src-idx"] = src_idx}
-      updates[path] = per_file
+local function diff_hunks(old_lines, new_lines)
+  local old_text = table.concat((old_lines or {}), "\n")
+  local new_text = table.concat((new_lines or {}), "\n")
+  local ok,out = pcall(vim.diff, old_text, new_text, {result_type = "indices", algorithm = "histogram"})
+  if (ok and (type(out) == "table")) then
+    return out
+  else
+    return {}
+  end
+end
+local function hunk_indices(h)
+  return {(h[1] or 1), (h[2] or 0), (h[3] or 1), (h[4] or 0)}
+end
+local function slice_lines(lines, start, count)
+  local out = {}
+  for i = start, (start + count + -1) do
+    if ((i >= 1) and (i <= #lines)) then
+      table.insert(out, lines[i])
     else
     end
   end
-  return updates
+  return out
 end
-local function apply_path_updates_21(session, updates)
+local function valid_row_3f(row)
+  return (row and (type(row.path) == "string") and (row.path ~= "") and (type(row.lnum) == "number") and (row.lnum > 0) and (row.kind ~= "file-entry"))
+end
+local function append_op_21(ops, path, op)
+  local per_file = (ops[path] or {})
+  table.insert(per_file, op)
+  ops[path] = per_file
+  return nil
+end
+local function collect_file_ops(session)
   local meta = session.meta
-  local any_written = false
-  local writes = 0
-  local wrote = any_written
-  local changed = writes
-  for path, per_file in pairs(updates) do
-    local ok_read,lines = pcall(vim.fn.readfile, path)
-    if (ok_read and (type(lines) == "table")) then
-      local local_change = false
-      for lnum, payload in pairs(per_file) do
-        if ((lnum >= 1) and (lnum <= #lines)) then
-          local next_line = payload.new
-          local src_idx = payload["src-idx"]
-          if (lines[lnum] ~= next_line) then
-            lines[lnum] = next_line
-            meta.buf.content[src_idx] = next_line
-            if (meta.buf["source-refs"] and meta.buf["source-refs"][src_idx]) then
-              local src_ref = meta.buf["source-refs"][src_idx]
-              src_ref["line"] = next_line
-            else
-            end
-            local_change = true
-            changed = (changed + 1)
-          else
-          end
+  local buf = meta.buf.buffer
+  local baseline_lines = (session["edit-baseline-lines"] or vim.api.nvim_buf_get_lines(buf, 0, -1, false))
+  local baseline_rows = (session["edit-baseline-rows"] or {})
+  local current_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  local hunks = diff_hunks(baseline_lines, current_lines)
+  local ops = {}
+  for _, h in ipairs(hunks) do
+    local _let_60_ = hunk_indices(h)
+    local a_start = _let_60_[1]
+    local a_count = _let_60_[2]
+    local b_start = _let_60_[3]
+    local b_count = _let_60_[4]
+    local common = math.min(a_count, b_count)
+    local old_rows = slice_lines(baseline_rows, a_start, a_count)
+    local new_lines = slice_lines(current_lines, b_start, b_count)
+    if (a_count > 0) then
+      for i = 1, common do
+        local row = old_rows[i]
+        local text = (new_lines[i] or "")
+        if (valid_row_3f(row) and ((row.text or "") ~= text)) then
+          append_op_21(ops, row.path, {kind = "replace", lnum = row.lnum, text = text})
         else
         end
       end
-      if local_change then
+      if (a_count > b_count) then
+        for i = (common + 1), a_count do
+          local row = old_rows[i]
+          if valid_row_3f(row) then
+            append_op_21(ops, row.path, {kind = "delete", lnum = row.lnum})
+          else
+          end
+        end
+      else
+      end
+      if (b_count > a_count) then
+        local extra = slice_lines(new_lines, (common + 1), (b_count - common))
+        local anchor_row = old_rows[a_count]
+        if (valid_row_3f(anchor_row) and (#extra > 0)) then
+          append_op_21(ops, anchor_row.path, {kind = "insert-after", lnum = anchor_row.lnum, lines = extra})
+        else
+        end
+      else
+      end
+    else
+      local extra = slice_lines(new_lines, 1, b_count)
+      local prev_row = baseline_rows[a_start]
+      local next_row = baseline_rows[(a_start + 1)]
+      if (#extra > 0) then
+        if valid_row_3f(prev_row) then
+          append_op_21(ops, prev_row.path, {kind = "insert-after", lnum = prev_row.lnum, lines = extra})
+        else
+          if valid_row_3f(next_row) then
+            append_op_21(ops, next_row.path, {kind = "insert-before", lnum = next_row.lnum, lines = extra})
+          else
+          end
+        end
+      else
+      end
+    end
+  end
+  return {ops = ops, ["current-lines"] = current_lines}
+end
+local function apply_file_ops_21(session, ops)
+  local post_lines = {}
+  local touched_paths = {}
+  local total = 0
+  local any_write = false
+  for path, per_file in pairs((ops or {})) do
+    local ok_read,lines0 = pcall(vim.fn.readfile, path)
+    if (ok_read and (type(lines0) == "table")) then
+      local lines = vim.deepcopy(lines0)
+      local delta = 0
+      local changed_3f = false
+      for _, op in ipairs((per_file or {})) do
+        if (op.kind == "replace") then
+          local lnum = (op.lnum + delta)
+          if ((lnum >= 1) and (lnum <= #lines) and (lines[lnum] ~= op.text)) then
+            lines[lnum] = op.text
+            total = (total + 1)
+            changed_3f = true
+          else
+          end
+        elseif (op.kind == "delete") then
+          local lnum = (op.lnum + delta)
+          if ((lnum >= 1) and (lnum <= #lines)) then
+            table.remove(lines, lnum)
+            delta = (delta - 1)
+            total = (total + 1)
+            changed_3f = true
+          else
+          end
+        elseif (op.kind == "insert-before") then
+          local ins = (op.lines or {})
+          local lnum = (op.lnum + delta)
+          local pos = math.max(1, math.min((#lines + 1), lnum))
+          if (#ins > 0) then
+            for i = 1, #ins do
+              table.insert(lines, (pos + i + -1), ins[i])
+            end
+            delta = (delta + #ins)
+            total = (total + #ins)
+            changed_3f = true
+          else
+          end
+        else
+          local ins = (op.lines or {})
+          local lnum = (op.lnum + delta)
+          local pos = math.max(0, math.min(#lines, lnum))
+          if (#ins > 0) then
+            for i = 1, #ins do
+              table.insert(lines, (pos + i), ins[i])
+            end
+            delta = (delta + #ins)
+            total = (total + #ins)
+            changed_3f = true
+          else
+          end
+        end
+      end
+      if changed_3f then
         local ok_write = pcall(vim.fn.writefile, lines, path)
         if ok_write then
-          wrote = true
+          any_write = true
+          touched_paths[path] = true
+          post_lines[path] = lines
           local bufnr = vim.fn.bufnr(path)
           if (bufnr and (bufnr > 0) and vim.api.nvim_buf_is_loaded(bufnr)) then
-            for lnum, payload in pairs(per_file) do
-              if ((lnum >= 1) and (lnum <= #lines)) then
-                pcall(vim.api.nvim_buf_set_lines, bufnr, (lnum - 1), lnum, false, {payload.new})
-              else
-              end
-            end
+            pcall(vim.api.nvim_buf_set_lines, bufnr, 0, -1, false, lines)
           else
           end
         else
@@ -575,7 +672,62 @@ local function apply_path_updates_21(session, updates)
     else
     end
   end
-  return {wrote = wrote, changed = changed}
+  return {wrote = any_write, changed = total, ["post-lines"] = post_lines, paths = touched_paths}
+end
+local function update_session_refs_after_ops_21(session, ops, post_lines)
+  local meta = session.meta
+  local refs = (meta.buf["source-refs"] or {})
+  local content = (meta.buf.content or {})
+  for src_idx, ref in ipairs(refs) do
+    if (ref and (type(ref.path) == "string") and (ref.path ~= "")) then
+      local path = ref.path
+      local per_file = ops[path]
+      if per_file then
+        local lnum0
+        if ((type(ref.lnum) == "number") and (ref.lnum > 0)) then
+          lnum0 = ref.lnum
+        else
+          lnum0 = 1
+        end
+        local lnum = lnum0
+        for _, op in ipairs(per_file) do
+          if (op.kind == "insert-before") then
+            if (lnum >= op.lnum) then
+              lnum = (lnum + #(op.lines or {}))
+            else
+            end
+          elseif (op.kind == "insert-after") then
+            if (lnum > op.lnum) then
+              lnum = (lnum + #(op.lines or {}))
+            else
+            end
+          elseif (op.kind == "delete") then
+            if (lnum > op.lnum) then
+              lnum = (lnum - 1)
+            else
+            end
+          else
+          end
+        end
+        if (lnum < 1) then
+          lnum = 1
+        else
+        end
+        ref["lnum"] = lnum
+        local lines = post_lines[path]
+        local line = ((lines and (lnum >= 1) and (lnum <= #lines) and lines[lnum]) or ref.line or "")
+        ref["line"] = line
+        if src_idx then
+          content[src_idx] = line
+        else
+        end
+      else
+      end
+    else
+    end
+  end
+  meta.buf.content = content
+  return nil
 end
 local function invalidate_caches_for_paths_21(deps, session, updates)
   local settings = deps.settings
@@ -603,10 +755,12 @@ M["write-results!"] = function(deps, prompt_buf)
   local update_info_window = deps["update-info-window"]
   local preview_window = deps["preview-window"]
   if session then
-    local updates = path_updates_from_visible(session)
-    local result = apply_path_updates_21(session, updates)
+    local collected = collect_file_ops(session)
+    local ops = collected.ops
+    local result = apply_file_ops_21(session, ops)
     local buf = session.meta.buf.buffer
-    invalidate_caches_for_paths_21(deps, session, updates)
+    update_session_refs_after_ops_21(session, ops, result["post-lines"])
+    invalidate_caches_for_paths_21(deps, session, result.paths)
     if (result.changed > 0) then
       pcall(session.meta["on-update"], 0)
     else
@@ -617,16 +771,17 @@ M["write-results!"] = function(deps, prompt_buf)
     pcall(update_info_window, session, true)
     pcall(preview_window["maybe-update-for-selection!"], session)
     if sign_mod then
+      pcall(sign_mod["capture-baseline!"], session)
       pcall(sign_mod["refresh-change-signs!"], session)
     else
     end
-    local _70_
+    local _91_
     if (result.changed > 0) then
-      _70_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+      _91_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
     else
-      _70_ = "metabuffer: no changes"
+      _91_ = "metabuffer: no changes"
     end
-    return vim.notify(_70_, vim.log.levels.INFO)
+    return vim.notify(_91_, vim.log.levels.INFO)
   else
     return nil
   end

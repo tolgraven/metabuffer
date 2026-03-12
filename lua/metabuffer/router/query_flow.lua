@@ -96,6 +96,7 @@ M["apply-prompt-lines!"] = function(deps, session)
   local project_source = deps["project-source"]
   local update_info_window = deps["update-info-window"]
   local refresh_change_signs_21 = deps["refresh-change-signs!"]
+  local capture_sign_baseline_21 = deps["capture-sign-baseline!"]
   local settings = deps.settings
   local merge_history_into_session_21 = deps["merge-history-into-session!"]
   local save_current_prompt_tag_21 = deps["save-current-prompt-tag!"]
@@ -124,7 +125,7 @@ M["apply-prompt-lines!"] = function(deps, session)
       end
       local _1
       if ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "") and save_current_prompt_tag_21) then
-        _1 = save_current_prompt_tag_21(session, parsed["save-tag"], __fnl_global__prompt_2dtext)
+        _1 = save_current_prompt_tag_21(session, parsed["save-tag"], effective_text)
       else
         _1 = nil
       end
@@ -238,19 +239,27 @@ M["apply-prompt-lines!"] = function(deps, session)
       session.meta.refresh_statusline()
       update_info_window(session)
       if refresh_change_signs_21 then
-        return refresh_change_signs_21(session)
+        refresh_change_signs_21(session)
+      else
+      end
+      if capture_sign_baseline_21 then
+        return capture_sign_baseline_21(session)
       else
         return nil
       end
     else
       if string.find(tostring(err), "E565") then
-        local function _30_()
+        local function _31_()
           if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
             pcall(session.meta["on-update"], 0)
             pcall(session.meta.refresh_statusline)
             pcall(update_info_window, session)
             if refresh_change_signs_21 then
-              return pcall(refresh_change_signs_21, session)
+              pcall(refresh_change_signs_21, session)
+            else
+            end
+            if capture_sign_baseline_21 then
+              return pcall(capture_sign_baseline_21, session)
             else
               return nil
             end
@@ -258,7 +267,7 @@ M["apply-prompt-lines!"] = function(deps, session)
             return nil
           end
         end
-        return vim.defer_fn(_30_, 1)
+        return vim.defer_fn(_31_, 1)
       else
         return nil
       end

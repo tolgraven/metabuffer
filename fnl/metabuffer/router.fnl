@@ -178,6 +178,7 @@
    :open-saved-browser! (fn [session]
                           (history-api.open-history-browser! session "saved"))
    :refresh-change-signs! sign_mod.refresh-change-signs!
+   :capture-sign-baseline! sign_mod.capture-baseline!
    :apply-prompt-lines (fn [session]
                          (apply-prompt-lines session))})
 

@@ -46,6 +46,7 @@
         project-source (. deps :project-source)
         meta-window-mod (. deps :meta-window-mod)
         history-store (. deps :history-store)
+        sign-mod (. deps :sign-mod)
         settings (. deps :settings)
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
         apply-prompt-lines (. deps :apply-prompt-lines)
@@ -191,6 +192,8 @@
                     ;; Initialize/render after prompt split exists so we avoid an extra
                     ;; post-split view correction pass that can visually "flash" scroll.
                     (curr.on-init)
+                    (when sign-mod
+                      (pcall sign-mod.capture-baseline! session))
                     (sync-prompt-buffer-name! session)
                     ;; Ensure initial selection/view is anchored before attaching prompt
                     ;; hooks that may sync from main-window cursor events.
