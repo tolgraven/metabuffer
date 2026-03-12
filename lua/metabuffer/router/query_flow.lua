@@ -95,6 +95,7 @@ M["apply-prompt-lines!"] = function(deps, session)
   local query_mod = deps["query-mod"]
   local project_source = deps["project-source"]
   local update_info_window = deps["update-info-window"]
+  local refresh_change_signs_21 = deps["refresh-change-signs!"]
   local settings = deps.settings
   local merge_history_into_session_21 = deps["merge-history-into-session!"]
   local save_current_prompt_tag_21 = deps["save-current-prompt-tag!"]
@@ -222,6 +223,10 @@ M["apply-prompt-lines!"] = function(deps, session)
         invalidate_filter_cache_21(session)
       else
       end
+      if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
+        pcall(vim.api.nvim_buf_set_var, session.meta.buf.buffer, "meta_manual_edit_active", false)
+      else
+      end
       if (session["project-mode"] and changed) then
         project_source["apply-source-set!"](session)
       else
@@ -231,19 +236,29 @@ M["apply-prompt-lines!"] = function(deps, session)
     local ok,err = pcall(session.meta["on-update"], 0)
     if ok then
       session.meta.refresh_statusline()
-      return update_info_window(session)
+      update_info_window(session)
+      if refresh_change_signs_21 then
+        return refresh_change_signs_21(session)
+      else
+        return nil
+      end
     else
       if string.find(tostring(err), "E565") then
-        local function _28_()
+        local function _30_()
           if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
             pcall(session.meta["on-update"], 0)
             pcall(session.meta.refresh_statusline)
-            return pcall(update_info_window, session)
+            pcall(update_info_window, session)
+            if refresh_change_signs_21 then
+              return pcall(refresh_change_signs_21, session)
+            else
+              return nil
+            end
           else
             return nil
           end
         end
-        return vim.defer_fn(_28_, 1)
+        return vim.defer_fn(_30_, 1)
       else
         return nil
       end

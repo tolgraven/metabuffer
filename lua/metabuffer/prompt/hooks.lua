@@ -10,6 +10,7 @@ M.new = function(opts)
   local maybe_sync_from_main_21 = opts["maybe-sync-from-main!"]
   local schedule_scroll_sync_21 = opts["schedule-scroll-sync!"]
   local maybe_restore_hidden_ui_21 = opts["maybe-restore-hidden-ui!"]
+  local sign_mod = opts["sign-mod"]
   local function disable_cmp(session)
     mark_prompt_buffer_21(session["prompt-buf"])
     local ok,cmp = pcall(require, "cmp")
@@ -484,18 +485,20 @@ M.new = function(opts)
     end
     vim.api.nvim_create_autocmd({"CursorMoved", "CursorMovedI"}, {group = aug, buffer = session.meta.buf.buffer, callback = _83_})
     local function _85_(_)
-      if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
-        local bo = vim.bo[session.meta.buf.buffer]
-        bo["buftype"] = "acwrite"
-        bo["modifiable"] = true
-        bo["readonly"] = false
-        bo["bufhidden"] = "hide"
-      else
-      end
-      if maybe_restore_hidden_ui_21 then
+      if (sign_mod and session.meta and session.meta.buf) then
+        local buf = session.meta.buf.buffer
+        local internal_3f
+        do
+          local ok,v = pcall(vim.api.nvim_buf_get_var, buf, "meta_internal_render")
+          internal_3f = (ok and v)
+        end
+        if not internal_3f then
+          pcall(vim.api.nvim_buf_set_var, buf, "meta_manual_edit_active", true)
+        else
+        end
         local function _87_()
           if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
-            return pcall(maybe_restore_hidden_ui_21, session)
+            return pcall(sign_mod["refresh-change-signs!"], session)
           else
             return nil
           end
@@ -505,16 +508,39 @@ M.new = function(opts)
         return nil
       end
     end
-    vim.api.nvim_create_autocmd("BufEnter", {group = aug, buffer = session.meta.buf.buffer, callback = _85_})
-    apply_main_keymaps(router, session)
+    vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {group = aug, buffer = session.meta.buf.buffer, callback = _85_})
     local function _90_(_)
+      if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
+        local bo = vim.bo[session.meta.buf.buffer]
+        bo["buftype"] = "acwrite"
+        bo["modifiable"] = true
+        bo["readonly"] = false
+        bo["bufhidden"] = "hide"
+      else
+      end
+      if maybe_restore_hidden_ui_21 then
+        local function _92_()
+          if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
+            return pcall(maybe_restore_hidden_ui_21, session)
+          else
+            return nil
+          end
+        end
+        return vim.schedule(_92_)
+      else
+        return nil
+      end
+    end
+    vim.api.nvim_create_autocmd("BufEnter", {group = aug, buffer = session.meta.buf.buffer, callback = _90_})
+    apply_main_keymaps(router, session)
+    local function _95_(_)
       return schedule_scroll_sync_21(session)
     end
-    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _90_})
-    local function _91_(_)
+    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _95_})
+    local function _96_(_)
       return router["write-results"](session["prompt-buf"])
     end
-    vim.api.nvim_create_autocmd("BufWriteCmd", {group = aug, buffer = session.meta.buf.buffer, callback = _91_})
+    vim.api.nvim_create_autocmd("BufWriteCmd", {group = aug, buffer = session.meta.buf.buffer, callback = _96_})
     disable_cmp(session)
     mark_prompt_buffer_21(session["prompt-buf"])
     refresh_prompt_highlights_21(session)

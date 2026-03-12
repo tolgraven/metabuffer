@@ -78,6 +78,16 @@
           s3 (string.gsub s2 "\r" " ")]
       s3)))
 
+(fn set-bvar!
+  [buf name value]
+  (when (and buf (vim.api.nvim_buf_is_valid buf))
+    (pcall vim.api.nvim_buf_set_var buf name value)))
+
+(fn bvar
+  [buf name default]
+  (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf name)]]
+    (if ok v default)))
+
 (fn M.new
   [nvim model]
   "Public API: M.new."
@@ -223,6 +233,7 @@
                (vim.api.nvim_win_call win (fn [] (vim.fn.winsaveview))))))
       (let [bo (. vim.bo self.buffer)]
         (set (. bo :modifiable) true))
+      (set-bvar! self.buffer "meta_internal_render" true)
       (each [_ idx (ipairs self.indices)]
         (let [line (. self.content idx)]
           (if (and self.show-source-prefix self.source-refs (. self.source-refs idx))
@@ -252,7 +263,15 @@
               line1 (tostring (or line0 ""))
               line2 (string.gsub line1 "[\r\n\v\f]" "")]
           (set (. out i) line2)))
-      (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
+      (let [manual-edit-active? (bvar self.buffer "meta_manual_edit_active" false)
+            undo-levels (if manual-edit-active?
+                            nil
+                            (vim.api.nvim_get_option_value "undolevels" {:buf self.buffer}))]
+        (when undo-levels
+          (pcall vim.api.nvim_set_option_value "undolevels" -1 {:buf self.buffer}))
+        (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
+        (when undo-levels
+          (pcall vim.api.nvim_set_option_value "undolevels" undo-levels {:buf self.buffer})))
       (vim.api.nvim_buf_clear_namespace self.buffer self.source-hl-ns 0 -1)
       (vim.api.nvim_buf_clear_namespace self.buffer self.source-sep-ns 0 -1)
       (vim.api.nvim_buf_clear_namespace self.buffer self.source-alt-ns 0 -1)
@@ -337,6 +356,7 @@
       (self.apply-source-syntax-regions)
       (let [bo (. vim.bo self.buffer)]
         (set (. bo :modifiable) (if self.keep-modifiable true false)))
+      (set-bvar! self.buffer "meta_internal_render" false)
       (each [win view (pairs win-views)]
         (when (vim.api.nvim_win_is_valid win)
           (vim.api.nvim_win_call win

@@ -9,6 +9,7 @@
 (fn remove-session!
   [deps session]
   (let [history-api (. deps :history-api)
+        sign-mod (. deps :sign-mod)
         router-util-mod (. deps :router-util-mod)
         info-window (. deps :info-window)
         preview-window (. deps :preview-window)
@@ -31,6 +32,8 @@
       (info-window.close-window! session)
       (preview-window.close-window! session)
       (history-api.close-history-browser! session)
+      (when (and sign-mod session.meta session.meta.buf session.meta.buf.buffer)
+        (sign-mod.clear-change-signs! session.meta.buf.buffer))
       (when session.source-buf
         (set (. active-by-source session.source-buf) nil))
       (when (and session.meta session.meta.buf session.meta.buf.buffer)
@@ -149,6 +152,7 @@
   [deps session]
   (let [active-by-prompt (. deps :active-by-prompt)
         router-prompt-mod (. deps :router-prompt-mod)
+        sign-mod (. deps :sign-mod)
         router-util-mod (. deps :router-util-mod)
         session-view (. deps :session-view)
         base-buffer (. deps :base-buffer)
@@ -208,7 +212,8 @@
                 router-prompt-mod.cancel-prompt-update!)
               (pcall vim.cmd "stopinsert")
               (clear-hit-highlight! curr)
-              (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
+              (when sign-mod
+                (sign-mod.clear-change-signs! curr.buf.buffer))
               (session-view.wipe-temp-buffers curr)
               (remove-session! deps session)
               (wrapup curr)))))
@@ -218,6 +223,7 @@
   [deps session]
   (let [router-prompt-mod (. deps :router-prompt-mod)
         router-util-mod (. deps :router-util-mod)
+        sign-mod (. deps :sign-mod)
         session-view (. deps :session-view)
         base-buffer (. deps :base-buffer)
         history-api (. deps :history-api)
@@ -230,7 +236,8 @@
     (history-api.push-history-entry! session session.last-prompt-text)
     (pcall vim.cmd "stopinsert")
     (clear-hit-highlight! curr)
-    (pcall vim.cmd (.. "sign unplace * buffer=" curr.buf.buffer))
+    (when sign-mod
+      (sign-mod.clear-change-signs! curr.buf.buffer))
     (vim.cmd "silent! nohlsearch")
     (when (and (vim.api.nvim_win_is_valid session.origin-win)
                (vim.api.nvim_buf_is_valid session.origin-buf))
@@ -478,6 +485,7 @@
 (fn M.write-results!
   [deps prompt-buf]
   (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)
+        sign-mod (. deps :sign-mod)
         update-info-window (. deps :update-info-window)
         preview-window (. deps :preview-window)]
     (when session
@@ -488,9 +496,12 @@
         (when (> result.changed 0)
           (pcall session.meta.on-update 0))
         (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
+        (pcall vim.api.nvim_buf_set_var buf "meta_manual_edit_active" false)
         (pcall session.meta.refresh_statusline)
         (pcall update-info-window session true)
         (pcall preview-window.maybe-update-for-selection! session)
+        (when sign-mod
+          (pcall sign-mod.refresh-change-signs! session))
         (vim.notify
           (if (> result.changed 0)
               (.. "metabuffer: wrote " (tostring result.changed) " change(s)")

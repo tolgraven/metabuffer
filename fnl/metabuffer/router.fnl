@@ -13,6 +13,7 @@
 (local config (require :metabuffer.config))
 (local query_mod (require :metabuffer.query))
 (local history_store (require :metabuffer.history_store))
+(local sign_mod (require :metabuffer.sign))
 (local prompt_hooks_mod (require :metabuffer.prompt.hooks))
 (local router_util_mod (require :metabuffer.router.util))
 (local router_history_mod (require :metabuffer.router.history))
@@ -176,6 +177,7 @@
    :restore-saved-prompt-tag! history-api.restore-saved-prompt-tag!
    :open-saved-browser! (fn [session]
                           (history-api.open-history-browser! session "saved"))
+   :refresh-change-signs! sign_mod.refresh-change-signs!
    :apply-prompt-lines (fn [session]
                          (apply-prompt-lines session))})
 
@@ -208,6 +210,7 @@
    :settings M
    :history-api history-api
    :history-store history_store
+   :sign-mod sign_mod
    :prompt-window-mod prompt_window_mod
    :meta-window-mod meta_window_mod
    :router-util-mod router_util_mod
@@ -246,6 +249,7 @@
    :project-source project-source
    :meta-window-mod meta_window_mod
    :history-store history_store
+   :sign-mod sign_mod
    :sync-prompt-buffer-name! sync-prompt-buffer-name!
    :apply-prompt-lines apply-prompt-lines
    :update-info-window update-info-window

@@ -11,8 +11,9 @@ local function register_prompt_hooks_21(deps, session)
   local maybe_sync_from_main_21 = deps["maybe-sync-from-main!"]
   local schedule_scroll_sync_21 = deps["schedule-scroll-sync!"]
   local maybe_restore_hidden_ui_21 = deps["maybe-restore-hidden-ui!"]
+  local sign_mod = deps["sign-mod"]
   local router_api = deps["router-api"]
-  local hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = default_prompt_keymaps, ["default-main-keymaps"] = default_main_keymaps, ["active-by-prompt"] = active_by_prompt, ["on-prompt-changed"] = on_prompt_changed, ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21, ["maybe-restore-hidden-ui!"] = maybe_restore_hidden_ui_21})
+  local hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = default_prompt_keymaps, ["default-main-keymaps"] = default_main_keymaps, ["active-by-prompt"] = active_by_prompt, ["on-prompt-changed"] = on_prompt_changed, ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21, ["maybe-restore-hidden-ui!"] = maybe_restore_hidden_ui_21, ["sign-mod"] = sign_mod})
   return hooks["register!"](router_api, session)
 end
 M["start!"] = function(deps, query, mode, _meta, project_mode)
@@ -152,6 +153,8 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
       bo["readonly"] = false
       bo["bufhidden"] = "hide"
     end
+    pcall(vim.api.nvim_buf_set_var, curr.buf.buffer, "meta_manual_edit_active", false)
+    pcall(vim.api.nvim_buf_set_var, curr.buf.buffer, "meta_internal_render", false)
     local initial_lines
     if (prompt_query0 and (prompt_query0 ~= "")) then
       initial_lines = vim.split(prompt_query0, "\n", {plain = true})

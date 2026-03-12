@@ -121,6 +121,7 @@
   (let [{: query-mod
          : project-source
          : update-info-window
+         : refresh-change-signs!
          : settings
          : merge-history-into-session!
          : save-current-prompt-tag!
@@ -224,6 +225,8 @@
                 ""))
           (when (or changed text-changed?)
             (invalidate-filter-cache! session))
+          (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+            (pcall vim.api.nvim_buf_set_var session.meta.buf.buffer "meta_manual_edit_active" false))
           (when (and session.project-mode changed)
             (project-source.apply-source-set! session))
           (session.meta.set-query-lines effective-lines))
@@ -231,7 +234,9 @@
           (if ok
               (do
                 (session.meta.refresh_statusline)
-                (update-info-window session))
+                (update-info-window session)
+                (when refresh-change-signs!
+                  (refresh-change-signs! session)))
               (when (string.find (tostring err) "E565")
                 ;; Textlock race: retry right after current input cycle.
                 (vim.defer_fn
@@ -240,7 +245,9 @@
                                (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
                       (pcall session.meta.on-update 0)
                       (pcall session.meta.refresh_statusline)
-                      (pcall update-info-window session)))
+                      (pcall update-info-window session)
+                      (when refresh-change-signs!
+                        (pcall refresh-change-signs! session))))
                   1))))))))
 
 (fn M.on-prompt-changed!

@@ -5,6 +5,7 @@ local function session_by_prompt(active_by_prompt, prompt_buf)
 end
 local function remove_session_21(deps, session)
   local history_api = deps["history-api"]
+  local sign_mod = deps["sign-mod"]
   local router_util_mod = deps["router-util-mod"]
   local info_window = deps["info-window"]
   local preview_window = deps["preview-window"]
@@ -36,6 +37,10 @@ local function remove_session_21(deps, session)
     info_window["close-window!"](session)
     preview_window["close-window!"](session)
     history_api["close-history-browser!"](session)
+    if (sign_mod and session.meta and session.meta.buf and session.meta.buf.buffer) then
+      sign_mod["clear-change-signs!"](session.meta.buf.buffer)
+    else
+    end
     if session["source-buf"] then
       active_by_source[session["source-buf"]] = nil
     else
@@ -132,11 +137,11 @@ local function restore_session_ui_21(deps, session)
     end
     local prompt_win
     if (local_layout_3f and vim.api.nvim_win_is_valid(curr.win.window)) then
-      local function _17_()
+      local function _18_()
         vim.cmd(("belowright " .. tostring(height) .. "new"))
         return vim.api.nvim_get_current_win()
       end
-      prompt_win = vim.api.nvim_win_call(curr.win.window, _17_)
+      prompt_win = vim.api.nvim_win_call(curr.win.window, _18_)
     else
       vim.cmd(("botright " .. tostring(height) .. "new"))
       prompt_win = vim.api.nvim_get_current_win()
@@ -194,6 +199,7 @@ end
 local function finish_accept(deps, session)
   local active_by_prompt = deps["active-by-prompt"]
   local router_prompt_mod = deps["router-prompt-mod"]
+  local sign_mod = deps["sign-mod"]
   local router_util_mod = deps["router-util-mod"]
   local session_view = deps["session-view"]
   local base_buffer = deps["base-buffer"]
@@ -264,12 +270,15 @@ local function finish_accept(deps, session)
     session["results-edit-mode"] = false
     hide_session_ui_21(deps, session)
   else
-    local function _30_()
+    local function _31_()
       if (active_by_prompt[session["prompt-buf"]] == session) then
         router_prompt_mod["begin-session-close!"](session, router_prompt_mod["cancel-prompt-update!"])
         pcall(vim.cmd, "stopinsert")
         clear_hit_highlight_21(curr)
-        pcall(vim.cmd, ("sign unplace * buffer=" .. curr.buf.buffer))
+        if sign_mod then
+          sign_mod["clear-change-signs!"](curr.buf.buffer)
+        else
+        end
         session_view["wipe-temp-buffers"](curr)
         remove_session_21(deps, session)
         return wrapup(curr)
@@ -277,13 +286,14 @@ local function finish_accept(deps, session)
         return nil
       end
     end
-    vim.schedule(_30_)
+    vim.schedule(_31_)
   end
   return curr
 end
 local function finish_cancel(deps, session)
   local router_prompt_mod = deps["router-prompt-mod"]
   local router_util_mod = deps["router-util-mod"]
+  local sign_mod = deps["sign-mod"]
   local session_view = deps["session-view"]
   local base_buffer = deps["base-buffer"]
   local history_api = deps["history-api"]
@@ -294,7 +304,10 @@ local function finish_cancel(deps, session)
   history_api["push-history-entry!"](session, session["last-prompt-text"])
   pcall(vim.cmd, "stopinsert")
   clear_hit_highlight_21(curr)
-  pcall(vim.cmd, ("sign unplace * buffer=" .. curr.buf.buffer))
+  if sign_mod then
+    sign_mod["clear-change-signs!"](curr.buf.buffer)
+  else
+  end
   vim.cmd("silent! nohlsearch")
   if (vim.api.nvim_win_is_valid(session["origin-win"]) and vim.api.nvim_buf_is_valid(session["origin-buf"])) then
     pcall(vim.api.nvim_set_current_win, session["origin-win"])
@@ -371,10 +384,10 @@ local function append_current_symbol_21(deps, prompt_buf, f)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if session then
     local word
-    local function _41_()
+    local function _44_()
       return vim.fn.expand("<cword>")
     end
-    word = vim.api.nvim_win_call(session.meta.win.window, _41_)
+    word = vim.api.nvim_win_call(session.meta.win.window, _44_)
     local token = f(word)
     if (token ~= "") then
       local current = router_util_mod["prompt-text"](session)
@@ -394,24 +407,24 @@ local function append_current_symbol_21(deps, prompt_buf, f)
   end
 end
 M["exclude-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _45_(word)
+  local function _48_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return ("!" .. word)
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _45_)
+  return append_current_symbol_21(deps, prompt_buf, _48_)
 end
 M["insert-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _47_(word)
+  local function _50_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return word
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _47_)
+  return append_current_symbol_21(deps, prompt_buf, _50_)
 end
 M["toggle-scan-option!"] = function(deps, prompt_buf, which)
   local project_source = deps["project-source"]
@@ -586,6 +599,7 @@ local function invalidate_caches_for_paths_21(deps, session, updates)
 end
 M["write-results!"] = function(deps, prompt_buf)
   local session = session_by_prompt(deps["active-by-prompt"], prompt_buf)
+  local sign_mod = deps["sign-mod"]
   local update_info_window = deps["update-info-window"]
   local preview_window = deps["preview-window"]
   if session then
@@ -598,16 +612,21 @@ M["write-results!"] = function(deps, prompt_buf)
     else
     end
     pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
+    pcall(vim.api.nvim_buf_set_var, buf, "meta_manual_edit_active", false)
     pcall(session.meta.refresh_statusline)
     pcall(update_info_window, session, true)
     pcall(preview_window["maybe-update-for-selection!"], session)
-    local _66_
-    if (result.changed > 0) then
-      _66_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+    if sign_mod then
+      pcall(sign_mod["refresh-change-signs!"], session)
     else
-      _66_ = "metabuffer: no changes"
     end
-    return vim.notify(_66_, vim.log.levels.INFO)
+    local _70_
+    if (result.changed > 0) then
+      _70_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+    else
+      _70_ = "metabuffer: no changes"
+    end
+    return vim.notify(_70_, vim.log.levels.INFO)
   else
     return nil
   end

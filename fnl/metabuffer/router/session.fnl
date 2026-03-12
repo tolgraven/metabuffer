@@ -14,6 +14,7 @@
         maybe-sync-from-main! (. deps :maybe-sync-from-main!)
         schedule-scroll-sync! (. deps :schedule-scroll-sync!)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)
+        sign-mod (. deps :sign-mod)
         router-api (. deps :router-api)
         hooks
         (prompt-hooks-mod.new
@@ -25,7 +26,8 @@
            :update-info-window update-info-window
            :maybe-sync-from-main! maybe-sync-from-main!
            :schedule-scroll-sync! schedule-scroll-sync!
-           :maybe-restore-hidden-ui! maybe-restore-hidden-ui!})]
+           :maybe-restore-hidden-ui! maybe-restore-hidden-ui!
+           :sign-mod sign-mod})]
     (hooks.register! router-api session)))
 
 (fn M.start!
@@ -113,6 +115,8 @@
                   (set (. bo :modifiable) true)
                   (set (. bo :readonly) false)
                   (set (. bo :bufhidden) "hide"))
+                (pcall vim.api.nvim_buf_set_var curr.buf.buffer "meta_manual_edit_active" false)
+                (pcall vim.api.nvim_buf_set_var curr.buf.buffer "meta_internal_render" false)
                 (let [initial-lines (if (and prompt-query (~= prompt-query ""))
                                         (vim.split prompt-query "\n" {:plain true})
                                         [""])

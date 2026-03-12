@@ -7,7 +7,7 @@
   (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
          : default-main-keymaps
          : on-prompt-changed : update-info-window : maybe-sync-from-main!
-         : schedule-scroll-sync! : maybe-restore-hidden-ui!} opts]
+         : schedule-scroll-sync! : maybe-restore-hidden-ui! : sign-mod} opts]
     (fn disable-cmp
   [session]
       (mark-prompt-buffer! session.prompt-buf)
@@ -344,6 +344,21 @@
                        (schedule-when-valid session
                          (fn []
                            (maybe-sync-from-main! session))))})
+        (vim.api.nvim_create_autocmd ["TextChanged" "TextChangedI"]
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       (when (and sign-mod session.meta session.meta.buf)
+                         (let [buf session.meta.buf.buffer
+                               internal? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_internal_render")]]
+                                           (and ok v))]
+                           (when-not internal?
+                             (pcall vim.api.nvim_buf_set_var buf "meta_manual_edit_active" true))
+                           (vim.schedule
+                             (fn []
+                               (when (and session.prompt-buf
+                                          (= (. active-by-prompt session.prompt-buf) session))
+                                 (pcall sign-mod.refresh-change-signs! session)))))))})
         (vim.api.nvim_create_autocmd "BufEnter"
           {:group aug
            :buffer session.meta.buf.buffer

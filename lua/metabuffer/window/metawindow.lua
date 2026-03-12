@@ -1,8 +1,8 @@
 -- [nfnl] fnl/metabuffer/window/metawindow.fnl
 local base = require("metabuffer.window.base")
 local M = {}
-M["default-opts"] = {scrolloff = 0, sidescrolloff = 0, cursorcolumn = false, foldenable = false, spell = false}
-M["opts-to-stash"] = {"foldcolumn", "number", "relativenumber", "wrap", "conceallevel"}
+M["default-opts"] = {scrolloff = 0, sidescrolloff = 0, signcolumn = "yes:1", cursorcolumn = false, foldenable = false, spell = false}
+M["opts-to-stash"] = {"foldcolumn", "number", "relativenumber", "wrap", "conceallevel", "signcolumn"}
 M.statusline = "%%#MetaStatuslineMode%s# %s%%#MetaStatuslineIndicator# %d/%d%s%%#MetaStatuslineMiddle#%%=%%#MetaStatuslineFile# %s %%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s "
 local function title_case(s)
   if ((type(s) == "string") and (#s > 0)) then
