@@ -90,30 +90,52 @@ local function unquote_token(tok)
     return t
   end
 end
+local function file_query_shortcut_token(tok)
+  local t = (tok or "")
+  if (t == "./") then
+    return "await"
+  else
+    return string.match(t, "^%./(.+)$")
+  end
+end
 local function parse_parts(parts, idx, state)
   if (idx > #parts) then
     return state
   else
     local tok = parts[idx]
-    local val_111_auto = parse_option_token(tok)
+    local val_111_auto = file_query_shortcut_token(tok)
     if val_111_auto then
-      local parsed = val_111_auto
-      local next = assoc_option(state, parsed[1], parsed[2])
-      if (parsed[1] == "files") then
+      local shortcut = val_111_auto
+      local next = assoc_option(state, "files", true)
+      if (shortcut == "await") then
         return parse_parts(parts, (idx + 1), assoc_option(next, "file-await-token", true))
       else
-        return parse_parts(parts, (idx + 1), next)
+        local next2 = vim.deepcopy(next)
+        table.insert(next2["file-lines"], unquote_token(shortcut))
+        next2["file-await-token"] = false
+        return parse_parts(parts, (idx + 1), next2)
       end
     else
-      if (state["file-await-token"] and (vim.trim(tok) ~= "")) then
-        local next = vim.deepcopy(state)
-        table.insert(next["file-lines"], unquote_token(tok))
-        next["file-await-token"] = false
-        return parse_parts(parts, (idx + 1), next)
+      local val_111_auto0 = parse_option_token(tok)
+      if val_111_auto0 then
+        local parsed = val_111_auto0
+        local next = assoc_option(state, parsed[1], parsed[2])
+        if (parsed[1] == "files") then
+          return parse_parts(parts, (idx + 1), assoc_option(next, "file-await-token", true))
+        else
+          return parse_parts(parts, (idx + 1), next)
+        end
       else
-        local next = vim.deepcopy(state)
-        table.insert(next.keep, tok)
-        return parse_parts(parts, (idx + 1), next)
+        if (state["file-await-token"] and (vim.trim(tok) ~= "")) then
+          local next = vim.deepcopy(state)
+          table.insert(next["file-lines"], unquote_token(tok))
+          next["file-await-token"] = false
+          return parse_parts(parts, (idx + 1), next)
+        else
+          local next = vim.deepcopy(state)
+          table.insert(next.keep, tok)
+          return parse_parts(parts, (idx + 1), next)
+        end
       end
     end
   end
@@ -156,13 +178,13 @@ M["parse-query-text"] = function(query)
     local parsed = M["parse-query-lines"](lines)
     return {query = table.concat(parsed.lines, "\n"), lines = (parsed.lines or {}), ["include-hidden"] = parsed.hidden, ["include-ignored"] = parsed.ignored, ["include-deps"] = parsed.deps, ["include-files"] = parsed.files, prefilter = parsed.prefilter, lazy = parsed.lazy, ["file-lines"] = (parsed["file-lines"] or {}), history = parsed.history, ["save-tag"] = parsed["save-tag"], ["saved-tag"] = parsed["saved-tag"], ["saved-browser"] = parsed["saved-browser"]}
   else
-    local _12_
+    local _15_
     if ((type(query) == "string") and (query ~= "")) then
-      _12_ = vim.split(query, "\n", {plain = true})
+      _15_ = vim.split(query, "\n", {plain = true})
     else
-      _12_ = {}
+      _15_ = {}
     end
-    return {query = query, lines = _12_, ["include-hidden"] = nil, ["include-ignored"] = nil, ["include-deps"] = nil, ["include-files"] = nil, prefilter = nil, lazy = nil, ["file-lines"] = {}, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil}
+    return {query = query, lines = _15_, ["include-hidden"] = nil, ["include-ignored"] = nil, ["include-deps"] = nil, ["include-files"] = nil, prefilter = nil, lazy = nil, ["file-lines"] = {}, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil}
   end
 end
 local function lines_has_active_3f(lines, idx)

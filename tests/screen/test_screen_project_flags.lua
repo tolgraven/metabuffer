@@ -35,6 +35,21 @@ T['file flag enables file-entry hits filtered by file token'] = H.timed_case(fun
   eq(H.str_contains(dbg, '+fil'), true)
 end)
 
+T['file shortcut token ./query enables file mode and applies file token'] = H.timed_case(function()
+  H.open_project_meta_from_file('README.md')
+  H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
+
+  H.type_prompt_human('./README.md', 90)
+  H.wait_for(function() return H.session_query_text() == '' end, 6000)
+  H.wait_for(function() return H.session_file_entry_hit_count() > 0 end, 6000)
+  local first_line = H.session_first_file_entry_line()
+  eq(type(first_line), 'string')
+  eq(string.find(string.lower(first_line), 'readme', 1, true) ~= nil, true)
+
+  local dbg = H.session_debug_out()
+  eq(H.str_contains(dbg, '+fil'), true)
+end)
+
 T['file flag token is separate from normal query terms on same line'] = H.timed_case(function()
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)

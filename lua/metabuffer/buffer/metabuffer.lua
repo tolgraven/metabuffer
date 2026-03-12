@@ -115,6 +115,7 @@ M.new = function(nvim, model)
   self["source-sep-ns"] = vim.api.nvim_create_namespace("metabuffer_source_separator")
   self["source-alt-ns"] = vim.api.nvim_create_namespace("metabuffer_source_alt")
   self["source-syntax-groups"] = {}
+  self["keep-modifiable"] = false
   self["model-valid?"] = function()
     return (self.model and vim.api.nvim_buf_is_valid(self.model))
   end
@@ -372,14 +373,18 @@ M.new = function(nvim, model)
     self["apply-source-syntax-regions"]()
     do
       local bo = vim.bo[self.buffer]
-      bo["modifiable"] = false
+      if self["keep-modifiable"] then
+        bo["modifiable"] = true
+      else
+        bo["modifiable"] = false
+      end
     end
     for win, view in pairs(win_views) do
       if vim.api.nvim_win_is_valid(win) then
-        local function _48_()
+        local function _49_()
           return pcall(vim.fn.winrestview, view)
         end
-        vim.api.nvim_win_call(win, _48_)
+        vim.api.nvim_win_call(win, _49_)
       else
       end
     end

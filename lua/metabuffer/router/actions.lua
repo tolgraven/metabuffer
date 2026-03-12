@@ -156,12 +156,14 @@ local function restore_session_ui_21(deps, session)
     sync_prompt_buffer_name_21(session)
     curr["status-win"] = meta_window_mod.new(vim, prompt_win)
     session["ui-hidden"] = false
-    session["results-edit-mode"] = false
     if (curr and curr.buf and curr.buf.buffer and vim.api.nvim_buf_is_valid(curr.buf.buffer)) then
       do
         local bo = vim.bo[curr.buf.buffer]
-        bo["buftype"] = "nofile"
-        bo["modifiable"] = false
+        curr.buf["keep-modifiable"] = true
+        bo["buftype"] = "acwrite"
+        bo["modifiable"] = true
+        bo["readonly"] = false
+        bo["bufhidden"] = "hide"
       end
       pcall(curr.buf.render)
     else
@@ -566,23 +568,19 @@ M["write-results!"] = function(deps, prompt_buf)
   local session = session_by_prompt(deps["active-by-prompt"], prompt_buf)
   local update_info_window = deps["update-info-window"]
   if session then
-    if not session["results-edit-mode"] then
-      return vim.notify("Meta results are not in edit mode (<M-CR>).", vim.log.levels.WARN)
+    local updates = path_updates_from_visible(session)
+    local result = apply_path_updates_21(session, updates)
+    local buf = session.meta.buf.buffer
+    pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
+    pcall(session.meta.refresh_statusline)
+    pcall(update_info_window, session, true)
+    local _64_
+    if (result.changed > 0) then
+      _64_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
     else
-      local updates = path_updates_from_visible(session)
-      local result = apply_path_updates_21(session, updates)
-      local buf = session.meta.buf.buffer
-      pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
-      pcall(session.meta.refresh_statusline)
-      pcall(update_info_window, session, true)
-      local _64_
-      if (result.changed > 0) then
-        _64_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
-      else
-        _64_ = "metabuffer: no changes"
-      end
-      return vim.notify(_64_, vim.log.levels.INFO)
+      _64_ = "metabuffer: no changes"
     end
+    return vim.notify(_64_, vim.log.levels.INFO)
   else
     return nil
   end
@@ -602,17 +600,17 @@ M["enter-edit-mode!"] = function(deps, prompt_buf)
     set_results_edit_buffer_21(session)
     if (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
       pcall(vim.api.nvim_set_current_win, session.meta.win.window)
-      return pcall(vim.api.nvim_win_set_buf, session.meta.win.window, session.meta.buf.buffer)
+      pcall(vim.api.nvim_win_set_buf, session.meta.win.window, session.meta.buf.buffer)
     else
-      return nil
     end
+    return pcall(vim.cmd, "stopinsert")
   else
     return nil
   end
 end
-M["maybe-restore-ui!"] = function(deps, prompt_buf)
+M["maybe-restore-ui!"] = function(deps, prompt_buf, force)
   local session = session_by_prompt(deps["active-by-prompt"], prompt_buf)
-  if (session and session["ui-hidden"] and session.meta and session.meta.buf and (vim.api.nvim_get_current_buf() == session.meta.buf.buffer)) then
+  if (session and session["ui-hidden"] and (force or not session["results-edit-mode"]) and session.meta and session.meta.buf and (vim.api.nvim_get_current_buf() == session.meta.buf.buffer)) then
     session.meta.win.window = vim.api.nvim_get_current_win()
     return restore_session_ui_21(deps, session)
   else

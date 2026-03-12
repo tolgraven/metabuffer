@@ -262,10 +262,11 @@
                             (router_navigation_mod.schedule-scroll-sync!
                               navigation-deps
                               session))
-   :maybe-restore-hidden-ui! (fn [session]
+   :maybe-restore-hidden-ui! (fn [session force]
                                (router_actions_mod.maybe-restore-ui!
                                  actions-deps
-                                 session.prompt-buf))})
+                                 session.prompt-buf
+                                 (if (= force nil) false force)))})
 
 (fn M.on-prompt-changed
   [prompt-buf force event-tick]
@@ -429,7 +430,7 @@
 (fn M.maybe-restore-hidden-ui
   [prompt-buf]
   "Restore hidden prompt/info UI when revisiting a preserved results buffer."
-  (router_actions_mod.maybe-restore-ui! actions-deps prompt-buf))
+  (router_actions_mod.maybe-restore-ui! actions-deps prompt-buf false))
 
 (fn M.toggle-scan-option
   [prompt-buf which]

@@ -3,32 +3,29 @@ local child, eq = H.child, H.eq
 
 local T = MiniTest.new_set({ hooks = H.case_hooks() })
 
-T['enter edit mode and :write propagates results edits to source files'] = H.timed_case(function()
+T['editing results buffer directly and :write propagates edits to source files'] = H.timed_case(function()
   local root = H.make_temp_project()
   H.open_project_meta_in_dir(root, 'main.txt')
 
   H.type_prompt_human('meta', 80)
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
 
+  local info_before = H.session_info_snapshot()
+  eq(type(info_before), 'table')
+
+  child.cmd('stopinsert')
   child.lua([[
     (function()
       local router = require('metabuffer.router')
       local s = router['active-by-source'][_G.__meta_source_buf]
-      router['enter-edit-mode'](s['prompt-buf'])
+      if s and s.meta and s.meta.win and vim.api.nvim_win_is_valid(s.meta.win.window) then
+        vim.api.nvim_set_current_win(s.meta.win.window)
+      end
     end)()
   ]])
 
-  H.wait_for(function()
-    return child.lua_get([[
-      (function()
-        local router = require('metabuffer.router')
-        local s = router['active-by-source'][_G.__meta_source_buf]
-        if not s then return false end
-        local pwin = s['prompt-win']
-        return (pwin == nil) or (not vim.api.nvim_win_is_valid(pwin))
-      end)()
-    ]])
-  end, 4000)
+  local info_after = H.session_info_snapshot()
+  eq(type(info_after), 'table')
 
   local target = child.lua_get([[
     (function()

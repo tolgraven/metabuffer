@@ -121,11 +121,13 @@
         (sync-prompt-buffer-name! session)
         (set curr.status-win (meta-window-mod.new vim prompt-win))
         (set session.ui-hidden false)
-        (set session.results-edit-mode false)
         (when (and curr curr.buf curr.buf.buffer (vim.api.nvim_buf_is_valid curr.buf.buffer))
           (let [bo (. vim.bo curr.buf.buffer)]
-            (set (. bo :buftype) "nofile")
-            (set (. bo :modifiable) false))
+            (set curr.buf.keep-modifiable true)
+            (set (. bo :buftype) "acwrite")
+            (set (. bo :modifiable) true)
+            (set (. bo :readonly) false)
+            (set (. bo :bufhidden) "hide"))
           (pcall curr.buf.render))
         (vim.cmd "silent! nohlsearch")
         (let [cursor (or session.hidden-prompt-cursor [1 0])
@@ -461,19 +463,17 @@
   (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)
         update-info-window (. deps :update-info-window)]
     (when session
-      (if (not session.results-edit-mode)
-          (vim.notify "Meta results are not in edit mode (<M-CR>)." vim.log.levels.WARN)
-          (let [updates (path-updates-from-visible session)
-                result (apply-path-updates! session updates)
-                buf session.meta.buf.buffer]
-            (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
-            (pcall session.meta.refresh_statusline)
-            (pcall update-info-window session true)
-            (vim.notify
-              (if (> result.changed 0)
-                  (.. "metabuffer: wrote " (tostring result.changed) " change(s)")
-                  "metabuffer: no changes")
-              vim.log.levels.INFO))))))
+      (let [updates (path-updates-from-visible session)
+            result (apply-path-updates! session updates)
+            buf session.meta.buf.buffer]
+        (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
+        (pcall session.meta.refresh_statusline)
+        (pcall update-info-window session true)
+        (vim.notify
+          (if (> result.changed 0)
+              (.. "metabuffer: wrote " (tostring result.changed) " change(s)")
+              "metabuffer: no changes")
+          vim.log.levels.INFO)))))
 
 (fn M.enter-edit-mode!
   [deps prompt-buf]
@@ -491,13 +491,16 @@
       (set-results-edit-buffer! session)
       (when (and session.meta session.meta.win (vim.api.nvim_win_is_valid session.meta.win.window))
         (pcall vim.api.nvim_set_current_win session.meta.win.window)
-        (pcall vim.api.nvim_win_set_buf session.meta.win.window session.meta.buf.buffer)))))
+        (pcall vim.api.nvim_win_set_buf session.meta.win.window session.meta.buf.buffer))
+      ;; Enter editing context in Normal mode; prompt starts in Insert mode.
+      (pcall vim.cmd "stopinsert"))))
 
 (fn M.maybe-restore-ui!
-  [deps prompt-buf]
+  [deps prompt-buf force]
   (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
     (when (and session
                session.ui-hidden
+               (or force (not session.results-edit-mode))
                session.meta
                session.meta.buf
                (= (vim.api.nvim_get_current_buf) session.meta.buf.buffer))

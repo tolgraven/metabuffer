@@ -77,24 +77,39 @@
           t))
       t)))
 
+(fn file-query-shortcut-token
+  [tok]
+  (let [t (or tok "")]
+    (if (= t "./")
+      :await
+      (string.match t "^%./(.+)$"))))
+
 (fn parse-parts
   [parts idx state]
   (if (> idx (# parts))
     state
     (let [tok (. parts idx)]
-      (if-let [parsed (parse-option-token tok)]
-        (let [next (assoc-option state (. parsed 1) (. parsed 2))]
-          (if (= (. parsed 1) :files)
+      (if-let [shortcut (file-query-shortcut-token tok)]
+        (let [next (assoc-option state :files true)]
+          (if (= shortcut :await)
             (parse-parts parts (+ idx 1) (assoc-option next :file-await-token true))
-            (parse-parts parts (+ idx 1) next)))
-        (if (and (. state :file-await-token) (~= (vim.trim tok) ""))
-          (let [next (vim.deepcopy state)]
-            (table.insert (. next :file-lines) (unquote-token tok))
-            (set (. next :file-await-token) false)
-            (parse-parts parts (+ idx 1) next))
-          (let [next (vim.deepcopy state)]
-            (table.insert (. next :keep) tok)
-            (parse-parts parts (+ idx 1) next)))))))
+            (let [next2 (vim.deepcopy next)]
+              (table.insert (. next2 :file-lines) (unquote-token shortcut))
+              (set (. next2 :file-await-token) false)
+              (parse-parts parts (+ idx 1) next2))))
+        (if-let [parsed (parse-option-token tok)]
+          (let [next (assoc-option state (. parsed 1) (. parsed 2))]
+            (if (= (. parsed 1) :files)
+              (parse-parts parts (+ idx 1) (assoc-option next :file-await-token true))
+              (parse-parts parts (+ idx 1) next)))
+          (if (and (. state :file-await-token) (~= (vim.trim tok) ""))
+            (let [next (vim.deepcopy state)]
+              (table.insert (. next :file-lines) (unquote-token tok))
+              (set (. next :file-await-token) false)
+              (parse-parts parts (+ idx 1) next))
+            (let [next (vim.deepcopy state)]
+              (table.insert (. next :keep) tok)
+              (parse-parts parts (+ idx 1) next))))))))
 
 (fn parse-line
   [acc line]

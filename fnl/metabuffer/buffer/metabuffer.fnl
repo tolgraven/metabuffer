@@ -90,6 +90,7 @@
     (set self.source-sep-ns (vim.api.nvim_create_namespace "metabuffer_source_separator"))
     (set self.source-alt-ns (vim.api.nvim_create_namespace "metabuffer_source_alt"))
     (set self.source-syntax-groups [])
+    (set self.keep-modifiable false)
 
   (fn self.model-valid?
   []
@@ -335,7 +336,7 @@
                    :priority 120}))))))
       (self.apply-source-syntax-regions)
       (let [bo (. vim.bo self.buffer)]
-        (set (. bo :modifiable) false))
+        (set (. bo :modifiable) (if self.keep-modifiable true false)))
       (each [win view (pairs win-views)]
         (when (vim.api.nvim_win_is_valid win)
           (vim.api.nvim_win_call win

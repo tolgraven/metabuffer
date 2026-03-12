@@ -169,8 +169,15 @@ end
 local function _29_(session)
   return router_navigation_mod["schedule-scroll-sync!"](navigation_deps, session)
 end
-local function _30_(session)
-  return router_actions_mod["maybe-restore-ui!"](actions_deps, session["prompt-buf"])
+local function _30_(session, force)
+  local function _31_()
+    if (force == nil) then
+      return false
+    else
+      return force
+    end
+  end
+  return router_actions_mod["maybe-restore-ui!"](actions_deps, session["prompt-buf"], _31_())
 end
 session_deps = {["router-api"] = M, settings = M, ["history-api"] = history_api, ["query-mod"] = query_mod, ["remove-session!"] = remove_session, ["active-by-source"] = M["active-by-source"], ["active-by-prompt"] = M["active-by-prompt"], instances = M.instances, ["session-view"] = session_view, ["meta-mod"] = meta_mod, ["base-buffer"] = base_buffer, ["router-util-mod"] = router_util_mod, ["prompt-window-mod"] = prompt_window_mod, ["project-source"] = project_source, ["meta-window-mod"] = meta_window_mod, ["history-store"] = history_store, ["sync-prompt-buffer-name!"] = sync_prompt_buffer_name_21, ["apply-prompt-lines"] = apply_prompt_lines, ["update-info-window"] = update_info_window, ["prompt-hooks-mod"] = prompt_hooks_mod, ["default-prompt-keymaps"] = M["prompt-keymaps"], ["default-main-keymaps"] = M["main-keymaps"], ["on-prompt-changed"] = _27_, ["maybe-sync-from-main!"] = _28_, ["schedule-scroll-sync!"] = _29_, ["maybe-restore-hidden-ui!"] = _30_}
 M["on-prompt-changed"] = function(prompt_buf, force, event_tick)
@@ -270,7 +277,7 @@ M["write-results"] = function(prompt_buf)
   return router_actions_mod["write-results!"](actions_deps, prompt_buf)
 end
 M["maybe-restore-hidden-ui"] = function(prompt_buf)
-  return router_actions_mod["maybe-restore-ui!"](actions_deps, prompt_buf)
+  return router_actions_mod["maybe-restore-ui!"](actions_deps, prompt_buf, false)
 end
 M["toggle-scan-option"] = function(prompt_buf, which)
   return router_actions_mod["toggle-scan-option!"](actions_deps, prompt_buf, which)
@@ -290,14 +297,14 @@ M.sync = function(meta, query)
   else
   end
   if meta then
-    local function _33_()
+    local function _34_()
       if (query and (query ~= "")) then
         return {query}
       else
         return {}
       end
     end
-    meta["set-query-lines"](_33_())
+    meta["set-query-lines"](_34_())
     meta["on-update"](0)
     M._store_vars(meta)
     return meta

@@ -348,6 +348,12 @@
           {:group aug
            :buffer session.meta.buf.buffer
            :callback (fn [_]
+                       (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+                         (let [bo (. vim.bo session.meta.buf.buffer)]
+                           (set (. bo :buftype) "acwrite")
+                           (set (. bo :modifiable) true)
+                           (set (. bo :readonly) false)
+                           (set (. bo :bufhidden) "hide")))
                        (when maybe-restore-hidden-ui!
                          ;; Defer UI restoration until after the jump/BufEnter
                          ;; command stack settles; restoring windows directly

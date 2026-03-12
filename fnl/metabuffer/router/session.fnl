@@ -61,6 +61,15 @@
                              start-query)
           parsed-query (query-mod.parse-query-text expanded-query)
           query0 (. parsed-query :query)
+          prompt-query (if (~= (. parsed-query :include-files) nil)
+                           expanded-query
+                           query0)
+          prompt-query (if (and (= (type prompt-query) "string")
+                                (~= prompt-query "")
+                                (not (vim.endswith prompt-query " "))
+                                (not (vim.endswith prompt-query "\n")))
+                           (.. prompt-query " ")
+                           prompt-query)
           start-hidden (if-some [v (. parsed-query :include-hidden)]
                                v
                                (query-mod.truthy? settings.default-include-hidden))
@@ -84,7 +93,7 @@
             existing (. active-by-source source-buf)]
         (if (and existing existing.ui-hidden maybe-restore-hidden-ui!)
             (do
-              (maybe-restore-hidden-ui! existing)
+              (maybe-restore-hidden-ui! existing true)
               existing.meta)
             (do
               (when existing
@@ -98,8 +107,14 @@
                 (set curr.project-mode (or project-mode false))
                 (base-buffer.switch-buf curr.buf.buffer)
                 (router-util-mod.ensure-source-refs! curr)
-                (let [initial-lines (if (and query (~= query ""))
-                                        (vim.split query "\n" {:plain true})
+                (set curr.buf.keep-modifiable true)
+                (let [bo (. vim.bo curr.buf.buffer)]
+                  (set (. bo :buftype) "acwrite")
+                  (set (. bo :modifiable) true)
+                  (set (. bo :readonly) false)
+                  (set (. bo :bufhidden) "hide"))
+                (let [initial-lines (if (and prompt-query (~= prompt-query ""))
+                                        (vim.split prompt-query "\n" {:plain true})
                                         [""])
                       prompt-win (prompt-window-mod.new
                                    vim
