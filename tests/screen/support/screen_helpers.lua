@@ -345,6 +345,25 @@ function M.session_selected_ref()
   ]])
 end
 
+function M.session_preview_contains(needle)
+  return M.child.lua_get(string.format([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not s then return false end
+      local buf = s['preview-buf']
+      if not (buf and vim.api.nvim_buf_is_valid(buf)) then return false end
+      local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      for _, line in ipairs(lines) do
+        if string.find(line or '', %q, 1, true) then
+          return true
+        end
+      end
+      return false
+    end)()
+  ]], needle or ''))
+end
+
 function M.session_prompt_win_height()
   return M.child.lua_get([[
     (function()

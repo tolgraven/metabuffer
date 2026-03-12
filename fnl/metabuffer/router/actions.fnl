@@ -458,17 +458,39 @@
                         (pcall vim.api.nvim_buf_set_lines bufnr (- lnum 1) lnum false [(. payload :new)])))))))))))
     {:wrote wrote :changed changed}))
 
+(fn invalidate-caches-for-paths!
+  [deps session updates]
+  (let [settings (. deps :settings)
+        project-file-cache (and settings settings.project-file-cache)
+        preview-file-cache (or session.preview-file-cache {})
+        info-file-head-cache (or session.info-file-head-cache {})
+        info-file-meta-cache (or session.info-file-meta-cache {})]
+    (set session.preview-file-cache preview-file-cache)
+    (set session.info-file-head-cache info-file-head-cache)
+    (set session.info-file-meta-cache info-file-meta-cache)
+    (each [path _ (pairs (or updates {}))]
+      (when project-file-cache
+        (set (. project-file-cache path) nil))
+      (set (. preview-file-cache path) nil)
+      (set (. info-file-head-cache path) nil)
+      (set (. info-file-meta-cache path) nil))))
+
 (fn M.write-results!
   [deps prompt-buf]
   (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)
-        update-info-window (. deps :update-info-window)]
+        update-info-window (. deps :update-info-window)
+        preview-window (. deps :preview-window)]
     (when session
       (let [updates (path-updates-from-visible session)
             result (apply-path-updates! session updates)
             buf session.meta.buf.buffer]
+        (invalidate-caches-for-paths! deps session updates)
+        (when (> result.changed 0)
+          (pcall session.meta.on-update 0))
         (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
         (pcall session.meta.refresh_statusline)
         (pcall update-info-window session true)
+        (pcall preview-window.maybe-update-for-selection! session)
         (vim.notify
           (if (> result.changed 0)
               (.. "metabuffer: wrote " (tostring result.changed) " change(s)")

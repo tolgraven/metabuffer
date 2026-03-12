@@ -564,23 +564,50 @@ local function apply_path_updates_21(session, updates)
   end
   return {wrote = wrote, changed = changed}
 end
+local function invalidate_caches_for_paths_21(deps, session, updates)
+  local settings = deps.settings
+  local project_file_cache = (settings and settings["project-file-cache"])
+  local preview_file_cache = (session["preview-file-cache"] or {})
+  local info_file_head_cache = (session["info-file-head-cache"] or {})
+  local info_file_meta_cache = (session["info-file-meta-cache"] or {})
+  session["preview-file-cache"] = preview_file_cache
+  session["info-file-head-cache"] = info_file_head_cache
+  session["info-file-meta-cache"] = info_file_meta_cache
+  for path, _ in pairs((updates or {})) do
+    if project_file_cache then
+      project_file_cache[path] = nil
+    else
+    end
+    preview_file_cache[path] = nil
+    info_file_head_cache[path] = nil
+    info_file_meta_cache[path] = nil
+  end
+  return nil
+end
 M["write-results!"] = function(deps, prompt_buf)
   local session = session_by_prompt(deps["active-by-prompt"], prompt_buf)
   local update_info_window = deps["update-info-window"]
+  local preview_window = deps["preview-window"]
   if session then
     local updates = path_updates_from_visible(session)
     local result = apply_path_updates_21(session, updates)
     local buf = session.meta.buf.buffer
+    invalidate_caches_for_paths_21(deps, session, updates)
+    if (result.changed > 0) then
+      pcall(session.meta["on-update"], 0)
+    else
+    end
     pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
     pcall(session.meta.refresh_statusline)
     pcall(update_info_window, session, true)
-    local _64_
+    pcall(preview_window["maybe-update-for-selection!"], session)
+    local _66_
     if (result.changed > 0) then
-      _64_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+      _66_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
     else
-      _64_ = "metabuffer: no changes"
+      _66_ = "metabuffer: no changes"
     end
-    return vim.notify(_64_, vim.log.levels.INFO)
+    return vim.notify(_66_, vim.log.levels.INFO)
   else
     return nil
   end

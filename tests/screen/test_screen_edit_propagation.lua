@@ -42,7 +42,7 @@ T['editing results buffer directly and :write propagates edits to source files']
   eq(type(target), 'table')
   eq(type(target.path), 'string')
 
-  local replacement = target.old .. ' [edited-by-meta]'
+  local replacement = target.old .. ' [edited-by-meta] meta'
   child.lua(string.format([[
     (function()
       local router = require('metabuffer.router')
@@ -61,6 +61,7 @@ T['editing results buffer directly and :write propagates edits to source files']
     end)()
   ]], target.path, target.lnum))
   eq(file_line, replacement)
+  H.wait_for(function() return H.session_preview_contains('[edited-by-meta]') end, 3000)
 
   child.cmd('Meta')
   H.wait_for(function() return H.session_active() end, 3000)

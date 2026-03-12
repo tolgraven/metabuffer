@@ -205,6 +205,7 @@
 (set actions-deps
   {:active-by-source M.active-by-source
    :active-by-prompt M.active-by-prompt
+   :settings M
    :history-api history-api
    :history-store history_store
    :prompt-window-mod prompt_window_mod
