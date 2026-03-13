@@ -6,6 +6,30 @@
   [name enabled]
   (.. "#" (if enabled "+" "-") name))
 
+(fn changed-setting-token
+  [query-mod name enabled default-enabled]
+  (let [on? (query-mod.truthy? enabled)
+        default-on? (query-mod.truthy? default-enabled)]
+    (when (~= on? default-on?)
+      (project-setting-token name on?))))
+
+(fn normalize-history-prompt
+  [text]
+  (let [parts (vim.split (or text "") "%s+" {:trimempty true})
+        out []]
+    (each [_ tok (ipairs parts)]
+      (let [next (if (= tok "#+file")
+                     "#file"
+                     (= tok "#+binary")
+                     "#binary"
+                     (= tok "#+hex")
+                     "#hex"
+                     tok)]
+        (table.insert out next)))
+    (if (> (# out) 0)
+        (table.concat out " ")
+        (or text ""))))
+
 (fn M.new
   [opts]
   (let [history-store (. opts :history-store)
@@ -17,7 +41,7 @@
 
     (fn api.history-entry-query
       [entry]
-      (let [parsed (query-mod.parse-query-text (or entry ""))]
+      (let [parsed (query-mod.parse-query-text (normalize-history-prompt entry))]
         (or (. parsed :query) "")))
 
     (fn api.history-entry-token
@@ -37,18 +61,51 @@
     (fn api.history-entry-with-settings
       [session prompt]
       (let [query-text (or prompt "")
-            prefix (if (and session session.project-mode)
-                       (table.concat
-                         [(project-setting-token "hidden" session.effective-include-hidden)
-                          (project-setting-token "ignored" session.effective-include-ignored)
-                          (project-setting-token "deps" session.effective-include-deps)
-                          (project-setting-token "binary" session.effective-include-binary)
-                          (project-setting-token "hex" session.effective-include-hex)
-                          (project-setting-token "file" session.effective-include-files)
-                          (project-setting-token "prefilter" session.prefilter-mode)
-                          (project-setting-token "lazy" session.lazy-mode)]
-                         " ")
-                       "")]
+            seen {}
+            tokens []
+            _ (each [_ part (ipairs (vim.split query-text "%s+" {:trimempty true}))]
+                (when (and (= (type part) "string") (~= part ""))
+                  (set (. seen part) true)))
+            _ (when (and session session.project-mode)
+                (let [defaults settings]
+                  (when-let [tok (changed-setting-token
+                                   query-mod
+                                   "hidden"
+                                   session.effective-include-hidden
+                                   defaults.default-include-hidden)]
+                    (when-not (. seen tok)
+                      (table.insert tokens tok)))
+                  (when-let [tok (changed-setting-token
+                                   query-mod
+                                   "ignored"
+                                   session.effective-include-ignored
+                                   defaults.default-include-ignored)]
+                    (when-not (. seen tok)
+                      (table.insert tokens tok)))
+                  (when-let [tok (changed-setting-token
+                                   query-mod
+                                   "deps"
+                                   session.effective-include-deps
+                                   defaults.default-include-deps)]
+                    (when-not (. seen tok)
+                      (table.insert tokens tok)))
+                  ;; Keep only consumed controls in synthetic history prefix.
+                  ;; Non-consumed controls (#file/#binary/#hex) stay in prompt text as typed.
+                  (when-let [tok (changed-setting-token
+                                   query-mod
+                                   "prefilter"
+                                   session.prefilter-mode
+                                   defaults.project-lazy-prefilter-enabled)]
+                    (when-not (. seen tok)
+                      (table.insert tokens tok)))
+                  (when-let [tok (changed-setting-token
+                                   query-mod
+                                   "lazy"
+                                   session.lazy-mode
+                                   defaults.project-lazy-enabled)]
+                    (when-not (. seen tok)
+                      (table.insert tokens tok)))))
+            prefix (if (> (# tokens) 0) (table.concat tokens " ") "")]
         (if (= prefix "")
             query-text
             (if (= query-text "")
@@ -92,7 +149,7 @@
                  (= (type tag) "string")
                  (~= (vim.trim tag) ""))
         (when-let [saved (history-store.saved-entry tag)]
-          (router-util-mod.set-prompt-text! session saved)
+          (router-util-mod.set-prompt-text! session (normalize-history-prompt saved))
           true)))
 
     (fn api.history-browser-filter
@@ -107,7 +164,7 @@
         (if (= mode "saved")
             (each [_ item (ipairs (history-store.saved-items))]
               (let [tag (or (. item :tag) "")
-                    prompt (or (. item :prompt) "")
+                    prompt (normalize-history-prompt (or (. item :prompt) ""))
                     hay (string.lower (.. tag " " prompt))]
                 (when (or (= filter0 "")
                           (not (not (string.find hay filter0 1 true))))
@@ -116,7 +173,7 @@
                                      :tag tag}))))
             (let [h (or session.history-cache (history-store.list))]
               (for [i (# h) 1 -1]
-                (let [entry (or (. h i) "")
+                (let [entry (normalize-history-prompt (or (. h i) ""))
                       hay (string.lower entry)]
                   (when (or (= filter0 "")
                             (not (not (string.find hay filter0 1 true))))
@@ -142,17 +199,17 @@
 
     (fn api.apply-history-browser-selection!
       [session]
-      (when (and history-browser-window session.history-browser-active)
-        (when-let [selected (history-browser-window.selected! session)]
-          (when-let [prompt (. selected :prompt)]
-            (router-util-mod.set-prompt-text! session prompt)))
+        (when (and history-browser-window session.history-browser-active)
+          (when-let [selected (history-browser-window.selected! session)]
+            (when-let [prompt (. selected :prompt)]
+            (router-util-mod.set-prompt-text! session (normalize-history-prompt prompt))))
         (api.close-history-browser! session)))
 
     (fn api.history-latest
       [session]
       (let [h (or (and session session.history-cache) (history-store.list))
             n (# h)]
-        (if (> n 0) (. h n) "")))
+        (if (> n 0) (normalize-history-prompt (. h n)) "")))
 
     (fn api.history-latest-token
       [session]
@@ -200,8 +257,9 @@
                               (router-util-mod.set-prompt-text! session session.initial-prompt-text))
                             (let [entry (. h (+ (- n session.history-index) 1))]
                               (when entry
-                                (set session.last-history-text entry)
-                                (router-util-mod.set-prompt-text! session entry))))))
+                                (let [norm-entry (normalize-history-prompt entry)]
+                                  (set session.last-history-text norm-entry)
+                                  (router-util-mod.set-prompt-text! session norm-entry)))))))
                     (move-selection-fn prompt-buf delta)))))))
 
     (fn api.open-history-searchback

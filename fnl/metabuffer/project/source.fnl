@@ -6,8 +6,8 @@
   "Build project-source orchestrator for eager/lazy pool construction."
   (let [{: settings : truthy? : selected-ref : canonical-path
          : current-buffer-path : path-under-root? : allow-project-path?
-         : project-file-list : read-file-lines-cached : session-active?
-         : lazy-streaming-allowed? : on-prompt-changed
+         : project-file-list : binary-file? : read-file-lines-cached : session-active?
+         : lazy-streaming-allowed? : on-prompt-changed : apply-prompt-lines-now!
          : prompt-has-active-query? : now-ms : prompt-update-delay-ms
          : schedule-prompt-update! : restore-meta-view! : update-info-window} opts]
 
@@ -133,7 +133,7 @@
                           :preview-lnum 1})))
 
   (fn all-project-file-paths
-    [session include-hidden include-ignored include-deps]
+    [session include-hidden include-ignored include-deps include-binary]
     (let [root (vim.fn.getcwd)
           seen {}
           out []]
@@ -141,6 +141,7 @@
         (let [path (canonical-path p)]
           (when (and path
                      (= 1 (vim.fn.filereadable path))
+                     (or include-binary (not (binary-file? path)))
                      (path-under-root? path root)
                      (not (. seen path)))
             (set (. seen path) true)
@@ -311,7 +312,8 @@
                                 session
                                 include-hidden
                                 include-ignored
-                                include-deps))]
+                                include-deps
+                                include-binary))]
           (push-file-entry-into-pool!
             session
             path
@@ -350,7 +352,8 @@
                                  session
                                  include-hidden
                                  include-ignored
-                                 include-deps)
+                                 include-deps
+                                 include-binary)
                                [])
           deferred []
           deferred-seen {}]
@@ -472,6 +475,29 @@
       (set meta._filter-cache {})
       (set meta._filter-cache-line-count (# meta.buf.content))))
 
+  (fn schedule-source-set-rebuild!
+    [session wait-ms]
+    "Cancel previous pending source-set rebuild and run latest one asynchronously."
+    (when (and session session.project-mode (not session.closing))
+      (set session.source-set-rebuild-token (+ 1 (or session.source-set-rebuild-token 0)))
+      (let [token session.source-set-rebuild-token]
+        (set session.source-set-rebuild-pending true)
+        (vim.defer_fn
+          (fn []
+            (when (and session (= token session.source-set-rebuild-token))
+              (set session.source-set-rebuild-pending false))
+            (when (and session
+                       (= token session.source-set-rebuild-token)
+                       session.project-mode
+                       session.prompt-buf
+                       (session-active? session)
+                       (not session.closing))
+              (apply-source-set! session)
+              (if apply-prompt-lines-now!
+                  (apply-prompt-lines-now! session)
+                  (on-prompt-changed session.prompt-buf true))))
+          (math.max 0 (or wait-ms 0))))))
+
   (fn apply-minimal-source-set!
     [session]
     "Apply minimal startup source set for empty project prompt."
@@ -537,6 +563,7 @@
 
   {:schedule-lazy-refresh! schedule-lazy-refresh!
    :apply-source-set! apply-source-set!
+   :schedule-source-set-rebuild! schedule-source-set-rebuild!
    :apply-minimal-source-set! apply-minimal-source-set!
    :schedule-project-bootstrap! schedule-project-bootstrap!}))
 

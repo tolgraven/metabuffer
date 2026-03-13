@@ -306,10 +306,25 @@ end
 M["prompt-insert-text!"] = function(active_by_prompt, prompt_buf, text)
   return M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, text)
 end
+local function prompt_buffer_text(session)
+  if (session and session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
+    return table.concat(vim.api.nvim_buf_get_lines(session["prompt-buf"], 0, -1, false), "\n")
+  else
+    return ""
+  end
+end
+local function should_insert_history_fragment_3f(session, fragment)
+  local needle = (fragment or "")
+  local hay = prompt_buffer_text(session)
+  return ((needle ~= "") and not string.find(hay, needle, 1, true))
+end
 M["insert-last-prompt!"] = function(active_by_prompt, history_api, prompt_buf)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   local entry = history_api["history-latest"](session)
-  M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, entry)
+  if should_insert_history_fragment_3f(session, entry) then
+    M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, entry)
+  else
+  end
   if (session and (entry ~= "")) then
     session["last-history-text"] = entry
     return nil
@@ -321,7 +336,10 @@ M["insert-last-token!"] = function(active_by_prompt, history_api, prompt_buf)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   local token = history_api["history-latest-token"](session)
   local entry = history_api["history-latest"](session)
-  M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, token)
+  if should_insert_history_fragment_3f(session, token) then
+    M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, token)
+  else
+  end
   if (session and (token ~= "")) then
     session["last-history-text"] = entry
     return nil
@@ -333,7 +351,10 @@ M["insert-last-tail!"] = function(active_by_prompt, history_api, prompt_buf)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   local tail = history_api["history-latest-tail"](session)
   local entry = history_api["history-latest"](session)
-  M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, tail)
+  if should_insert_history_fragment_3f(session, tail) then
+    M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, tail)
+  else
+  end
   if (session and (tail ~= "")) then
     session["last-history-text"] = entry
     return nil
@@ -372,9 +393,9 @@ end
 M["negate-current-token!"] = function(active_by_prompt, prompt_buf)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_49_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
-    local row = _let_49_[1]
-    local col = _let_49_[2]
+    local _let_53_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
+    local row = _let_53_[1]
+    local col = _let_53_[2]
     local row0 = math.max(0, (row - 1))
     local line = (vim.api.nvim_buf_get_lines(session["prompt-buf"], row0, (row0 + 1), false)[1] or "")
     local val_110_auto = find_token_span(line, col)
@@ -393,13 +414,13 @@ M["negate-current-token!"] = function(active_by_prompt, prompt_buf)
       local delta = (#next_token - #token)
       local s0 = (s - 1)
       vim.api.nvim_buf_set_text(session["prompt-buf"], row0, s0, row0, e, {next_token})
-      local _51_
+      local _55_
       if (col >= s0) then
-        _51_ = delta
+        _55_ = delta
       else
-        _51_ = 0
+        _55_ = 0
       end
-      return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, math.max(0, (col + _51_))})
+      return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, math.max(0, (col + _55_))})
     else
       return nil
     end

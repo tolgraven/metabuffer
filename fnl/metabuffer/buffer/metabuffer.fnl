@@ -141,19 +141,26 @@
           (self.clear-source-syntax)
           (vim.api.nvim_buf_call self.buffer
             (fn []
-              ;; Reset inherited/base syntax only when we know we can apply at
-              ;; least one source syntax cluster; this keeps source-file
-              ;; highlighting accurate while avoiding stale cross-file syntax.
-              (vim.cmd "silent! syntax clear")
-              (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
+              (var reset-base-syntax? false)
+              (var block-id 0)
               (fn add-block
   [start stop ft]
                 (when (and ft (~= ft "") (<= start stop))
+                  (set block-id (+ block-id 1))
                   (let [cluster (.. "MetaSrcFt_" (sanitize-syntax-id ft))
-                          group (string.format "MetaSrcBlock_%d_%d" start stop)
+                          ;; Keep group names stable across updates/reloads to avoid
+                          ;; unbounded syntax-group creation (E849).
+                          group (string.format "MetaSrcBlock_%d" block-id)
                           synfiles (syntax-files-for-ft ft)
                           has-syntax (> (# synfiles) 0)]
                     (when has-syntax
+                      (when-not reset-base-syntax?
+                        ;; Reset inherited/base syntax only when we know we can apply at
+                        ;; least one source syntax cluster; this keeps source-file
+                        ;; highlighting accurate while avoiding stale cross-file syntax.
+                        (vim.cmd "silent! syntax clear")
+                        (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
+                        (set reset-base-syntax? true))
                       (when-not (. included cluster)
                         ;; Most syntax files early-return when b:current_syntax
                         ;; is set; clear it before each include so mixed

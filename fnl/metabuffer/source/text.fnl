@@ -170,7 +170,10 @@
                   all0 (. cache ref.path)
                   all (if (= (type all0) "table")
                           all0
-                          (let [lines (read-file-lines-cached ref.path)]
+                          (let [lines (read-file-lines-cached
+                                        ref.path
+                                        {:include-binary (and session session.effective-include-binary)
+                                         :hex-view (and session session.effective-include-hex)})]
                             (if (= (type lines) "table")
                                 (do
                                   (set (. cache ref.path) lines)

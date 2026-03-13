@@ -66,6 +66,23 @@
       (and saved-tag (~= (vim.trim saved-tag) "")) [:saved-tag (vim.trim saved-tag)]
       saved-browser? [:saved-browser true])))
 
+(fn escaped-prefix-token
+  [tok]
+  (let [t (or tok "")
+        prefix (option-prefix)
+        escaped-prefix (.. "\\" prefix)]
+    (if (and (> (# t) (# escaped-prefix))
+             (vim.startswith t escaped-prefix))
+      (string.sub t 2)
+      nil)))
+
+(fn prefix-directive-token?
+  [tok]
+  (let [t (or tok "")
+        prefix (option-prefix)]
+    (and (~= t prefix)
+         (vim.startswith t prefix))))
+
 (fn assoc-option
   [acc k v]
   (let [next (vim.deepcopy acc)]
@@ -97,27 +114,33 @@
   (if (> idx (# parts))
     state
     (let [tok (. parts idx)]
-      (if-let [shortcut (file-query-shortcut-token tok)]
-        (let [next (assoc-option state :files true)]
-          (if (= shortcut :await)
-            (parse-parts parts (+ idx 1) (assoc-option next :file-await-token true))
-            (let [next2 (vim.deepcopy next)]
-              (table.insert (. next2 :file-lines) (unquote-token shortcut))
-              (set (. next2 :file-await-token) false)
-              (parse-parts parts (+ idx 1) next2))))
-        (if-let [parsed (parse-option-token tok)]
-          (let [next (assoc-option state (. parsed 1) (. parsed 2))]
-            (if (= (. parsed 1) :files)
+      (if-let [escaped (escaped-prefix-token tok)]
+        (let [next (vim.deepcopy state)]
+          (table.insert (. next :keep) escaped)
+          (parse-parts parts (+ idx 1) next))
+        (if-let [shortcut (file-query-shortcut-token tok)]
+          (let [next (assoc-option state :files true)]
+            (if (= shortcut :await)
               (parse-parts parts (+ idx 1) (assoc-option next :file-await-token true))
-              (parse-parts parts (+ idx 1) next)))
-          (if (and (. state :file-await-token) (~= (vim.trim tok) ""))
-            (let [next (vim.deepcopy state)]
-              (table.insert (. next :file-lines) (unquote-token tok))
-              (set (. next :file-await-token) false)
-              (parse-parts parts (+ idx 1) next))
-            (let [next (vim.deepcopy state)]
-              (table.insert (. next :keep) tok)
-              (parse-parts parts (+ idx 1) next))))))))
+              (let [next2 (vim.deepcopy next)]
+                (table.insert (. next2 :file-lines) (unquote-token shortcut))
+                (set (. next2 :file-await-token) false)
+                (parse-parts parts (+ idx 1) next2))))
+          (if-let [parsed (parse-option-token tok)]
+            (let [next (assoc-option state (. parsed 1) (. parsed 2))]
+              (if (= (. parsed 1) :files)
+                (parse-parts parts (+ idx 1) (assoc-option next :file-await-token true))
+                (parse-parts parts (+ idx 1) next)))
+            (if (prefix-directive-token? tok)
+              (parse-parts parts (+ idx 1) state)
+              (if (and (. state :file-await-token) (~= (vim.trim tok) ""))
+                (let [next (vim.deepcopy state)]
+                  (table.insert (. next :file-lines) (unquote-token tok))
+                  (set (. next :file-await-token) false)
+                  (parse-parts parts (+ idx 1) next))
+                (let [next (vim.deepcopy state)]
+                  (table.insert (. next :keep) tok)
+                  (parse-parts parts (+ idx 1) next))))))))))
 
 (fn parse-line
   [acc line]

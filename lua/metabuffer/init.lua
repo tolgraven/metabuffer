@@ -2,6 +2,8 @@
 local router = require("metabuffer.router")
 local config = require("metabuffer.config")
 local M = {}
+local PATH_SEG_GROUPS = {"Directory", "Identifier", "Type", "Special", "String", "Constant", "Function", "Statement", "PreProc", "Keyword", "Operator", "Character", "Tag", "Delimiter", "Number", "Boolean", "Macro", "Title", "Question", "Exception", "DiffAdd", "DiffChange", "DiffText", "DiagnosticInfo"}
+local AUTHOR_GROUPS = {"Identifier", "Type", "Special", "String", "Constant", "Function", "Statement", "PreProc", "Keyword", "Operator", "Character", "Tag", "Delimiter", "Number", "Boolean", "Macro", "Title", "Question", "Exception", "DiffAdd", "DiffChange", "DiffText", "DiagnosticInfo", "DiagnosticHint"}
 local function rgb_luma(n)
   if not n then
     return nil
@@ -12,13 +14,19 @@ local function rgb_luma(n)
     return ((0.2126 * r) + (0.7152 * g) + (0.0722 * b))
   end
 end
+local function effective_fg(hl)
+  return (hl.fg or (hl.reverse and hl.bg))
+end
+local function effective_ctermfg(hl)
+  return (hl.ctermfg or ((hl.reverse or (hl.cterm and hl.cterm.reverse)) and hl.ctermbg))
+end
 local function statusline_color_from(group)
   local opts = {cterm = {reverse = false}, reverse = false}
   local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
   local ok_normal,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
   if (ok and (type(hl) == "table")) then
-    local fg = (hl.fg or (hl.reverse and hl.bg))
-    local cfg = (hl.ctermfg or ((hl.reverse or (hl.cterm and hl.cterm.reverse)) and hl.ctermbg))
+    local fg = effective_fg(hl)
+    local cfg = effective_ctermfg(hl)
     if fg then
       opts["bg"] = fg
     else
@@ -149,6 +157,88 @@ local function plain_hl_from(group)
   end
   return opts
 end
+local function fg_only_hl_from(group)
+  local opts = {default = true}
+  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  if (ok and (type(hl) == "table")) then
+    if hl.fg then
+      opts["fg"] = hl.fg
+    else
+    end
+    if hl.ctermfg then
+      opts["ctermfg"] = hl.ctermfg
+    else
+    end
+  else
+  end
+  return opts
+end
+local function statusline_path_hl_from(group)
+  local opts = {default = true}
+  local ok_hl,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  local ok_sl,sl = pcall(vim.api.nvim_get_hl, 0, {name = "StatusLine", link = false})
+  opts["fg"] = ((ok_hl and (type(hl) == "table") and effective_fg(hl)) or (ok_sl and (type(sl) == "table") and effective_fg(sl)) or 16777215)
+  opts["bg"] = ((ok_sl and (type(sl) == "table") and sl.bg) or (ok_hl and (type(hl) == "table") and hl.bg) or 0)
+  opts["ctermfg"] = ((ok_hl and (type(hl) == "table") and effective_ctermfg(hl)) or (ok_sl and (type(sl) == "table") and effective_ctermfg(sl)) or 15)
+  opts["ctermbg"] = ((ok_sl and (type(sl) == "table") and sl.ctermbg) or (ok_hl and (type(hl) == "table") and hl.ctermbg) or 0)
+  return opts
+end
+local function statusline_fg_hl_from(group)
+  local opts = {cterm = {reverse = false}, reverse = false}
+  local ok_hl,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  local ok_sl,sl = pcall(vim.api.nvim_get_hl, 0, {name = "StatusLine", link = false})
+  local ok_normal,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
+  opts["fg"] = ((ok_hl and (type(hl) == "table") and effective_fg(hl)) or (ok_sl and (type(sl) == "table") and effective_fg(sl)) or 16777215)
+  if (ok_normal and (type(normal) == "table")) then
+    if normal.bg then
+      opts["bg"] = normal.bg
+    else
+    end
+    if normal.ctermbg then
+      opts["ctermbg"] = normal.ctermbg
+    else
+    end
+  else
+  end
+  opts["ctermfg"] = ((ok_hl and (type(hl) == "table") and effective_ctermfg(hl)) or (ok_sl and (type(sl) == "table") and effective_ctermfg(sl)) or 15)
+  return opts
+end
+local function statusline_sep_hl()
+  local opts = {cterm = {reverse = false}, reverse = false}
+  local ok_sl,sl = pcall(vim.api.nvim_get_hl, 0, {name = "StatusLine", link = false})
+  local ok_normal,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
+  opts["fg"] = ((ok_sl and (type(sl) == "table") and effective_fg(sl)) or (ok_normal and (type(normal) == "table") and effective_fg(normal)) or 16777215)
+  if (ok_normal and (type(normal) == "table")) then
+    if normal.bg then
+      opts["bg"] = normal.bg
+    else
+    end
+    if normal.ctermbg then
+      opts["ctermbg"] = normal.ctermbg
+    else
+    end
+  else
+  end
+  opts["ctermfg"] = ((ok_sl and (type(sl) == "table") and effective_ctermfg(sl)) or (ok_normal and (type(normal) == "table") and effective_ctermfg(normal)) or 15)
+  return opts
+end
+local function underlined_text_from(text_group, underline_group)
+  local opts = fg_only_hl_from(text_group)
+  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = underline_group, link = false})
+  opts["undercurl"] = true
+  if (ok and (type(hl) == "table")) then
+    if hl.sp then
+      opts["sp"] = hl.sp
+    else
+      if hl.fg then
+        opts["sp"] = hl.fg
+      else
+      end
+    end
+  else
+  end
+  return opts
+end
 local function darken_rgb(n, factor)
   if not n then
     return nil
@@ -228,7 +318,12 @@ local function ensure_defaults_and_highlights_21(opts)
   local hi = vim.api.nvim_set_hl
   hi(0, "MetaStatuslineModeInsert", statusline_color_from("ErrorMsg"))
   hi(0, "MetaStatuslineModeReplace", statusline_color_from("Todo"))
-  hi(0, "MetaStatuslineModeNormal", statusline_color_from("Normal"))
+  do
+    local normal_mode_hl = plain_hl_from("StatusLine")
+    normal_mode_hl["bold"] = true
+    normal_mode_hl["cterm"] = {bold = true}
+    hi(0, "MetaStatuslineModeNormal", normal_mode_hl)
+  end
   hi(0, "MetaStatuslineQuery", statusline_color_from("Normal"))
   hi(0, "MetaStatuslineFile", statusline_color_from("Comment"))
   hi(0, "MetaStatuslineMiddle", plain_hl_from("StatusLine"))
@@ -253,37 +348,25 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaPromptNeg", {default = true, link = "ErrorMsg"})
   hi(0, "MetaPromptAnchor", {default = true, link = "SpecialChar"})
   hi(0, "MetaPromptRegex", {default = true, link = "MetaSearchHitRegex", underline = true})
-  hi(0, "MetaPromptFlagOn", {default = true, link = "MetaStatuslineFlagOn"})
-  hi(0, "MetaPromptFlagOff", {default = true, link = "MetaStatuslineFlagOff"})
+  hi(0, "MetaPromptFlagHashOn", statusline_color_from("String"))
+  hi(0, "MetaPromptFlagHashOff", statusline_color_from("ErrorMsg"))
+  hi(0, "MetaPromptFlagTextOn", fg_only_hl_from("String"))
+  hi(0, "MetaPromptFlagTextOff", fg_only_hl_from("ErrorMsg"))
+  hi(0, "MetaPromptFlagTextFuncOn", underlined_text_from("String", "Special"))
+  hi(0, "MetaPromptFlagTextFuncOff", underlined_text_from("ErrorMsg", "Special"))
   hi(0, "MetaSourceLineNr", {default = true, link = "LineNr"})
   hi(0, "MetaSourceDir", {default = true, link = "Directory"})
   hi(0, "MetaSourceBoundary", thin_underline_from("Error"))
   hi(0, "MetaSourceAltBg", alt_bg_from("Normal"))
-  hi(0, "MetaPathSeg1", {default = true, link = "Directory"})
-  hi(0, "MetaPathSeg2", {default = true, link = "Identifier"})
-  hi(0, "MetaPathSeg3", {default = true, link = "Type"})
-  hi(0, "MetaPathSeg4", {default = true, link = "Special"})
-  hi(0, "MetaPathSeg5", {default = true, link = "String"})
-  hi(0, "MetaPathSeg6", {default = true, link = "Constant"})
-  hi(0, "MetaPathSeg7", {default = true, link = "Function"})
-  hi(0, "MetaPathSeg8", {default = true, link = "Statement"})
-  hi(0, "MetaPathSeg9", {default = true, link = "PreProc"})
-  hi(0, "MetaPathSeg10", {default = true, link = "Keyword"})
-  hi(0, "MetaPathSeg11", {default = true, link = "Operator"})
-  hi(0, "MetaPathSeg12", {default = true, link = "Character"})
-  hi(0, "MetaPathSeg13", {default = true, link = "Tag"})
-  hi(0, "MetaPathSeg14", {default = true, link = "Delimiter"})
-  hi(0, "MetaPathSeg15", {default = true, link = "Number"})
-  hi(0, "MetaPathSeg16", {default = true, link = "Boolean"})
-  hi(0, "MetaPathSeg17", {default = true, link = "Macro"})
-  hi(0, "MetaPathSeg18", {default = true, link = "Title"})
-  hi(0, "MetaPathSeg19", {default = true, link = "Question"})
-  hi(0, "MetaPathSeg20", {default = true, link = "Exception"})
-  hi(0, "MetaPathSeg21", {default = true, link = "DiffAdd"})
-  hi(0, "MetaPathSeg22", {default = true, link = "DiffChange"})
-  hi(0, "MetaPathSeg23", {default = true, link = "DiffText"})
-  hi(0, "MetaPathSeg24", {default = true, link = "DiagnosticInfo"})
+  for i, src in ipairs(PATH_SEG_GROUPS) do
+    hi(0, ("MetaPathSeg" .. tostring(i)), {default = true, link = src})
+  end
   hi(0, "MetaPathSep", {default = true, link = "Normal"})
+  for i, src in ipairs(PATH_SEG_GROUPS) do
+    hi(0, ("MetaStatuslinePathSeg" .. tostring(i)), statusline_fg_hl_from(src))
+  end
+  hi(0, "MetaStatuslinePathSep", statusline_sep_hl())
+  hi(0, "MetaStatuslinePathFile", statusline_fg_hl_from("Comment"))
   hi(0, "MetaFileSignDirty", {default = true, link = "WarningMsg"})
   hi(0, "MetaFileSignUntracked", {default = true, link = "DiagnosticError"})
   hi(0, "MetaFileSignClean", {default = true, link = "LineNr"})
@@ -297,30 +380,9 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaFileAgeWeek", {default = true, link = "DiagnosticWarn"})
   hi(0, "MetaFileAgeMonth", {default = true, link = "Constant"})
   hi(0, "MetaFileAgeYear", {default = true, link = "DiagnosticError"})
-  hi(0, "MetaAuthor1", {default = true, link = "Identifier"})
-  hi(0, "MetaAuthor2", {default = true, link = "Type"})
-  hi(0, "MetaAuthor3", {default = true, link = "Special"})
-  hi(0, "MetaAuthor4", {default = true, link = "String"})
-  hi(0, "MetaAuthor5", {default = true, link = "Constant"})
-  hi(0, "MetaAuthor6", {default = true, link = "Function"})
-  hi(0, "MetaAuthor7", {default = true, link = "Statement"})
-  hi(0, "MetaAuthor8", {default = true, link = "PreProc"})
-  hi(0, "MetaAuthor9", {default = true, link = "Keyword"})
-  hi(0, "MetaAuthor10", {default = true, link = "Operator"})
-  hi(0, "MetaAuthor11", {default = true, link = "Character"})
-  hi(0, "MetaAuthor12", {default = true, link = "Tag"})
-  hi(0, "MetaAuthor13", {default = true, link = "Delimiter"})
-  hi(0, "MetaAuthor14", {default = true, link = "Number"})
-  hi(0, "MetaAuthor15", {default = true, link = "Boolean"})
-  hi(0, "MetaAuthor16", {default = true, link = "Macro"})
-  hi(0, "MetaAuthor17", {default = true, link = "Title"})
-  hi(0, "MetaAuthor18", {default = true, link = "Question"})
-  hi(0, "MetaAuthor19", {default = true, link = "Exception"})
-  hi(0, "MetaAuthor20", {default = true, link = "DiffAdd"})
-  hi(0, "MetaAuthor21", {default = true, link = "DiffChange"})
-  hi(0, "MetaAuthor22", {default = true, link = "DiffText"})
-  hi(0, "MetaAuthor23", {default = true, link = "DiagnosticInfo"})
-  hi(0, "MetaAuthor24", {default = true, link = "DiagnosticHint"})
+  for i, src in ipairs(AUTHOR_GROUPS) do
+    hi(0, ("MetaAuthor" .. tostring(i)), {default = true, link = src})
+  end
   if (1 == vim.fn.hlexists("NetrwPlain")) then
     return hi(0, "MetaSourceFile", {default = true, link = "NetrwPlain"})
   else
@@ -388,43 +450,43 @@ M.reload = function(opts)
   clear_module_cache()
   clear_plugin_loaded_flags_21()
   source_plugin_bootstrap_21()
-  local _42_
+  local _54_
   if do_compile then
-    _42_ = "[metabuffer] reloaded (compiled)"
+    _54_ = "[metabuffer] reloaded (compiled)"
   else
-    _42_ = "[metabuffer] reloaded"
+    _54_ = "[metabuffer] reloaded"
   end
-  vim.notify(_42_, vim.log.levels.INFO)
+  vim.notify(_54_, vim.log.levels.INFO)
   return true
 end
 M.setup = function(opts)
   router.configure(opts)
   ensure_defaults_and_highlights_21(opts)
-  local function _44_(args)
+  local function _56_(args)
     return router.entry_start(args.args, args.bang)
   end
-  ensure_command("Meta", _44_, {nargs = "?", bang = true})
-  local function _45_(args)
+  ensure_command("Meta", _56_, {nargs = "?", bang = true})
+  local function _57_(args)
     return router.entry_resume(args.args)
   end
-  ensure_command("MetaResume", _45_, {nargs = "?"})
-  local function _46_()
+  ensure_command("MetaResume", _57_, {nargs = "?"})
+  local function _58_()
     return router.entry_cursor_word(false)
   end
-  ensure_command("MetaCursorWord", _46_, {nargs = 0})
-  local function _47_()
+  ensure_command("MetaCursorWord", _58_, {nargs = 0})
+  local function _59_()
     return router.entry_cursor_word(true)
   end
-  ensure_command("MetaResumeCursorWord", _47_, {nargs = 0})
-  local function _48_(args)
+  ensure_command("MetaResumeCursorWord", _59_, {nargs = 0})
+  local function _60_(args)
     return router.entry_sync(args.args)
   end
-  ensure_command("MetaSync", _48_, {nargs = "?"})
-  local function _49_()
+  ensure_command("MetaSync", _60_, {nargs = "?"})
+  local function _61_()
     return router.entry_push()
   end
-  ensure_command("MetaPush", _49_, {nargs = 0})
-  local function _50_(args)
+  ensure_command("MetaPush", _61_, {nargs = 0})
+  local function _62_(args)
     local ok,err = pcall(M.reload, {compile = args.bang})
     if not ok then
       return vim.notify(("[metabuffer] reload failed: " .. tostring(err)), vim.log.levels.ERROR)
@@ -432,7 +494,7 @@ M.setup = function(opts)
       return nil
     end
   end
-  ensure_command("MetaReload", _50_, {nargs = 0, bang = true})
+  ensure_command("MetaReload", _62_, {nargs = 0, bang = true})
   return true
 end
 M.defaults = config.defaults

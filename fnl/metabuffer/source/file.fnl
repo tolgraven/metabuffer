@@ -7,14 +7,25 @@
   [session read-file-lines-cached path]
   (let [cache (or session.info-file-head-cache {})
         mtime (vim.fn.getftime path)
+        include-binary (not (not (and session session.effective-include-binary)))
+        include-hex (not (not (and session session.effective-include-hex)))
         found (. cache path)]
     (if (and (= (type found) "table")
              (= (. found :mtime) mtime)
+             (= (. found :include-binary) include-binary)
+             (= (. found :include-hex) include-hex)
              (= (type (. found :line)) "string"))
         (. found :line)
-        (let [line0 (or (. (or (read-file-lines-cached path) []) 1) "")
+        (let [line0 (or (. (or (read-file-lines-cached
+                                path
+                                {:include-binary include-binary
+                                 :hex-view include-hex}) []) 1) "")
               line (tostring line0)]
-          (set (. cache path) {:mtime mtime :line line})
+          (set (. cache path)
+               {:mtime mtime
+                :include-binary include-binary
+                :include-hex include-hex
+                :line line})
           (set session.info-file-head-cache cache)
           line))))
 
@@ -71,9 +82,12 @@
   [meta]
   (let [mtime-text (or (. meta :mtime-text) "000000")
         git-age (or (. meta :age) "")
+        age-width 4
         age-fragment (if (~= git-age "")
-                         (.. " 🕓" git-age)
-                         " ")
+                         (.. " 🕓"
+                             (string.rep " " (math.max 0 (- age-width (# git-age))))
+                             git-age)
+                         (string.rep " " (+ 2 age-width)))
         git-author (let [a (vim.trim (or (. meta :author) ""))]
                      (if (= a "") "?" a))]
     (.. mtime-text
@@ -177,10 +191,11 @@
         author-end (if (= right "") -1 (+ author-start (# right)))
         clock-start1 (string.find left "🕓" 1 true)
         age-token (if clock-start1
-                      (or (string.match left "🕓([%d]+[a-z]+)$") "")
+                      (or (string.match left "🕓%s*([%d]+[a-z]+)$") "")
                       "")
         age-start (if (and clock-start1 (~= age-token ""))
-                      (+ (- clock-start1 1) (# "🕓"))
+                      (let [age-pos (string.find left age-token clock-start1 true)]
+                        (if age-pos (- age-pos 1) (+ (- clock-start1 1) (# "🕓"))))
                       -1)
         age-end (if (>= age-start 0) (+ age-start (# age-token)) -1)
         suffix-highlights []]

@@ -85,10 +85,7 @@
       (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col])
       (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
         (pcall vim.api.nvim_set_option_value "wrap" true {:win session.prompt-win})
-        (pcall vim.api.nvim_set_option_value "linebreak" true {:win session.prompt-win})
-        (pcall vim.api.nvim_win_call
-               session.prompt-win
-               (fn [] (vim.fn.winrestview {:leftcol 0})))))))
+        (pcall vim.api.nvim_set_option_value "linebreak" true {:win session.prompt-win})))))
 
 (fn M.current-buffer-path
   [buf]
@@ -214,8 +211,48 @@
         r (M.canonical-path root)]
     (and p r (vim.startswith p r))))
 
+(fn contains-nul-byte?
+  [lines]
+  (let [n (math.min 8 (# (or lines [])))]
+    (var found false)
+    (for [i 1 n]
+      (let [line (or (. lines i) "")]
+        (when (string.find line "\0" 1 true)
+          (set found true))))
+    found))
+
+(fn M.binary-file?
+  [settings path]
+  (if (or (not path) (= 0 (vim.fn.filereadable path)))
+      false
+      (let [size (vim.fn.getfsize path)
+            mtime (vim.fn.getftime path)
+            cache (or settings.project-file-cache {})
+            _ (set settings.project-file-cache cache)
+            cached (. cache path)]
+        (if (or (< size 0) (> size settings.project-max-file-bytes))
+            false
+            (if (and (= (type cached) "table")
+                     (= (. cached :size) size)
+                     (= (. cached :mtime) mtime)
+                     (~= (. cached :binary) nil))
+                (not (not (. cached :binary)))
+                (let [[ok-head head] [(pcall vim.fn.readfile path "b" 8)]
+                      bin? (and ok-head (= (type head) "table") (contains-nul-byte? head))
+                      prev-lines (and (= (type cached) "table") (. cached :lines))]
+                  (set (. cache path)
+                       {:size size
+                        :mtime mtime
+                        :binary (not (not bin?))
+                        :lines (if (= (type prev-lines) "table") prev-lines nil)})
+                  (not (not bin?))))))))
+
 (fn M.read-file-lines-cached
   [settings path opts]
+  (fn binary-header-line
+    [size]
+    (let [kb (math.max 1 (math.floor (/ (math.max 0 (or size 0)) 1024)))]
+      (.. "binary " (tostring kb) " KB")))
   (fn chunk-line
     [s width]
     (let [txt (or s "")
@@ -230,33 +267,37 @@
               (table.insert out (string.sub txt i (math.min n (+ i w -1))))
               (set i (+ i w)))
             out))))
-  (fn contains-nul-byte?
-    [lines]
-    (let [n (math.min 8 (# (or lines [])))]
-      (var found false)
-      (for [i 1 n]
-        (let [line (or (. lines i) "")]
-          (when (string.find line "\0" 1 true)
-            (set found true))))
-      found))
   (fn strings-lines
-    [path]
+    [path size]
     (if (= 1 (vim.fn.executable "strings"))
         (let [out (vim.fn.systemlist ["strings" "-a" path])]
           (if (= vim.v.shell_error 0)
               (let [joined (table.concat (or out []) " ")
-                    chunks (chunk-line joined 80)]
-                chunks)
+                    chunks (chunk-line joined 80)
+                    with-head [(binary-header-line size)]]
+                (each [_ line (ipairs chunks)]
+                  (table.insert with-head line))
+                with-head)
               nil))
         nil))
   (fn hex-lines
-    [path]
+    [path size]
     (if (= 1 (vim.fn.executable "xxd"))
         (let [out (vim.fn.systemlist ["xxd" "-g" "1" "-u" path])]
-          (if (= vim.v.shell_error 0) out nil))
+          (if (= vim.v.shell_error 0)
+              (let [with-head [(binary-header-line size)]]
+                (each [_ line (ipairs (or out []))]
+                  (table.insert with-head line))
+                with-head)
+              nil))
         (if (= 1 (vim.fn.executable "hexdump"))
             (let [out (vim.fn.systemlist ["hexdump" "-C" path])]
-              (if (= vim.v.shell_error 0) out nil))
+              (if (= vim.v.shell_error 0)
+                  (let [with-head [(binary-header-line size)]]
+                    (each [_ line (ipairs (or out []))]
+                      (table.insert with-head line))
+                    with-head)
+                  nil))
             nil)))
   (let [include-binary (and opts (. opts :include-binary))
         hex-view (and opts (. opts :hex-view))]
@@ -286,7 +327,7 @@
                     (if (and ok-head (= (type head) "table") (contains-nul-byte? head))
                         (let [entry {:size size :mtime mtime :binary true}]
                           (if include-binary
-                              (let [lines (if hex-view (hex-lines path) (strings-lines path))
+                              (let [lines (if hex-view (hex-lines path size) (strings-lines path size))
                                     key (if hex-view :hex-lines :strings-lines)]
                                 (set (. entry key) (if (= (type lines) "table") lines []))
                                 (set (. cache path) entry)

@@ -5,13 +5,15 @@ local M = {}
 local function file_first_line(session, read_file_lines_cached, path)
   local cache = (session["info-file-head-cache"] or {})
   local mtime = vim.fn.getftime(path)
+  local include_binary = not not (session and session["effective-include-binary"])
+  local include_hex = not not (session and session["effective-include-hex"])
   local found = cache[path]
-  if ((type(found) == "table") and (found.mtime == mtime) and (type(found.line) == "string")) then
+  if ((type(found) == "table") and (found.mtime == mtime) and (found["include-binary"] == include_binary) and (found["include-hex"] == include_hex) and (type(found.line) == "string")) then
     return found.line
   else
-    local line0 = ((read_file_lines_cached(path) or {})[1] or "")
+    local line0 = ((read_file_lines_cached(path, {["include-binary"] = include_binary, ["hex-view"] = include_hex}) or {})[1] or "")
     local line = tostring(line0)
-    cache[path] = {mtime = mtime, line = line}
+    cache[path] = {mtime = mtime, ["include-binary"] = include_binary, ["include-hex"] = include_hex, line = line}
     session["info-file-head-cache"] = cache
     return line
   end
@@ -123,11 +125,12 @@ end
 local function file_meta_line(meta)
   local mtime_text = (meta["mtime-text"] or "000000")
   local git_age = (meta.age or "")
+  local age_width = 4
   local age_fragment
   if (git_age ~= "") then
-    age_fragment = (" \240\159\149\147" .. git_age)
+    age_fragment = (" \240\159\149\147" .. string.rep(" ", math.max(0, (age_width - #git_age))) .. git_age)
   else
-    age_fragment = " "
+    age_fragment = string.rep(" ", (2 + age_width))
   end
   local git_author
   do
@@ -258,13 +261,18 @@ local function aligned_meta_suffix(suffix, path_width)
   local clock_start1 = string.find(left, "\240\159\149\147", 1, true)
   local age_token
   if clock_start1 then
-    age_token = (string.match(left, "\240\159\149\147([%d]+[a-z]+)$") or "")
+    age_token = (string.match(left, "\240\159\149\147%s*([%d]+[a-z]+)$") or "")
   else
     age_token = ""
   end
   local age_start
   if (clock_start1 and (age_token ~= "")) then
-    age_start = ((clock_start1 - 1) + #"\240\159\149\147")
+    local age_pos = string.find(left, age_token, clock_start1, true)
+    if age_pos then
+      age_start = (age_pos - 1)
+    else
+      age_start = ((clock_start1 - 1) + #"\240\159\149\147")
+    end
   else
     age_start = -1
   end

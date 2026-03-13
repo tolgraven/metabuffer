@@ -37,3 +37,6 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 28 [] project mode gets opened with only about 2000 total possible lines, but project has many many more (even excluding deps, hidden etc). Something is wrong. Faulty prefilter when doing straight `:Meta!`?
 - 29 [] fake preview window line number column has line numbers after end of file.
 - 29 [] preview window should anchor one line higher so gets 8 lines by default.
+- 30 [] we should properly document all required and optional dependencies, and document what having those entails.
+- 31 [] is there any way to speed up the full screen tests in general? they're now taking 8s or so. can we run more tests in parallell instead?
+

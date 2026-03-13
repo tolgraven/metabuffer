@@ -24,6 +24,9 @@ T['editing results buffer directly and :write propagates edits to source files']
     end)()
   ]])
 
+  H.wait_for(function()
+    return type(H.session_info_snapshot()) == 'table'
+  end, 3000)
   local info_after = H.session_info_snapshot()
   eq(type(info_after), 'table')
 

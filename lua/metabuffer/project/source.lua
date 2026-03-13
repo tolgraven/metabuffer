@@ -9,10 +9,12 @@ M.new = function(opts)
   local path_under_root_3f = opts["path-under-root?"]
   local allow_project_path_3f = opts["allow-project-path?"]
   local project_file_list = opts["project-file-list"]
+  local binary_file_3f = opts["binary-file?"]
   local read_file_lines_cached = opts["read-file-lines-cached"]
   local session_active_3f = opts["session-active?"]
   local lazy_streaming_allowed_3f = opts["lazy-streaming-allowed?"]
   local on_prompt_changed = opts["on-prompt-changed"]
+  local apply_prompt_lines_now_21 = opts["apply-prompt-lines-now!"]
   local prompt_has_active_query_3f = opts["prompt-has-active-query?"]
   local now_ms = opts["now-ms"]
   local prompt_update_delay_ms = opts["prompt-update-delay-ms"]
@@ -184,13 +186,13 @@ M.new = function(opts)
     end
     return table.insert(refs, {path = path, lnum = total_lines, line = _21_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
   end
-  local function all_project_file_paths(session, include_hidden, include_ignored, include_deps)
+  local function all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)
     local root = vim.fn.getcwd()
     local seen = {}
     local out = {}
     for _, p in ipairs(project_file_list(root, include_hidden, include_ignored, include_deps)) do
       local path = canonical_path(p)
-      if (path and (1 == vim.fn.filereadable(path)) and path_under_root_3f(path, root) and not seen[path]) then
+      if (path and (1 == vim.fn.filereadable(path)) and (include_binary or not binary_file_3f(path)) and path_under_root_3f(path, root) and not seen[path]) then
         seen[path] = true
         table.insert(out, path)
       else
@@ -399,7 +401,7 @@ M.new = function(opts)
     else
     end
     if include_files then
-      for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps)) do
+      for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)) do
         push_file_entry_into_pool_21(session, path, read_file_lines_cached(path, {["include-binary"] = include_binary, ["hex-view"] = include_hex}))
       end
     else
@@ -441,7 +443,7 @@ M.new = function(opts)
     local all_paths = project_file_list(root, include_hidden, include_ignored, include_deps)
     local file_entry_paths
     if include_files then
-      file_entry_paths = all_project_file_paths(session, include_hidden, include_ignored, include_deps)
+      file_entry_paths = all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)
     else
       file_entry_paths = {}
     end
@@ -557,6 +559,32 @@ M.new = function(opts)
     meta["_filter-cache-line-count"] = #meta.buf.content
     return nil
   end
+  local function schedule_source_set_rebuild_21(session, wait_ms)
+    if (session and session["project-mode"] and not session.closing) then
+      session["source-set-rebuild-token"] = (1 + (session["source-set-rebuild-token"] or 0))
+      local token = session["source-set-rebuild-token"]
+      session["source-set-rebuild-pending"] = true
+      local function _71_()
+        if (session and (token == session["source-set-rebuild-token"])) then
+          session["source-set-rebuild-pending"] = false
+        else
+        end
+        if (session and (token == session["source-set-rebuild-token"]) and session["project-mode"] and session["prompt-buf"] and session_active_3f(session) and not session.closing) then
+          apply_source_set_21(session)
+          if apply_prompt_lines_now_21 then
+            return apply_prompt_lines_now_21(session)
+          else
+            return on_prompt_changed(session["prompt-buf"], true)
+          end
+        else
+          return nil
+        end
+      end
+      return vim.defer_fn(_71_, math.max(0, (wait_ms or 0)))
+    else
+      return nil
+    end
+  end
   local function apply_minimal_source_set_21(session)
     local meta = session.meta
     local old_line
@@ -579,7 +607,7 @@ M.new = function(opts)
       session["project-bootstrap-token"] = (1 + (session["project-bootstrap-token"] or 0))
       local token = session["project-bootstrap-token"]
       session["project-bootstrap-pending"] = true
-      local function _72_()
+      local function _77_()
         if (session and (token == session["project-bootstrap-token"])) then
           session["project-bootstrap-pending"] = false
         else
@@ -612,11 +640,11 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_72_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
+      return vim.defer_fn(_77_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
     else
       return nil
     end
   end
-  return {["schedule-lazy-refresh!"] = schedule_lazy_refresh_21, ["apply-source-set!"] = apply_source_set_21, ["apply-minimal-source-set!"] = apply_minimal_source_set_21, ["schedule-project-bootstrap!"] = schedule_project_bootstrap_21}
+  return {["schedule-lazy-refresh!"] = schedule_lazy_refresh_21, ["apply-source-set!"] = apply_source_set_21, ["schedule-source-set-rebuild!"] = schedule_source_set_rebuild_21, ["apply-minimal-source-set!"] = apply_minimal_source_set_21, ["schedule-project-bootstrap!"] = schedule_project_bootstrap_21}
 end
 return M

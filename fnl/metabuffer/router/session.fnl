@@ -14,6 +14,7 @@
         maybe-sync-from-main! (. deps :maybe-sync-from-main!)
         schedule-scroll-sync! (. deps :schedule-scroll-sync!)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)
+        preview-window (. deps :preview-window)
         sign-mod (. deps :sign-mod)
         router-api (. deps :router-api)
         hooks
@@ -27,6 +28,10 @@
            :maybe-sync-from-main! maybe-sync-from-main!
            :schedule-scroll-sync! schedule-scroll-sync!
            :maybe-restore-hidden-ui! maybe-restore-hidden-ui!
+           :maybe-refresh-preview-statusline! (fn [s]
+                                               (when (and preview-window
+                                                          preview-window.refresh-statusline!)
+                                                 (preview-window.refresh-statusline! s)))
            :sign-mod sign-mod})]
     (hooks.register! router-api session)))
 

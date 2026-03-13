@@ -39,12 +39,60 @@ T['file flag enables file-entry hits filtered by file token'] = H.timed_case(fun
   H.type_prompt_human('#file README.md', 90)
   H.wait_for(function() return H.session_query_text() == '' end, 6000)
   H.wait_for(function() return H.session_file_entry_hit_count() > 0 end, 6000)
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not s then return false end
+        local idxs = s.meta.buf.indices or {}
+        local refs = s.meta.buf['source-refs'] or {}
+        for _, src_idx in ipairs(idxs) do
+          local ref = refs[src_idx]
+          if ref and ref.kind ~= 'file-entry' then
+            return false
+          end
+        end
+        return true
+      end)()
+    ]])
+  end, 6000)
   local first_line = H.session_first_file_entry_line()
   eq(type(first_line), 'string')
   eq(string.sub(first_line, 1, 1) == '/', false)
 
   local dbg = H.session_debug_out()
   eq(H.str_contains(dbg, '+fil'), true)
+end)
+
+T['file mode with -binary excludes binary files from file entries'] = H.timed_case(function()
+  H.open_project_meta_from_file('README.md')
+  H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
+
+  H.type_prompt_human('#-binary #file metabuffer.png', 90)
+  H.wait_for(function() return H.session_query_text() == '' end, 6000)
+  H.wait_for(function() return H.session_file_entry_hit_count() >= 0 end, 6000)
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not s then return false end
+        local idxs = s.meta.buf.indices or {}
+        local refs = s.meta.buf['source-refs'] or {}
+        for _, src_idx in ipairs(idxs) do
+          local ref = refs[src_idx]
+          if ref and ref.kind == 'file-entry' then
+            local p = (ref.path or ''):lower()
+            if string.find(p, 'metabuffer%.png', 1, false) then
+              return false
+            end
+          end
+        end
+        return true
+      end)()
+    ]])
+  end, 6000)
 end)
 
 T['file shortcut token ./query enables file mode and applies file token'] = H.timed_case(function()
@@ -69,6 +117,37 @@ T['file flag token is separate from normal query terms on same line'] = H.timed_
   H.type_prompt_human('#file README lua', 90)
   H.wait_for(function() return H.session_query_text() == 'lua' end, 6000)
   H.wait_for(function() return H.session_file_entry_hit_count() > 0 end, 6000)
+end)
+
+T['file flag without file token keeps existing regular hits'] = H.timed_case(function()
+  H.open_project_meta_from_file('README.md')
+  H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
+
+  H.type_prompt_human('local', 90)
+  H.wait_for(function() return H.session_query_text() == 'local' end, 6000)
+  local before = H.session_hit_count()
+  eq(before > 0, true)
+
+  H.type_prompt_human(' #file', 90)
+  H.wait_for(function() return H.session_query_text() == 'local' end, 6000)
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not s then return false end
+        local idxs = s.meta.buf.indices or {}
+        local refs = s.meta.buf['source-refs'] or {}
+        for _, src_idx in ipairs(idxs) do
+          local ref = refs[src_idx]
+          if ref and ref.kind ~= 'file-entry' then
+            return true
+          end
+        end
+        return false
+      end)()
+    ]])
+  end, 6000)
 end)
 
 T['file token constrains regular hits to matching paths'] = H.timed_case(function()
@@ -97,6 +176,52 @@ T['file token constrains regular hits to matching paths'] = H.timed_case(functio
           end
         end
         return has_non_file
+      end)()
+    ]])
+  end, 6000)
+end)
+
+T['clearing file token removes stale file filtering'] = H.timed_case(function()
+  H.open_project_meta_from_file('README.md')
+  H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
+
+  H.type_prompt_human('#file png', 90)
+  H.wait_for(function() return H.session_query_text() == '' end, 6000)
+  H.wait_for(function() return H.session_file_entry_hit_count() >= 0 end, 6000)
+
+  H.type_prompt('<C-u>')
+  H.wait_for(function() return H.session_prompt_text() == '' end, 6000)
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not s then return false end
+        local q = s.meta['file-query-lines'] or {}
+        return #q == 0
+      end)()
+    ]])
+  end, 6000)
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not s then return false end
+        local idxs = s.meta.buf.indices or {}
+        local refs = s.meta.buf['source-refs'] or {}
+        local has_non_png = false
+        for _, src_idx in ipairs(idxs) do
+          local ref = refs[src_idx]
+          if ref and ref.kind == 'file-entry' then
+            local p = (ref.path or ''):lower()
+            if not string.find(p, 'png', 1, true) then
+              has_non_png = true
+              break
+            end
+          end
+        end
+        return has_non_png
       end)()
     ]])
   end, 6000)

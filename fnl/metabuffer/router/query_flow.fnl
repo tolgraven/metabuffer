@@ -140,34 +140,8 @@
       (let [raw-lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
         (let [parsed (query-mod.parse-query-lines raw-lines)
               lines (. parsed :lines)
-              consume-controls? (or (~= (. parsed :include-hidden) nil)
-                                    (~= (. parsed :include-ignored) nil)
-                                    (~= (. parsed :include-deps) nil)
-                                    (~= (. parsed :include-binary) nil)
-                                    (~= (. parsed :include-hex) nil)
-                                    (~= (. parsed :include-files) nil)
-                                    (~= (. parsed :prefilter) nil)
-                                    (~= (. parsed :lazy) nil)
-                                    (. parsed :history)
-                                    (. parsed :saved-browser)
-                                    (and (= (type (. parsed :save-tag)) "string")
-                                         (~= (vim.trim (. parsed :save-tag)) ""))
-                                    (and (= (type (. parsed :saved-tag)) "string")
-                                         (~= (vim.trim (. parsed :saved-tag)) "")))
-              consume-visible-controls? (or (~= (. parsed :include-hidden) nil)
-                                            (~= (. parsed :include-ignored) nil)
-                                            (~= (. parsed :include-deps) nil)
-                                            (~= (. parsed :include-binary) nil)
-                                            (~= (. parsed :include-hex) nil)
-                                            (~= (. parsed :prefilter) nil)
-                                            (~= (. parsed :lazy) nil)
-                                            (. parsed :history)
-                                            (. parsed :saved-browser)
-                                            (and (= (type (. parsed :save-tag)) "string")
-                                                 (~= (vim.trim (. parsed :save-tag)) ""))
-                                            (and (= (type (. parsed :saved-tag)) "string")
-                                                 (~= (vim.trim (. parsed :saved-tag)) "")))
-              effective-lines (if consume-controls? lines raw-lines)
+              consume-visible-controls? false
+              effective-lines lines
               effective-text (table.concat effective-lines "\n")
               _ false
               _ (when (and (. parsed :history) merge-history-into-session!)
@@ -236,8 +210,10 @@
             (invalidate-filter-cache! session))
           (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
             (pcall vim.api.nvim_buf_set_var session.meta.buf.buffer "meta_manual_edit_active" false))
-          (when (and session.project-mode changed)
-            (project-source.apply-source-set! session))
+          (when (and session.project-mode
+                     changed
+                     project-source.schedule-source-set-rebuild!)
+            (project-source.schedule-source-set-rebuild! session 0))
           (session.meta.set-query-lines effective-lines))
         (let [[ok err] [(pcall session.meta.on-update 0)]]
           (if ok

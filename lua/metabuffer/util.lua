@@ -37,6 +37,13 @@ end
 M.clamp = function(n, lo, hi)
   return math.max(lo, math.min(hi, n))
 end
+M["build-group-names"] = function(prefix, count)
+  local groups = {}
+  for i = 1, count do
+    table.insert(groups, (prefix .. i))
+  end
+  return groups
+end
 M["buf-lines"] = function(buf)
   return vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 end

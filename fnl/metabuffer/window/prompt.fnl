@@ -41,10 +41,6 @@
         (set (. wo :spell) false)
         (set (. wo :wrap) true)
         (set (. wo :linebreak) true))
-      (vim.api.nvim_win_call
-        win
-        (fn []
-          (pcall vim.fn.winrestview {:leftcol 0})))
       (set self.buffer buf)
       self))
 

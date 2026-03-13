@@ -107,14 +107,8 @@ M["apply-prompt-lines!"] = function(deps, session)
     do
       local parsed = query_mod["parse-query-lines"](raw_lines)
       local lines = parsed.lines
-      local consume_controls_3f = ((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed["include-binary"] ~= nil) or (parsed["include-hex"] ~= nil) or (parsed["include-files"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "")))
-      local consume_visible_controls_3f = ((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed["include-binary"] ~= nil) or (parsed["include-hex"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "")))
-      local effective_lines
-      if consume_controls_3f then
-        effective_lines = lines
-      else
-        effective_lines = raw_lines
-      end
+      local consume_visible_controls_3f = false
+      local effective_lines = lines
       local effective_text = table.concat(effective_lines, "\n")
       local _ = false
       local _0
@@ -195,8 +189,8 @@ M["apply-prompt-lines!"] = function(deps, session)
         pcall(vim.api.nvim_buf_set_var, session.meta.buf.buffer, "meta_manual_edit_active", false)
       else
       end
-      if (session["project-mode"] and changed) then
-        project_source["apply-source-set!"](session)
+      if (session["project-mode"] and changed and project_source["schedule-source-set-rebuild!"]) then
+        project_source["schedule-source-set-rebuild!"](session, 0)
       else
       end
       session.meta["set-query-lines"](effective_lines)
@@ -216,7 +210,7 @@ M["apply-prompt-lines!"] = function(deps, session)
       end
     else
       if string.find(tostring(err), "E565") then
-        local function _20_()
+        local function _19_()
           if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
             pcall(session.meta["on-update"], 0)
             pcall(session.meta.refresh_statusline)
@@ -234,7 +228,7 @@ M["apply-prompt-lines!"] = function(deps, session)
             return nil
           end
         end
-        return vim.defer_fn(_20_, 1)
+        return vim.defer_fn(_19_, 1)
       else
         return nil
       end

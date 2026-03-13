@@ -46,10 +46,6 @@ M.new = function(nvim, opts)
     wo["wrap"] = true
     wo["linebreak"] = true
   end
-  local function _4_()
-    return pcall(vim.fn.winrestview, {leftcol = 0})
-  end
-  vim.api.nvim_win_call(win, _4_)
   self.buffer = buf
   return self
 end

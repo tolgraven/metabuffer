@@ -12,6 +12,18 @@
         (string.sub file (+ dot 1))
         "")))
 
+(fn ext-start-in-file
+  [file]
+  (let [txt (or file "")
+        n (# txt)]
+    (var dot 0)
+    (for [i n 1 -1]
+      (when (and (= dot 0) (= (string.sub txt i i) "."))
+        (set dot i)))
+    (if (and (> dot 1) (< dot n))
+        dot
+        0)))
+
 (fn devicon-for-path
   [path fallback-hl]
   (let [file (vim.fn.fnamemodify (or path "") ":t")
@@ -89,14 +101,14 @@
                 (if (<= (# compact) budget)
                     [cdir file]
                     (if (> (# file) budget)
-                        ["" (if (> budget 3)
-                                (.. "..." (string.sub file (+ (- (# file) budget) 4)))
+                        ["" (if (> budget 1)
+                                (.. "…" (string.sub file (+ (- (# file) budget) 2)))
                                 (string.sub file (+ (- (# file) budget) 1)))]
                         (let [dir-budget (math.max 0 (- budget (# file)))
                               short-dir (if (<= (# cdir) dir-budget)
                                             cdir
-                                            (if (> dir-budget 3)
-                                                (.. "..." (string.sub cdir (+ (- (# cdir) dir-budget) 4)))
+                                            (if (> dir-budget 1)
+                                                (.. "…" (string.sub cdir (+ (- (# cdir) dir-budget) 2)))
                                                 (string.sub cdir (+ (- (# cdir) dir-budget) 1))))]
                           [short-dir file])))))))))
 
@@ -341,6 +353,13 @@
                     (table.insert highlights [row dr.hl dr.start dr.end])))
                 (when (and highlight-file? (> (# file0) 0))
                   (table.insert highlights [row this-file-hl file-start (+ file-start (# file0))]))
+                (when (and highlight-file? (> (# file0) 0))
+                  (let [dot (ext-start-in-file file0)]
+                    (when (> dot 0)
+                      (table.insert highlights
+                                    [row icon-hl
+                                     (+ file-start (- dot 1))
+                                     (+ file-start (# file0))]))))
                 (when (> (# suffix0) 0)
                   (table.insert highlights [row "Comment" suffix-start (+ suffix-start (# suffix0))]))
                 (each [_ sh (ipairs suffix-hls)]

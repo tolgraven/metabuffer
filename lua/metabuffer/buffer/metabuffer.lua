@@ -176,15 +176,22 @@ M.new = function(nvim, model)
       local groups = {}
       self["clear-source-syntax"]()
       local function _21_()
-        vim.cmd("silent! syntax clear")
-        pcall(vim.api.nvim_buf_del_var, self.buffer, "current_syntax")
+        local reset_base_syntax_3f = false
+        local block_id = 0
         local function add_block(start, stop, ft)
           if (ft and (ft ~= "") and (start <= stop)) then
+            block_id = (block_id + 1)
             local cluster = ("MetaSrcFt_" .. sanitize_syntax_id(ft))
-            local group = string.format("MetaSrcBlock_%d_%d", start, stop)
+            local group = string.format("MetaSrcBlock_%d", block_id)
             local synfiles = syntax_files_for_ft(ft)
             local has_syntax = (#synfiles > 0)
             if has_syntax then
+              if not reset_base_syntax_3f then
+                vim.cmd("silent! syntax clear")
+                pcall(vim.api.nvim_buf_del_var, self.buffer, "current_syntax")
+                reset_base_syntax_3f = true
+              else
+              end
               if not included[cluster] then
                 for _, synfile in ipairs(synfiles) do
                   pcall(vim.api.nvim_buf_del_var, self.buffer, "current_syntax")
@@ -280,10 +287,10 @@ M.new = function(nvim, model)
     local ranges = {}
     for _, win in ipairs(vim.fn.win_findbuf(self.buffer)) do
       if vim.api.nvim_win_is_valid(win) then
-        local function _35_()
+        local function _36_()
           return vim.fn.winsaveview()
         end
-        win_views[win] = vim.api.nvim_win_call(win, _35_)
+        win_views[win] = vim.api.nvim_win_call(win, _36_)
       else
       end
     end
@@ -298,7 +305,7 @@ M.new = function(nvim, model)
         local ref = self["source-refs"][idx]
         local pfx = source_prefix(ref)
         local row = (#out + 1)
-        local function _38_()
+        local function _39_()
           if ((pfx.text or "") == "") then
             return normalize_render_line(line)
           else
@@ -309,7 +316,7 @@ M.new = function(nvim, model)
             end
           end
         end
-        table.insert(out, _38_())
+        table.insert(out, _39_())
         table.insert(ranges, {row = row, ["lnum-end"] = pfx["lnum-end"], ["icon-start"] = pfx["icon-start"], ["icon-end"] = pfx["icon-end"], ["icon-hl"] = pfx["icon-hl"], ["dir-ranges"] = (pfx["dir-ranges"] or {}), ["file-start"] = pfx["file-start"], ["file-end"] = pfx["file-end"], ["file-hl"] = pfx["file-hl"], ["ext-start"] = pfx["ext-start"], ["ext-end"] = pfx["ext-end"], ["ext-hl"] = pfx["ext-hl"]})
       else
         table.insert(out, normalize_render_line(line))
@@ -419,10 +426,10 @@ M.new = function(nvim, model)
     set_bvar_21(self.buffer, "meta_internal_render", false)
     for win, view in pairs(win_views) do
       if vim.api.nvim_win_is_valid(win) then
-        local function _55_()
+        local function _56_()
           return pcall(vim.fn.winrestview, view)
         end
-        vim.api.nvim_win_call(win, _55_)
+        vim.api.nvim_win_call(win, _56_)
       else
       end
     end

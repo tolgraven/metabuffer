@@ -11,6 +11,17 @@
   (when (and tbl key (= (. tbl key) expected))
     (set (. tbl key) nil)))
 
+(fn clear-hit-highlight!
+  [curr]
+  (let [matcher (curr.matcher)]
+    (when matcher
+      (pcall matcher.remove-highlight matcher))))
+
+(fn clear-buffer-modified!
+  [buf]
+  (when (and buf (vim.api.nvim_buf_is_valid buf))
+    (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})))
+
 (fn remove-session!
   [deps session]
   (let [history-api (. deps :history-api)
@@ -35,7 +46,10 @@
       (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
         (pcall vim.api.nvim_win_close session.prompt-win true))
       (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
+        (clear-buffer-modified! session.prompt-buf)
         (pcall vim.api.nvim_buf_delete session.prompt-buf {:force true}))
+      (when (and session.meta session.meta.buf session.meta.buf.buffer)
+        (clear-buffer-modified! session.meta.buf.buffer))
       (info-window.close-window! session)
       (preview-window.close-window! session)
       (history-api.close-history-browser! session)
@@ -48,12 +62,6 @@
       (when session.instance-id
         (clear-map-entry! instances session.instance-id session)))))
 
-(fn clear-hit-highlight!
-  [curr]
-  (let [matcher (curr.matcher)]
-    (when matcher
-      (pcall matcher.remove-highlight matcher))))
-
 (fn apply-prompt-window-opts!
   [win]
   (when (and win (vim.api.nvim_win_is_valid win))
@@ -65,7 +73,7 @@
       (set (. wo :foldcolumn) "0")
       (set (. wo :spell) false)
       (set (. wo :wrap) true)
-      (set (. wo :linebreak) false))))
+      (set (. wo :linebreak) true))))
 
 (fn hide-session-ui!
   [deps session]
@@ -85,8 +93,11 @@
       (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
         (let [bo (. vim.bo session.prompt-buf)]
           (set (. bo :bufhidden) "hide")))
+      (clear-buffer-modified! session.prompt-buf)
       (pcall vim.api.nvim_win_close session.prompt-win true))
     (set session.prompt-win nil)
+    (when (and session.meta session.meta.buf session.meta.buf.buffer)
+      (clear-buffer-modified! session.meta.buf.buffer))
     (info-window.close-window! session)
     (preview-window.close-window! session)
     (history-api.close-history-browser! session)
@@ -514,8 +525,8 @@
   [prev-row next-row text rel-index]
   (let [base (or prev-row next-row {})
         out (vim.deepcopy base)
-        prev-lnum (or (. prev-row :lnum) (. base :lnum) 1)
-        next-lnum (or (. next-row :lnum) (. base :lnum) (+ prev-lnum 1))
+        prev-lnum (or (and prev-row (. prev-row :lnum)) (. base :lnum) 1)
+        next-lnum (or (and next-row (. next-row :lnum)) (. base :lnum) (+ prev-lnum 1))
         lnum (if prev-row
                  (+ prev-lnum rel-index)
                  (math.max 1 (- next-lnum 1)))]

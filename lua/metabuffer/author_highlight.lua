@@ -1,6 +1,7 @@
 -- [nfnl] fnl/metabuffer/author_highlight.fnl
 local M = {}
-M["author-groups"] = {"MetaAuthor1", "MetaAuthor2", "MetaAuthor3", "MetaAuthor4", "MetaAuthor5", "MetaAuthor6", "MetaAuthor7", "MetaAuthor8", "MetaAuthor9", "MetaAuthor10", "MetaAuthor11", "MetaAuthor12", "MetaAuthor13", "MetaAuthor14", "MetaAuthor15", "MetaAuthor16", "MetaAuthor17", "MetaAuthor18", "MetaAuthor19", "MetaAuthor20", "MetaAuthor21", "MetaAuthor22", "MetaAuthor23", "MetaAuthor24"}
+local util = require("metabuffer.util")
+M["author-groups"] = util["build-group-names"]("MetaAuthor", 24)
 M["author->group"] = {}
 M["next-group-idx"] = 1
 local function normalize_author(name)

@@ -12,6 +12,22 @@ local function ext_from_path(path)
     return ""
   end
 end
+local function ext_start_in_file(file)
+  local txt = (file or "")
+  local n = #txt
+  local dot = 0
+  for i = n, 1, -1 do
+    if ((dot == 0) and (string.sub(txt, i, i) == ".")) then
+      dot = i
+    else
+    end
+  end
+  if ((dot > 1) and (dot < n)) then
+    return dot
+  else
+    return 0
+  end
+end
 local function devicon_for_path(path, fallback_hl)
   local file = vim.fn.fnamemodify((path or ""), ":t")
   local ext = ext_from_path(path)
@@ -19,29 +35,29 @@ local function devicon_for_path(path, fallback_hl)
   if (ok_web and web) then
     local ok_i,icon,icon_hl = pcall(web.get_icon, file, ext, {default = true})
     local file_hl = fallback_hl
-    local _2_
-    if (ok_i and (type(icon) == "string") and (icon ~= "")) then
-      _2_ = icon
-    else
-      _2_ = ""
-    end
     local _4_
-    if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
-      _4_ = icon_hl
+    if (ok_i and (type(icon) == "string") and (icon ~= "")) then
+      _4_ = icon
     else
-      _4_ = fallback_hl
+      _4_ = ""
     end
-    return {icon = _2_, ["icon-hl"] = _4_, ["file-hl"] = file_hl}
+    local _6_
+    if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
+      _6_ = icon_hl
+    else
+      _6_ = fallback_hl
+    end
+    return {icon = _4_, ["icon-hl"] = _6_, ["file-hl"] = file_hl}
   else
     if (1 == vim.fn.exists("*WebDevIconsGetFileTypeSymbol")) then
       local icon = vim.fn.WebDevIconsGetFileTypeSymbol(file)
-      local _6_
+      local _8_
       if ((type(icon) == "string") and (icon ~= "")) then
-        _6_ = icon
+        _8_ = icon
       else
-        _6_ = ""
+        _8_ = ""
       end
-      return {icon = _6_, ["icon-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
+      return {icon = _8_, ["icon-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
     else
       return {icon = "", ["icon-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
     end
@@ -128,22 +144,22 @@ local function fit_path_into_width(path, path_width)
         return {cdir, file}
       else
         if (#file > budget) then
-          local function _19_()
-            if (budget > 3) then
-              return ("..." .. string.sub(file, ((#file - budget) + 4)))
+          local function _21_()
+            if (budget > 1) then
+              return ("\226\128\166" .. string.sub(file, ((#file - budget) + 2)))
             else
               return string.sub(file, ((#file - budget) + 1))
             end
           end
-          return {"", _19_()}
+          return {"", _21_()}
         else
           local dir_budget = math.max(0, (budget - #file))
           local short_dir
           if (#cdir <= dir_budget) then
             short_dir = cdir
           else
-            if (dir_budget > 3) then
-              short_dir = ("..." .. string.sub(cdir, ((#cdir - dir_budget) + 4)))
+            if (dir_budget > 1) then
+              short_dir = ("\226\128\166" .. string.sub(cdir, ((#cdir - dir_budget) + 2)))
             else
               short_dir = string.sub(cdir, ((#cdir - dir_budget) + 1))
             end
@@ -250,10 +266,10 @@ M.new = function(opts)
   local function fit_info_width_21(session, lines)
     if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
       local widths
-      local function _34_(line)
+      local function _36_(line)
         return vim.fn.strdisplaywidth((line or ""))
       end
-      widths = vim.tbl_map(_34_, (lines or {}))
+      widths = vim.tbl_map(_36_, (lines or {}))
       local max_len = numeric_max(widths, 0)
       local needed = max_len
       local host_width
@@ -296,10 +312,10 @@ M.new = function(opts)
     else
       if (session and meta and meta.win and vim.api.nvim_win_is_valid(meta.win.window)) then
         local view
-        local function _40_()
+        local function _42_()
           return vim.fn.winsaveview()
         end
-        view = vim.api.nvim_win_call(meta.win.window, _40_)
+        view = vim.api.nvim_win_call(meta.win.window, _42_)
         local top = math.max(1, math.min(total, (view.topline or 1)))
         local height = math.max(1, vim.api.nvim_win_get_height(meta.win.window))
         local stop0 = math.min(total, (top + height + -1))
@@ -428,9 +444,9 @@ M.new = function(opts)
         else
           icon_width = 0
         end
-        local _let_56_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
-        local dir = _let_56_[1]
-        local file0 = _let_56_[2]
+        local _let_58_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
+        local dir = _let_58_[1]
+        local file0 = _let_58_[2]
         local this_file_hl = (icon_info["file-hl"] or file_hl)
         local row = #lines
         local line = (sign_prefix .. lnum_cell0 .. icon_prefix .. dir .. file0 .. suffix_prefix .. suffix0)
@@ -465,6 +481,14 @@ M.new = function(opts)
         end
         if (highlight_file_3f and (#file0 > 0)) then
           table.insert(highlights, {row, this_file_hl, file_start, (file_start + #file0)})
+        else
+        end
+        if (highlight_file_3f and (#file0 > 0)) then
+          local dot = ext_start_in_file(file0)
+          if (dot > 0) then
+            table.insert(highlights, {row, icon_hl, (file_start + (dot - 1)), (file_start + #file0)})
+          else
+          end
         else
         end
         if (#suffix0 > 0) then
@@ -565,9 +589,9 @@ M.new = function(opts)
     if (session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
       local meta = session.meta
       local selected1 = (meta.selected_index + 1)
-      local _let_72_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-      local wanted_start = _let_72_[1]
-      local wanted_stop = _let_72_[2]
+      local _let_76_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
+      local wanted_start = _let_76_[1]
+      local wanted_stop = _let_76_[2]
       local start_index = (session["info-start-index"] or 1)
       local stop_index = (session["info-stop-index"] or 0)
       local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
@@ -587,7 +611,7 @@ M.new = function(opts)
     end
     return update_preview(session)
   end
-  local function _76_(session, refresh_lines)
+  local function _80_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -600,6 +624,6 @@ M.new = function(opts)
       return update_regular_21(session)
     end
   end
-  return {["close-window!"] = close_info_window_21, ["update!"] = _76_}
+  return {["close-window!"] = close_info_window_21, ["update!"] = _80_}
 end
 return M

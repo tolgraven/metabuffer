@@ -54,7 +54,7 @@ end
 T['parse-query-lines keeps escaped control tokens literal'] = function()
   local parsed = query['parse-query-lines']({ '\\#deps token' })
   eq(parsed.deps, nil)
-  eq(parsed.lines, { '\\#deps token' })
+  eq(parsed.lines, { '#deps token' })
 end
 
 T['parse-query-lines consumes binary and hex flags into settings'] = function()
