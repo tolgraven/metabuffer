@@ -105,6 +105,21 @@ local function normalize_render_line(line)
   local s3 = string.gsub(s2, "\r", " ")
   return s3
 end
+local function set_bvar_21(buf, name, value)
+  if (buf and vim.api.nvim_buf_is_valid(buf)) then
+    return pcall(vim.api.nvim_buf_set_var, buf, name, value)
+  else
+    return nil
+  end
+end
+local function bvar(buf, name, default)
+  local ok,v = pcall(vim.api.nvim_buf_get_var, buf, name)
+  if ok then
+    return v
+  else
+    return default
+  end
+end
 M.new = function(nvim, model)
   local self = base.new(nvim, {model = model, name = "meta", ["default-opts"] = M["default-opts"]})
   self["syntax-type"] = "buffer"
@@ -115,6 +130,7 @@ M.new = function(nvim, model)
   self["source-sep-ns"] = vim.api.nvim_create_namespace("metabuffer_source_separator")
   self["source-alt-ns"] = vim.api.nvim_create_namespace("metabuffer_source_alt")
   self["source-syntax-groups"] = {}
+  self["keep-modifiable"] = false
   self["model-valid?"] = function()
     return (self.model and vim.api.nvim_buf_is_valid(self.model))
   end
@@ -139,13 +155,13 @@ M.new = function(nvim, model)
   end
   self["clear-source-syntax"] = function()
     if (self["source-syntax-groups"] and (#self["source-syntax-groups"] > 0)) then
-      local function _17_()
+      local function _19_()
         for _, g in ipairs(self["source-syntax-groups"]) do
           vim.cmd(("silent! syntax clear " .. g))
         end
         return nil
       end
-      vim.api.nvim_buf_call(self.buffer, _17_)
+      vim.api.nvim_buf_call(self.buffer, _19_)
     else
     end
     self["source-syntax-groups"] = {}
@@ -159,16 +175,23 @@ M.new = function(nvim, model)
       local included = {}
       local groups = {}
       self["clear-source-syntax"]()
-      local function _19_()
-        vim.cmd("silent! syntax clear")
-        pcall(vim.api.nvim_buf_del_var, self.buffer, "current_syntax")
+      local function _21_()
+        local reset_base_syntax_3f = false
+        local block_id = 0
         local function add_block(start, stop, ft)
           if (ft and (ft ~= "") and (start <= stop)) then
+            block_id = (block_id + 1)
             local cluster = ("MetaSrcFt_" .. sanitize_syntax_id(ft))
-            local group = string.format("MetaSrcBlock_%d_%d", start, stop)
+            local group = string.format("MetaSrcBlock_%d", block_id)
             local synfiles = syntax_files_for_ft(ft)
             local has_syntax = (#synfiles > 0)
             if has_syntax then
+              if not reset_base_syntax_3f then
+                vim.cmd("silent! syntax clear")
+                pcall(vim.api.nvim_buf_del_var, self.buffer, "current_syntax")
+                reset_base_syntax_3f = true
+              else
+              end
               if not included[cluster] then
                 for _, synfile in ipairs(synfiles) do
                   pcall(vim.api.nvim_buf_del_var, self.buffer, "current_syntax")
@@ -211,7 +234,7 @@ M.new = function(nvim, model)
         end
         return vim.cmd("silent! syntax sync fromstart")
       end
-      vim.api.nvim_buf_call(self.buffer, _19_)
+      vim.api.nvim_buf_call(self.buffer, _21_)
       self["source-syntax-groups"] = groups
       return nil
     end
@@ -264,10 +287,10 @@ M.new = function(nvim, model)
     local ranges = {}
     for _, win in ipairs(vim.fn.win_findbuf(self.buffer)) do
       if vim.api.nvim_win_is_valid(win) then
-        local function _33_()
+        local function _36_()
           return vim.fn.winsaveview()
         end
-        win_views[win] = vim.api.nvim_win_call(win, _33_)
+        win_views[win] = vim.api.nvim_win_call(win, _36_)
       else
       end
     end
@@ -275,13 +298,14 @@ M.new = function(nvim, model)
       local bo = vim.bo[self.buffer]
       bo["modifiable"] = true
     end
+    set_bvar_21(self.buffer, "meta_internal_render", true)
     for _, idx in ipairs(self.indices) do
       local line = self.content[idx]
       if (self["show-source-prefix"] and self["source-refs"] and self["source-refs"][idx]) then
         local ref = self["source-refs"][idx]
         local pfx = source_prefix(ref)
         local row = (#out + 1)
-        local function _36_()
+        local function _39_()
           if ((pfx.text or "") == "") then
             return normalize_render_line(line)
           else
@@ -292,7 +316,7 @@ M.new = function(nvim, model)
             end
           end
         end
-        table.insert(out, _36_())
+        table.insert(out, _39_())
         table.insert(ranges, {row = row, ["lnum-end"] = pfx["lnum-end"], ["icon-start"] = pfx["icon-start"], ["icon-end"] = pfx["icon-end"], ["icon-hl"] = pfx["icon-hl"], ["dir-ranges"] = (pfx["dir-ranges"] or {}), ["file-start"] = pfx["file-start"], ["file-end"] = pfx["file-end"], ["file-hl"] = pfx["file-hl"], ["ext-start"] = pfx["ext-start"], ["ext-end"] = pfx["ext-end"], ["ext-hl"] = pfx["ext-hl"]})
       else
         table.insert(out, normalize_render_line(line))
@@ -304,7 +328,28 @@ M.new = function(nvim, model)
       local line2 = string.gsub(line1, "[\r\n\v\f]", "")
       out[i] = line2
     end
-    vim.api.nvim_buf_set_lines(self.buffer, 0, -1, false, out)
+    do
+      local manual_edit_active_3f = bvar(self.buffer, "meta_manual_edit_active", false)
+      local undo_levels
+      if manual_edit_active_3f then
+        undo_levels = nil
+      else
+        undo_levels = vim.api.nvim_get_option_value("undolevels", {buf = self.buffer})
+      end
+      if undo_levels then
+        pcall(vim.api.nvim_set_option_value, "undolevels", -1, {buf = self.buffer})
+      else
+      end
+      vim.api.nvim_buf_set_lines(self.buffer, 0, -1, false, out)
+      if not manual_edit_active_3f then
+        pcall(vim.api.nvim_set_option_value, "modified", false, {buf = self.buffer})
+      else
+      end
+      if undo_levels then
+        pcall(vim.api.nvim_set_option_value, "undolevels", undo_levels, {buf = self.buffer})
+      else
+      end
+    end
     vim.api.nvim_buf_clear_namespace(self.buffer, self["source-hl-ns"], 0, -1)
     vim.api.nvim_buf_clear_namespace(self.buffer, self["source-sep-ns"], 0, -1)
     vim.api.nvim_buf_clear_namespace(self.buffer, self["source-alt-ns"], 0, -1)
@@ -372,14 +417,19 @@ M.new = function(nvim, model)
     self["apply-source-syntax-regions"]()
     do
       local bo = vim.bo[self.buffer]
-      bo["modifiable"] = false
+      if self["keep-modifiable"] then
+        bo["modifiable"] = true
+      else
+        bo["modifiable"] = false
+      end
     end
+    set_bvar_21(self.buffer, "meta_internal_render", false)
     for win, view in pairs(win_views) do
       if vim.api.nvim_win_is_valid(win) then
-        local function _48_()
+        local function _56_()
           return pcall(vim.fn.winrestview, view)
         end
-        vim.api.nvim_win_call(win, _48_)
+        vim.api.nvim_win_call(win, _56_)
       else
       end
     end

@@ -176,7 +176,7 @@ M["preview-lines"] = function(session, ref, height, read_file_lines_cached)
       if (type(all0) == "table") then
         all = all0
       else
-        local lines = read_file_lines_cached(ref.path)
+        local lines = read_file_lines_cached(ref.path, {["include-binary"] = (session and session["effective-include-binary"]), ["hex-view"] = (session and session["effective-include-hex"])})
         if (type(lines) == "table") then
           cache[ref.path] = lines
           all = lines

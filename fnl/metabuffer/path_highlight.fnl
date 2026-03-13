@@ -1,32 +1,8 @@
 (local M {})
+(local util (require :metabuffer.util))
 
 (set M.sep-group "MetaPathSep")
-
-(set M.segment-groups
-  ["MetaPathSeg1"
-   "MetaPathSeg2"
-   "MetaPathSeg3"
-   "MetaPathSeg4"
-   "MetaPathSeg5"
-   "MetaPathSeg6"
-   "MetaPathSeg7"
-   "MetaPathSeg8"
-   "MetaPathSeg9"
-   "MetaPathSeg10"
-   "MetaPathSeg11"
-   "MetaPathSeg12"
-   "MetaPathSeg13"
-   "MetaPathSeg14"
-   "MetaPathSeg15"
-   "MetaPathSeg16"
-   "MetaPathSeg17"
-   "MetaPathSeg18"
-   "MetaPathSeg19"
-   "MetaPathSeg20"
-   "MetaPathSeg21"
-   "MetaPathSeg22"
-   "MetaPathSeg23"
-   "MetaPathSeg24"])
+(set M.segment-groups (util.build-group-names "MetaPathSeg" 24))
 
 (set M.segment->group {})
 (set M.next-group-idx 1)

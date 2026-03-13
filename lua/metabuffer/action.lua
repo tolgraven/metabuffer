@@ -8,10 +8,9 @@ local function _sync_selected_from_cursor(meta)
   else
     local c = vim.api.nvim_win_get_cursor(0)
     local row = c[1]
-    local col = c[2]
     local clamped = math.max(1, math.min(row, max))
     if (row ~= clamped) then
-      vim.api.nvim_win_set_cursor(0, {clamped, col})
+      vim.api.nvim_win_set_cursor(0, {clamped, 0})
     else
     end
     meta.selected_index = (clamped - 1)
@@ -38,13 +37,11 @@ local function _select_clicked(meta, _)
     local mp = vim.fn.getmousepos()
     local winid = mp.winid
     local lnum = mp.line
-    local col = mp.column
     local curwin = vim.api.nvim_get_current_win()
     local max = math.max(1, #meta.buf.indices)
     if ((winid == curwin) and (lnum > 0)) then
       local row = math.max(1, math.min(lnum, max))
-      local zero_col = math.max(0, ((col or 1) - 1))
-      vim.api.nvim_win_set_cursor(0, {row, zero_col})
+      vim.api.nvim_win_set_cursor(0, {row, 0})
     else
     end
   end

@@ -38,14 +38,7 @@
       (let [trimmed (vim.trim (or q ""))]
         (when (~= trimmed "")
           (table.insert queries0 trimmed))))
-    (let [queries (if (> (# queries0) 0)
-                      queries0
-                      (let [fallback []]
-                        (each [_ q (ipairs (or regular-queries []))]
-                          (let [trimmed (vim.trim (or q ""))]
-                            (when (~= trimmed "")
-                              (table.insert fallback trimmed))))
-                        fallback))]
+    (let [queries queries0]
     (let [matches-all-queries? (fn [path]
                                  (if (= (# queries) 0)
                                      true
@@ -62,14 +55,16 @@
                                        ok)))
           regular-set {}
           file-set {}
-          regular-allowed? regular-query-active?]
+          regular-allowed? (or regular-query-active?
+                               (= (# queries) 0))]
       (each [_ idx (ipairs (or indices []))]
         (let [ref (. refs idx)]
           (if (ref-is-file-entry? ref)
               nil
-              (when regular-allowed?
-                (when (matches-all-queries? (and ref ref.path))
-                  (set (. regular-set idx) true))))))
+              (if regular-allowed?
+                  (when (matches-all-queries? (and ref ref.path))
+                    (set (. regular-set idx) true))
+                  (set (. regular-set idx) true)))))
       (for [idx 1 (# refs)]
         (let [ref (. refs idx)]
           (when (ref-is-file-entry? ref)
@@ -115,15 +110,6 @@
         (vim.startswith m "i")
         {:group "Insert" :label (if (nerd-font-enabled?) "𝐈" "Insert")}
         {:group "Normal" :label (if (nerd-font-enabled?) "𝗡" "Normal")})))
-
-(fn selected-preview-file
-  [self]
-  (let [src-idx (. self.buf.indices (+ self.selected_index 1))
-        ref (and src-idx (. (or self.buf.source-refs []) src-idx))
-        path (and ref ref.path)]
-    (if (and (= (type path) "string") (~= path ""))
-        (vim.fn.pathshorten (vim.fn.fnamemodify path ":~:."))
-        "")))
 
 (fn highlight-pattern->vim-query
   [pat]
@@ -322,8 +308,7 @@
       (fn self.refresh_statusline
         []
         (let [mode-state (statusline-mode-state)
-              hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")
-              preview-file (selected-preview-file self)]
+              hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")]
           (self.status-win.set-statusline-state
             (. mode-state :group)
             (. mode-state :label)
@@ -332,7 +317,7 @@
             (self.buf.line-count)
             (self.selected_line)
             self.debug_out
-            preview-file
+            ""
             (. (self.matcher) :name)
             (self.case)
             hl-prefix

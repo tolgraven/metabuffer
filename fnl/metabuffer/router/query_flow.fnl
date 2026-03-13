@@ -94,6 +94,8 @@
     (and (or (~= (. parsed :include-hidden) nil)
              (~= (. parsed :include-ignored) nil)
              (~= (. parsed :include-deps) nil)
+             (~= (. parsed :include-binary) nil)
+             (~= (. parsed :include-hex) nil)
              (~= (. parsed :prefilter) nil)
              (~= (. parsed :lazy) nil)
              (. parsed :history)
@@ -102,7 +104,9 @@
                   (~= (vim.trim (. parsed :save-tag)) ""))
              (and (= (type (. parsed :saved-tag)) "string")
                   (~= (vim.trim (. parsed :saved-tag)) "")))
-         (= (. parsed :include-files) nil))))
+         (= (. parsed :include-files) nil)
+         (= (. parsed :include-binary) nil)
+         (= (. parsed :include-hex) nil))))
 
 (fn consume-visible-controls-lines
   [query-mod raw-lines]
@@ -121,6 +125,8 @@
   (let [{: query-mod
          : project-source
          : update-info-window
+         : refresh-change-signs!
+         : capture-sign-baseline!
          : settings
          : merge-history-into-session!
          : save-current-prompt-tag!
@@ -134,30 +140,8 @@
       (let [raw-lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
         (let [parsed (query-mod.parse-query-lines raw-lines)
               lines (. parsed :lines)
-              consume-controls? (or (~= (. parsed :include-hidden) nil)
-                                    (~= (. parsed :include-ignored) nil)
-                                    (~= (. parsed :include-deps) nil)
-                                    (~= (. parsed :include-files) nil)
-                                    (~= (. parsed :prefilter) nil)
-                                    (~= (. parsed :lazy) nil)
-                                    (. parsed :history)
-                                    (. parsed :saved-browser)
-                                    (and (= (type (. parsed :save-tag)) "string")
-                                         (~= (vim.trim (. parsed :save-tag)) ""))
-                                    (and (= (type (. parsed :saved-tag)) "string")
-                                         (~= (vim.trim (. parsed :saved-tag)) "")))
-              consume-visible-controls? (or (~= (. parsed :include-hidden) nil)
-                                            (~= (. parsed :include-ignored) nil)
-                                            (~= (. parsed :include-deps) nil)
-                                            (~= (. parsed :prefilter) nil)
-                                            (~= (. parsed :lazy) nil)
-                                            (. parsed :history)
-                                            (. parsed :saved-browser)
-                                            (and (= (type (. parsed :save-tag)) "string")
-                                                 (~= (vim.trim (. parsed :save-tag)) ""))
-                                            (and (= (type (. parsed :saved-tag)) "string")
-                                                 (~= (vim.trim (. parsed :saved-tag)) "")))
-              effective-lines (if consume-controls? lines raw-lines)
+              consume-visible-controls? false
+              effective-lines lines
               effective-text (table.concat effective-lines "\n")
               _ false
               _ (when (and (. parsed :history) merge-history-into-session!)
@@ -165,7 +149,7 @@
               _ (when (and (= (type (. parsed :save-tag)) "string")
                            (~= (vim.trim (. parsed :save-tag)) "")
                            save-current-prompt-tag!)
-                  (save-current-prompt-tag! session (. parsed :save-tag) prompt-text))
+                  (save-current-prompt-tag! session (. parsed :save-tag) effective-text))
               _ (when (and (= (type (. parsed :saved-tag)) "string")
                            (~= (vim.trim (. parsed :saved-tag)) "")
                            restore-saved-prompt-tag!)
@@ -176,6 +160,8 @@
               next-hidden (choose-current-when-nil (. parsed :include-hidden) session.include-hidden)
               next-ignored (choose-current-when-nil (. parsed :include-ignored) session.include-ignored)
               next-deps (choose-current-when-nil (. parsed :include-deps) session.include-deps)
+              next-binary (choose-current-when-nil (. parsed :include-binary) session.include-binary)
+              next-hex (choose-current-when-nil (. parsed :include-hex) session.include-hex)
               next-files (choose-current-when-nil (. parsed :include-files) session.include-files)
               next-prefilter (choose-current-when-nil (. parsed :prefilter) session.prefilter-mode)
               next-lazy (choose-current-when-nil (. parsed :lazy) session.lazy-mode)
@@ -184,16 +170,22 @@
               changed (or (~= next-hidden session.effective-include-hidden)
                           (~= next-ignored session.effective-include-ignored)
                           (~= next-deps session.effective-include-deps)
+                          (~= next-binary session.effective-include-binary)
+                          (~= next-hex session.effective-include-hex)
                           (~= next-files session.effective-include-files)
                           (~= next-prefilter session.prefilter-mode)
                           (~= next-lazy session.lazy-mode))]
           (set session.effective-include-hidden next-hidden)
           (set session.effective-include-ignored next-ignored)
           (set session.effective-include-deps next-deps)
+          (set session.effective-include-binary next-binary)
+          (set session.effective-include-hex next-hex)
           (set session.effective-include-files next-files)
           (set session.include-hidden next-hidden)
           (set session.include-ignored next-ignored)
           (set session.include-deps next-deps)
+          (set session.include-binary next-binary)
+          (set session.include-hex next-hex)
           (set session.include-files next-files)
           (set session.prefilter-mode next-prefilter)
           (set session.lazy-mode next-lazy)
@@ -202,6 +194,8 @@
           (set session.last-prompt-text effective-text)
           (set session.prompt-last-applied-text effective-text)
           (set session.meta.file-query-lines (or (. parsed :file-lines) []))
+          (set session.meta.include-binary next-binary)
+          (set session.meta.include-hex next-hex)
           (set session.meta.include-files next-files)
           (when consume-visible-controls?
             (let [visible-lines (consume-visible-controls-lines query-mod raw-lines)
@@ -211,27 +205,25 @@
                 (set session._rewriting-visible-controls true)
                 (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false visible-lines)
                 (set session._rewriting-visible-controls false))))
-          (set session.meta.debug_out
-            (if session.project-mode
-                (let [flags [(if session.effective-include-hidden "+hid" "-hid")
-                             (if session.effective-include-ignored "+ig" "-ig")
-                             (if session.effective-include-deps "+dep" "-dep")
-                             (if session.effective-include-files "+fil" "-fil")
-                             (if session.prefilter-mode "+prf" "-prf")]]
-                  (when-not session.lazy-mode
-                    (table.insert flags "nlz"))
-                  (.. " [" (table.concat flags " ") "]"))
-                ""))
+          (set session.meta.debug_out "")
           (when (or changed text-changed?)
             (invalidate-filter-cache! session))
-          (when (and session.project-mode changed)
-            (project-source.apply-source-set! session))
+          (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+            (pcall vim.api.nvim_buf_set_var session.meta.buf.buffer "meta_manual_edit_active" false))
+          (when (and session.project-mode
+                     changed
+                     project-source.schedule-source-set-rebuild!)
+            (project-source.schedule-source-set-rebuild! session 0))
           (session.meta.set-query-lines effective-lines))
         (let [[ok err] [(pcall session.meta.on-update 0)]]
           (if ok
               (do
                 (session.meta.refresh_statusline)
-                (update-info-window session))
+                (update-info-window session)
+                (when refresh-change-signs!
+                  (refresh-change-signs! session))
+                (when capture-sign-baseline!
+                  (capture-sign-baseline! session)))
               (when (string.find (tostring err) "E565")
                 ;; Textlock race: retry right after current input cycle.
                 (vim.defer_fn
@@ -240,7 +232,11 @@
                                (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
                       (pcall session.meta.on-update 0)
                       (pcall session.meta.refresh_statusline)
-                      (pcall update-info-window session)))
+                      (pcall update-info-window session)
+                      (when refresh-change-signs!
+                        (pcall refresh-change-signs! session))
+                      (when capture-sign-baseline!
+                        (pcall capture-sign-baseline! session))))
                   1))))))))
 
 (fn M.on-prompt-changed!

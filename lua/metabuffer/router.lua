@@ -13,6 +13,7 @@ local debug = require("metabuffer.debug")
 local config = require("metabuffer.config")
 local query_mod = require("metabuffer.query")
 local history_store = require("metabuffer.history_store")
+local sign_mod = require("metabuffer.sign")
 local prompt_hooks_mod = require("metabuffer.prompt.hooks")
 local router_util_mod = require("metabuffer.router.util")
 local router_history_mod = require("metabuffer.router.history")
@@ -30,6 +31,7 @@ local function sync_prompt_buffer_name_21(session)
   end
 end
 M.instances = {}
+M["_instance-seq"] = 0
 M["active-by-source"] = {}
 M["active-by-prompt"] = {}
 local update_info_window = nil
@@ -112,34 +114,40 @@ local function _16_(root, include_hidden, include_ignored, include_deps)
   return router_util_mod["project-file-list"](M, root, include_hidden, include_ignored, include_deps)
 end
 local function _17_(path)
-  return router_util_mod["read-file-lines-cached"](M, path)
+  return router_util_mod["binary-file?"](M, path)
 end
-local function _18_(session)
-  return router_util_mod["session-active?"](M["active-by-prompt"], session)
+local function _18_(path, opts)
+  return router_util_mod["read-file-lines-cached"](M, path, opts)
 end
 local function _19_(session)
+  return router_util_mod["session-active?"](M["active-by-prompt"], session)
+end
+local function _20_(session)
   return router_util_mod["lazy-streaming-allowed?"](M, query_mod, session)
 end
-local function _20_(prompt_buf, force)
+local function _21_(prompt_buf, force)
   return M["on-prompt-changed"](prompt_buf, force)
 end
-local function _21_(session)
-  return router_prompt_mod["prompt-has-active-query?"](query_mod, router_util_mod["prompt-lines"], session)
-end
 local function _22_(session)
-  return router_prompt_mod["prompt-update-delay-ms"](M, query_mod, router_util_mod["prompt-lines"], session)
-end
-local function _23_(session, wait_ms)
-  return router_prompt_mod["schedule-prompt-update!"](prompt_scheduler_ctx, session, wait_ms)
-end
-project_source = project_source_mod.new({settings = M, ["truthy?"] = query_mod["truthy?"], ["selected-ref"] = router_util_mod["selected-ref"], ["canonical-path"] = router_util_mod["canonical-path"], ["current-buffer-path"] = router_util_mod["current-buffer-path"], ["path-under-root?"] = router_util_mod["path-under-root?"], ["allow-project-path?"] = _15_, ["project-file-list"] = _16_, ["read-file-lines-cached"] = _17_, ["session-active?"] = _18_, ["lazy-streaming-allowed?"] = _19_, ["on-prompt-changed"] = _20_, ["prompt-has-active-query?"] = _21_, ["now-ms"] = router_prompt_mod["now-ms"], ["prompt-update-delay-ms"] = _22_, ["schedule-prompt-update!"] = _23_, ["restore-meta-view!"] = session_view["restore-meta-view!"], ["update-info-window"] = update_info_window})
-local function _24_(session)
-  return history_api["open-history-browser!"](session, "saved")
-end
-local function _25_(session)
   return apply_prompt_lines(session)
 end
-query_flow_deps = {["active-by-prompt"] = M["active-by-prompt"], ["query-mod"] = query_mod, ["project-source"] = project_source, ["update-info-window"] = update_info_window, settings = M, ["prompt-scheduler-ctx"] = prompt_scheduler_ctx, ["merge-history-into-session!"] = history_api["merge-history-into-session!"], ["save-current-prompt-tag!"] = history_api["save-current-prompt-tag!"], ["restore-saved-prompt-tag!"] = history_api["restore-saved-prompt-tag!"], ["open-saved-browser!"] = _24_, ["apply-prompt-lines"] = _25_}
+local function _23_(session)
+  return router_prompt_mod["prompt-has-active-query?"](query_mod, router_util_mod["prompt-lines"], session)
+end
+local function _24_(session)
+  return router_prompt_mod["prompt-update-delay-ms"](M, query_mod, router_util_mod["prompt-lines"], session)
+end
+local function _25_(session, wait_ms)
+  return router_prompt_mod["schedule-prompt-update!"](prompt_scheduler_ctx, session, wait_ms)
+end
+project_source = project_source_mod.new({settings = M, ["truthy?"] = query_mod["truthy?"], ["selected-ref"] = router_util_mod["selected-ref"], ["canonical-path"] = router_util_mod["canonical-path"], ["current-buffer-path"] = router_util_mod["current-buffer-path"], ["path-under-root?"] = router_util_mod["path-under-root?"], ["allow-project-path?"] = _15_, ["project-file-list"] = _16_, ["binary-file?"] = _17_, ["read-file-lines-cached"] = _18_, ["session-active?"] = _19_, ["lazy-streaming-allowed?"] = _20_, ["on-prompt-changed"] = _21_, ["apply-prompt-lines-now!"] = _22_, ["prompt-has-active-query?"] = _23_, ["now-ms"] = router_prompt_mod["now-ms"], ["prompt-update-delay-ms"] = _24_, ["schedule-prompt-update!"] = _25_, ["restore-meta-view!"] = session_view["restore-meta-view!"], ["update-info-window"] = update_info_window})
+local function _26_(session)
+  return history_api["open-history-browser!"](session, "saved")
+end
+local function _27_(session)
+  return apply_prompt_lines(session)
+end
+query_flow_deps = {["active-by-prompt"] = M["active-by-prompt"], ["query-mod"] = query_mod, ["project-source"] = project_source, ["update-info-window"] = update_info_window, settings = M, ["prompt-scheduler-ctx"] = prompt_scheduler_ctx, ["merge-history-into-session!"] = history_api["merge-history-into-session!"], ["save-current-prompt-tag!"] = history_api["save-current-prompt-tag!"], ["restore-saved-prompt-tag!"] = history_api["restore-saved-prompt-tag!"], ["open-saved-browser!"] = _26_, ["refresh-change-signs!"] = sign_mod["refresh-change-signs!"], ["capture-sign-baseline!"] = sign_mod["capture-baseline!"], ["apply-prompt-lines"] = _27_}
 M._store_vars = function(meta)
   vim.b._meta_context = meta.store()
   vim.b._meta_indexes = meta.buf.indices
@@ -154,25 +162,36 @@ end
 local function remove_session(session)
   return router_actions_mod["remove-session!"](actions_deps, session)
 end
-local function _26_(session)
+local function _28_(session)
   return router_query_flow_mod["apply-prompt-lines!"](query_flow_deps, session)
 end
-apply_prompt_lines = _26_
-actions_deps = {["active-by-source"] = M["active-by-source"], ["active-by-prompt"] = M["active-by-prompt"], ["history-api"] = history_api, ["history-store"] = history_store, ["prompt-window-mod"] = prompt_window_mod, ["meta-window-mod"] = meta_window_mod, ["router-util-mod"] = router_util_mod, ["router-prompt-mod"] = router_prompt_mod, ["session-view"] = session_view, ["base-buffer"] = base_buffer, ["info-window"] = info_window, ["preview-window"] = preview_window, ["project-source"] = project_source, ["update-info-window"] = update_info_window, ["sync-prompt-buffer-name!"] = sync_prompt_buffer_name_21, ["apply-prompt-lines"] = apply_prompt_lines, wrapup = M._wrapup}
+apply_prompt_lines = _28_
+actions_deps = {["active-by-source"] = M["active-by-source"], ["active-by-prompt"] = M["active-by-prompt"], instances = M.instances, settings = M, ["history-api"] = history_api, ["history-store"] = history_store, ["sign-mod"] = sign_mod, ["prompt-window-mod"] = prompt_window_mod, ["meta-window-mod"] = meta_window_mod, ["router-util-mod"] = router_util_mod, ["router-prompt-mod"] = router_prompt_mod, ["session-view"] = session_view, ["base-buffer"] = base_buffer, ["info-window"] = info_window, ["preview-window"] = preview_window, ["project-source"] = project_source, ["update-info-window"] = update_info_window, ["sync-prompt-buffer-name!"] = sync_prompt_buffer_name_21, ["apply-prompt-lines"] = apply_prompt_lines, wrapup = M._wrapup}
 navigation_deps = {["active-by-prompt"] = M["active-by-prompt"], ["update-info-window"] = update_info_window, ["session-view"] = session_view, ["scroll-sync-debounce-ms"] = M["scroll-sync-debounce-ms"], ["source-syntax-refresh-debounce-ms"] = M["source-syntax-refresh-debounce-ms"]}
-local function _27_(prompt_buf, force, event_tick)
+local function _29_()
+  M["_instance-seq"] = ((M["_instance-seq"] or 0) + 1)
+  return M["_instance-seq"]
+end
+local function _30_(prompt_buf, force, event_tick)
   return M["on-prompt-changed"](prompt_buf, force, event_tick)
 end
-local function _28_(session, force_refresh)
+local function _31_(session, force_refresh)
   return router_navigation_mod["maybe-sync-from-main!"](navigation_deps, session, force_refresh)
 end
-local function _29_(session)
+local function _32_(session)
   return router_navigation_mod["schedule-scroll-sync!"](navigation_deps, session)
 end
-local function _30_(session)
-  return router_actions_mod["maybe-restore-ui!"](actions_deps, session["prompt-buf"])
+local function _33_(session, force)
+  local function _34_()
+    if (force == nil) then
+      return false
+    else
+      return force
+    end
+  end
+  return router_actions_mod["maybe-restore-ui!"](actions_deps, session["prompt-buf"], _34_())
 end
-session_deps = {["router-api"] = M, settings = M, ["history-api"] = history_api, ["query-mod"] = query_mod, ["remove-session!"] = remove_session, ["active-by-source"] = M["active-by-source"], ["active-by-prompt"] = M["active-by-prompt"], instances = M.instances, ["session-view"] = session_view, ["meta-mod"] = meta_mod, ["base-buffer"] = base_buffer, ["router-util-mod"] = router_util_mod, ["prompt-window-mod"] = prompt_window_mod, ["project-source"] = project_source, ["meta-window-mod"] = meta_window_mod, ["history-store"] = history_store, ["sync-prompt-buffer-name!"] = sync_prompt_buffer_name_21, ["apply-prompt-lines"] = apply_prompt_lines, ["update-info-window"] = update_info_window, ["prompt-hooks-mod"] = prompt_hooks_mod, ["default-prompt-keymaps"] = M["prompt-keymaps"], ["default-main-keymaps"] = M["main-keymaps"], ["on-prompt-changed"] = _27_, ["maybe-sync-from-main!"] = _28_, ["schedule-scroll-sync!"] = _29_, ["maybe-restore-hidden-ui!"] = _30_}
+session_deps = {["router-api"] = M, settings = M, ["history-api"] = history_api, ["query-mod"] = query_mod, ["remove-session!"] = remove_session, ["active-by-source"] = M["active-by-source"], ["active-by-prompt"] = M["active-by-prompt"], instances = M.instances, ["session-view"] = session_view, ["meta-mod"] = meta_mod, ["base-buffer"] = base_buffer, ["router-util-mod"] = router_util_mod, ["prompt-window-mod"] = prompt_window_mod, ["project-source"] = project_source, ["meta-window-mod"] = meta_window_mod, ["preview-window"] = preview_window, ["history-store"] = history_store, ["sign-mod"] = sign_mod, ["next-instance-id!"] = _29_, ["sync-prompt-buffer-name!"] = sync_prompt_buffer_name_21, ["apply-prompt-lines"] = apply_prompt_lines, ["update-info-window"] = update_info_window, ["prompt-hooks-mod"] = prompt_hooks_mod, ["default-prompt-keymaps"] = M["prompt-keymaps"], ["default-main-keymaps"] = M["main-keymaps"], ["on-prompt-changed"] = _30_, ["maybe-sync-from-main!"] = _31_, ["schedule-scroll-sync!"] = _32_, ["maybe-restore-hidden-ui!"] = _33_}
 M["on-prompt-changed"] = function(prompt_buf, force, event_tick)
   router_query_flow_mod["on-prompt-changed!"](query_flow_deps, prompt_buf, force, event_tick)
   local session = M["active-by-prompt"][prompt_buf]
@@ -260,11 +279,29 @@ end
 M["insert-symbol-under-cursor"] = function(prompt_buf)
   return router_actions_mod["insert-symbol-under-cursor!"](actions_deps, prompt_buf)
 end
+M["insert-symbol-under-cursor-newline"] = function(prompt_buf)
+  return router_actions_mod["insert-symbol-under-cursor-newline!"](actions_deps, prompt_buf)
+end
+M["toggle-prompt-results-focus"] = function(prompt_buf)
+  return router_actions_mod["toggle-prompt-results-focus!"](actions_deps, prompt_buf)
+end
 M["accept-main"] = function(prompt_buf)
   return router_actions_mod["accept-main!"](actions_deps, prompt_buf)
 end
+M["enter-edit-mode"] = function(prompt_buf)
+  return router_actions_mod["enter-edit-mode!"](actions_deps, prompt_buf)
+end
+M["write-results"] = function(prompt_buf)
+  return router_actions_mod["write-results!"](actions_deps, prompt_buf)
+end
+M["sync-live-edits"] = function(prompt_buf)
+  return router_actions_mod["sync-live-edits!"](actions_deps, prompt_buf)
+end
+M["results-buffer-wiped"] = function(results_buf)
+  return router_actions_mod["on-results-buffer-wipe!"](actions_deps, results_buf)
+end
 M["maybe-restore-hidden-ui"] = function(prompt_buf)
-  return router_actions_mod["maybe-restore-ui!"](actions_deps, prompt_buf)
+  return router_actions_mod["maybe-restore-ui!"](actions_deps, prompt_buf, false)
 end
 M["toggle-scan-option"] = function(prompt_buf, which)
   return router_actions_mod["toggle-scan-option!"](actions_deps, prompt_buf, which)
@@ -284,14 +321,14 @@ M.sync = function(meta, query)
   else
   end
   if meta then
-    local function _33_()
+    local function _37_()
       if (query and (query ~= "")) then
         return {query}
       else
         return {}
       end
     end
-    meta["set-query-lines"](_33_())
+    meta["set-query-lines"](_37_())
     meta["on-update"](0)
     M._store_vars(meta)
     return meta
@@ -319,11 +356,17 @@ M.entry_resume = function(query)
 end
 M.entry_sync = function(query)
   local key = vim.api.nvim_get_current_buf()
-  return M.sync(M.instances[key], query)
+  local session = M["active-by-source"][key]
+  local inst = M.instances[key]
+  local meta = ((session and session.meta) or (inst and inst.meta) or inst)
+  return M.sync(meta, query)
 end
 M.entry_push = function()
   local key = vim.api.nvim_get_current_buf()
-  return M.push(M.instances[key])
+  local session = M["active-by-source"][key]
+  local inst = M.instances[key]
+  local meta = ((session and session.meta) or (inst and inst.meta) or inst)
+  return M.push(meta)
 end
 M.entry_cursor_word = function(resume)
   local w = vim.fn.expand("<cword>")
@@ -333,4 +376,112 @@ M.entry_cursor_word = function(resume)
     return M.entry_start(w, false)
   end
 end
+local function clear_table_21(tbl)
+  for k, _ in pairs((tbl or {})) do
+    tbl[k] = nil
+  end
+  return nil
+end
+local function add_session_21(seen, sessions, session)
+  if (session and (type(session) == "table") and not seen[session]) then
+    seen[session] = true
+    return table.insert(sessions, session)
+  else
+    return nil
+  end
+end
+local function maybe_close_win_21(win)
+  if (win and vim.api.nvim_win_is_valid(win)) then
+    return pcall(vim.api.nvim_win_close, win, true)
+  else
+    return nil
+  end
+end
+local function maybe_delete_buf_21(buf)
+  if (buf and vim.api.nvim_buf_is_valid(buf)) then
+    pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
+    return pcall(vim.api.nvim_buf_delete, buf, {force = true})
+  else
+    return nil
+  end
+end
+M["fail-safe-teardown!"] = function(where, err)
+  M["_last-failsafe"] = {where = where, error = tostring(err)}
+  if not M["_teardown-in-progress"] then
+    M["_teardown-in-progress"] = true
+    do
+      local seen = {}
+      local sessions = {}
+      for _, session in pairs((M.instances or {})) do
+        add_session_21(seen, sessions, session)
+      end
+      for _, session in pairs((M["active-by-prompt"] or {})) do
+        add_session_21(seen, sessions, session)
+      end
+      for _, session in pairs((M["active-by-source"] or {})) do
+        add_session_21(seen, sessions, session)
+      end
+      for _, session in ipairs(sessions) do
+        pcall(router_actions_mod["remove-session!"], actions_deps, session)
+        maybe_close_win_21(session["prompt-win"])
+        maybe_delete_buf_21(session["prompt-buf"])
+        if (session.meta and session.meta.win) then
+          maybe_close_win_21(session.meta.win.window)
+        else
+        end
+        if (session.meta and session.meta.buf) then
+          maybe_delete_buf_21(session.meta.buf.buffer)
+        else
+        end
+        if (info_window and info_window["close-window!"]) then
+          pcall(info_window["close-window!"], session)
+        else
+        end
+        if (preview_window and preview_window["close-window!"]) then
+          pcall(preview_window["close-window!"], session)
+        else
+        end
+        if history_api then
+          pcall(history_api["close-history-browser!"], session)
+        else
+        end
+      end
+    end
+    clear_table_21(M.instances)
+    clear_table_21(M["active-by-prompt"])
+    clear_table_21(M["active-by-source"])
+    M["_teardown-in-progress"] = false
+  else
+  end
+  local function _51_()
+    return vim.notify(("metabuffer: torn down after error in " .. tostring(where) .. "\n" .. tostring(err)), vim.log.levels.ERROR)
+  end
+  return vim.schedule(_51_)
+end
+local function wrap_public_api_with_failsafe_21()
+  if not M["_failsafe-wrapped"] then
+    for k, v in pairs(M) do
+      if ((type(k) == "string") and (type(v) == "function") and not vim.startswith(k, "_") and (k ~= "configure") and (k ~= "fail-safe-teardown!")) then
+        local function _52_(...)
+          local res = {pcall(v, ...)}
+          local ok = res[1]
+          local result = res[2]
+          if ok then
+            return unpack(res, 2)
+          else
+            M["fail-safe-teardown!"](k, result)
+            return error(result)
+          end
+        end
+        M[k] = _52_
+      else
+      end
+    end
+    M["_failsafe-wrapped"] = true
+    return nil
+  else
+    return nil
+  end
+end
+wrap_public_api_with_failsafe_21()
 return M

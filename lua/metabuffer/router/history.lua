@@ -9,6 +9,37 @@ local function project_setting_token(name, enabled)
   end
   return ("#" .. _1_ .. name)
 end
+local function changed_setting_token(query_mod, name, enabled, default_enabled)
+  local on_3f = query_mod["truthy?"](enabled)
+  local default_on_3f = query_mod["truthy?"](default_enabled)
+  if (on_3f ~= default_on_3f) then
+    return project_setting_token(name, on_3f)
+  else
+    return nil
+  end
+end
+local function normalize_history_prompt(text)
+  local parts = vim.split((text or ""), "%s+", {trimempty = true})
+  local out = {}
+  for _, tok in ipairs(parts) do
+    local next
+    if (tok == "#+file") then
+      next = "#file"
+    elseif (tok == "#+binary") then
+      next = "#binary"
+    elseif (tok == "#+hex") then
+      next = "#hex"
+    else
+      next = tok
+    end
+    table.insert(out, next)
+  end
+  if (#out > 0) then
+    return table.concat(out, " ")
+  else
+    return (text or "")
+  end
+end
 M.new = function(opts)
   local history_store = opts["history-store"]
   local router_util_mod = opts["router-util-mod"]
@@ -17,7 +48,7 @@ M.new = function(opts)
   local settings = opts.settings
   local api = {}
   api["history-entry-query"] = function(entry)
-    local parsed = query_mod["parse-query-text"]((entry or ""))
+    local parsed = query_mod["parse-query-text"](normalize_history_prompt(entry))
     return (parsed.query or "")
   end
   api["history-entry-token"] = function(entry)
@@ -38,9 +69,80 @@ M.new = function(opts)
   end
   api["history-entry-with-settings"] = function(session, prompt)
     local query_text = (prompt or "")
-    local prefix
+    local seen = {}
+    local tokens = {}
+    local _
+    for _0, part in ipairs(vim.split(query_text, "%s+", {trimempty = true})) do
+      if ((type(part) == "string") and (part ~= "")) then
+        seen[part] = true
+      else
+      end
+    end
+    _ = nil
+    local _0
     if (session and session["project-mode"]) then
-      prefix = table.concat({project_setting_token("hidden", session["effective-include-hidden"]), project_setting_token("ignored", session["effective-include-ignored"]), project_setting_token("deps", session["effective-include-deps"]), project_setting_token("file", session["effective-include-files"]), project_setting_token("prefilter", session["prefilter-mode"]), project_setting_token("lazy", session["lazy-mode"])}, " ")
+      local defaults = settings
+      do
+        local val_110_auto = changed_setting_token(query_mod, "hidden", session["effective-include-hidden"], defaults["default-include-hidden"])
+        if val_110_auto then
+          local tok = val_110_auto
+          if not seen[tok] then
+            table.insert(tokens, tok)
+          else
+          end
+        else
+        end
+      end
+      do
+        local val_110_auto = changed_setting_token(query_mod, "ignored", session["effective-include-ignored"], defaults["default-include-ignored"])
+        if val_110_auto then
+          local tok = val_110_auto
+          if not seen[tok] then
+            table.insert(tokens, tok)
+          else
+          end
+        else
+        end
+      end
+      do
+        local val_110_auto = changed_setting_token(query_mod, "deps", session["effective-include-deps"], defaults["default-include-deps"])
+        if val_110_auto then
+          local tok = val_110_auto
+          if not seen[tok] then
+            table.insert(tokens, tok)
+          else
+          end
+        else
+        end
+      end
+      do
+        local val_110_auto = changed_setting_token(query_mod, "prefilter", session["prefilter-mode"], defaults["project-lazy-prefilter-enabled"])
+        if val_110_auto then
+          local tok = val_110_auto
+          if not seen[tok] then
+            table.insert(tokens, tok)
+          else
+          end
+        else
+        end
+      end
+      local val_110_auto = changed_setting_token(query_mod, "lazy", session["lazy-mode"], defaults["project-lazy-enabled"])
+      if val_110_auto then
+        local tok = val_110_auto
+        if not seen[tok] then
+          _0 = table.insert(tokens, tok)
+        else
+          _0 = nil
+        end
+      else
+        _0 = nil
+      end
+    else
+      _0 = nil
+    end
+    local prefix
+    if (#tokens > 0) then
+      prefix = table.concat(tokens, " ")
     else
       prefix = ""
     end
@@ -93,7 +195,7 @@ M.new = function(opts)
       local val_110_auto = history_store["saved-entry"](tag)
       if val_110_auto then
         local saved = val_110_auto
-        router_util_mod["set-prompt-text!"](session, saved)
+        router_util_mod["set-prompt-text!"](session, normalize_history_prompt(saved))
         return true
       else
         return nil
@@ -112,7 +214,7 @@ M.new = function(opts)
     if (mode == "saved") then
       for _, item in ipairs(history_store["saved-items"]()) do
         local tag = (item.tag or "")
-        local prompt = (item.prompt or "")
+        local prompt = normalize_history_prompt((item.prompt or ""))
         local hay = string.lower((tag .. " " .. prompt))
         if ((filter0 == "") or not not string.find(hay, filter0, 1, true)) then
           table.insert(out, {label = ("##" .. tag .. "  " .. prompt), prompt = prompt, tag = tag})
@@ -122,7 +224,7 @@ M.new = function(opts)
     else
       local h = (session["history-cache"] or history_store.list())
       for i = #h, 1, -1 do
-        local entry = (h[i] or "")
+        local entry = normalize_history_prompt((h[i] or ""))
         local hay = string.lower(entry)
         if ((filter0 == "") or not not string.find(hay, filter0, 1, true)) then
           table.insert(out, {label = entry, prompt = entry})
@@ -164,7 +266,7 @@ M.new = function(opts)
           local val_110_auto0 = selected.prompt
           if val_110_auto0 then
             local prompt = val_110_auto0
-            router_util_mod["set-prompt-text!"](session, prompt)
+            router_util_mod["set-prompt-text!"](session, normalize_history_prompt(prompt))
           else
           end
         else
@@ -179,7 +281,7 @@ M.new = function(opts)
     local h = ((session and session["history-cache"]) or history_store.list())
     local n = #h
     if (n > 0) then
-      return h[n]
+      return normalize_history_prompt(h[n])
     else
       return ""
     end
@@ -221,8 +323,9 @@ M.new = function(opts)
             else
               local entry = h[((n - session["history-index"]) + 1)]
               if entry then
-                session["last-history-text"] = entry
-                return router_util_mod["set-prompt-text!"](session, entry)
+                local norm_entry = normalize_history_prompt(entry)
+                session["last-history-text"] = norm_entry
+                return router_util_mod["set-prompt-text!"](session, norm_entry)
               else
                 return nil
               end

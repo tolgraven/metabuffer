@@ -242,11 +242,27 @@
   [active-by-prompt prompt-buf text]
   (M.prompt-insert-at-cursor! active-by-prompt prompt-buf text))
 
+(fn prompt-buffer-text
+  [session]
+  (if (and session
+           session.prompt-buf
+           (vim.api.nvim_buf_is_valid session.prompt-buf))
+      (table.concat (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false) "\n")
+      ""))
+
+(fn should-insert-history-fragment?
+  [session fragment]
+  (let [needle (or fragment "")
+        hay (prompt-buffer-text session)]
+    (and (~= needle "")
+         (not (string.find hay needle 1 true)))))
+
 (fn M.insert-last-prompt!
   [active-by-prompt history-api prompt-buf]
   (let [session (session-by-prompt active-by-prompt prompt-buf)
         entry (history-api.history-latest session)]
-    (M.prompt-insert-at-cursor! active-by-prompt prompt-buf entry)
+    (when (should-insert-history-fragment? session entry)
+      (M.prompt-insert-at-cursor! active-by-prompt prompt-buf entry))
     (when (and session (~= entry ""))
       (set session.last-history-text entry))))
 
@@ -255,7 +271,8 @@
   (let [session (session-by-prompt active-by-prompt prompt-buf)
         token (history-api.history-latest-token session)
         entry (history-api.history-latest session)]
-    (M.prompt-insert-at-cursor! active-by-prompt prompt-buf token)
+    (when (should-insert-history-fragment? session token)
+      (M.prompt-insert-at-cursor! active-by-prompt prompt-buf token))
     (when (and session (~= token ""))
       (set session.last-history-text entry))))
 
@@ -264,7 +281,8 @@
   (let [session (session-by-prompt active-by-prompt prompt-buf)
         tail (history-api.history-latest-tail session)
         entry (history-api.history-latest session)]
-    (M.prompt-insert-at-cursor! active-by-prompt prompt-buf tail)
+    (when (should-insert-history-fragment? session tail)
+      (M.prompt-insert-at-cursor! active-by-prompt prompt-buf tail))
     (when (and session (~= tail ""))
       (set session.last-history-text entry))))
 

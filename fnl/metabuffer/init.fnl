@@ -3,6 +3,14 @@
 (local config (require :metabuffer.config))
 
 (local M {})
+(local PATH_SEG_GROUPS
+  ["Directory" "Identifier" "Type" "Special" "String" "Constant" "Function" "Statement"
+   "PreProc" "Keyword" "Operator" "Character" "Tag" "Delimiter" "Number" "Boolean"
+   "Macro" "Title" "Question" "Exception" "DiffAdd" "DiffChange" "DiffText" "DiagnosticInfo"])
+(local AUTHOR_GROUPS
+  ["Identifier" "Type" "Special" "String" "Constant" "Function" "Statement" "PreProc"
+   "Keyword" "Operator" "Character" "Tag" "Delimiter" "Number" "Boolean" "Macro"
+   "Title" "Question" "Exception" "DiffAdd" "DiffChange" "DiffText" "DiagnosticInfo" "DiagnosticHint"])
 
 (fn rgb-luma
   [n]
@@ -13,18 +21,26 @@
             b (% n 0x100)]
         (+ (* 0.2126 r) (* 0.7152 g) (* 0.0722 b)))))
 
+(fn effective-fg
+  [hl]
+  (or (. hl :fg)
+      (and (. hl :reverse) (. hl :bg))))
+
+(fn effective-ctermfg
+  [hl]
+  (or (. hl :ctermfg)
+      (and (or (. hl :reverse)
+               (and (. hl :cterm) (. (. hl :cterm) :reverse)))
+           (. hl :ctermbg))))
+
 (fn statusline-color-from
   [group]
   (let [opts {:reverse false :cterm {:reverse false}}
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
         [ok-normal normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
     (when (and ok (= (type hl) "table"))
-      (let [fg (or (. hl :fg)
-                   (and (. hl :reverse) (. hl :bg)))
-            cfg (or (. hl :ctermfg)
-                    (and (or (. hl :reverse)
-                             (and (. hl :cterm) (. (. hl :cterm) :reverse)))
-                         (. hl :ctermbg)))]
+      (let [fg (effective-fg hl)
+            cfg (effective-ctermfg hl)]
       (if fg
           (set (. opts :bg) fg)
           (when (and ok-normal (= (type normal) "table") (. normal :bg))
@@ -96,6 +112,85 @@
         (set (. opts :ctermfg) (. hl :ctermfg)))
       (when (. hl :ctermbg)
         (set (. opts :ctermbg) (. hl :ctermbg))))
+    opts))
+
+(fn fg-only-hl-from
+  [group]
+  (let [opts {:default true}
+        [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
+    (when (and ok (= (type hl) "table"))
+      (when (. hl :fg)
+        (set (. opts :fg) (. hl :fg)))
+      (when (. hl :ctermfg)
+        (set (. opts :ctermfg) (. hl :ctermfg))))
+    opts))
+
+(fn statusline-path-hl-from
+  [group]
+  (let [opts {:default true}
+        [ok-hl hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
+        [ok-sl sl] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]]
+    (set (. opts :fg) (or (and ok-hl (= (type hl) "table") (effective-fg hl))
+                          (and ok-sl (= (type sl) "table") (effective-fg sl))
+                          0xFFFFFF))
+    (set (. opts :bg) (or (and ok-sl (= (type sl) "table") (. sl :bg))
+                          (and ok-hl (= (type hl) "table") (. hl :bg))
+                          0x000000))
+    (set (. opts :ctermfg) (or (and ok-hl (= (type hl) "table") (effective-ctermfg hl))
+                               (and ok-sl (= (type sl) "table") (effective-ctermfg sl))
+                               15))
+    (set (. opts :ctermbg) (or (and ok-sl (= (type sl) "table") (. sl :ctermbg))
+                               (and ok-hl (= (type hl) "table") (. hl :ctermbg))
+                               0))
+    opts))
+
+(fn statusline-fg-hl-from
+  [group]
+  (let [opts {:reverse false :cterm {:reverse false}}
+        [ok-hl hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
+        [ok-sl sl] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]
+        [ok-normal normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
+    (set (. opts :fg) (or (and ok-hl (= (type hl) "table") (effective-fg hl))
+                          (and ok-sl (= (type sl) "table") (effective-fg sl))
+                          0xFFFFFF))
+    (when (and ok-normal (= (type normal) "table"))
+      (when (. normal :bg)
+        (set (. opts :bg) (. normal :bg)))
+      (when (. normal :ctermbg)
+        (set (. opts :ctermbg) (. normal :ctermbg))))
+    (set (. opts :ctermfg) (or (and ok-hl (= (type hl) "table") (effective-ctermfg hl))
+                               (and ok-sl (= (type sl) "table") (effective-ctermfg sl))
+                               15))
+    opts))
+
+(fn statusline-sep-hl
+  []
+  (let [opts {:reverse false :cterm {:reverse false}}
+        [ok-sl sl] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]
+        [ok-normal normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
+    (set (. opts :fg) (or (and ok-sl (= (type sl) "table") (effective-fg sl))
+                          (and ok-normal (= (type normal) "table") (effective-fg normal))
+                          0xFFFFFF))
+    (when (and ok-normal (= (type normal) "table"))
+      (when (. normal :bg)
+        (set (. opts :bg) (. normal :bg)))
+      (when (. normal :ctermbg)
+        (set (. opts :ctermbg) (. normal :ctermbg))))
+    (set (. opts :ctermfg) (or (and ok-sl (= (type sl) "table") (effective-ctermfg sl))
+                               (and ok-normal (= (type normal) "table") (effective-ctermfg normal))
+                               15))
+    opts))
+
+(fn underlined-text-from
+  [text-group underline-group]
+  (let [opts (fg-only-hl-from text-group)
+        [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name underline-group :link false})]]
+    (set (. opts :undercurl) true)
+    (when (and ok (= (type hl) "table"))
+      (if (. hl :sp)
+          (set (. opts :sp) (. hl :sp))
+          (when (. hl :fg)
+            (set (. opts :sp) (. hl :fg)))))
     opts))
 
 (fn darken-rgb
@@ -173,9 +268,12 @@
   [opts]
   (apply-ui-config! opts)
   (let [hi vim.api.nvim_set_hl]
-    (hi 0 "MetaStatuslineModeInsert" (statusline-color-from "Tag"))
+    (hi 0 "MetaStatuslineModeInsert" (statusline-color-from "ErrorMsg"))
     (hi 0 "MetaStatuslineModeReplace" (statusline-color-from "Todo"))
-    (hi 0 "MetaStatuslineModeNormal" (statusline-color-from "Comment"))
+    (let [normal-mode-hl (plain-hl-from "StatusLine")]
+      (set (. normal-mode-hl :bold) true)
+      (set (. normal-mode-hl :cterm) {:bold true})
+      (hi 0 "MetaStatuslineModeNormal" normal-mode-hl))
     (hi 0 "MetaStatuslineQuery" (statusline-color-from "Normal"))
     (hi 0 "MetaStatuslineFile" (statusline-color-from "Comment"))
     ;; Fill area around %= should blend with the host statusline theme.
@@ -190,6 +288,8 @@
     (hi 0 "MetaStatuslineSyntaxMeta" (statusline-color-from "Number"))
     (hi 0 "MetaStatuslineIndicator" (statusline-color-from "Tag"))
     (hi 0 "MetaStatuslineKey" (statusline-color-from "Comment"))
+    (hi 0 "MetaStatuslineFlagOn" (statusline-color-from "String"))
+    (hi 0 "MetaStatuslineFlagOff" (statusline-color-from "ErrorMsg"))
     (hi 0 "MetaSearchHitAll" (hit-hl "Statement" "Error"))
     (hi 0 "MetaSearchHitBuffer" (hit-hl "Statement" "Error"))
     (hi 0 "MetaSearchHitFuzzy" (hit-hl "Number" "WarningMsg"))
@@ -199,39 +299,30 @@
     (hi 0 "MetaPromptNeg" {:default true :link "ErrorMsg"})
     (hi 0 "MetaPromptAnchor" {:default true :link "SpecialChar"})
     (hi 0 "MetaPromptRegex" {:default true :link "MetaSearchHitRegex" :underline true})
+    (hi 0 "MetaPromptFlagHashOn" (statusline-color-from "String"))
+    (hi 0 "MetaPromptFlagHashOff" (statusline-color-from "ErrorMsg"))
+    (hi 0 "MetaPromptFlagTextOn" (fg-only-hl-from "String"))
+    (hi 0 "MetaPromptFlagTextOff" (fg-only-hl-from "ErrorMsg"))
+    (hi 0 "MetaPromptFlagTextFuncOn" (underlined-text-from "String" "Special"))
+    (hi 0 "MetaPromptFlagTextFuncOff" (underlined-text-from "ErrorMsg" "Special"))
     (hi 0 "MetaSourceLineNr" {:default true :link "LineNr"})
     (hi 0 "MetaSourceDir" {:default true :link "Directory"})
     (hi 0 "MetaSourceBoundary" (thin-underline-from "Error"))
     ;; Intentionally not :default so theme/background recalculations always apply.
     (hi 0 "MetaSourceAltBg" (alt-bg-from "Normal"))
-    (hi 0 "MetaPathSeg1" {:default true :link "Directory"})
-    (hi 0 "MetaPathSeg2" {:default true :link "Identifier"})
-    (hi 0 "MetaPathSeg3" {:default true :link "Type"})
-    (hi 0 "MetaPathSeg4" {:default true :link "Special"})
-    (hi 0 "MetaPathSeg5" {:default true :link "String"})
-    (hi 0 "MetaPathSeg6" {:default true :link "Constant"})
-    (hi 0 "MetaPathSeg7" {:default true :link "Function"})
-    (hi 0 "MetaPathSeg8" {:default true :link "Statement"})
-    (hi 0 "MetaPathSeg9" {:default true :link "PreProc"})
-    (hi 0 "MetaPathSeg10" {:default true :link "Keyword"})
-    (hi 0 "MetaPathSeg11" {:default true :link "Operator"})
-    (hi 0 "MetaPathSeg12" {:default true :link "Character"})
-    (hi 0 "MetaPathSeg13" {:default true :link "Tag"})
-    (hi 0 "MetaPathSeg14" {:default true :link "Delimiter"})
-    (hi 0 "MetaPathSeg15" {:default true :link "Number"})
-    (hi 0 "MetaPathSeg16" {:default true :link "Boolean"})
-    (hi 0 "MetaPathSeg17" {:default true :link "Macro"})
-    (hi 0 "MetaPathSeg18" {:default true :link "Title"})
-    (hi 0 "MetaPathSeg19" {:default true :link "Question"})
-    (hi 0 "MetaPathSeg20" {:default true :link "Exception"})
-    (hi 0 "MetaPathSeg21" {:default true :link "DiffAdd"})
-    (hi 0 "MetaPathSeg22" {:default true :link "DiffChange"})
-    (hi 0 "MetaPathSeg23" {:default true :link "DiffText"})
-    (hi 0 "MetaPathSeg24" {:default true :link "DiagnosticInfo"})
+    (each [i src (ipairs PATH_SEG_GROUPS)]
+      (hi 0 (.. "MetaPathSeg" (tostring i)) {:default true :link src}))
     (hi 0 "MetaPathSep" {:default true :link "Normal"})
+    (each [i src (ipairs PATH_SEG_GROUPS)]
+      (hi 0 (.. "MetaStatuslinePathSeg" (tostring i)) (statusline-fg-hl-from src)))
+    (hi 0 "MetaStatuslinePathSep" (statusline-sep-hl))
+    (hi 0 "MetaStatuslinePathFile" (statusline-fg-hl-from "Comment"))
     (hi 0 "MetaFileSignDirty" {:default true :link "WarningMsg"})
     (hi 0 "MetaFileSignUntracked" {:default true :link "DiagnosticError"})
     (hi 0 "MetaFileSignClean" {:default true :link "LineNr"})
+    (hi 0 "MetaBufSignAdded" {:default true :link "DiagnosticOk"})
+    (hi 0 "MetaBufSignModified" {:default true :link "Statement"})
+    (hi 0 "MetaBufSignRemoved" {:default true :link "DiagnosticError"})
     (hi 0 "MetaFileAge" {:default true :link "Comment"})
     (hi 0 "MetaFileAgeMinute" {:default true :link "DiagnosticOk"})
     (hi 0 "MetaFileAgeHour" {:default true :link "DiagnosticHint"})
@@ -239,30 +330,8 @@
     (hi 0 "MetaFileAgeWeek" {:default true :link "DiagnosticWarn"})
     (hi 0 "MetaFileAgeMonth" {:default true :link "Constant"})
     (hi 0 "MetaFileAgeYear" {:default true :link "DiagnosticError"})
-    (hi 0 "MetaAuthor1" {:default true :link "Identifier"})
-    (hi 0 "MetaAuthor2" {:default true :link "Type"})
-    (hi 0 "MetaAuthor3" {:default true :link "Special"})
-    (hi 0 "MetaAuthor4" {:default true :link "String"})
-    (hi 0 "MetaAuthor5" {:default true :link "Constant"})
-    (hi 0 "MetaAuthor6" {:default true :link "Function"})
-    (hi 0 "MetaAuthor7" {:default true :link "Statement"})
-    (hi 0 "MetaAuthor8" {:default true :link "PreProc"})
-    (hi 0 "MetaAuthor9" {:default true :link "Keyword"})
-    (hi 0 "MetaAuthor10" {:default true :link "Operator"})
-    (hi 0 "MetaAuthor11" {:default true :link "Character"})
-    (hi 0 "MetaAuthor12" {:default true :link "Tag"})
-    (hi 0 "MetaAuthor13" {:default true :link "Delimiter"})
-    (hi 0 "MetaAuthor14" {:default true :link "Number"})
-    (hi 0 "MetaAuthor15" {:default true :link "Boolean"})
-    (hi 0 "MetaAuthor16" {:default true :link "Macro"})
-    (hi 0 "MetaAuthor17" {:default true :link "Title"})
-    (hi 0 "MetaAuthor18" {:default true :link "Question"})
-    (hi 0 "MetaAuthor19" {:default true :link "Exception"})
-    (hi 0 "MetaAuthor20" {:default true :link "DiffAdd"})
-    (hi 0 "MetaAuthor21" {:default true :link "DiffChange"})
-    (hi 0 "MetaAuthor22" {:default true :link "DiffText"})
-    (hi 0 "MetaAuthor23" {:default true :link "DiagnosticInfo"})
-    (hi 0 "MetaAuthor24" {:default true :link "DiagnosticHint"})
+    (each [i src (ipairs AUTHOR_GROUPS)]
+      (hi 0 (.. "MetaAuthor" (tostring i)) {:default true :link src}))
     ;; Prefer netrw-like plain file coloring if present.
     (if (= 1 (vim.fn.hlexists "NetrwPlain"))
         (hi 0 "MetaSourceFile" {:default true :link "NetrwPlain"})

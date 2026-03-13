@@ -8,10 +8,9 @@
         (set meta.selected_index 0)
         (let [c (vim.api.nvim_win_get_cursor 0)
               row (. c 1)
-              col (. c 2)
               clamped (math.max 1 (math.min row max))]
           (when (~= row clamped)
-            (vim.api.nvim_win_set_cursor 0 [clamped col]))
+            (vim.api.nvim_win_set_cursor 0 [clamped 0]))
           (set meta.selected_index (- clamped 1))))))
 
 (fn _change-line
@@ -37,13 +36,12 @@
   (let [mp (vim.fn.getmousepos)
         winid (. mp :winid)
         lnum (. mp :line)
-        col (. mp :column)
         curwin (vim.api.nvim_get_current_win)
         max (math.max 1 (# meta.buf.indices))]
     (when (and (= winid curwin) (> lnum 0))
-      (let [row (math.max 1 (math.min lnum max))
-            zero-col (math.max 0 (- (or col 1) 1))]
-        (vim.api.nvim_win_set_cursor 0 [row zero-col]))))
+      (let [row (math.max 1 (math.min lnum max))]
+        ;; Keep click-to-select from pushing viewport horizontally.
+        (vim.api.nvim_win_set_cursor 0 [row 0]))))
   (_sync-selected-from-cursor meta)
   (meta.refresh_statusline))
 

@@ -59,6 +59,8 @@ T['project <CR> hides Meta UI but restores full state when returning to results 
     ]])
   end)
 
+  eq(child.lua_get(string.format('vim.api.nvim_get_current_buf() == %d', state_before.results_buf)), true)
+
   local state_after = child.lua_get([[
     (function()
       local router = require('metabuffer.router')

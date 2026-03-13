@@ -91,6 +91,7 @@
 - Features in `features` should always result in feature branches in git. Commit each step when doing that, without asking. Don't push unless asked. Other work can be done straight on mainline, and then you should defer committing until told.
 - Try to avoid commands that need escalated permissions and hence user input (to confirm), since these disrupt work. Always see if there is an in-sandbox alternative.
 - Since you lack full access to `~/.local/state/nvim` you need to always use `/tmp` and set appropriate exports for such things when trying to test using a full neovim config/setup.
+- Remember `fennel-ls` should be run directly after any file edit.
 
 ## Symbol Index
 

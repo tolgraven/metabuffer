@@ -29,6 +29,10 @@
         ignored-off (or (= tok "#noignored") (= tok "-ignored") (= tok "#-ignored") (= tok (.. prefix "noignored")))
         deps-on (or (= tok "#deps") (= tok "+deps") (= tok "#+deps") (= tok (.. prefix "deps")))
         deps-off (or (= tok "#nodeps") (= tok "-deps") (= tok "#-deps") (= tok (.. prefix "nodeps")))
+        binary-on (or (= tok "#binary") (= tok "+binary") (= tok "#+binary") (= tok (.. prefix "binary")))
+        binary-off (or (= tok "#nobinary") (= tok "-binary") (= tok "#-binary") (= tok (.. prefix "nobinary")))
+        hex-on (or (= tok "#hex") (= tok "+hex") (= tok "#+hex") (= tok (.. prefix "hex")))
+        hex-off (or (= tok "#nohex") (= tok "-hex") (= tok "#-hex") (= tok (.. prefix "nohex")))
         prefilter-off (or (= tok "#escape") (= tok "+escape") (= tok "#+escape") (= tok (.. prefix "escape")) (= tok "#noprefilter") (= tok "-prefilter") (= tok "#-prefilter") (= tok (.. prefix "noprefilter")))
         prefilter-on (or (= tok "#prefilter") (= tok "+prefilter") (= tok "#+prefilter") (= tok (.. prefix "prefilter")))
         lazy-off (or (= tok "#nolazy") (= tok "-lazy") (= tok "#-lazy") (= tok (.. prefix "nolazy")))
@@ -47,6 +51,10 @@
       ignored-off [:ignored false]
       deps-on [:deps true]
       deps-off [:deps false]
+      binary-on [:binary true]
+      binary-off [:binary false]
+      hex-on [:hex true]
+      hex-off [:hex false]
       prefilter-off [:prefilter false]
       prefilter-on [:prefilter true]
       lazy-off [:lazy false]
@@ -57,6 +65,23 @@
       save-tag [:save-tag save-tag]
       (and saved-tag (~= (vim.trim saved-tag) "")) [:saved-tag (vim.trim saved-tag)]
       saved-browser? [:saved-browser true])))
+
+(fn escaped-prefix-token
+  [tok]
+  (let [t (or tok "")
+        prefix (option-prefix)
+        escaped-prefix (.. "\\" prefix)]
+    (if (and (> (# t) (# escaped-prefix))
+             (vim.startswith t escaped-prefix))
+      (string.sub t 2)
+      nil)))
+
+(fn prefix-directive-token?
+  [tok]
+  (let [t (or tok "")
+        prefix (option-prefix)]
+    (and (~= t prefix)
+         (vim.startswith t prefix))))
 
 (fn assoc-option
   [acc k v]
@@ -77,24 +102,45 @@
           t))
       t)))
 
+(fn file-query-shortcut-token
+  [tok]
+  (let [t (or tok "")]
+    (if (= t "./")
+      :await
+      (string.match t "^%./(.+)$"))))
+
 (fn parse-parts
   [parts idx state]
   (if (> idx (# parts))
     state
     (let [tok (. parts idx)]
-      (if-let [parsed (parse-option-token tok)]
-        (let [next (assoc-option state (. parsed 1) (. parsed 2))]
-          (if (= (. parsed 1) :files)
-            (parse-parts parts (+ idx 1) (assoc-option next :file-await-token true))
-            (parse-parts parts (+ idx 1) next)))
-        (if (and (. state :file-await-token) (~= (vim.trim tok) ""))
-          (let [next (vim.deepcopy state)]
-            (table.insert (. next :file-lines) (unquote-token tok))
-            (set (. next :file-await-token) false)
-            (parse-parts parts (+ idx 1) next))
-          (let [next (vim.deepcopy state)]
-            (table.insert (. next :keep) tok)
-            (parse-parts parts (+ idx 1) next)))))))
+      (if-let [escaped (escaped-prefix-token tok)]
+        (let [next (vim.deepcopy state)]
+          (table.insert (. next :keep) escaped)
+          (parse-parts parts (+ idx 1) next))
+        (if-let [shortcut (file-query-shortcut-token tok)]
+          (let [next (assoc-option state :files true)]
+            (if (= shortcut :await)
+              (parse-parts parts (+ idx 1) (assoc-option next :file-await-token true))
+              (let [next2 (vim.deepcopy next)]
+                (table.insert (. next2 :file-lines) (unquote-token shortcut))
+                (set (. next2 :file-await-token) false)
+                (parse-parts parts (+ idx 1) next2))))
+          (if-let [parsed (parse-option-token tok)]
+            (let [next (assoc-option state (. parsed 1) (. parsed 2))]
+              (if (= (. parsed 1) :files)
+                (parse-parts parts (+ idx 1) (assoc-option next :file-await-token true))
+                (parse-parts parts (+ idx 1) next)))
+            (if (prefix-directive-token? tok)
+              (parse-parts parts (+ idx 1) state)
+              (if (and (. state :file-await-token) (~= (vim.trim tok) ""))
+                (let [next (vim.deepcopy state)]
+                  (table.insert (. next :file-lines) (unquote-token tok))
+                  (set (. next :file-await-token) false)
+                  (parse-parts parts (+ idx 1) next))
+                (let [next (vim.deepcopy state)]
+                  (table.insert (. next :keep) tok)
+                  (parse-parts parts (+ idx 1) next))))))))))
 
 (fn parse-line
   [acc line]
@@ -124,6 +170,8 @@
               :hidden nil
               :ignored nil
               :deps nil
+              :binary nil
+              :hex nil
               :prefilter nil
               :lazy nil
               :files nil
@@ -137,6 +185,8 @@
       (set (. parsed :include-hidden) (. parsed :hidden))
       (set (. parsed :include-ignored) (. parsed :ignored))
       (set (. parsed :include-deps) (. parsed :deps))
+      (set (. parsed :include-binary) (. parsed :binary))
+      (set (. parsed :include-hex) (. parsed :hex))
       (set (. parsed :include-files) (. parsed :files))
       parsed)))
 
@@ -151,6 +201,8 @@
        :include-hidden (. parsed :hidden)
        :include-ignored (. parsed :ignored)
        :include-deps (. parsed :deps)
+       :include-binary (. parsed :binary)
+       :include-hex (. parsed :hex)
        :include-files (. parsed :files)
        :prefilter (. parsed :prefilter)
        :lazy (. parsed :lazy)
@@ -166,6 +218,8 @@
      :include-hidden nil
      :include-ignored nil
      :include-deps nil
+     :include-binary nil
+     :include-hex nil
      :include-files nil
      :prefilter nil
      :lazy nil

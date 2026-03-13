@@ -78,6 +78,16 @@
           s3 (string.gsub s2 "\r" " ")]
       s3)))
 
+(fn set-bvar!
+  [buf name value]
+  (when (and buf (vim.api.nvim_buf_is_valid buf))
+    (pcall vim.api.nvim_buf_set_var buf name value)))
+
+(fn bvar
+  [buf name default]
+  (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf name)]]
+    (if ok v default)))
+
 (fn M.new
   [nvim model]
   "Public API: M.new."
@@ -90,6 +100,7 @@
     (set self.source-sep-ns (vim.api.nvim_create_namespace "metabuffer_source_separator"))
     (set self.source-alt-ns (vim.api.nvim_create_namespace "metabuffer_source_alt"))
     (set self.source-syntax-groups [])
+    (set self.keep-modifiable false)
 
   (fn self.model-valid?
   []
@@ -130,19 +141,26 @@
           (self.clear-source-syntax)
           (vim.api.nvim_buf_call self.buffer
             (fn []
-              ;; Reset inherited/base syntax only when we know we can apply at
-              ;; least one source syntax cluster; this keeps source-file
-              ;; highlighting accurate while avoiding stale cross-file syntax.
-              (vim.cmd "silent! syntax clear")
-              (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
+              (var reset-base-syntax? false)
+              (var block-id 0)
               (fn add-block
   [start stop ft]
                 (when (and ft (~= ft "") (<= start stop))
+                  (set block-id (+ block-id 1))
                   (let [cluster (.. "MetaSrcFt_" (sanitize-syntax-id ft))
-                          group (string.format "MetaSrcBlock_%d_%d" start stop)
+                          ;; Keep group names stable across updates/reloads to avoid
+                          ;; unbounded syntax-group creation (E849).
+                          group (string.format "MetaSrcBlock_%d" block-id)
                           synfiles (syntax-files-for-ft ft)
                           has-syntax (> (# synfiles) 0)]
                     (when has-syntax
+                      (when-not reset-base-syntax?
+                        ;; Reset inherited/base syntax only when we know we can apply at
+                        ;; least one source syntax cluster; this keeps source-file
+                        ;; highlighting accurate while avoiding stale cross-file syntax.
+                        (vim.cmd "silent! syntax clear")
+                        (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
+                        (set reset-base-syntax? true))
                       (when-not (. included cluster)
                         ;; Most syntax files early-return when b:current_syntax
                         ;; is set; clear it before each include so mixed
@@ -222,6 +240,7 @@
                (vim.api.nvim_win_call win (fn [] (vim.fn.winsaveview))))))
       (let [bo (. vim.bo self.buffer)]
         (set (. bo :modifiable) true))
+      (set-bvar! self.buffer "meta_internal_render" true)
       (each [_ idx (ipairs self.indices)]
         (let [line (. self.content idx)]
           (if (and self.show-source-prefix self.source-refs (. self.source-refs idx))
@@ -251,7 +270,19 @@
               line1 (tostring (or line0 ""))
               line2 (string.gsub line1 "[\r\n\v\f]" "")]
           (set (. out i) line2)))
-      (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
+      (let [manual-edit-active? (bvar self.buffer "meta_manual_edit_active" false)
+            undo-levels (if manual-edit-active?
+                            nil
+                            (vim.api.nvim_get_option_value "undolevels" {:buf self.buffer}))]
+        (when undo-levels
+          (pcall vim.api.nvim_set_option_value "undolevels" -1 {:buf self.buffer}))
+        (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
+        (when-not manual-edit-active?
+          ;; Prompt/filter-driven rerenders are internal and should not mark the
+          ;; results buffer as user-edited.
+          (pcall vim.api.nvim_set_option_value "modified" false {:buf self.buffer}))
+        (when undo-levels
+          (pcall vim.api.nvim_set_option_value "undolevels" undo-levels {:buf self.buffer})))
       (vim.api.nvim_buf_clear_namespace self.buffer self.source-hl-ns 0 -1)
       (vim.api.nvim_buf_clear_namespace self.buffer self.source-sep-ns 0 -1)
       (vim.api.nvim_buf_clear_namespace self.buffer self.source-alt-ns 0 -1)
@@ -335,7 +366,8 @@
                    :priority 120}))))))
       (self.apply-source-syntax-regions)
       (let [bo (. vim.bo self.buffer)]
-        (set (. bo :modifiable) false))
+        (set (. bo :modifiable) (if self.keep-modifiable true false)))
+      (set-bvar! self.buffer "meta_internal_render" false)
       (each [win view (pairs win-views)]
         (when (vim.api.nvim_win_is_valid win)
           (vim.api.nvim_win_call win

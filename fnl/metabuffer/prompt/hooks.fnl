@@ -7,7 +7,8 @@
   (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
          : default-main-keymaps
          : on-prompt-changed : update-info-window : maybe-sync-from-main!
-         : schedule-scroll-sync! : maybe-restore-hidden-ui!} opts]
+         : schedule-scroll-sync! : maybe-restore-hidden-ui!
+         : maybe-refresh-preview-statusline! : sign-mod} opts]
     (fn disable-cmp
   [session]
       (mark-prompt-buffer! session.prompt-buf)
@@ -35,6 +36,178 @@
           (when (session-prompt-valid? session)
             (f)))))
 
+    (fn option-prefix
+      []
+      (let [p (. vim.g "meta#prefix")]
+        (if (and (= (type p) "string") (~= p ""))
+            p
+            "#")))
+
+    (fn some=
+      [needle coll]
+      (let [hit0 false]
+        (var hit hit0)
+        (each [_ item (ipairs (or coll []))]
+          (when (= needle item)
+            (set hit true)))
+        hit))
+
+    (fn control-token-style
+      [tok]
+      (let [token (or tok "")
+            prefix (option-prefix)
+            escaped-prefix? (and (vim.startswith token "\\")
+                                 (vim.startswith (string.sub token 2) prefix))
+            sign (string.match token "^#([%+%-])")
+            base (if sign
+                     (string.sub token 3)
+                     (if (vim.startswith token "#")
+                         (string.sub token 2)
+                         (if (and (~= prefix "#") (vim.startswith token prefix))
+                             (string.sub token (+ (# prefix) 1))
+                             "")))
+            toggle-off? (some= base
+                               ["nohidden" "noignored" "nodeps" "nobinary" "nohex"
+                                "nofile" "noprefilter" "nolazy" "escape"])
+            toggle-on? (some= base
+                              ["hidden" "ignored" "deps" "binary" "hex" "file"
+                               "prefilter" "lazy"])
+            functional? (some= base ["hex" "nohex" "prefilter" "noprefilter" "lazy" "nolazy" "escape"])
+            off? (or (= sign "-") toggle-off?)]
+        (if (or escaped-prefix? (= base ""))
+            nil
+            (if (or (= sign "+") (= sign "-") toggle-on? toggle-off?)
+                {:hash-hl (if off? "MetaPromptFlagHashOff" "MetaPromptFlagHashOn")
+                 :text-hl (if functional?
+                              (if off? "MetaPromptFlagTextFuncOff" "MetaPromptFlagTextFuncOn")
+                              (if off? "MetaPromptFlagTextOff" "MetaPromptFlagTextOn"))}
+                nil))))
+
+    (fn project-flag-token
+      [name on?]
+      [(if on?
+           (.. "#" name)
+           (.. "#-" name))
+       (control-token-style (if on? (.. "#" name) (.. "#-" name)))])
+
+    (fn wrap-flag-pieces
+      [pieces max-cols]
+      (let [width (math.max 12 (or max-cols 12))
+            lines []
+            current0 {}
+            line-w0 0]
+        (var current current0)
+        (var line-w line-w0)
+        (fn flush-line!
+          []
+          (when (> (# current) 0)
+            (table.insert lines current)
+            (set current {})
+            (set line-w 0)))
+        (each [_ p (ipairs pieces)]
+          (let [chunks (or (. p :chunks) [[(or (. p :text) "") (or (. p :hl) "MetaPromptText")]])
+                w (or (. p :width)
+                      (let [sum0 0]
+                        (var sum sum0)
+                        (each [_ c (ipairs chunks)]
+                          (set sum (+ sum (vim.fn.strdisplaywidth (or (. c 1) "")))))
+                        sum))]
+            (if (and (> line-w 0) (> (+ line-w w) width))
+                (flush-line!))
+            (each [_ c (ipairs chunks)]
+              (table.insert current [(or (. c 1) "") (or (. c 2) "MetaPromptText")]))
+            (set line-w (+ line-w w))))
+        (flush-line!)
+        (if (> (# lines) 0) lines [[["" "MetaPromptText"]]])))
+
+    (fn line-display-rows
+      [line width]
+      (let [w (math.max 1 (or width 1))
+            n (vim.fn.strdisplaywidth (or line ""))]
+        (math.max 1 (math.ceil (/ n w)))))
+
+    (fn prompt-content-display-rows
+      [session width]
+      (let [rows0 0]
+        (var rows rows0)
+        (each [_ line (ipairs (or (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false) []))]
+          (set rows (+ rows (line-display-rows line width))))
+        (math.max 1 rows)))
+
+    (fn render-project-flags-footer!
+      [session]
+      (when (and session.prompt-buf
+                 (session-prompt-valid? session))
+        (let [ns (or session.prompt-footer-ns (vim.api.nvim_create_namespace "metabuffer.prompt.footer"))
+              row (math.max 0 (- (vim.api.nvim_buf_line_count session.prompt-buf) 1))
+              last-line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf row (+ row 1) false) 1) "")
+              [hidden-token hidden-style] (project-flag-token "hidden" (not (not session.effective-include-hidden)))
+              [ignored-token ignored-style] (project-flag-token "ignored" (not (not session.effective-include-ignored)))
+              [deps-token deps-style] (project-flag-token "deps" (not (not session.effective-include-deps)))
+              [file-token file-style] (project-flag-token "file" (not (not session.effective-include-files)))
+              [binary-token binary-style] (project-flag-token "binary" (not (not session.effective-include-binary)))
+              [hex-token hex-style] (project-flag-token "hex" (not (not session.effective-include-hex)))
+              [prefilter-token prefilter-style] (project-flag-token "prefilter" (not (not session.prefilter-mode)))
+              [lazy-token lazy-style] (project-flag-token "lazy" (not (not session.lazy-mode)))
+              tokens [[hidden-token hidden-style]
+                      [ignored-token ignored-style]
+                      [deps-token deps-style]
+                      [file-token file-style]
+                      [binary-token binary-style]
+                      [hex-token hex-style]
+                      [prefilter-token prefilter-style]
+                      [lazy-token lazy-style]]
+              pieces0 []
+              _ (each [i pair (ipairs tokens)]
+                  (let [tok (or (. pair 1) "")
+                        style (. pair 2)
+                        sign-hl (or (and style (. style :hash-hl)) "MetaPromptText")
+                        text-hl (or (and style (. style :text-hl)) "MetaPromptText")]
+                    (when (> (# tok) 0)
+                      (if (vim.startswith tok "#-")
+                          (let [suffix (if (> (# tok) 2) (string.sub tok 3) "")
+                                chunks [["-" sign-hl] [suffix text-hl]]
+                                w (+ 1 (vim.fn.strdisplaywidth suffix))]
+                            (table.insert pieces0 {:chunks chunks :width w}))
+                          (if (vim.startswith tok "#")
+                              (let [suffix (if (> (# tok) 1) (string.sub tok 2) "")
+                                    chunks [["+" sign-hl] [suffix text-hl]]
+                                    w (+ 1 (vim.fn.strdisplaywidth suffix))]
+                                (table.insert pieces0 {:chunks chunks :width w}))
+                              (table.insert pieces0 {:chunks [[tok text-hl]]
+                                                     :width (vim.fn.strdisplaywidth tok)}))))
+                    (when (< i (# tokens))
+                      (table.insert pieces0 {:chunks [[" " "MetaPromptText"]] :width 1}))))
+              pieces pieces0
+              max-cols (if (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+                           (vim.api.nvim_win_get_width session.prompt-win)
+                           80)
+              win-height (if (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+                             (vim.api.nvim_win_get_height session.prompt-win)
+                             1)
+              last-line-rows (line-display-rows last-line max-cols)
+              anchor-row (math.max 0 (- row (math.max 0 (- last-line-rows 1))))
+              flag-lines (wrap-flag-pieces pieces max-cols)
+              content-rows (prompt-content-display-rows session max-cols)
+              spacer-count (math.max 0 (- win-height content-rows (# flag-lines)))
+              virt-lines0 []
+              _ (each [_ _i (ipairs (vim.fn.range 1 spacer-count))]
+                  (table.insert virt-lines0 [["" "MetaPromptText"]]))
+              _ (each [_ vl (ipairs flag-lines)]
+                  (table.insert virt-lines0 vl))
+              virt-lines virt-lines0]
+          (set session.prompt-footer-ns ns)
+          (vim.api.nvim_buf_clear_namespace session.prompt-buf ns 0 -1)
+          (when session.project-mode
+            (vim.api.nvim_buf_set_extmark
+              session.prompt-buf
+              ns
+              anchor-row
+              0
+              {:virt_lines virt-lines
+               :virt_lines_above false
+               :hl_mode "combine"})))))
+
     (fn refresh-prompt-highlights!
   [session]
       (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
@@ -52,6 +225,23 @@
                       (let [token (string.sub txt s e)
                             s0 (- s 1)
                             e0 e]
+                        (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptText" r s0 e0)
+                        (when-let [style (control-token-style token)]
+                          (vim.api.nvim_buf_add_highlight
+                            session.prompt-buf
+                            ns
+                            (or (. style :hash-hl) "MetaPromptText")
+                            r
+                            s0
+                            (+ s0 1))
+                          (when (> e0 (+ s0 1))
+                            (vim.api.nvim_buf_add_highlight
+                              session.prompt-buf
+                              ns
+                              (or (. style :text-hl) "MetaPromptText")
+                              r
+                              (+ s0 1)
+                              e0)))
                         (when (and (> (# token) 1) (= (string.sub token 1 1) "!"))
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptNeg" r s0 e0))
                         (let [core (if (and (> (# token) 1) (= (string.sub token 1 1) "!"))
@@ -65,7 +255,8 @@
                         (when (and (> (# token) 0) (= (string.sub token (# token)) "$"))
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r (- e0 1) e0))
                         (set pos (+ e 1)))
-                        (set pos (+ (# txt) 1))))))))))
+                        (set pos (+ (# txt) 1)))))))
+          (render-project-flags-footer! session))))
 
     (fn maybe-expand-history-shorthand!
   [router session]
@@ -131,6 +322,8 @@
       (if
         (= action "accept")
         (fn [] (router.accept session.prompt-buf))
+        (= action "enter-edit-mode")
+        (fn [] (router.enter-edit-mode session.prompt-buf))
         (= action "cancel")
         (fn [] (router.cancel session.prompt-buf))
         (= action "move-selection")
@@ -169,6 +362,10 @@
         (fn [] (schedule-when-valid session
                  (fn []
                    (router.insert-last-tail session.prompt-buf))))
+        (= action "toggle-prompt-results-focus")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.toggle-prompt-results-focus session.prompt-buf))))
         (= action "negate-current-token")
         (fn [] (schedule-when-valid session
                  (fn []
@@ -232,10 +429,16 @@
       (if
         (= action "accept-main")
         (fn [] (router.accept-main session.prompt-buf))
+        (= action "enter-edit-mode")
+        (fn [] (router.enter-edit-mode session.prompt-buf))
         (= action "exclude-symbol-under-cursor")
         (fn [] (router.exclude-symbol-under-cursor session.prompt-buf))
         (= action "insert-symbol-under-cursor")
         (fn [] (router.insert-symbol-under-cursor session.prompt-buf))
+        (= action "insert-symbol-under-cursor-newline")
+        (fn [] (router.insert-symbol-under-cursor-newline session.prompt-buf))
+        (= action "toggle-prompt-results-focus")
+        (fn [] (router.toggle-prompt-results-focus session.prompt-buf))
         (= action "scroll-main")
         (fn [] (router.scroll-main session.prompt-buf arg))
         (= action "toggle-info-file-entry-view")
@@ -324,12 +527,21 @@
                        (schedule-when-valid session
                          (fn []
                            (pcall session.meta.refresh_statusline))))})
+      (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
+        {:group aug
+         :buffer session.prompt-buf
+         :callback (fn [_]
+                     (schedule-when-valid session
+                       (fn []
+                         (when maybe-refresh-preview-statusline!
+                           (pcall maybe-refresh-preview-statusline! session)))))})
       ;; Recompute floating info rendering/width when editor windows resize.
         (vim.api.nvim_create_autocmd ["VimResized" "WinResized"]
           {:group aug
            :callback (fn [_]
                        (schedule-when-valid session
                          (fn []
+                           (pcall refresh-prompt-highlights! session)
                            (pcall update-info-window session))))})
       ;; Keep selection/status/info synced when user scrolls or moves in the
       ;; main meta window with regular motions/mouse while prompt is open.
@@ -340,10 +552,34 @@
                        (schedule-when-valid session
                          (fn []
                            (maybe-sync-from-main! session))))})
+        (vim.api.nvim_create_autocmd ["TextChanged" "TextChangedI"]
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       (when (and sign-mod session.meta session.meta.buf)
+                         (let [buf session.meta.buf.buffer
+                               internal? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_internal_render")]]
+                                           (and ok v))]
+                           (when-not internal?
+                             (pcall vim.api.nvim_buf_set_var buf "meta_manual_edit_active" true))
+                           (vim.schedule
+                             (fn []
+                               (when (and session.prompt-buf
+                                          (= (. active-by-prompt session.prompt-buf) session))
+                                 (pcall router.sync-live-edits session.prompt-buf)
+                                 (pcall maybe-sync-from-main! session true)
+                                 (pcall update-info-window session true)
+                                 (pcall sign-mod.refresh-change-signs! session)))))))})
         (vim.api.nvim_create_autocmd "BufEnter"
           {:group aug
            :buffer session.meta.buf.buffer
            :callback (fn [_]
+                       (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+                         (let [bo (. vim.bo session.meta.buf.buffer)]
+                           (set (. bo :buftype) "acwrite")
+                           (set (. bo :modifiable) true)
+                           (set (. bo :readonly) false)
+                           (set (. bo :bufhidden) "hide")))
                        (when maybe-restore-hidden-ui!
                          ;; Defer UI restoration until after the jump/BufEnter
                          ;; command stack settles; restoring windows directly
@@ -358,9 +594,28 @@
           {:group aug
            :callback (fn [_]
                        (schedule-scroll-sync! session))})
+        (vim.api.nvim_create_autocmd "BufWriteCmd"
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       (router.write-results session.prompt-buf))})
+        (vim.api.nvim_create_autocmd "BufWipeout"
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       (vim.schedule
+                         (fn []
+                           (router.results-buffer-wiped session.meta.buf.buffer))))})
         (disable-cmp session)
         (mark-prompt-buffer! session.prompt-buf)
         (refresh-prompt-highlights! session)
+        ;; Prompt/footer layout can change one tick later after split/floating
+        ;; windows settle; rerender so wrapped footer lines are visible at open.
+        (vim.schedule
+          (fn []
+            (when (and session.prompt-buf
+                       (= (. active-by-prompt session.prompt-buf) session))
+              (pcall refresh-prompt-highlights! session))))
         (apply-keymaps router session)
         (apply-emacs-insert-fallbacks router session)))
 

@@ -1,19 +1,14 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local base (require :metabuffer.window.base))
+(local statusline-mod (require :metabuffer.window.statusline))
 
 (local M {})
 
-(set M.default-opts {:spell false :foldenable false :cursorcolumn false :scrolloff 0 :sidescrolloff 0})
-(set M.opts-to-stash ["foldcolumn" "number" "relativenumber" "wrap" "conceallevel"])
+(set M.default-opts {:spell false :foldenable false :cursorcolumn false :scrolloff 0 :sidescrolloff 0 :signcolumn "yes:1"})
+(set M.opts-to-stash ["foldcolumn" "number" "relativenumber" "wrap" "conceallevel" "signcolumn"])
 
 (set M.statusline
   "%%#MetaStatuslineMode%s# %s%%#MetaStatuslineIndicator# %d/%d%s%%#MetaStatuslineMiddle#%%=%%#MetaStatuslineFile# %s %%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s ")
-
-(fn title-case
-  [s]
-  (if (and (= (type s) "string") (> (# s) 0))
-      (.. (string.upper (string.sub s 1 1)) (string.lower (string.sub s 2)))
-      ""))
 
 (fn M.new
   [nvim win]
@@ -22,8 +17,8 @@
 
     (fn self.set-statusline-state
       [mode-group mode-label name num-hits num-lines line-nr debug-out preview-file matcher case-mode hl-prefix syntax]
-      (let [matcher-suffix (title-case matcher)
-            case-suffix (title-case case-mode)
+      (let [matcher-suffix (statusline-mod.title-case matcher)
+            case-suffix (statusline-mod.title-case case-mode)
             text (string.format M.statusline
                    mode-group mode-label
                    num-hits num-lines (or debug-out "")

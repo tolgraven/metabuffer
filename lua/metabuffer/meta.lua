@@ -48,22 +48,9 @@ local function apply_file_entry_filter(indices, refs, file_query_lines, regular_
       else
       end
     end
-    local queries
-    if (#queries0 > 0) then
-      queries = queries0
-    else
-      local fallback = {}
-      for _, q in ipairs((regular_queries or {})) do
-        local trimmed = vim.trim((q or ""))
-        if (trimmed ~= "") then
-          table.insert(fallback, trimmed)
-        else
-        end
-      end
-      queries = fallback
-    end
+    local queries = queries0
     local matches_all_queries_3f
-    local function _7_(path)
+    local function _5_(path)
       if (#queries == 0) then
         return true
       else
@@ -91,10 +78,10 @@ local function apply_file_entry_filter(indices, refs, file_query_lines, regular_
         return ok
       end
     end
-    matches_all_queries_3f = _7_
+    matches_all_queries_3f = _5_
     local regular_set = {}
     local file_set = {}
-    local regular_allowed_3f = regular_query_active_3f
+    local regular_allowed_3f = (regular_query_active_3f or (#queries == 0))
     for _, idx in ipairs((indices or {})) do
       local ref = refs[idx]
       if ref_is_file_entry_3f(ref) then
@@ -105,6 +92,7 @@ local function apply_file_entry_filter(indices, refs, file_query_lines, regular_
           else
           end
         else
+          regular_set[idx] = true
         end
       end
     end
@@ -159,39 +147,29 @@ end
 local function statusline_mode_state()
   local m = (vim.api.nvim_get_mode().mode or "")
   if vim.startswith(m, "R") then
+    local _20_
+    if nerd_font_enabled_3f() then
+      _20_ = "R"
+    else
+      _20_ = "Replace"
+    end
+    return {group = "Replace", label = _20_}
+  elseif vim.startswith(m, "i") then
     local _22_
     if nerd_font_enabled_3f() then
-      _22_ = "R"
+      _22_ = "\240\157\144\136"
     else
-      _22_ = "Replace"
+      _22_ = "Insert"
     end
-    return {group = "Replace", label = _22_}
-  elseif vim.startswith(m, "i") then
+    return {group = "Insert", label = _22_}
+  else
     local _24_
     if nerd_font_enabled_3f() then
-      _24_ = "\240\157\144\136"
+      _24_ = "\240\157\151\161"
     else
-      _24_ = "Insert"
+      _24_ = "Normal"
     end
-    return {group = "Insert", label = _24_}
-  else
-    local _26_
-    if nerd_font_enabled_3f() then
-      _26_ = "\240\157\151\161"
-    else
-      _26_ = "Normal"
-    end
-    return {group = "Normal", label = _26_}
-  end
-end
-local function selected_preview_file(self)
-  local src_idx = self.buf.indices[(self.selected_index + 1)]
-  local ref = (src_idx and (self.buf["source-refs"] or {})[src_idx])
-  local path = (ref and ref.path)
-  if ((type(path) == "string") and (path ~= "")) then
-    return vim.fn.pathshorten(vim.fn.fnamemodify(path, ":~:."))
-  else
-    return ""
+    return {group = "Normal", label = _24_}
   end
 end
 local function highlight_pattern__3evim_query(pat)
@@ -220,21 +198,21 @@ local function bang_token_completed_3f(prev, next)
   local next0 = (next or "")
   local prev_n = #prev0
   local next_n = #next0
-  local and_33_ = (prev_n > 0) and (next_n > prev_n) and vim.startswith(next0, prev0) and (string.sub(prev0, prev_n, prev_n) == "!")
-  if and_33_ then
+  local and_30_ = (prev_n > 0) and (next_n > prev_n) and vim.startswith(next0, prev0) and (string.sub(prev0, prev_n, prev_n) == "!")
+  if and_30_ then
     local before
     if (prev_n > 1) then
       before = string.sub(prev0, (prev_n - 1), (prev_n - 1))
     else
       before = ""
     end
-    and_33_ = ((before ~= "\\") and ((prev_n == 1) or not not string.find(before, "%s")))
+    and_30_ = ((before ~= "\\") and ((prev_n == 1) or not not string.find(before, "%s")))
   end
-  if and_33_ then
+  if and_30_ then
     local added = string.sub(next0, (prev_n + 1), (prev_n + 1))
-    and_33_ = not not string.find(added, "%S")
+    and_30_ = not not string.find(added, "%S")
   end
-  return and_33_
+  return and_30_
 end
 local function ends_with_space_3f(s)
   local txt = (s or "")
@@ -314,17 +292,17 @@ M.new = function(nvim, condition)
       return nil
     end
   end
-  local function _42_(idx)
-    local function _43_()
+  local function _39_(idx)
+    local function _40_()
       if (idx.current() == "meta") then
         return "meta"
       else
         return "buffer"
       end
     end
-    return self.buf["apply-syntax"](_43_())
+    return self.buf["apply-syntax"](_40_())
   end
-  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state.cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state["syntax-types"], (cond["syntax-index"] or 1), {["on-active"] = _42_})}
+  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state.cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state["syntax-types"], (cond["syntax-index"] or 1), {["on-active"] = _39_})}
   self.text = (cond.text or "")
   if (self.text ~= "") then
     self["query-lines"] = {self.text}
@@ -398,29 +376,28 @@ M.new = function(nvim, condition)
     else
       hl_prefix = "Buffer"
     end
-    local preview_file = selected_preview_file(self)
-    self["status-win"]["set-statusline-state"](mode_state.group, mode_state.label, self.buf.name, #self.buf.indices, self.buf["line-count"](), self.selected_line(), self.debug_out, preview_file, self.matcher().name, self.case(), hl_prefix, self.syntax())
+    self["status-win"]["set-statusline-state"](mode_state.group, mode_state.label, self.buf.name, #self.buf.indices, self.buf["line-count"](), self.selected_line(), self.debug_out, "", self.matcher().name, self.case(), hl_prefix, self.syntax())
     return vim.cmd("redrawstatus")
   end
   self["on-init"] = function()
-    local function _50_()
+    local function _47_()
       if self["project-mode"] then
         return project_display_name()
       else
         return metabuffer_display_name(self.buf.model)
       end
     end
-    self.buf["set-name"](_50_())
+    self.buf["set-name"](_47_())
     do
       local init_syntax = (vim.g["meta#syntax_on_init"] or "buffer")
-      local function _51_()
+      local function _48_()
         if (init_syntax == "meta") then
           return "meta"
         else
           return "buffer"
         end
       end
-      self.buf["apply-syntax"](_51_())
+      self.buf["apply-syntax"](_48_())
     end
     clear_all_highlights()
     self.buf.render()
@@ -472,25 +449,25 @@ M.new = function(nvim, condition)
       end
       local prev_matcher_name = (self["_prev-matcher"] or matcher_name)
       local prev_cache_key
-      local _56_
+      local _53_
       if prev_ignorecase then
-        _56_ = "1"
+        _53_ = "1"
       else
-        _56_ = "0"
+        _53_ = "0"
       end
-      prev_cache_key = (prev_matcher_name .. "|" .. _56_ .. "|" .. (prev_text or ""))
+      prev_cache_key = (prev_matcher_name .. "|" .. _53_ .. "|" .. (prev_text or ""))
       local line_count = #self.buf.content
       local cache_grew_3f = (line_count > self["_filter-cache-line-count"])
       local cache_shrank_3f = (line_count < self["_filter-cache-line-count"])
       local cache_reset_3f = cache_shrank_3f
       local cache_key
-      local _58_
+      local _55_
       if ignorecase then
-        _58_ = "1"
+        _55_ = "1"
       else
-        _58_ = "0"
+        _55_ = "0"
       end
-      cache_key = (matcher_name .. "|" .. _58_ .. "|" .. effective_query)
+      cache_key = (matcher_name .. "|" .. _55_ .. "|" .. effective_query)
       local reset0_3f = ((prev_text == "") or not vim.startswith(self.text, prev_text) or bang_token_completed_3f(prev_text, self.text) or cache_grew_3f or cache_reset_3f or (self["_prev-ignorecase"] ~= ignorecase) or (self["_prev-matcher"] ~= matcher_name))
       local narrow_reuse_threshold = (vim.g.meta_narrow_reuse_threshold or 400)
       local narrow_reuse_3f = (reset0_3f and vim.startswith(self.text, prev_text) and (matcher_name == "all") and not negation_growth_broadens_3f(prev_text, self.text) and (#prev_text > 0) and (#self.text > #prev_text) and (#prev_hits <= narrow_reuse_threshold))

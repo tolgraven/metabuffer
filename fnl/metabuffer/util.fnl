@@ -57,6 +57,14 @@
   "Public API: M.clamp."
   (math.max lo (math.min hi n)))
 
+(fn M.build-group-names
+  [prefix count]
+  "Public API: M.build-group-names."
+  (let [groups []]
+    (for [i 1 count]
+      (table.insert groups (.. prefix i)))
+    groups))
+
 (fn M.buf-lines
   [buf]
   "Public API: M.buf-lines."

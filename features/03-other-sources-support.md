@@ -12,7 +12,8 @@ Also see files support in 03_2 feature.
 We should be able to (without a "real" query) for example only show changed and unstaged, or staged, or both, git hunks for files in project.
 
 Other sources (to be implemented only once above is in place and working):
-[] search git commit history in general, open commit on <CR>
+[] search git commit history in general, open commit (or file at commit) on <CR>
+[] gh prs (incl desc, commit messages)/git branches
 [] search git history for a file (what the code has been)
   - including specifying between which commits to perform search (HEAD to -20 touching that file/hunk, or something by default)
   - show ts, rev and blame in info window

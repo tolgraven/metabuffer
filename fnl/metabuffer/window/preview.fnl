@@ -1,7 +1,8 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
-(local lineno-mod (require :metabuffer.window.lineno))
 (local source-mod (require :metabuffer.source))
+(local lineno-mod (require :metabuffer.window.lineno))
+(local statusline-mod (require :metabuffer.window.statusline))
 
 (fn trim-or-pad-lines
   [lines target]
@@ -19,35 +20,64 @@
         ws (or (string.match txt "^(%s*)") "")]
     (vim.fn.strdisplaywidth ws)))
 
+(fn preview-statusline-text-for-path
+  [path]
+  (statusline-mod.render-path path {:default-text "Preview"
+                                    :file-group "MetaStatuslinePathFile"}))
+
 (fn M.new
   [opts]
   "Create preview window manager for selected source refs."
-  (let [{: floating-window-mod : selected-ref : read-file-lines-cached
+  (let [{: selected-ref : read-file-lines-cached
          : is-active-session : debug-log : source-switch-debounce-ms} opts]
 
-  (fn preview-window-config
-    [session width height]
-    (let [p-row-col (vim.api.nvim_win_get_position session.prompt-win)
-          p-row (. p-row-col 1)
-          p-col (. p-row-col 2)
-          p-width (vim.api.nvim_win_get_width session.prompt-win)]
-      (if session.window-local-layout
-          {:relative "win"
-           :win session.prompt-win
-           :anchor "NW"
-           :row 0
-           :col p-width
-           :width width
-           :height height}
-          {:relative "editor"
-           :anchor "NE"
-           :row p-row
-           :col (+ p-col p-width)
-           :width width
-           :height height})))
+	  (fn target-preview-width
+	    [session]
+    (let [anchor-win (if (and session.meta
+                              session.meta.win
+                              (vim.api.nvim_win_is_valid session.meta.win.window))
+                         session.meta.win.window
+                         session.prompt-win)
+          total-width (vim.api.nvim_win_get_width anchor-win)]
+      ;; Derive from the stable main window width so prompt/preview siblings do
+      ;; not create a recursive resize loop.
+	      (math.max 36 (math.min 220 (math.floor (* total-width 0.58))))))
 
-  (fn mark-preview-buffer!
-    [buf]
+  (fn selected-preview-ref
+    [session]
+    (and session session.meta (selected-ref session.meta)))
+
+  (fn refresh-preview-statusline!
+    [session]
+    (when (and session session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
+      (let [ref (selected-preview-ref session)
+            path (and ref ref.path)
+            text (preview-statusline-text-for-path path)]
+        (set session.preview-statusline-text text)
+        (pcall vim.api.nvim_set_option_value "statusline" text {:win session.preview-win}))))
+
+  (fn ensure-preview-statusline-autocmds!
+    [session]
+    (when (and session
+               session.preview-buf
+               (vim.api.nvim_buf_is_valid session.preview-buf)
+               (not session.preview-statusline-aug))
+      (let [aug-name (.. "metabuffer.preview.statusline." (tostring session.preview-buf))
+            aug (vim.api.nvim_create_augroup aug-name {:clear true})]
+        (set session.preview-statusline-aug aug)
+        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
+          {:group aug
+           :buffer session.preview-buf
+           :callback (fn [_]
+                       (vim.schedule
+                         (fn []
+                           (when (and (is-active-session session)
+                                      session.preview-buf
+                                      (vim.api.nvim_buf_is_valid session.preview-buf))
+                             (refresh-preview-statusline! session)))))}))))
+
+	  (fn mark-preview-buffer!
+	    [buf]
     (when (and buf (vim.api.nvim_buf_is_valid buf))
       ;; Keep syntax/filetype, but hint heavy tooling to skip preview-only buffers.
       (pcall vim.api.nvim_buf_set_var buf "conjure_disable" true)
@@ -57,9 +87,9 @@
       (pcall vim.api.nvim_buf_set_var buf "meta_preview" true)
       (pcall vim.diagnostic.enable false {:bufnr buf})))
 
-  (fn apply-preview-window-opts!
-    [win]
-    (when (and win (vim.api.nvim_win_is_valid win))
+	  (fn apply-preview-window-opts!
+	    [session win]
+	    (when (and win (vim.api.nvim_win_is_valid win))
       (pcall vim.api.nvim_set_option_value "number" false {:win win})
       (pcall vim.api.nvim_set_option_value "relativenumber" false {:win win})
       (pcall vim.api.nvim_set_option_value "wrap" false {:win win})
@@ -71,23 +101,30 @@
       (pcall vim.api.nvim_set_option_value "cursorline" true {:win win})
       ;; Match regular window palette in preview.
       (pcall vim.api.nvim_set_option_value "winblend" 0 {:win win})
-      (pcall vim.api.nvim_set_option_value "winhighlight"
-             "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal"
-             {:win win})))
+	      (pcall vim.api.nvim_set_option_value "winhighlight"
+	             "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal,StatusLine:Normal,StatusLineNC:Normal"
+	             {:win win})
+        (when (and session (= (type session.preview-statusline-text) "string"))
+          (pcall vim.api.nvim_set_option_value "statusline" session.preview-statusline-text {:win win}))))
 
   (fn ensure-preview-window!
     [session]
     (when-not (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
-      (let [buf (vim.api.nvim_create_buf false true)
-            p-width (vim.api.nvim_win_get_width session.prompt-win)
-            p-height (vim.api.nvim_win_get_height session.prompt-win)
-            width (math.max 36 (math.min 128 (math.floor (* p-width 0.58))))
-            cfg (preview-window-config session width p-height)
-            win (floating-window-mod.new vim buf cfg)]
+      (let [buf (if (and session.preview-buf (vim.api.nvim_buf_is_valid session.preview-buf))
+                    session.preview-buf
+                    (vim.api.nvim_create_buf false true))
+            width (target-preview-width session)
+            win-id (vim.api.nvim_win_call
+                     session.prompt-win
+                     (fn []
+                       (vim.cmd "rightbelow vsplit")
+                       (vim.api.nvim_get_current_win)))]
         (set session.preview-buf buf)
-        (set session.preview-win win.window)
+        (set session.preview-win win-id)
         (set session.preview-layout nil)
         (set session.preview-last-path nil)
+        (pcall vim.api.nvim_win_set_buf win-id buf)
+        (pcall vim.api.nvim_win_set_width win-id width)
         (let [bo (. vim.bo buf)]
           ;; Keep scratch alive even when preview window temporarily shows source
           ;; buffers, and disable swapfile side effects.
@@ -96,7 +133,7 @@
           (set (. bo :swapfile) false)
           (set (. bo :modifiable) false)
           (set (. bo :filetype) "text"))
-        (let [wo (. vim.wo win.window)]
+        (let [wo (. vim.wo win-id)]
           (set (. wo :number) false)
           (set (. wo :relativenumber) false)
           (set (. wo :wrap) false)
@@ -104,14 +141,18 @@
           (set (. wo :cursorline) true)
           (set (. wo :signcolumn) "no"))
         (mark-preview-buffer! buf))
-      (apply-preview-window-opts! session.preview-win)))
+	      (ensure-preview-statusline-autocmds! session)
+	      (apply-preview-window-opts! session session.preview-win)))
 
   (fn close-preview-window!
     [session]
-    (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
-      (pcall vim.api.nvim_win_close session.preview-win true))
-    (set session.preview-win nil)
-    (set session.preview-buf nil))
+	    (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
+	      (pcall vim.api.nvim_win_close session.preview-win true))
+      (when session.preview-statusline-aug
+        (pcall vim.api.nvim_del_augroup_by_id session.preview-statusline-aug))
+      (set session.preview-statusline-aug nil)
+	    (set session.preview-win nil)
+	    (set session.preview-buf nil))
 
   (fn ensure-preview-scratch-buf!
     [session]
@@ -128,10 +169,10 @@
   (fn preview-context
     [session]
     (let [ref (selected-ref session.meta)
-          p-width (vim.api.nvim_win_get_width session.prompt-win)
-          p-height (vim.api.nvim_win_get_height session.prompt-win)
-          width (math.max 36 (math.min 128 (math.floor (* p-width 0.58))))
-          cfg (preview-window-config session width p-height)
+          p-height (if (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
+                       (vim.api.nvim_win_get_height session.preview-win)
+                       (vim.api.nvim_win_get_height session.meta.win.window))
+          width (target-preview-width session)
           preview-data (source-mod.preview-lines session ref p-height read-file-lines-cached)
           ft (source-mod.preview-filetype ref)
           lines (or preview-data.lines (trim-or-pad-lines [] p-height))
@@ -142,29 +183,20 @@
                           (math.max 1 (math.min row p-height)))
                         1)]
       {:ref ref
-       :p-row (. cfg :row)
        :p-height p-height
        :width width
-       :col (. cfg :col)
-       :cfg cfg
        :ft ft
        :lines lines
        :start-lnum start-lnum
        :focus-row focus-row}))
 
-  (fn maybe-update-preview-layout!
+  (fn ensure-preview-width!
     [session ctx]
-    (let [row (. ctx :p-row)
-          col (. ctx :col)
-          width (. ctx :width)
-          height (. ctx :p-height)]
-      (when (or (not session.preview-layout)
-                (~= (. session.preview-layout :row) row)
-                (~= (. session.preview-layout :col) col)
-                (~= (. session.preview-layout :width) width)
-                (~= (. session.preview-layout :height) height))
-        (set session.preview-layout {:row row :col col :width width :height height})
-        (pcall vim.api.nvim_win_set_config session.preview-win (. ctx :cfg)))))
+    (let [width (. ctx :width)]
+      (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
+        (when (~= width (or session.preview-width 0))
+          (set session.preview-width width)
+          (pcall vim.api.nvim_win_set_width session.preview-win width)))))
 
   (fn render-preview-scratch!
     [session ctx]
@@ -174,28 +206,36 @@
       (set (. bo :modifiable) true))
     (let [start (or (. ctx :start-lnum) 1)
           stop (+ start (math.max 0 (- (# (. ctx :lines)) 1)))
-          digit-width (lineno-mod.digit-width-from-max-value stop)
+          digit-width (math.max 2 (# (tostring (math.max 1 stop))))
           field-width (+ digit-width 1)
           focus-row (math.max 1 (or (. ctx :focus-row) 1))
           focus-line (or (. (. ctx :lines) focus-row) "")
           indent (leading-indent-width focus-line)
-          target-leftcol (math.max 0 (+ field-width (math.max 0 (- indent 2))))
+          base-target (math.max 0 (- (+ field-width indent) 8))
+          ;; Never scroll away synthetic line numbers.
+          target-leftcol (math.max 0 (math.min base-target (math.max 0 (- field-width 1))))
           rendered []
-          highlights []]
+          ]
       (each [i line (ipairs (. ctx :lines))]
-        (let [lnum-cell (lineno-mod.lnum-cell (+ start i -1) digit-width)
-              text (.. lnum-cell (or line ""))]
-          (table.insert rendered text)
-          (table.insert highlights [(- i 1) "LineNr" 0 (# lnum-cell)])))
+        (let [lnum (+ start (- i 1))
+              lnum-cell (lineno-mod.lnum-cell lnum digit-width)]
+          (table.insert rendered (.. lnum-cell (or line "")))))
       (vim.api.nvim_buf_set_lines session.preview-buf 0 -1 false rendered)
-      (pcall vim.api.nvim_set_option_value "numberwidth" field-width {:win session.preview-win})
       (let [ns (or session.preview-hl-ns (vim.api.nvim_create_namespace "metabuffer.preview"))]
         (set session.preview-hl-ns ns)
         (vim.api.nvim_buf_clear_namespace session.preview-buf ns 0 -1)
-        (each [_ h (ipairs highlights)]
-          (vim.api.nvim_buf_add_highlight session.preview-buf ns (. h 2) (. h 1) (. h 3) (. h 4)))
+        (each [row _ (ipairs rendered)]
+          (pcall vim.api.nvim_buf_add_highlight
+                 session.preview-buf
+                 ns
+                 "LineNr"
+                 (- row 1)
+                 0
+                 field-width))
         (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0])
-        (pcall vim.fn.winrestview {:leftcol target-leftcol})))
+        (pcall vim.api.nvim_win_call
+               session.preview-win
+               (fn [] (vim.fn.winrestview {:leftcol target-leftcol})))))
     (let [bo (. vim.bo session.preview-buf)
           ft (. ctx :ft)]
       (set (. bo :modifiable) false)
@@ -205,20 +245,21 @@
         (when (~= (. bo :filetype) next-ft)
           (set (. bo :filetype) next-ft)))))
 
-  (fn update-preview-window!
-    [session]
-    (ensure-preview-window! session)
-    (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
-      (ensure-preview-scratch-buf! session)
-      (when (and session.preview-buf (vim.api.nvim_buf_is_valid session.preview-buf))
-        (let [ctx (preview-context session)]
+	  (fn update-preview-window!
+	    [session]
+	    (ensure-preview-window! session)
+	    (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
+	      (ensure-preview-scratch-buf! session)
+	      (when (and session.preview-buf (vim.api.nvim_buf_is_valid session.preview-buf))
+	        (let [ctx (preview-context session)]
           (debug-log (.. "preview idx=" (tostring session.meta.selected_index)
                          " path=" (tostring (and (. ctx :ref) (. (. ctx :ref) :path)))
                          " lnum=" (tostring (and (. ctx :ref) (. (. ctx :ref) :lnum)))))
-          (maybe-update-preview-layout! session ctx)
-          (apply-preview-window-opts! session.preview-win)
-          (render-preview-scratch! session ctx)
-          (set session.preview-last-path (and (. ctx :ref) (. (. ctx :ref) :path)))))))
+	          (ensure-preview-width! session ctx)
+	      (apply-preview-window-opts! session session.preview-win)
+              (refresh-preview-statusline! session)
+	      (render-preview-scratch! session ctx)
+	      (set session.preview-last-path (and (. ctx :ref) (. (. ctx :ref) :path)))))))
 
   (fn selected-preview-path
     [session]
@@ -279,8 +320,9 @@
             (cancel-preview-update! session)
             (update-preview-window! session)))))
 
-  {:close-window! close-preview-window!
-   :maybe-update-for-selection! maybe-update-preview-for-selection!
-   :cancel-update! cancel-preview-update!}))
+	  {:close-window! close-preview-window!
+     :refresh-statusline! refresh-preview-statusline!
+	   :maybe-update-for-selection! maybe-update-preview-for-selection!
+	   :cancel-update! cancel-preview-update!}))
 
 M

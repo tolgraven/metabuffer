@@ -6,8 +6,8 @@
   "Build project-source orchestrator for eager/lazy pool construction."
   (let [{: settings : truthy? : selected-ref : canonical-path
          : current-buffer-path : path-under-root? : allow-project-path?
-         : project-file-list : read-file-lines-cached : session-active?
-         : lazy-streaming-allowed? : on-prompt-changed
+         : project-file-list : binary-file? : read-file-lines-cached : session-active?
+         : lazy-streaming-allowed? : on-prompt-changed : apply-prompt-lines-now!
          : prompt-has-active-query? : now-ms : prompt-update-delay-ms
          : schedule-prompt-update! : restore-meta-view! : update-info-window} opts]
 
@@ -133,7 +133,7 @@
                           :preview-lnum 1})))
 
   (fn all-project-file-paths
-    [session include-hidden include-ignored include-deps]
+    [session include-hidden include-ignored include-deps include-binary]
     (let [root (vim.fn.getcwd)
           seen {}
           out []]
@@ -141,6 +141,7 @@
         (let [path (canonical-path p)]
           (when (and path
                      (= 1 (vim.fn.filereadable path))
+                     (or include-binary (not (binary-file? path)))
                      (path-under-root? path root)
                      (not (. seen path)))
             (set (. seen path) true)
@@ -289,7 +290,7 @@
     (math.floor (/ bytes 80)))
 
   (fn collect-project-sources
-    [session include-hidden include-ignored include-deps include-files]
+    [session include-hidden include-ignored include-deps include-binary include-hex include-files]
     (let [root (vim.fn.getcwd)
           current-path (current-buffer-path session.source-buf)
           file-cache (or session.preview-file-cache {})
@@ -311,8 +312,12 @@
                                 session
                                 include-hidden
                                 include-ignored
-                                include-deps))]
-          (push-file-entry-into-pool! session path (read-file-lines-cached path))))
+                                include-deps
+                                include-binary))]
+          (push-file-entry-into-pool!
+            session
+            path
+            (read-file-lines-cached path {:include-binary include-binary :hex-view include-hex}))))
       (each [_ path (ipairs (project-file-list root include-hidden include-ignored include-deps))]
         (let [rel (vim.fn.fnamemodify path ":.")]
           (when (and (< total-lines settings.project-max-total-lines)
@@ -321,8 +326,8 @@
                      (= 1 (vim.fn.filereadable path)))
             (let [size (vim.fn.getfsize path)]
               (when (and (>= size 0) (<= size settings.project-max-file-bytes))
-                (let [[ok lines] [(pcall vim.fn.readfile path)]]
-                  (when (and ok (= (type lines) "table"))
+                (let [lines (read-file-lines-cached path {:include-binary include-binary :hex-view include-hex})]
+                  (when (= (type lines) "table")
                     (set (. file-cache path) lines)
                     (each [lnum line (ipairs lines)]
                       (when (< total-lines settings.project-max-total-lines)
@@ -336,6 +341,8 @@
           include-hidden session.effective-include-hidden
           include-ignored session.effective-include-ignored
           include-deps session.effective-include-deps
+          include-binary session.effective-include-binary
+          include-hex session.effective-include-hex
           include-files session.effective-include-files
           current (canonical-path (current-buffer-path session.source-buf))
           open-paths (open-project-buffer-paths session root include-hidden include-deps)
@@ -345,18 +352,26 @@
                                  session
                                  include-hidden
                                  include-ignored
-                                 include-deps)
+                                 include-deps
+                                 include-binary)
                                [])
           deferred []
           deferred-seen {}]
       (each [_ path (ipairs file-entry-paths)]
-        (push-file-entry-into-pool! session path (read-file-lines-cached path)))
+        (push-file-entry-into-pool!
+          session
+          path
+          (read-file-lines-cached path {:include-binary include-binary :hex-view include-hex})))
       ;; Prioritize nearby context by materializing already-open buffers first.
       (each [_ path (ipairs open-paths)]
         (let [p (canonical-path path)]
           (when (and p (= 1 (vim.fn.filereadable p)))
             (set (. deferred-seen p) true)
-            (push-file-into-pool! session p (read-file-lines-cached p) prefilter))))
+            (push-file-into-pool!
+              session
+              p
+              (read-file-lines-cached p {:include-binary include-binary :hex-view include-hex})
+              prefilter))))
       (each [_ path (ipairs all-paths)]
         (let [p (canonical-path path)]
           (when (and p
@@ -396,7 +411,11 @@
                       (<= session.lazy-stream-next total)
                       (< (# session.meta.buf.content) settings.project-max-total-lines))
             (let [path (. paths session.lazy-stream-next)
-                  lines (and path (read-file-lines-cached path))
+                  lines (and path
+                             (read-file-lines-cached
+                               path
+                               {:include-binary session.effective-include-binary
+                                :hex-view session.effective-include-hex}))
                   before (# session.meta.buf.content)]
               (when lines
                 (push-file-into-pool! session path lines prefilter)
@@ -433,6 +452,8 @@
                                                   session.effective-include-hidden
                                                   session.effective-include-ignored
                                                   session.effective-include-deps
+                                                  session.effective-include-binary
+                                                  session.effective-include-hex
                                                   session.effective-include-files)]
                 (set meta.buf.content pool.content)
                 (set meta.buf.source-refs pool.refs)
@@ -453,6 +474,29 @@
       (set meta._prev_text "")
       (set meta._filter-cache {})
       (set meta._filter-cache-line-count (# meta.buf.content))))
+
+  (fn schedule-source-set-rebuild!
+    [session wait-ms]
+    "Cancel previous pending source-set rebuild and run latest one asynchronously."
+    (when (and session session.project-mode (not session.closing))
+      (set session.source-set-rebuild-token (+ 1 (or session.source-set-rebuild-token 0)))
+      (let [token session.source-set-rebuild-token]
+        (set session.source-set-rebuild-pending true)
+        (vim.defer_fn
+          (fn []
+            (when (and session (= token session.source-set-rebuild-token))
+              (set session.source-set-rebuild-pending false))
+            (when (and session
+                       (= token session.source-set-rebuild-token)
+                       session.project-mode
+                       session.prompt-buf
+                       (session-active? session)
+                       (not session.closing))
+              (apply-source-set! session)
+              (if apply-prompt-lines-now!
+                  (apply-prompt-lines-now! session)
+                  (on-prompt-changed session.prompt-buf true))))
+          (math.max 0 (or wait-ms 0))))))
 
   (fn apply-minimal-source-set!
     [session]
@@ -519,6 +563,7 @@
 
   {:schedule-lazy-refresh! schedule-lazy-refresh!
    :apply-source-set! apply-source-set!
+   :schedule-source-set-rebuild! schedule-source-set-rebuild!
    :apply-minimal-source-set! apply-minimal-source-set!
    :schedule-project-bootstrap! schedule-project-bootstrap!}))
 

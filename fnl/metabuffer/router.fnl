@@ -3,6 +3,7 @@
 (local prompt_window_mod (require :metabuffer.window.prompt))
 (local meta_window_mod (require :metabuffer.window.metawindow))
 (local floating_window_mod (require :metabuffer.window.floating))
+; hey
 (local preview_window_mod (require :metabuffer.window.preview))
 (local info_window_mod (require :metabuffer.window.info))
 (local history_browser_window_mod (require :metabuffer.window.history_browser))
@@ -13,6 +14,7 @@
 (local config (require :metabuffer.config))
 (local query_mod (require :metabuffer.query))
 (local history_store (require :metabuffer.history_store))
+(local sign_mod (require :metabuffer.sign))
 (local prompt_hooks_mod (require :metabuffer.prompt.hooks))
 (local router_util_mod (require :metabuffer.router.util))
 (local router_history_mod (require :metabuffer.router.history))
@@ -39,6 +41,7 @@
       (.. session.meta.buf.name " [Prompt]"))))
 
 (set M.instances {})
+(set M._instance-seq 0)
 (set M.active-by-source {})
 (set M.active-by-prompt {})
 (var update-info-window nil)
@@ -123,6 +126,7 @@
             (info-window.close-window! session))
           (when (and info-window info-window.update!)
             (info-window.update! session refresh-lines))))))
+;; fuuuuh
 
 (local project-source
   (project_source_mod.new
@@ -136,14 +140,18 @@
                             (router_util_mod.allow-project-path? M rel include-hidden include-deps))
      :project-file-list (fn [root include-hidden include-ignored include-deps]
                           (router_util_mod.project-file-list M root include-hidden include-ignored include-deps))
-     :read-file-lines-cached (fn [path]
-                               (router_util_mod.read-file-lines-cached M path))
+     :binary-file? (fn [path]
+                     (router_util_mod.binary-file? M path))
+     :read-file-lines-cached (fn [path opts]
+                               (router_util_mod.read-file-lines-cached M path opts))
      :session-active? (fn [session]
                         (router_util_mod.session-active? M.active-by-prompt session))
      :lazy-streaming-allowed? (fn [session]
                                 (router_util_mod.lazy-streaming-allowed? M query_mod session))
      :on-prompt-changed (fn [prompt-buf force]
                           (M.on-prompt-changed prompt-buf force))
+     :apply-prompt-lines-now! (fn [session]
+                                (apply-prompt-lines session))
      :prompt-has-active-query? (fn [session]
                                  (router_prompt_mod.prompt-has-active-query?
                                    query_mod
@@ -176,6 +184,8 @@
    :restore-saved-prompt-tag! history-api.restore-saved-prompt-tag!
    :open-saved-browser! (fn [session]
                           (history-api.open-history-browser! session "saved"))
+   :refresh-change-signs! sign_mod.refresh-change-signs!
+   :capture-sign-baseline! sign_mod.capture-baseline!
    :apply-prompt-lines (fn [session]
                          (apply-prompt-lines session))})
 
@@ -205,8 +215,11 @@
 (set actions-deps
   {:active-by-source M.active-by-source
    :active-by-prompt M.active-by-prompt
+   :instances M.instances
+   :settings M
    :history-api history-api
    :history-store history_store
+   :sign-mod sign_mod
    :prompt-window-mod prompt_window_mod
    :meta-window-mod meta_window_mod
    :router-util-mod router_util_mod
@@ -244,7 +257,12 @@
    :prompt-window-mod prompt_window_mod
    :project-source project-source
    :meta-window-mod meta_window_mod
+   :preview-window preview-window
    :history-store history_store
+   :sign-mod sign_mod
+   :next-instance-id! (fn []
+                        (set M._instance-seq (+ (or M._instance-seq 0) 1))
+                        M._instance-seq)
    :sync-prompt-buffer-name! sync-prompt-buffer-name!
    :apply-prompt-lines apply-prompt-lines
    :update-info-window update-info-window
@@ -262,10 +280,11 @@
                             (router_navigation_mod.schedule-scroll-sync!
                               navigation-deps
                               session))
-   :maybe-restore-hidden-ui! (fn [session]
+   :maybe-restore-hidden-ui! (fn [session force]
                                (router_actions_mod.maybe-restore-ui!
                                  actions-deps
-                                 session.prompt-buf))})
+                                 session.prompt-buf
+                                 (if (= force nil) false force)))})
 
 (fn M.on-prompt-changed
   [prompt-buf force event-tick]
@@ -411,15 +430,45 @@
   "Append <cword> from main results window into prompt query."
   (router_actions_mod.insert-symbol-under-cursor! actions-deps prompt-buf))
 
+(fn M.insert-symbol-under-cursor-newline
+  [prompt-buf]
+  "Append <cword> from results into prompt on a new line (OR)."
+  (router_actions_mod.insert-symbol-under-cursor-newline! actions-deps prompt-buf))
+
+(fn M.toggle-prompt-results-focus
+  [prompt-buf]
+  "Toggle focus between prompt and results window."
+  (router_actions_mod.toggle-prompt-results-focus! actions-deps prompt-buf))
+
 (fn M.accept-main
   [prompt-buf]
   "Accept current selection from the main results window."
   (router_actions_mod.accept-main! actions-deps prompt-buf))
 
+(fn M.enter-edit-mode
+  [prompt-buf]
+  "Hide prompt/info and switch to editable results buffer."
+  (router_actions_mod.enter-edit-mode! actions-deps prompt-buf))
+
+(fn M.write-results
+  [prompt-buf]
+  "Propagate edited results lines back to their source files."
+  (router_actions_mod.write-results! actions-deps prompt-buf))
+
+(fn M.sync-live-edits
+  [prompt-buf]
+  "Update in-memory refs/indices for manual results edits before write."
+  (router_actions_mod.sync-live-edits! actions-deps prompt-buf))
+
+(fn M.results-buffer-wiped
+  [results-buf]
+  "Handle manual results-buffer wipe by cleaning hidden/resting session state."
+  (router_actions_mod.on-results-buffer-wipe! actions-deps results-buf))
+
 (fn M.maybe-restore-hidden-ui
   [prompt-buf]
   "Restore hidden prompt/info UI when revisiting a preserved results buffer."
-  (router_actions_mod.maybe-restore-ui! actions-deps prompt-buf))
+  (router_actions_mod.maybe-restore-ui! actions-deps prompt-buf false))
 
 (fn M.toggle-scan-option
   [prompt-buf which]
@@ -443,7 +492,6 @@
 
 (fn M.sync
   [meta query]
-  "Public API: M.sync."
   (when-not meta
     (vim.notify "No Meta instance" vim.log.levels.WARN))
   (when meta
@@ -454,7 +502,6 @@
 
 (fn M.push
   [meta]
-  "Public API: M.push."
   (when-not meta
     (vim.notify "No Meta instance" vim.log.levels.WARN))
   (when meta
@@ -475,13 +522,23 @@
   [query]
   "Public API: M.entry_sync."
   (let [key (vim.api.nvim_get_current_buf)]
-    (M.sync (. M.instances key) query)))
+    (let [session (. M.active-by-source key)
+          inst (. M.instances key)
+          meta (or (and session session.meta)
+                   (and inst inst.meta)
+                   inst)]
+      (M.sync meta query))))
 
 (fn M.entry_push
   []
   "Public API: M.entry_push."
   (let [key (vim.api.nvim_get_current_buf)]
-    (M.push (. M.instances key))))
+    (let [session (. M.active-by-source key)
+          inst (. M.instances key)
+          meta (or (and session session.meta)
+                   (and inst inst.meta)
+                   inst)]
+      (M.push meta))))
 
 (fn M.entry_cursor_word
   [resume]
@@ -490,5 +547,89 @@
     (if resume
         (M.entry_resume w)
         (M.entry_start w false))))
+
+(fn clear-table!
+  [tbl]
+  (each [k _ (pairs (or tbl {}))]
+    (set (. tbl k) nil)))
+
+(fn add-session!
+  [seen sessions session]
+  (when (and session
+             (= (type session) "table")
+             (not (. seen session)))
+    (set (. seen session) true)
+    (table.insert sessions session)))
+
+(fn maybe-close-win!
+  [win]
+  (when (and win (vim.api.nvim_win_is_valid win))
+    (pcall vim.api.nvim_win_close win true)))
+
+(fn maybe-delete-buf!
+  [buf]
+  (when (and buf (vim.api.nvim_buf_is_valid buf))
+    (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
+    (pcall vim.api.nvim_buf_delete buf {:force true})))
+
+(fn M.fail-safe-teardown!
+  [where err]
+  (set M._last-failsafe {:where where :error (tostring err)})
+  (when-not M._teardown-in-progress
+    (set M._teardown-in-progress true)
+    (let [seen {}
+          sessions {}]
+      (each [_ session (pairs (or M.instances {}))]
+        (add-session! seen sessions session))
+      (each [_ session (pairs (or M.active-by-prompt {}))]
+        (add-session! seen sessions session))
+      (each [_ session (pairs (or M.active-by-source {}))]
+        (add-session! seen sessions session))
+      (each [_ session (ipairs sessions)]
+        (pcall router_actions_mod.remove-session! actions-deps session)
+        (maybe-close-win! session.prompt-win)
+        (maybe-delete-buf! session.prompt-buf)
+        (when (and session.meta session.meta.win)
+          (maybe-close-win! session.meta.win.window))
+        (when (and session.meta session.meta.buf)
+          (maybe-delete-buf! session.meta.buf.buffer))
+        (when (and info-window info-window.close-window!)
+          (pcall info-window.close-window! session))
+        (when (and preview-window preview-window.close-window!)
+          (pcall preview-window.close-window! session))
+        (when history-api
+          (pcall history-api.close-history-browser! session))))
+    (clear-table! M.instances)
+    (clear-table! M.active-by-prompt)
+    (clear-table! M.active-by-source)
+    (set M._teardown-in-progress false))
+  (vim.schedule
+    (fn []
+      (vim.notify
+        (.. "metabuffer: torn down after error in " (tostring where) "\n" (tostring err))
+        vim.log.levels.ERROR))))
+
+(fn wrap-public-api-with-failsafe!
+  []
+  (when-not M._failsafe-wrapped
+    (each [k v (pairs M)]
+      (when (and (= (type k) "string")
+                 (= (type v) "function")
+                 (not (vim.startswith k "_"))
+                 (~= k "configure")
+                 (~= k "fail-safe-teardown!"))
+        (set (. M k)
+             (fn [...]
+               (let [res [(pcall v ...)]
+                     ok (. res 1)
+                     result (. res 2)]
+                 (if ok
+                     (unpack res 2)
+                     (do
+                       (M.fail-safe-teardown! k result)
+                       (error result))))))))
+    (set M._failsafe-wrapped true)))
+
+(wrap-public-api-with-failsafe!)
 
 M
