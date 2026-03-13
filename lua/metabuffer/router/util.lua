@@ -249,6 +249,18 @@ M["path-under-root?"] = function(path, root)
   return (p and r and vim.startswith(p, r))
 end
 M["read-file-lines-cached"] = function(settings, path)
+  local function contains_nul_byte_3f(lines)
+    local n = math.min(8, #(lines or {}))
+    local found = false
+    for i = 1, n do
+      local line = (lines[i] or "")
+      if string.find(line, "\0", 1, true) then
+        found = true
+      else
+      end
+    end
+    return found
+  end
   if (not path or (0 == vim.fn.filereadable(path))) then
     return nil
   else
@@ -262,15 +274,29 @@ M["read-file-lines-cached"] = function(settings, path)
     if ((size < 0) or (size > settings["project-max-file-bytes"])) then
       return nil
     else
-      if ((type(cached) == "table") and (cached.size == size) and (cached.mtime == mtime) and (type(cached.lines) == "table")) then
-        return cached.lines
-      else
-        local ok,lines = pcall(vim.fn.readfile, path)
-        if (ok and (type(lines) == "table")) then
-          cache[path] = {size = size, mtime = mtime, lines = lines}
-          return lines
-        else
+      if ((type(cached) == "table") and (cached.size == size) and (cached.mtime == mtime)) then
+        if cached.binary then
           return nil
+        else
+          if (type(cached.lines) == "table") then
+            return cached.lines
+          else
+            return nil
+          end
+        end
+      else
+        local ok_head,head = pcall(vim.fn.readfile, path, "b", 8)
+        if (ok_head and (type(head) == "table") and contains_nul_byte_3f(head)) then
+          cache[path] = {size = size, mtime = mtime, binary = true}
+          return nil
+        else
+          local ok,lines = pcall(vim.fn.readfile, path)
+          if (ok and (type(lines) == "table")) then
+            cache[path] = {size = size, mtime = mtime, lines = lines, binary = false}
+            return lines
+          else
+            return nil
+          end
         end
       end
     end

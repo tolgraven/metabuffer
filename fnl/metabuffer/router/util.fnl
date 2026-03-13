@@ -210,6 +210,15 @@
 
 (fn M.read-file-lines-cached
   [settings path]
+  (fn contains-nul-byte?
+    [lines]
+    (let [n (math.min 8 (# (or lines [])))]
+      (var found false)
+      (for [i 1 n]
+        (let [line (or (. lines i) "")]
+          (when (string.find line "\0" 1 true)
+            (set found true))))
+      found))
   (if (or (not path) (= 0 (vim.fn.filereadable path)))
       nil
       (let [size (vim.fn.getfsize path)
@@ -221,12 +230,20 @@
             nil
             (if (and (= (type cached) "table")
                      (= (. cached :size) size)
-                     (= (. cached :mtime) mtime)
-                     (= (type (. cached :lines)) "table"))
-                (. cached :lines)
-                (let [[ok lines] [(pcall vim.fn.readfile path)]]
-                  (when (and ok (= (type lines) "table"))
-                    (set (. cache path) {:size size :mtime mtime :lines lines})
-                    lines)))))))
+                     (= (. cached :mtime) mtime))
+                (if (. cached :binary)
+                    nil
+                    (if (= (type (. cached :lines)) "table")
+                        (. cached :lines)
+                        nil))
+                (let [[ok-head head] [(pcall vim.fn.readfile path "b" 8)]]
+                  (if (and ok-head (= (type head) "table") (contains-nul-byte? head))
+                      (do
+                        (set (. cache path) {:size size :mtime mtime :binary true})
+                        nil)
+                      (let [[ok lines] [(pcall vim.fn.readfile path)]]
+                        (when (and ok (= (type lines) "table"))
+                          (set (. cache path) {:size size :mtime mtime :binary false :lines lines})
+                          lines)))))))))
 
 M
