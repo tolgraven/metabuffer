@@ -75,6 +75,8 @@
     :default_include_hidden false
     :default_include_ignored false
     :default_include_deps false
+    :default_include_binary false
+    :default_include_hex false
     :default_include_files false
     :project_rg_bin "rg"
     :project_rg_base_args ["--files" "--glob" "!.git"]
@@ -193,6 +195,8 @@
       :default_include_hidden (opt-value opts :default_include_hidden :meta_project_include_hidden (. defaults :default_include_hidden))
       :default_include_ignored (opt-value opts :default_include_ignored :meta_project_include_ignored (. defaults :default_include_ignored))
       :default_include_deps (opt-value opts :default_include_deps :meta_project_include_deps (. defaults :default_include_deps))
+      :default_include_binary (opt-value opts :default_include_binary :meta_project_include_binary (. defaults :default_include_binary))
+      :default_include_hex (opt-value opts :default_include_hex :meta_project_include_hex (. defaults :default_include_hex))
       :default_include_files (opt-value opts :default_include_files :meta_project_include_files (. defaults :default_include_files))
       :project_rg_bin (opt-value opts :project_rg_bin :meta_project_rg_bin (. defaults :project_rg_bin))
       :project_rg_base_args (opt-value opts :project_rg_base_args :meta_project_rg_base_args (. defaults :project_rg_base_args))
@@ -242,6 +246,8 @@
     (set router.default-include-hidden (. options :default_include_hidden))
     (set router.default-include-ignored (. options :default_include_ignored))
     (set router.default-include-deps (. options :default_include_deps))
+    (set router.default-include-binary (. options :default_include_binary))
+    (set router.default-include-hex (. options :default_include_hex))
     (set router.default-include-files (. options :default_include_files))
     (set router.project-rg-bin (. options :project_rg_bin))
     (set router.project-rg-base-args (. options :project_rg_base_args))

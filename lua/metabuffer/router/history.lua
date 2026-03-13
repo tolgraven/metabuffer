@@ -40,7 +40,7 @@ M.new = function(opts)
     local query_text = (prompt or "")
     local prefix
     if (session and session["project-mode"]) then
-      prefix = table.concat({project_setting_token("hidden", session["effective-include-hidden"]), project_setting_token("ignored", session["effective-include-ignored"]), project_setting_token("deps", session["effective-include-deps"]), project_setting_token("file", session["effective-include-files"]), project_setting_token("prefilter", session["prefilter-mode"]), project_setting_token("lazy", session["lazy-mode"])}, " ")
+      prefix = table.concat({project_setting_token("hidden", session["effective-include-hidden"]), project_setting_token("ignored", session["effective-include-ignored"]), project_setting_token("deps", session["effective-include-deps"]), project_setting_token("binary", session["effective-include-binary"]), project_setting_token("hex", session["effective-include-hex"]), project_setting_token("file", session["effective-include-files"]), project_setting_token("prefilter", session["prefilter-mode"]), project_setting_token("lazy", session["lazy-mode"])}, " ")
     else
       prefix = ""
     end

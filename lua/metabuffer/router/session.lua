@@ -95,6 +95,26 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
       start_deps = query_mod["truthy?"](settings["default-include-deps"])
     end
   end
+  local start_binary
+  do
+    local val_113_auto = parsed_query["include-binary"]
+    if (nil ~= val_113_auto) then
+      local v = val_113_auto
+      start_binary = v
+    else
+      start_binary = query_mod["truthy?"](settings["default-include-binary"])
+    end
+  end
+  local start_hex
+  do
+    local val_113_auto = parsed_query["include-hex"]
+    if (nil ~= val_113_auto) then
+      local v = val_113_auto
+      start_hex = v
+    else
+      start_hex = query_mod["truthy?"](settings["default-include-hex"])
+    end
+  end
   local start_files
   do
     local val_113_auto = parsed_query["include-files"]
@@ -166,19 +186,19 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
     local prompt_win = prompt_window_mod.new(vim, {height = router_util_mod["prompt-height"](), ["window-local-layout"] = settings["window-local-layout"], ["origin-win"] = origin_win})
     local prompt_buf = prompt_win.buffer
     local session
-    local _12_
-    if query_mod["query-lines-has-active?"](parsed_query.lines) then
-      _12_ = settings["project-bootstrap-delay-ms"]
-    else
-      _12_ = settings["project-bootstrap-idle-delay-ms"]
-    end
     local _14_
-    if (query1 and (query1 ~= "")) then
-      _14_ = vim.split(query1, "\n", {plain = true})
+    if query_mod["query-lines-has-active?"](parsed_query.lines) then
+      _14_ = settings["project-bootstrap-delay-ms"]
     else
-      _14_ = {""}
+      _14_ = settings["project-bootstrap-idle-delay-ms"]
     end
-    session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-win"] = prompt_win.window, ["prompt-buf"] = prompt_buf, ["window-local-layout"] = settings["window-local-layout"], ["prompt-keymaps"] = settings["prompt-keymaps"], ["main-keymaps"] = settings["main-keymaps"], ["prompt-fallback-keymaps"] = settings["prompt-fallback-keymaps"], ["info-file-entry-view"] = (settings["info-file-entry-view"] or "meta"), ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["project-mode"] = (project_mode or false), ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-files"] = start_files, ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["effective-include-files"] = start_files, ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _12_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["last-parsed-query"] = {lines = _14_, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-files"] = start_files, ["file-lines"] = (parsed_query["file-lines"] or {}), prefilter = start_prefilter, lazy = start_lazy}, ["file-query-lines"] = (parsed_query["file-lines"] or {}), ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), ["instance-id"] = next_instance_id_21(), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
+    local _16_
+    if (query1 and (query1 ~= "")) then
+      _16_ = vim.split(query1, "\n", {plain = true})
+    else
+      _16_ = {""}
+    end
+    session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-win"] = prompt_win.window, ["prompt-buf"] = prompt_buf, ["window-local-layout"] = settings["window-local-layout"], ["prompt-keymaps"] = settings["prompt-keymaps"], ["main-keymaps"] = settings["main-keymaps"], ["prompt-fallback-keymaps"] = settings["prompt-fallback-keymaps"], ["info-file-entry-view"] = (settings["info-file-entry-view"] or "meta"), ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["project-mode"] = (project_mode or false), ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-hex"] = start_hex, ["include-files"] = start_files, ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["effective-include-binary"] = start_binary, ["effective-include-hex"] = start_hex, ["effective-include-files"] = start_files, ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _14_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["last-parsed-query"] = {lines = _16_, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-hex"] = start_hex, ["include-files"] = start_files, ["file-lines"] = (parsed_query["file-lines"] or {}), prefilter = start_prefilter, lazy = start_lazy}, ["file-query-lines"] = (parsed_query["file-lines"] or {}), ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), ["instance-id"] = next_instance_id_21(), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
     local initial_query_active = session["initial-query-active"]
     if session["project-mode"] then
       project_source["apply-minimal-source-set!"](session)
@@ -214,7 +234,7 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
       pcall(vim.api.nvim_win_set_cursor, prompt_win.window, {row, col})
     end
     vim.cmd("startinsert")
-    local function _20_()
+    local function _22_()
       session["startup-initializing"] = false
       if (session["project-mode"] and not session["project-bootstrapped"]) then
         return project_source["schedule-project-bootstrap!"](session, 0)
@@ -222,9 +242,9 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
         return nil
       end
     end
-    vim.schedule(_20_)
+    vim.schedule(_22_)
     if (session["project-mode"] and not initial_query_active) then
-      local function _22_()
+      local function _24_()
         if (active_by_prompt[session["prompt-buf"]] == session) then
           pcall(curr.refresh_statusline)
           return pcall(update_info_window, session)
@@ -232,7 +252,7 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
           return nil
         end
       end
-      vim.schedule(_22_)
+      vim.schedule(_24_)
     else
     end
     instances[session["instance-id"]] = session

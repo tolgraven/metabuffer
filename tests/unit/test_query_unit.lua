@@ -57,6 +57,20 @@ T['parse-query-lines keeps escaped control tokens literal'] = function()
   eq(parsed.lines, { '\\#deps token' })
 end
 
+T['parse-query-lines consumes binary and hex flags into settings'] = function()
+  local parsed = query['parse-query-lines']({ '#binary #hex token' })
+  eq(parsed['include-binary'], true)
+  eq(parsed['include-hex'], true)
+  eq(parsed.lines, { 'token' })
+end
+
+T['parse-query-lines supports explicit binary and hex disable flags'] = function()
+  local parsed = query['parse-query-lines']({ '#binary #hex #-binary #-hex token' })
+  eq(parsed['include-binary'], false)
+  eq(parsed['include-hex'], false)
+  eq(parsed.lines, { 'token' })
+end
+
 T['parse-query-text merges multiline settings and returns stripped query'] = function()
   local parsed = query['parse-query-text']('alpha\n#deps\n#nohidden beta')
   eq(parsed.query, 'alpha\n\nbeta')

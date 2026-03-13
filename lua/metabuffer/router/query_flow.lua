@@ -74,7 +74,7 @@ local function invalidate_filter_cache_21(session)
 end
 local function consume_visible_control_token_3f(query_mod, tok)
   local parsed = query_mod["parse-query-lines"]({(tok or "")})
-  return (((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= ""))) and (parsed["include-files"] == nil))
+  return (((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed["include-binary"] ~= nil) or (parsed["include-hex"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= ""))) and (parsed["include-files"] == nil) and (parsed["include-binary"] == nil) and (parsed["include-hex"] == nil))
 end
 local function consume_visible_controls_lines(query_mod, raw_lines)
   local out = {}
@@ -107,8 +107,8 @@ M["apply-prompt-lines!"] = function(deps, session)
     do
       local parsed = query_mod["parse-query-lines"](raw_lines)
       local lines = parsed.lines
-      local consume_controls_3f = ((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed["include-files"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "")))
-      local consume_visible_controls_3f = ((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "")))
+      local consume_controls_3f = ((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed["include-binary"] ~= nil) or (parsed["include-hex"] ~= nil) or (parsed["include-files"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "")))
+      local consume_visible_controls_3f = ((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed["include-binary"] ~= nil) or (parsed["include-hex"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "")))
       local effective_lines
       if consume_controls_3f then
         effective_lines = lines
@@ -144,19 +144,25 @@ M["apply-prompt-lines!"] = function(deps, session)
       local next_hidden = choose_current_when_nil(parsed["include-hidden"], session["include-hidden"])
       local next_ignored = choose_current_when_nil(parsed["include-ignored"], session["include-ignored"])
       local next_deps = choose_current_when_nil(parsed["include-deps"], session["include-deps"])
+      local next_binary = choose_current_when_nil(parsed["include-binary"], session["include-binary"])
+      local next_hex = choose_current_when_nil(parsed["include-hex"], session["include-hex"])
       local next_files = choose_current_when_nil(parsed["include-files"], session["include-files"])
       local next_prefilter = choose_current_when_nil(parsed.prefilter, session["prefilter-mode"])
       local next_lazy = choose_current_when_nil(parsed.lazy, session["lazy-mode"])
       local prev_effective_text = (session["prompt-last-applied-text"] or "")
       local text_changed_3f = (effective_text ~= prev_effective_text)
-      local changed = ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_files ~= session["effective-include-files"]) or (next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]))
+      local changed = ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_binary ~= session["effective-include-binary"]) or (next_hex ~= session["effective-include-hex"]) or (next_files ~= session["effective-include-files"]) or (next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]))
       session["effective-include-hidden"] = next_hidden
       session["effective-include-ignored"] = next_ignored
       session["effective-include-deps"] = next_deps
+      session["effective-include-binary"] = next_binary
+      session["effective-include-hex"] = next_hex
       session["effective-include-files"] = next_files
       session["include-hidden"] = next_hidden
       session["include-ignored"] = next_ignored
       session["include-deps"] = next_deps
+      session["include-binary"] = next_binary
+      session["include-hex"] = next_hex
       session["include-files"] = next_files
       session["prefilter-mode"] = next_prefilter
       session["lazy-mode"] = next_lazy
@@ -165,6 +171,8 @@ M["apply-prompt-lines!"] = function(deps, session)
       session["last-prompt-text"] = effective_text
       session["prompt-last-applied-text"] = effective_text
       session.meta["file-query-lines"] = (parsed["file-lines"] or {})
+      session.meta["include-binary"] = next_binary
+      session.meta["include-hex"] = next_hex
       session.meta["include-files"] = next_files
       if consume_visible_controls_3f then
         local visible_lines = consume_visible_controls_lines(query_mod, raw_lines)
@@ -199,19 +207,31 @@ M["apply-prompt-lines!"] = function(deps, session)
           _19_ = "-dep"
         end
         local _21_
-        if session["effective-include-files"] then
-          _21_ = "+fil"
+        if session["effective-include-binary"] then
+          _21_ = "+bin"
         else
-          _21_ = "-fil"
+          _21_ = "-bin"
         end
-        local function _23_()
+        local _23_
+        if session["effective-include-hex"] then
+          _23_ = "+hex"
+        else
+          _23_ = "-hex"
+        end
+        local _25_
+        if session["effective-include-files"] then
+          _25_ = "+fil"
+        else
+          _25_ = "-fil"
+        end
+        local function _27_()
           if session["prefilter-mode"] then
             return "+prf"
           else
             return "-prf"
           end
         end
-        flags = {_15_, _17_, _19_, _21_, _23_()}
+        flags = {_15_, _17_, _19_, _21_, _23_, _25_, _27_()}
         if not session["lazy-mode"] then
           table.insert(flags, "nlz")
         else
@@ -249,7 +269,7 @@ M["apply-prompt-lines!"] = function(deps, session)
       end
     else
       if string.find(tostring(err), "E565") then
-        local function _31_()
+        local function _35_()
           if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
             pcall(session.meta["on-update"], 0)
             pcall(session.meta.refresh_statusline)
@@ -267,7 +287,7 @@ M["apply-prompt-lines!"] = function(deps, session)
             return nil
           end
         end
-        return vim.defer_fn(_31_, 1)
+        return vim.defer_fn(_35_, 1)
       else
         return nil
       end

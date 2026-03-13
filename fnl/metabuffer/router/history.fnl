@@ -42,6 +42,8 @@
                          [(project-setting-token "hidden" session.effective-include-hidden)
                           (project-setting-token "ignored" session.effective-include-ignored)
                           (project-setting-token "deps" session.effective-include-deps)
+                          (project-setting-token "binary" session.effective-include-binary)
+                          (project-setting-token "hex" session.effective-include-hex)
                           (project-setting-token "file" session.effective-include-files)
                           (project-setting-token "prefilter" session.prefilter-mode)
                           (project-setting-token "lazy" session.lazy-mode)]

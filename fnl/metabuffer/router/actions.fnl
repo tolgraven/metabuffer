@@ -528,17 +528,16 @@
   [baseline-rows baseline-lines current-lines]
   (let [hunks (diff-hunks baseline-lines current-lines)
         out []
-        old-i 1
-        new-i 1]
+        idx {:old 1 :new 1}]
     (each [_ h (ipairs hunks)]
       (let [[a-start a-count b-start b-count] (hunk-indices h)
             common (math.min a-count b-count)]
         ;; unchanged rows before hunk
-        (while (< old-i a-start)
-          (let [txt (or (. current-lines new-i) "")]
-            (table.insert out (clone-row-with-text (. baseline-rows old-i) txt))
-            (set old-i (+ old-i 1))
-            (set new-i (+ new-i 1))))
+        (while (< (. idx :old) a-start)
+          (let [txt (or (. current-lines (. idx :new)) "")]
+            (table.insert out (clone-row-with-text (. baseline-rows (. idx :old)) txt))
+            (set (. idx :old) (+ (. idx :old) 1))
+            (set (. idx :new) (+ (. idx :new) 1))))
         ;; replacements
         (for [k 1 common]
           (let [txt (or (. current-lines (+ b-start k -1)) "")]
@@ -554,14 +553,14 @@
               (let [txt (or (. current-lines (+ b-start common k -1)) "")]
                 (table.insert out (inserted-row prev-row next-row txt k))))))
         ;; deletions are omitted from output
-        (set old-i (+ a-start a-count))
-        (set new-i (+ b-start b-count))))
+        (set (. idx :old) (+ a-start a-count))
+        (set (. idx :new) (+ b-start b-count))))
     ;; unchanged tail
-    (while (<= old-i (# baseline-rows))
-      (let [txt (or (. current-lines new-i) "")]
-        (table.insert out (clone-row-with-text (. baseline-rows old-i) txt))
-        (set old-i (+ old-i 1))
-        (set new-i (+ new-i 1))))
+    (while (<= (. idx :old) (# baseline-rows))
+      (let [txt (or (. current-lines (. idx :new)) "")]
+        (table.insert out (clone-row-with-text (. baseline-rows (. idx :old)) txt))
+        (set (. idx :old) (+ (. idx :old) 1))
+        (set (. idx :new) (+ (. idx :new) 1))))
     out))
 
 (fn apply-live-edits-to-meta!

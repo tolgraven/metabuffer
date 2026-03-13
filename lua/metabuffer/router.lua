@@ -113,8 +113,8 @@ end
 local function _16_(root, include_hidden, include_ignored, include_deps)
   return router_util_mod["project-file-list"](M, root, include_hidden, include_ignored, include_deps)
 end
-local function _17_(path)
-  return router_util_mod["read-file-lines-cached"](M, path)
+local function _17_(path, opts)
+  return router_util_mod["read-file-lines-cached"](M, path, opts)
 end
 local function _18_(session)
   return router_util_mod["session-active?"](M["active-by-prompt"], session)

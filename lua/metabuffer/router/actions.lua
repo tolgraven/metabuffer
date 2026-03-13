@@ -127,12 +127,13 @@ local function hide_session_ui_21(deps, session)
     return nil
   end
 end
-local function restore_session_ui_21(deps, session)
+local function restore_session_ui_21(deps, session, opts)
   local prompt_window_mod = deps["prompt-window-mod"]
   local meta_window_mod = deps["meta-window-mod"]
   local sync_prompt_buffer_name_21 = deps["sync-prompt-buffer-name!"]
   local router_util_mod = deps["router-util-mod"]
   local update_info_window = deps["update-info-window"]
+  local preserve_focus_3f = (opts and opts["preserve-focus"])
   local curr = session.meta
   if (session["ui-hidden"] and session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and curr and curr.win and vim.api.nvim_win_is_valid(curr.win.window)) then
     local height = (session["hidden-prompt-height"] or router_util_mod["prompt-height"]())
@@ -193,11 +194,15 @@ local function restore_session_ui_21(deps, session)
     end
     pcall(curr.refresh_statusline)
     pcall(update_info_window, session, true)
-    vim.api.nvim_set_current_win(prompt_win)
-    if session["ui-last-insert-mode"] then
-      return vim.cmd("startinsert")
+    if not preserve_focus_3f then
+      vim.api.nvim_set_current_win(prompt_win)
+      if session["ui-last-insert-mode"] then
+        return vim.cmd("startinsert")
+      else
+        return vim.cmd("stopinsert")
+      end
     else
-      return vim.cmd("stopinsert")
+      return nil
     end
   else
     return nil
@@ -277,7 +282,7 @@ local function finish_accept(deps, session)
     session["results-edit-mode"] = false
     hide_session_ui_21(deps, session)
   else
-    local function _31_()
+    local function _32_()
       if (active_by_prompt[session["prompt-buf"]] == session) then
         router_prompt_mod["begin-session-close!"](session, router_prompt_mod["cancel-prompt-update!"])
         pcall(vim.cmd, "stopinsert")
@@ -293,7 +298,7 @@ local function finish_accept(deps, session)
         return nil
       end
     end
-    vim.schedule(_31_)
+    vim.schedule(_32_)
   end
   return curr
 end
@@ -385,24 +390,33 @@ M["merge-history-cache!"] = function(deps, prompt_buf)
     return nil
   end
 end
-local function append_current_symbol_21(deps, prompt_buf, f)
+local function append_current_symbol_21(deps, prompt_buf, f, opts)
   local active_by_prompt = deps["active-by-prompt"]
   local router_util_mod = deps["router-util-mod"]
+  local on_newline_3f = (opts and opts.newline)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if session then
     local word
-    local function _44_()
+    local function _45_()
       return vim.fn.expand("<cword>")
     end
-    word = vim.api.nvim_win_call(session.meta.win.window, _44_)
+    word = vim.api.nvim_win_call(session.meta.win.window, _45_)
     local token = f(word)
     if (token ~= "") then
       local current = router_util_mod["prompt-text"](session)
       local sep
-      if ((current == "") or vim.endswith(current, " ") or vim.endswith(current, "\n")) then
-        sep = ""
+      if on_newline_3f then
+        if ((current == "") or vim.endswith(current, "\n")) then
+          sep = ""
+        else
+          sep = "\n"
+        end
       else
-        sep = " "
+        if ((current == "") or vim.endswith(current, " ") or vim.endswith(current, "\n")) then
+          sep = ""
+        else
+          sep = " "
+        end
       end
       local next = (current .. sep .. token)
       return router_util_mod["set-prompt-text!"](session, next)
@@ -414,24 +428,68 @@ local function append_current_symbol_21(deps, prompt_buf, f)
   end
 end
 M["exclude-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _48_(word)
+  local function _51_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return ("!" .. word)
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _48_)
+  return append_current_symbol_21(deps, prompt_buf, _51_)
 end
 M["insert-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _50_(word)
+  local function _53_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return word
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _50_)
+  return append_current_symbol_21(deps, prompt_buf, _53_)
+end
+M["insert-symbol-under-cursor-newline!"] = function(deps, prompt_buf)
+  local function _55_(word)
+    if ((type(word) == "string") and (vim.trim(word) ~= "")) then
+      return word
+    else
+      return ""
+    end
+  end
+  return append_current_symbol_21(deps, prompt_buf, _55_, {newline = true})
+end
+M["toggle-prompt-results-focus!"] = function(deps, prompt_buf)
+  local session = session_by_prompt(deps["active-by-prompt"], prompt_buf)
+  if session then
+    local meta_win = (session.meta and session.meta.win and session.meta.win.window)
+    local prompt_win = session["prompt-win"]
+    local cur_win = vim.api.nvim_get_current_win()
+    if (session["ui-hidden"] and session.meta and session.meta.buf and (vim.api.nvim_get_current_buf() == session.meta.buf.buffer)) then
+      restore_session_ui_21(deps, session, {["preserve-focus"] = false})
+      if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+        pcall(vim.api.nvim_set_current_win, session["prompt-win"])
+        return pcall(vim.cmd, "startinsert")
+      else
+        return nil
+      end
+    else
+      if (prompt_win and vim.api.nvim_win_is_valid(prompt_win) and (cur_win == prompt_win)) then
+        if (meta_win and vim.api.nvim_win_is_valid(meta_win)) then
+          pcall(vim.api.nvim_set_current_win, meta_win)
+        else
+        end
+        return pcall(vim.cmd, "stopinsert")
+      else
+        if (prompt_win and vim.api.nvim_win_is_valid(prompt_win)) then
+          pcall(vim.api.nvim_set_current_win, prompt_win)
+          return pcall(vim.cmd, "startinsert")
+        else
+          return nil
+        end
+      end
+    end
+  else
+    return nil
+  end
 end
 M["toggle-scan-option!"] = function(deps, prompt_buf, which)
   local project_source = deps["project-source"]
@@ -505,15 +563,15 @@ M["on-results-buffer-wipe!"] = function(deps, results_buf)
   if (session and not session._results_wiped) then
     session._results_wiped = true
     session.closing = true
-    local or_58_ = session["last-prompt-text"]
-    if not or_58_ then
+    local or_69_ = session["last-prompt-text"]
+    if not or_69_ then
       if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
-        or_58_ = router_util_mod["prompt-text"](session)
+        or_69_ = router_util_mod["prompt-text"](session)
       else
-        or_58_ = ""
+        or_69_ = ""
       end
     end
-    history_api["push-history-entry!"](session, or_58_)
+    history_api["push-history-entry!"](session, or_69_)
     router_util_mod["persist-prompt-height!"](session)
     if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
       pcall(vim.api.nvim_win_close, session["prompt-win"], true)
@@ -576,6 +634,96 @@ local function slice_lines(lines, start, count)
   end
   return out
 end
+local function clone_row_with_text(row, text)
+  local r = vim.deepcopy((row or {}))
+  r["text"] = (text or "")
+  r["line"] = (text or "")
+  return r
+end
+local function inserted_row(prev_row, next_row, text, rel_index)
+  local base = (prev_row or next_row or {})
+  local out = vim.deepcopy(base)
+  local prev_lnum = (prev_row.lnum or base.lnum or 1)
+  local next_lnum = (next_row.lnum or base.lnum or (prev_lnum + 1))
+  local lnum
+  if prev_row then
+    lnum = (prev_lnum + rel_index)
+  else
+    lnum = math.max(1, (next_lnum - 1))
+  end
+  out["lnum"] = math.max(1, (lnum or 1))
+  out["text"] = (text or "")
+  out["line"] = (text or "")
+  return out
+end
+local function projected_rows_from_edits(baseline_rows, baseline_lines, current_lines)
+  local hunks = diff_hunks(baseline_lines, current_lines)
+  local out = {}
+  local idx = {old = 1, new = 1}
+  for _, h in ipairs(hunks) do
+    local _let_78_ = hunk_indices(h)
+    local a_start = _let_78_[1]
+    local a_count = _let_78_[2]
+    local b_start = _let_78_[3]
+    local b_count = _let_78_[4]
+    local common = math.min(a_count, b_count)
+    while (idx.old < a_start) do
+      local txt = (current_lines[idx.new] or "")
+      table.insert(out, clone_row_with_text(baseline_rows[idx.old], txt))
+      idx["old"] = (idx.old + 1)
+      idx["new"] = (idx.new + 1)
+    end
+    for k = 1, common do
+      local txt = (current_lines[(b_start + k + -1)] or "")
+      table.insert(out, clone_row_with_text(baseline_rows[(a_start + k + -1)], txt))
+    end
+    if (b_count > a_count) then
+      local extra = (b_count - common)
+      local prev_row
+      if ((a_start + common + -1) > 0) then
+        prev_row = baseline_rows[(a_start + common + -1)]
+      else
+        prev_row = nil
+      end
+      local next_row = baseline_rows[(a_start + common)]
+      for k = 1, extra do
+        local txt = (current_lines[(b_start + common + k + -1)] or "")
+        table.insert(out, inserted_row(prev_row, next_row, txt, k))
+      end
+    else
+    end
+    idx["old"] = (a_start + a_count)
+    idx["new"] = (b_start + b_count)
+  end
+  while (idx.old <= #baseline_rows) do
+    local txt = (current_lines[idx.new] or "")
+    table.insert(out, clone_row_with_text(baseline_rows[idx.old], txt))
+    idx["old"] = (idx.old + 1)
+    idx["new"] = (idx.new + 1)
+  end
+  return out
+end
+local function apply_live_edits_to_meta_21(session, current_lines)
+  local meta = session.meta
+  local baseline_lines = (session["edit-baseline-lines"] or {})
+  local baseline_rows = (session["edit-baseline-rows"] or {})
+  local rows = projected_rows_from_edits(baseline_rows, baseline_lines, current_lines)
+  local refs = {}
+  local content = {}
+  local idxs = {}
+  for i = 1, #rows do
+    local row = (rows[i] or {})
+    refs[i] = {kind = (row.kind or ""), path = (row.path or ""), lnum = (row.lnum or 1), ["open-lnum"] = (row["open-lnum"] or row.lnum or 1), line = (row.text or row.line or "")}
+    content[i] = (row.text or row.line or "")
+    idxs[i] = i
+  end
+  meta.buf["source-refs"] = refs
+  meta.buf.content = content
+  meta.buf.indices = idxs
+  local max = math.max(1, #idxs)
+  meta.selected_index = math.max(0, math.min((meta.selected_index or 0), (max - 1)))
+  return nil
+end
 local function valid_row_3f(row)
   return (row and (type(row.path) == "string") and (row.path ~= "") and (type(row.lnum) == "number") and (row.lnum > 0) and (row.kind ~= "file-entry"))
 end
@@ -594,11 +742,11 @@ local function collect_file_ops(session)
   local hunks = diff_hunks(baseline_lines, current_lines)
   local ops = {}
   for _, h in ipairs(hunks) do
-    local _let_66_ = hunk_indices(h)
-    local a_start = _let_66_[1]
-    local a_count = _let_66_[2]
-    local b_start = _let_66_[3]
-    local b_count = _let_66_[4]
+    local _let_81_ = hunk_indices(h)
+    local a_start = _let_81_[1]
+    local a_count = _let_81_[2]
+    local b_start = _let_81_[3]
+    local b_count = _let_81_[4]
     local common = math.min(a_count, b_count)
     local old_rows = slice_lines(baseline_rows, a_start, a_count)
     local new_lines = slice_lines(current_lines, b_start, b_count)
@@ -632,8 +780,8 @@ local function collect_file_ops(session)
       end
     else
       local extra = slice_lines(new_lines, 1, b_count)
-      local prev_row = baseline_rows[a_start]
-      local next_row = baseline_rows[(a_start + 1)]
+      local prev_row = baseline_rows[(a_start - 1)]
+      local next_row = baseline_rows[a_start]
       if (#extra > 0) then
         if valid_row_3f(prev_row) then
           append_op_21(ops, prev_row.path, {kind = "insert-after", lnum = prev_row.lnum, lines = extra})
@@ -654,74 +802,167 @@ local function apply_file_ops_21(session, ops)
   local touched_paths = {}
   local total = 0
   local any_write = false
-  for path, per_file in pairs((ops or {})) do
-    local ok_read,lines0 = pcall(vim.fn.readfile, path)
-    if (ok_read and (type(lines0) == "table")) then
-      local lines = vim.deepcopy(lines0)
-      local delta = 0
-      local changed_3f = false
-      for _, op in ipairs((per_file or {})) do
-        if (op.kind == "replace") then
-          local lnum = (op.lnum + delta)
-          if ((lnum >= 1) and (lnum <= #lines) and (lines[lnum] ~= op.text)) then
-            lines[lnum] = op.text
-            total = (total + 1)
-            changed_3f = true
-          else
-          end
-        elseif (op.kind == "delete") then
-          local lnum = (op.lnum + delta)
-          if ((lnum >= 1) and (lnum <= #lines)) then
-            table.remove(lines, lnum)
-            delta = (delta - 1)
-            total = (total + 1)
-            changed_3f = true
-          else
-          end
-        elseif (op.kind == "insert-before") then
-          local ins = (op.lines or {})
-          local lnum = (op.lnum + delta)
-          local pos = math.max(1, math.min((#lines + 1), lnum))
-          if (#ins > 0) then
-            for i = 1, #ins do
-              table.insert(lines, (pos + i + -1), ins[i])
-            end
-            delta = (delta + #ins)
-            total = (total + #ins)
-            changed_3f = true
-          else
-          end
+  local function apply_op_to_loaded_buffer_21(buf, op, delta)
+    if (op.kind == "replace") then
+      local lnum = (op.lnum + delta)
+      local line_count = vim.api.nvim_buf_line_count(buf)
+      if ((lnum >= 1) and (lnum <= line_count)) then
+        local old = (vim.api.nvim_buf_get_lines(buf, (lnum - 1), lnum, false)[1] or "")
+        local new = (op.text or "")
+        if (old ~= new) then
+          vim.api.nvim_buf_set_lines(buf, (lnum - 1), lnum, false, {new})
+          return {delta, 1}
         else
-          local ins = (op.lines or {})
-          local lnum = (op.lnum + delta)
-          local pos = math.max(0, math.min(#lines, lnum))
-          if (#ins > 0) then
-            for i = 1, #ins do
-              table.insert(lines, (pos + i), ins[i])
+          return {delta, 0}
+        end
+      else
+        return {delta, 0}
+      end
+    elseif (op.kind == "delete") then
+      local lnum = (op.lnum + delta)
+      local line_count = vim.api.nvim_buf_line_count(buf)
+      if ((lnum >= 1) and (lnum <= line_count)) then
+        vim.api.nvim_buf_set_lines(buf, (lnum - 1), lnum, false, {})
+        return {(delta - 1), 1}
+      else
+        return {delta, 0}
+      end
+    elseif (op.kind == "insert-before") then
+      local ins = (op.lines or {})
+      local lnum = (op.lnum + delta)
+      local pos = math.max(1, math.min((vim.api.nvim_buf_line_count(buf) + 1), lnum))
+      if (#ins > 0) then
+        vim.api.nvim_buf_set_lines(buf, (pos - 1), (pos - 1), false, ins)
+        return {(delta + #ins), #ins}
+      else
+        return {delta, 0}
+      end
+    else
+      local ins = (op.lines or {})
+      local lnum = (op.lnum + delta)
+      local pos = math.max(0, math.min(vim.api.nvim_buf_line_count(buf), lnum))
+      if (#ins > 0) then
+        vim.api.nvim_buf_set_lines(buf, pos, pos, false, ins)
+        return {(delta + #ins), #ins}
+      else
+        return {delta, 0}
+      end
+    end
+  end
+  local function apply_op_to_lines_21(lines, op, delta)
+    if (op.kind == "replace") then
+      local lnum = (op.lnum + delta)
+      if ((lnum >= 1) and (lnum <= #lines) and (lines[lnum] ~= op.text)) then
+        lines[lnum] = op.text
+        return {delta, 1}
+      else
+        return {delta, 0}
+      end
+    elseif (op.kind == "delete") then
+      local lnum = (op.lnum + delta)
+      if ((lnum >= 1) and (lnum <= #lines)) then
+        table.remove(lines, lnum)
+        return {(delta - 1), 1}
+      else
+        return {delta, 0}
+      end
+    elseif (op.kind == "insert-before") then
+      local ins = (op.lines or {})
+      local lnum = (op.lnum + delta)
+      local pos = math.max(1, math.min((#lines + 1), lnum))
+      if (#ins > 0) then
+        for i = 1, #ins do
+          table.insert(lines, (pos + i + -1), ins[i])
+        end
+        return {(delta + #ins), #ins}
+      else
+        return {delta, 0}
+      end
+    else
+      local ins = (op.lines or {})
+      local lnum = (op.lnum + delta)
+      local pos = math.max(0, math.min(#lines, lnum))
+      if (#ins > 0) then
+        for i = 1, #ins do
+          table.insert(lines, (pos + i), ins[i])
+        end
+        return {(delta + #ins), #ins}
+      else
+        return {delta, 0}
+      end
+    end
+  end
+  for path, per_file in pairs((ops or {})) do
+    local bufnr = vim.fn.bufnr(path)
+    if (bufnr and (bufnr > 0) and vim.api.nvim_buf_is_loaded(bufnr)) then
+      local bo = vim.bo[bufnr]
+      local old_mod = bo.modifiable
+      local old_ro = bo.readonly
+      bo["modifiable"] = true
+      bo["readonly"] = false
+      local delta = 0
+      local changed = 0
+      for _, op in ipairs((per_file or {})) do
+        local _let_102_ = apply_op_to_loaded_buffer_21(bufnr, op, delta)
+        local next_delta = _let_102_[1]
+        local bump = _let_102_[2]
+        delta = next_delta
+        changed = (changed + bump)
+      end
+      bo["modifiable"] = old_mod
+      bo["readonly"] = old_ro
+      if (changed > 0) then
+        local function _103_()
+          return vim.cmd("silent keepalt noautocmd write")
+        end
+        local ok_write = pcall(vim.api.nvim_buf_call, bufnr, _103_)
+        if ok_write then
+          any_write = true
+          total = (total + changed)
+          touched_paths[path] = true
+          post_lines[path] = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+        else
+          local ok_read,lines0 = pcall(vim.api.nvim_buf_get_lines, bufnr, 0, -1, false)
+          if (ok_read and (type(lines0) == "table")) then
+            local ok_fallback = pcall(vim.fn.writefile, lines0, path)
+            if ok_fallback then
+              any_write = true
+              total = (total + changed)
+              touched_paths[path] = true
+              post_lines[path] = lines0
+            else
             end
-            delta = (delta + #ins)
-            total = (total + #ins)
-            changed_3f = true
           else
           end
         end
+      else
       end
-      if changed_3f then
-        local ok_write = pcall(vim.fn.writefile, lines, path)
-        if ok_write then
-          any_write = true
-          touched_paths[path] = true
-          post_lines[path] = lines
-          local bufnr = vim.fn.bufnr(path)
-          if (bufnr and (bufnr > 0) and vim.api.nvim_buf_is_loaded(bufnr)) then
-            pcall(vim.api.nvim_buf_set_lines, bufnr, 0, -1, false, lines)
+    else
+      local ok_read,lines0 = pcall(vim.fn.readfile, path)
+      if (ok_read and (type(lines0) == "table")) then
+        local lines = vim.deepcopy(lines0)
+        local delta = 0
+        local changed = 0
+        for _, op in ipairs((per_file or {})) do
+          local _let_108_ = apply_op_to_lines_21(lines, op, delta)
+          local next_delta = _let_108_[1]
+          local bump = _let_108_[2]
+          delta = next_delta
+          changed = (changed + bump)
+        end
+        if (changed > 0) then
+          local ok_write = pcall(vim.fn.writefile, lines, path)
+          if ok_write then
+            any_write = true
+            total = (total + changed)
+            touched_paths[path] = true
+            post_lines[path] = lines
           else
           end
         else
         end
       else
       end
-    else
     end
   end
   return {wrote = any_write, changed = total, ["post-lines"] = post_lines, paths = touched_paths}
@@ -827,13 +1068,13 @@ M["write-results!"] = function(deps, prompt_buf)
       pcall(sign_mod["refresh-change-signs!"], session)
     else
     end
-    local _97_
+    local _125_
     if (result.changed > 0) then
-      _97_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+      _125_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
     else
-      _97_ = "metabuffer: no changes"
+      _125_ = "metabuffer: no changes"
     end
-    return vim.notify(_97_, vim.log.levels.INFO)
+    return vim.notify(_125_, vim.log.levels.INFO)
   else
     return nil
   end
@@ -861,11 +1102,30 @@ M["enter-edit-mode!"] = function(deps, prompt_buf)
     return nil
   end
 end
+M["sync-live-edits!"] = function(deps, prompt_buf)
+  local session = session_by_prompt(deps["active-by-prompt"], prompt_buf)
+  if (session and session.meta and session.meta.buf) then
+    local buf = session.meta.buf.buffer
+    local manual_3f
+    do
+      local ok,v = pcall(vim.api.nvim_buf_get_var, buf, "meta_manual_edit_active")
+      manual_3f = (ok and v)
+    end
+    if (manual_3f and vim.api.nvim_buf_is_valid(buf)) then
+      local current_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+      return apply_live_edits_to_meta_21(session, current_lines)
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
 M["maybe-restore-ui!"] = function(deps, prompt_buf, force)
   local session = session_by_prompt(deps["active-by-prompt"], prompt_buf)
   if (session and session["ui-hidden"] and (force or not session["results-edit-mode"]) and session.meta and session.meta.buf and (vim.api.nvim_get_current_buf() == session.meta.buf.buffer)) then
     session.meta.win.window = vim.api.nvim_get_current_win()
-    return restore_session_ui_21(deps, session)
+    return restore_session_ui_21(deps, session, {["preserve-focus"] = not force})
   else
     return nil
   end

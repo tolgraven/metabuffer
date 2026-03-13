@@ -20,6 +20,18 @@ T['project flags are consumed and reflected in debug/statusline'] = H.timed_case
   eq(H.str_contains(sl, '+dep'), true)
 end)
 
+T['binary and hex flags stay visible in prompt and toggle state'] = H.timed_case(function()
+  H.open_project_meta_from_file('README.md')
+  H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
+
+  H.type_prompt_human('#binary #hex metabuffer.png', 90)
+  H.wait_for(function() return H.session_prompt_text() == '#binary #hex metabuffer.png' end, 6000)
+
+  local dbg = H.session_debug_out()
+  eq(H.str_contains(dbg, '+bin'), true)
+  eq(H.str_contains(dbg, '+hex'), true)
+end)
+
 T['file flag enables file-entry hits filtered by file token'] = H.timed_case(function()
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)

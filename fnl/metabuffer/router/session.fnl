@@ -83,6 +83,12 @@
           start-deps (if-some [v (. parsed-query :include-deps)]
                              v
                              (query-mod.truthy? settings.default-include-deps))
+          start-binary (if-some [v (. parsed-query :include-binary)]
+                               v
+                               (query-mod.truthy? settings.default-include-binary))
+          start-hex (if-some [v (. parsed-query :include-hex)]
+                           v
+                           (query-mod.truthy? settings.default-include-hex))
           start-files (if-some [v (. parsed-query :include-files)]
                               v
                               (query-mod.truthy? settings.default-include-files))
@@ -161,10 +167,14 @@
                                :include-hidden start-hidden
                                :include-ignored start-ignored
                                :include-deps start-deps
+                               :include-binary start-binary
+                               :include-hex start-hex
                                :include-files start-files
                                :effective-include-hidden start-hidden
                                :effective-include-ignored start-ignored
                                :effective-include-deps start-deps
+                               :effective-include-binary start-binary
+                               :effective-include-hex start-hex
                                :effective-include-files start-files
                                :project-bootstrap-pending false
                                :project-bootstrap-token 0
@@ -180,6 +190,8 @@
                                                    :include-hidden start-hidden
                                                    :include-ignored start-ignored
                                                    :include-deps start-deps
+                                                   :include-binary start-binary
+                                                   :include-hex start-hex
                                                    :include-files start-files
                                                    :file-lines (or (. parsed-query :file-lines) [])
                                                    :prefilter start-prefilter

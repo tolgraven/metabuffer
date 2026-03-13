@@ -373,7 +373,7 @@ M.new = function(opts)
     end
     return math.floor((bytes / 80))
   end
-  local function collect_project_sources(session, include_hidden, include_ignored, include_deps, include_files)
+  local function collect_project_sources(session, include_hidden, include_ignored, include_deps, include_binary, include_hex, include_files)
     local root = vim.fn.getcwd()
     local current_path = current_buffer_path(session["source-buf"])
     local file_cache = (session["preview-file-cache"] or {})
@@ -400,7 +400,7 @@ M.new = function(opts)
     end
     if include_files then
       for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps)) do
-        push_file_entry_into_pool_21(session, path, read_file_lines_cached(path))
+        push_file_entry_into_pool_21(session, path, read_file_lines_cached(path, {["include-binary"] = include_binary, ["hex-view"] = include_hex}))
       end
     else
     end
@@ -409,8 +409,8 @@ M.new = function(opts)
       if ((total_lines < settings["project-max-total-lines"]) and allow_project_path_3f(rel, include_hidden, include_deps) and (not current_path or (vim.fn.fnamemodify(path, ":p") ~= vim.fn.fnamemodify(current_path, ":p"))) and (1 == vim.fn.filereadable(path))) then
         local size = vim.fn.getfsize(path)
         if ((size >= 0) and (size <= settings["project-max-file-bytes"])) then
-          local ok,lines = pcall(vim.fn.readfile, path)
-          if (ok and (type(lines) == "table")) then
+          local lines = read_file_lines_cached(path, {["include-binary"] = include_binary, ["hex-view"] = include_hex})
+          if (type(lines) == "table") then
             file_cache[path] = lines
             for lnum, line in ipairs(lines) do
               if (total_lines < settings["project-max-total-lines"]) then
@@ -433,6 +433,8 @@ M.new = function(opts)
     local include_hidden = session["effective-include-hidden"]
     local include_ignored = session["effective-include-ignored"]
     local include_deps = session["effective-include-deps"]
+    local include_binary = session["effective-include-binary"]
+    local include_hex = session["effective-include-hex"]
     local include_files = session["effective-include-files"]
     local current = canonical_path(current_buffer_path(session["source-buf"]))
     local open_paths = open_project_buffer_paths(session, root, include_hidden, include_deps)
@@ -446,13 +448,13 @@ M.new = function(opts)
     local deferred = {}
     local deferred_seen = {}
     for _, path in ipairs(file_entry_paths) do
-      push_file_entry_into_pool_21(session, path, read_file_lines_cached(path))
+      push_file_entry_into_pool_21(session, path, read_file_lines_cached(path, {["include-binary"] = include_binary, ["hex-view"] = include_hex}))
     end
     for _, path in ipairs(open_paths) do
       local p = canonical_path(path)
       if (p and (1 == vim.fn.filereadable(p))) then
         deferred_seen[p] = true
-        push_file_into_pool_21(session, p, read_file_lines_cached(p), prefilter)
+        push_file_into_pool_21(session, p, read_file_lines_cached(p, {["include-binary"] = include_binary, ["hex-view"] = include_hex}), prefilter)
       else
       end
     end
@@ -486,7 +488,7 @@ M.new = function(opts)
         local touched = false
         while ((consumed < chunk) and (session["lazy-stream-next"] <= total) and (#session.meta.buf.content < settings["project-max-total-lines"])) do
           local path = paths[session["lazy-stream-next"]]
-          local lines = (path and read_file_lines_cached(path))
+          local lines = (path and read_file_lines_cached(path, {["include-binary"] = session["effective-include-binary"], ["hex-view"] = session["effective-include-hex"]}))
           local before = #session.meta.buf.content
           if lines then
             push_file_into_pool_21(session, path, lines, prefilter)
@@ -532,7 +534,7 @@ M.new = function(opts)
       if lazy_preferred_3f(session, (init["estimated-lines"] or 0)) then
         start_project_stream_21(session, nil, init)
       else
-        local pool = collect_project_sources(session, session["effective-include-hidden"], session["effective-include-ignored"], session["effective-include-deps"], session["effective-include-files"])
+        local pool = collect_project_sources(session, session["effective-include-hidden"], session["effective-include-ignored"], session["effective-include-deps"], session["effective-include-binary"], session["effective-include-hex"], session["effective-include-files"])
         meta.buf.content = pool.content
         meta.buf["source-refs"] = pool.refs
         session["lazy-stream-done"] = true

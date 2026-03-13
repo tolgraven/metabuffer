@@ -140,8 +140,8 @@
                             (router_util_mod.allow-project-path? M rel include-hidden include-deps))
      :project-file-list (fn [root include-hidden include-ignored include-deps]
                           (router_util_mod.project-file-list M root include-hidden include-ignored include-deps))
-     :read-file-lines-cached (fn [path]
-                               (router_util_mod.read-file-lines-cached M path))
+     :read-file-lines-cached (fn [path opts]
+                               (router_util_mod.read-file-lines-cached M path opts))
      :session-active? (fn [session]
                         (router_util_mod.session-active? M.active-by-prompt session))
      :lazy-streaming-allowed? (fn [session]

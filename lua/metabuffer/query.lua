@@ -24,6 +24,10 @@ local function parse_option_token(tok)
   local ignored_off = ((tok == "#noignored") or (tok == "-ignored") or (tok == "#-ignored") or (tok == (prefix .. "noignored")))
   local deps_on = ((tok == "#deps") or (tok == "+deps") or (tok == "#+deps") or (tok == (prefix .. "deps")))
   local deps_off = ((tok == "#nodeps") or (tok == "-deps") or (tok == "#-deps") or (tok == (prefix .. "nodeps")))
+  local binary_on = ((tok == "#binary") or (tok == "+binary") or (tok == "#+binary") or (tok == (prefix .. "binary")))
+  local binary_off = ((tok == "#nobinary") or (tok == "-binary") or (tok == "#-binary") or (tok == (prefix .. "nobinary")))
+  local hex_on = ((tok == "#hex") or (tok == "+hex") or (tok == "#+hex") or (tok == (prefix .. "hex")))
+  local hex_off = ((tok == "#nohex") or (tok == "-hex") or (tok == "#-hex") or (tok == (prefix .. "nohex")))
   local prefilter_off = ((tok == "#escape") or (tok == "+escape") or (tok == "#+escape") or (tok == (prefix .. "escape")) or (tok == "#noprefilter") or (tok == "-prefilter") or (tok == "#-prefilter") or (tok == (prefix .. "noprefilter")))
   local prefilter_on = ((tok == "#prefilter") or (tok == "+prefilter") or (tok == "#+prefilter") or (tok == (prefix .. "prefilter")))
   local lazy_off = ((tok == "#nolazy") or (tok == "-lazy") or (tok == "#-lazy") or (tok == (prefix .. "nolazy")))
@@ -46,6 +50,14 @@ local function parse_option_token(tok)
     return {"deps", true}
   elseif deps_off then
     return {"deps", false}
+  elseif binary_on then
+    return {"binary", true}
+  elseif binary_off then
+    return {"binary", false}
+  elseif hex_on then
+    return {"hex", true}
+  elseif hex_off then
+    return {"hex", false}
   elseif prefilter_off then
     return {"prefilter", false}
   elseif prefilter_on then
@@ -164,11 +176,13 @@ local function parse_lines(lines, idx, state)
   end
 end
 M["parse-query-lines"] = function(lines)
-  local init = {lines = {}, hidden = nil, ignored = nil, deps = nil, prefilter = nil, lazy = nil, files = nil, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil, ["file-lines"] = {}, ["file-await-token"] = false}
+  local init = {lines = {}, hidden = nil, ignored = nil, deps = nil, binary = nil, hex = nil, prefilter = nil, lazy = nil, files = nil, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil, ["file-lines"] = {}, ["file-await-token"] = false}
   local parsed = parse_lines((lines or {}), 1, init)
   parsed["include-hidden"] = parsed.hidden
   parsed["include-ignored"] = parsed.ignored
   parsed["include-deps"] = parsed.deps
+  parsed["include-binary"] = parsed.binary
+  parsed["include-hex"] = parsed.hex
   parsed["include-files"] = parsed.files
   return parsed
 end
@@ -176,7 +190,7 @@ M["parse-query-text"] = function(query)
   if ((type(query) == "string") and (query ~= "")) then
     local lines = vim.split(query, "\n", {plain = true})
     local parsed = M["parse-query-lines"](lines)
-    return {query = table.concat(parsed.lines, "\n"), lines = (parsed.lines or {}), ["include-hidden"] = parsed.hidden, ["include-ignored"] = parsed.ignored, ["include-deps"] = parsed.deps, ["include-files"] = parsed.files, prefilter = parsed.prefilter, lazy = parsed.lazy, ["file-lines"] = (parsed["file-lines"] or {}), history = parsed.history, ["save-tag"] = parsed["save-tag"], ["saved-tag"] = parsed["saved-tag"], ["saved-browser"] = parsed["saved-browser"]}
+    return {query = table.concat(parsed.lines, "\n"), lines = (parsed.lines or {}), ["include-hidden"] = parsed.hidden, ["include-ignored"] = parsed.ignored, ["include-deps"] = parsed.deps, ["include-binary"] = parsed.binary, ["include-hex"] = parsed.hex, ["include-files"] = parsed.files, prefilter = parsed.prefilter, lazy = parsed.lazy, ["file-lines"] = (parsed["file-lines"] or {}), history = parsed.history, ["save-tag"] = parsed["save-tag"], ["saved-tag"] = parsed["saved-tag"], ["saved-browser"] = parsed["saved-browser"]}
   else
     local _15_
     if ((type(query) == "string") and (query ~= "")) then
@@ -184,7 +198,7 @@ M["parse-query-text"] = function(query)
     else
       _15_ = {}
     end
-    return {query = query, lines = _15_, ["include-hidden"] = nil, ["include-ignored"] = nil, ["include-deps"] = nil, ["include-files"] = nil, prefilter = nil, lazy = nil, ["file-lines"] = {}, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil}
+    return {query = query, lines = _15_, ["include-hidden"] = nil, ["include-ignored"] = nil, ["include-deps"] = nil, ["include-binary"] = nil, ["include-hex"] = nil, ["include-files"] = nil, prefilter = nil, lazy = nil, ["file-lines"] = {}, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil}
   end
 end
 local function lines_has_active_3f(lines, idx)
