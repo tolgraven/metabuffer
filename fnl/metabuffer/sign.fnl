@@ -99,14 +99,18 @@
         buf (and meta meta.buf meta.buf.buffer)]
     (when (and buf (vim.api.nvim_buf_is_valid buf)
                (not (bvar buf "meta_internal_render" false)))
-      (ensure-change-signs-defined!)
-      (M.clear-change-signs! buf)
-      (let [old-lines (or session.edit-baseline-lines [])
-            new-lines (current-lines buf)
-            hunks (diff-hunks old-lines new-lines)]
-        (var next-id 1)
-        (each [_ h (ipairs hunks)]
-          (set next-id (place-hunk-signs! buf (# new-lines) next-id h)))))))
+      (let [manual-edit? (bvar buf "meta_manual_edit_active" false)]
+        (if (not manual-edit?)
+            (M.clear-change-signs! buf)
+            (do
+              (ensure-change-signs-defined!)
+              (M.clear-change-signs! buf)
+              (let [old-lines (or session.edit-baseline-lines [])
+                    new-lines (current-lines buf)
+                    hunks (diff-hunks old-lines new-lines)]
+                (var next-id 1)
+                (each [_ h (ipairs hunks)]
+                  (set next-id (place-hunk-signs! buf (# new-lines) next-id h))))))))))
 
 (fn M.capture-baseline!
   [session]

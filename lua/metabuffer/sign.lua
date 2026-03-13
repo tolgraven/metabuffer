@@ -102,16 +102,21 @@ M["refresh-change-signs!"] = function(session)
   local meta = (session and session.meta)
   local buf = (meta and meta.buf and meta.buf.buffer)
   if (buf and vim.api.nvim_buf_is_valid(buf) and not bvar(buf, "meta_internal_render", false)) then
-    ensure_change_signs_defined_21()
-    M["clear-change-signs!"](buf)
-    local old_lines = (session["edit-baseline-lines"] or {})
-    local new_lines = current_lines(buf)
-    local hunks = diff_hunks(old_lines, new_lines)
-    local next_id = 1
-    for _, h in ipairs(hunks) do
-      next_id = place_hunk_signs_21(buf, #new_lines, next_id, h)
+    local manual_edit_3f = bvar(buf, "meta_manual_edit_active", false)
+    if not manual_edit_3f then
+      return M["clear-change-signs!"](buf)
+    else
+      ensure_change_signs_defined_21()
+      M["clear-change-signs!"](buf)
+      local old_lines = (session["edit-baseline-lines"] or {})
+      local new_lines = current_lines(buf)
+      local hunks = diff_hunks(old_lines, new_lines)
+      local next_id = 1
+      for _, h in ipairs(hunks) do
+        next_id = place_hunk_signs_21(buf, #new_lines, next_id, h)
+      end
+      return nil
     end
-    return nil
   else
     return nil
   end

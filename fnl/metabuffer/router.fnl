@@ -3,6 +3,7 @@
 (local prompt_window_mod (require :metabuffer.window.prompt))
 (local meta_window_mod (require :metabuffer.window.metawindow))
 (local floating_window_mod (require :metabuffer.window.floating))
+; hey
 (local preview_window_mod (require :metabuffer.window.preview))
 (local info_window_mod (require :metabuffer.window.info))
 (local history_browser_window_mod (require :metabuffer.window.history_browser))
@@ -40,6 +41,7 @@
       (.. session.meta.buf.name " [Prompt]"))))
 
 (set M.instances {})
+(set M._instance-seq 0)
 (set M.active-by-source {})
 (set M.active-by-prompt {})
 (var update-info-window nil)
@@ -124,6 +126,7 @@
             (info-window.close-window! session))
           (when (and info-window info-window.update!)
             (info-window.update! session refresh-lines))))))
+;; fuuuuh
 
 (local project-source
   (project_source_mod.new
@@ -208,6 +211,7 @@
 (set actions-deps
   {:active-by-source M.active-by-source
    :active-by-prompt M.active-by-prompt
+   :instances M.instances
    :settings M
    :history-api history-api
    :history-store history_store
@@ -251,6 +255,9 @@
    :meta-window-mod meta_window_mod
    :history-store history_store
    :sign-mod sign_mod
+   :next-instance-id! (fn []
+                        (set M._instance-seq (+ (or M._instance-seq 0) 1))
+                        M._instance-seq)
    :sync-prompt-buffer-name! sync-prompt-buffer-name!
    :apply-prompt-lines apply-prompt-lines
    :update-info-window update-info-window
@@ -433,6 +440,16 @@
   "Propagate edited results lines back to their source files."
   (router_actions_mod.write-results! actions-deps prompt-buf))
 
+(fn M.sync-live-edits
+  [prompt-buf]
+  "Update in-memory refs/indices for manual results edits before write."
+  (router_actions_mod.sync-live-edits! actions-deps prompt-buf))
+
+(fn M.results-buffer-wiped
+  [results-buf]
+  "Handle manual results-buffer wipe by cleaning hidden/resting session state."
+  (router_actions_mod.on-results-buffer-wipe! actions-deps results-buf))
+
 (fn M.maybe-restore-hidden-ui
   [prompt-buf]
   "Restore hidden prompt/info UI when revisiting a preserved results buffer."
@@ -446,6 +463,7 @@
 (fn M.toggle-project-mode
   [prompt-buf]
   "Public API: M.toggle-project-mode."
+ok
   (router_actions_mod.toggle-project-mode! actions-deps prompt-buf))
 
 (fn M.toggle-info-file-entry-view
@@ -460,7 +478,7 @@
 
 (fn M.sync
   [meta query]
-  "Public API: M.sync."
+; yada
   (when-not meta
     (vim.notify "No Meta instance" vim.log.levels.WARN))
   (when meta
@@ -471,7 +489,6 @@
 
 (fn M.push
   [meta]
-  "Public API: M.push."
   (when-not meta
     (vim.notify "No Meta instance" vim.log.levels.WARN))
   (when meta
@@ -492,13 +509,23 @@
   [query]
   "Public API: M.entry_sync."
   (let [key (vim.api.nvim_get_current_buf)]
-    (M.sync (. M.instances key) query)))
+    (let [session (. M.active-by-source key)
+          inst (. M.instances key)
+          meta (or (and session session.meta)
+                   (and inst inst.meta)
+                   inst)]
+      (M.sync meta query))))
 
 (fn M.entry_push
   []
   "Public API: M.entry_push."
   (let [key (vim.api.nvim_get_current_buf)]
-    (M.push (. M.instances key))))
+    (let [session (. M.active-by-source key)
+          inst (. M.instances key)
+          meta (or (and session session.meta)
+                   (and inst inst.meta)
+                   inst)]
+      (M.push meta))))
 
 (fn M.entry_cursor_word
   [resume]

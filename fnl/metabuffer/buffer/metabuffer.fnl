@@ -270,6 +270,10 @@
         (when undo-levels
           (pcall vim.api.nvim_set_option_value "undolevels" -1 {:buf self.buffer}))
         (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
+        (when-not manual-edit-active?
+          ;; Prompt/filter-driven rerenders are internal and should not mark the
+          ;; results buffer as user-edited.
+          (pcall vim.api.nvim_set_option_value "modified" false {:buf self.buffer}))
         (when undo-levels
           (pcall vim.api.nvim_set_option_value "undolevels" undo-levels {:buf self.buffer})))
       (vim.api.nvim_buf_clear_namespace self.buffer self.source-hl-ns 0 -1)

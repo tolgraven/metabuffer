@@ -6,6 +6,11 @@
   [active-by-prompt prompt-buf]
   (. active-by-prompt prompt-buf))
 
+(fn clear-map-entry!
+  [tbl key expected]
+  (when (and tbl key (= (. tbl key) expected))
+    (set (. tbl key) nil)))
+
 (fn remove-session!
   [deps session]
   (let [history-api (. deps :history-api)
@@ -14,8 +19,10 @@
         info-window (. deps :info-window)
         preview-window (. deps :preview-window)
         active-by-source (. deps :active-by-source)
-        active-by-prompt (. deps :active-by-prompt)]
+        active-by-prompt (. deps :active-by-prompt)
+        instances (. deps :instances)]
     (when session
+      (set session.closing true)
       (history-api.push-history-entry!
         session
         (or session.last-prompt-text
@@ -34,12 +41,12 @@
       (history-api.close-history-browser! session)
       (when (and sign-mod session.meta session.meta.buf session.meta.buf.buffer)
         (sign-mod.clear-change-signs! session.meta.buf.buffer))
-      (when session.source-buf
-        (set (. active-by-source session.source-buf) nil))
+      (clear-map-entry! active-by-source session.source-buf session)
       (when (and session.meta session.meta.buf session.meta.buf.buffer)
-        (set (. active-by-source session.meta.buf.buffer) nil))
-      (when session.prompt-buf
-        (set (. active-by-prompt session.prompt-buf) nil)))))
+        (clear-map-entry! active-by-source session.meta.buf.buffer session))
+      (clear-map-entry! active-by-prompt session.prompt-buf session)
+      (when session.instance-id
+        (clear-map-entry! instances session.instance-id session)))))
 
 (fn clear-hit-highlight!
   [curr]
@@ -87,12 +94,13 @@
       (set (. active-by-source session.meta.buf.buffer) session))))
 
 (fn restore-session-ui!
-  [deps session]
+  [deps session opts]
   (let [prompt-window-mod (. deps :prompt-window-mod)
         meta-window-mod (. deps :meta-window-mod)
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
         router-util-mod (. deps :router-util-mod)
         update-info-window (. deps :update-info-window)
+        preserve-focus? (and opts (. opts :preserve-focus))
         curr session.meta]
     (when (and session.ui-hidden
                session.prompt-buf
@@ -143,10 +151,11 @@
           (pcall vim.api.nvim_win_set_cursor prompt-win [row* col*]))
         (pcall curr.refresh_statusline)
         (pcall update-info-window session true)
-        (vim.api.nvim_set_current_win prompt-win)
-        (if session.ui-last-insert-mode
-            (vim.cmd "startinsert")
-            (vim.cmd "stopinsert"))))))
+        (when-not preserve-focus?
+          (vim.api.nvim_set_current_win prompt-win)
+          (if session.ui-last-insert-mode
+              (vim.cmd "startinsert")
+              (vim.cmd "stopinsert")))))))
 
 (fn finish-accept
   [deps session]
@@ -387,6 +396,39 @@
   [deps session]
   (remove-session! deps session))
 
+(fn M.on-results-buffer-wipe!
+  [deps results-buf]
+  (let [active-by-source (. deps :active-by-source)
+        history-api (. deps :history-api)
+        router-util-mod (. deps :router-util-mod)
+        info-window (. deps :info-window)
+        preview-window (. deps :preview-window)
+        instances (. deps :instances)
+        active-by-prompt (. deps :active-by-prompt)
+        session (. active-by-source results-buf)]
+    (when (and session (not session._results_wiped))
+      (set session._results_wiped true)
+      (set session.closing true)
+      (history-api.push-history-entry!
+        session
+        (or session.last-prompt-text
+            (if (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
+                (router-util-mod.prompt-text session)
+                "")))
+      (router-util-mod.persist-prompt-height! session)
+      (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+        (pcall vim.api.nvim_win_close session.prompt-win true))
+      (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
+        (pcall vim.api.nvim_buf_delete session.prompt-buf {:force true}))
+      (info-window.close-window! session)
+      (preview-window.close-window! session)
+      (history-api.close-history-browser! session)
+      (clear-map-entry! active-by-source session.source-buf session)
+      (clear-map-entry! active-by-source results-buf session)
+      (clear-map-entry! active-by-prompt session.prompt-buf session)
+      (when session.instance-id
+        (clear-map-entry! instances session.instance-id session)))))
+
 (fn set-results-edit-buffer!
   [session]
   (let [buf session.meta.buf.buffer
@@ -421,6 +463,92 @@
       (when (and (>= i 1) (<= i (# lines)))
         (table.insert out (. lines i))))
     out))
+
+(fn clone-row-with-text
+  [row text]
+  (let [r (vim.deepcopy (or row {}))]
+    (set (. r :text) (or text ""))
+    (set (. r :line) (or text ""))
+    r))
+
+(fn inserted-row
+  [prev-row next-row text rel-index]
+  (let [base (or prev-row next-row {})
+        out (vim.deepcopy base)
+        prev-lnum (or (. prev-row :lnum) (. base :lnum) 1)
+        next-lnum (or (. next-row :lnum) (. base :lnum) (+ prev-lnum 1))
+        lnum (if prev-row
+                 (+ prev-lnum rel-index)
+                 (math.max 1 (- next-lnum 1)))]
+    (set (. out :lnum) (math.max 1 (or lnum 1)))
+    (set (. out :text) (or text ""))
+    (set (. out :line) (or text ""))
+    out))
+
+(fn projected-rows-from-edits
+  [baseline-rows baseline-lines current-lines]
+  (let [hunks (diff-hunks baseline-lines current-lines)
+        out []
+        old-i 1
+        new-i 1]
+    (each [_ h (ipairs hunks)]
+      (let [[a-start a-count b-start b-count] (hunk-indices h)
+            common (math.min a-count b-count)]
+        ;; unchanged rows before hunk
+        (while (< old-i a-start)
+          (let [txt (or (. current-lines new-i) "")]
+            (table.insert out (clone-row-with-text (. baseline-rows old-i) txt))
+            (set old-i (+ old-i 1))
+            (set new-i (+ new-i 1))))
+        ;; replacements
+        (for [k 1 common]
+          (let [txt (or (. current-lines (+ b-start k -1)) "")]
+            (table.insert out (clone-row-with-text (. baseline-rows (+ a-start k -1)) txt))))
+        ;; insertions
+        (when (> b-count a-count)
+          (let [extra (- b-count common)
+                prev-row (if (> (+ a-start common -1) 0)
+                             (. baseline-rows (+ a-start common -1))
+                             nil)
+                next-row (. baseline-rows (+ a-start common))]
+            (for [k 1 extra]
+              (let [txt (or (. current-lines (+ b-start common k -1)) "")]
+                (table.insert out (inserted-row prev-row next-row txt k))))))
+        ;; deletions are omitted from output
+        (set old-i (+ a-start a-count))
+        (set new-i (+ b-start b-count))))
+    ;; unchanged tail
+    (while (<= old-i (# baseline-rows))
+      (let [txt (or (. current-lines new-i) "")]
+        (table.insert out (clone-row-with-text (. baseline-rows old-i) txt))
+        (set old-i (+ old-i 1))
+        (set new-i (+ new-i 1))))
+    out))
+
+(fn apply-live-edits-to-meta!
+  [session current-lines]
+  (let [meta session.meta
+        baseline-lines (or session.edit-baseline-lines [])
+        baseline-rows (or session.edit-baseline-rows [])
+        rows (projected-rows-from-edits baseline-rows baseline-lines current-lines)
+        refs []
+        content []
+        idxs []]
+    (for [i 1 (# rows)]
+      (let [row (or (. rows i) {})]
+        (set (. refs i) {:kind (or (. row :kind) "")
+                         :path (or (. row :path) "")
+                         :lnum (or (. row :lnum) 1)
+                         :open-lnum (or (. row :open-lnum) (. row :lnum) 1)
+                         :line (or (. row :text) (. row :line) "")})
+        (set (. content i) (or (. row :text) (. row :line) ""))
+        (set (. idxs i) i)))
+    (set meta.buf.source-refs refs)
+    (set meta.buf.content content)
+    (set meta.buf.indices idxs)
+    (let [max (math.max 1 (# idxs))]
+      (set meta.selected_index
+           (math.max 0 (math.min (or meta.selected_index 0) (- max 1)))))))
 
 (fn valid-row?
   [row]
@@ -471,8 +599,11 @@
                       {:kind :insert-after :lnum (. anchor-row :lnum) :lines extra}))))
               )
             (let [extra (slice-lines new-lines 1 b-count)
-                  prev-row (. baseline-rows a-start)
-                  next-row (. baseline-rows (+ a-start 1))]
+                  ;; For pure insertion hunks (a_count == 0), vim.diff's a_start
+                  ;; points at the next old row. So insertion is between old
+                  ;; rows [a_start-1] and [a_start].
+                  prev-row (. baseline-rows (- a-start 1))
+                  next-row (. baseline-rows a-start)]
               (when (> (# extra) 0)
                 (if (valid-row? prev-row)
                     (append-op! ops (. prev-row :path)
@@ -488,55 +619,137 @@
         touched-paths {}]
     (var total 0)
     (var any-write false)
+    (fn apply-op-to-loaded-buffer!
+      [buf op delta]
+      (if (= (. op :kind) :replace)
+          (let [lnum (+ (. op :lnum) delta)
+                line-count (vim.api.nvim_buf_line_count buf)]
+            (if (and (>= lnum 1) (<= lnum line-count))
+                (let [old (or (. (vim.api.nvim_buf_get_lines buf (- lnum 1) lnum false) 1) "")
+                      new (or (. op :text) "")]
+                  (if (~= old new)
+                      (do
+                        (vim.api.nvim_buf_set_lines buf (- lnum 1) lnum false [new])
+                        [delta 1])
+                      [delta 0]))
+                [delta 0]))
+          (= (. op :kind) :delete)
+          (let [lnum (+ (. op :lnum) delta)
+                line-count (vim.api.nvim_buf_line_count buf)]
+            (if (and (>= lnum 1) (<= lnum line-count))
+                (do
+                  (vim.api.nvim_buf_set_lines buf (- lnum 1) lnum false [])
+                  [(- delta 1) 1])
+                [delta 0]))
+          (= (. op :kind) :insert-before)
+          (let [ins (or (. op :lines) [])
+                lnum (+ (. op :lnum) delta)
+                pos (math.max 1 (math.min (+ (vim.api.nvim_buf_line_count buf) 1) lnum))]
+            (if (> (# ins) 0)
+                (do
+                  (vim.api.nvim_buf_set_lines buf (- pos 1) (- pos 1) false ins)
+                  [(+ delta (# ins)) (# ins)])
+                [delta 0]))
+          (let [ins (or (. op :lines) [])
+                lnum (+ (. op :lnum) delta)
+                pos (math.max 0 (math.min (vim.api.nvim_buf_line_count buf) lnum))]
+            (if (> (# ins) 0)
+                (do
+                  (vim.api.nvim_buf_set_lines buf pos pos false ins)
+                  [(+ delta (# ins)) (# ins)])
+                [delta 0]))))
+    (fn apply-op-to-lines!
+      [lines op delta]
+      (if (= (. op :kind) :replace)
+          (let [lnum (+ (. op :lnum) delta)]
+            (if (and (>= lnum 1) (<= lnum (# lines))
+                     (~= (. lines lnum) (. op :text)))
+                (do
+                  (set (. lines lnum) (. op :text))
+                  [delta 1])
+                [delta 0]))
+          (= (. op :kind) :delete)
+          (let [lnum (+ (. op :lnum) delta)]
+            (if (and (>= lnum 1) (<= lnum (# lines)))
+                (do
+                  (table.remove lines lnum)
+                  [(- delta 1) 1])
+                [delta 0]))
+          (= (. op :kind) :insert-before)
+          (let [ins (or (. op :lines) [])
+                lnum (+ (. op :lnum) delta)
+                pos (math.max 1 (math.min (+ (# lines) 1) lnum))]
+            (if (> (# ins) 0)
+                (do
+                  (for [i 1 (# ins)]
+                    (table.insert lines (+ pos i -1) (. ins i)))
+                  [(+ delta (# ins)) (# ins)])
+                [delta 0]))
+          (let [ins (or (. op :lines) [])
+                lnum (+ (. op :lnum) delta)
+                pos (math.max 0 (math.min (# lines) lnum))]
+            (if (> (# ins) 0)
+                (do
+                  (for [i 1 (# ins)]
+                    (table.insert lines (+ pos i) (. ins i)))
+                  [(+ delta (# ins)) (# ins)])
+                [delta 0]))))
     (each [path per-file (pairs (or ops {}))]
-      (let [[ok-read lines0] [(pcall vim.fn.readfile path)]]
-        (when (and ok-read (= (type lines0) "table"))
-          (let [lines (vim.deepcopy lines0)]
-            (var delta 0)
-            (var changed? false)
-            (each [_ op (ipairs (or per-file []))]
-              (if (= (. op :kind) :replace)
-                  (let [lnum (+ (. op :lnum) delta)]
-                    (when (and (>= lnum 1) (<= lnum (# lines))
-                               (~= (. lines lnum) (. op :text)))
-                      (set (. lines lnum) (. op :text))
-                      (set total (+ total 1))
-                      (set changed? true)))
-                  (= (. op :kind) :delete)
-                  (let [lnum (+ (. op :lnum) delta)]
-                    (when (and (>= lnum 1) (<= lnum (# lines)))
-                      (table.remove lines lnum)
-                      (set delta (- delta 1))
-                      (set total (+ total 1))
-                      (set changed? true)))
-                  (= (. op :kind) :insert-before)
-                  (let [ins (or (. op :lines) [])
-                        lnum (+ (. op :lnum) delta)
-                        pos (math.max 1 (math.min (+ (# lines) 1) lnum))]
-                    (when (> (# ins) 0)
-                      (for [i 1 (# ins)]
-                        (table.insert lines (+ pos i -1) (. ins i)))
-                      (set delta (+ delta (# ins)))
-                      (set total (+ total (# ins)))
-                      (set changed? true)))
-                  (let [ins (or (. op :lines) [])
-                        lnum (+ (. op :lnum) delta)
-                        pos (math.max 0 (math.min (# lines) lnum))]
-                    (when (> (# ins) 0)
-                      (for [i 1 (# ins)]
-                        (table.insert lines (+ pos i) (. ins i)))
-                      (set delta (+ delta (# ins)))
-                      (set total (+ total (# ins)))
-                      (set changed? true)))))
-            (when changed?
-              (let [[ok-write] [(pcall vim.fn.writefile lines path)]]
-                (when ok-write
-                  (set any-write true)
-                  (set (. touched-paths path) true)
-                  (set (. post-lines path) lines)
-                  (let [bufnr (vim.fn.bufnr path)]
-                    (when (and bufnr (> bufnr 0) (vim.api.nvim_buf_is_loaded bufnr))
-                      (pcall vim.api.nvim_buf_set_lines bufnr 0 -1 false lines))))))))))
+      (let [bufnr (vim.fn.bufnr path)]
+        (if (and bufnr (> bufnr 0) (vim.api.nvim_buf_is_loaded bufnr))
+            (do
+              ;; Apply changes directly to loaded file buffer so undo history in
+              ;; that real buffer reflects propagated edits accurately.
+              (let [bo (. vim.bo bufnr)
+                    old-mod (. bo :modifiable)
+                    old-ro (. bo :readonly)]
+                (set (. bo :modifiable) true)
+                (set (. bo :readonly) false)
+                (var delta 0)
+                (var changed 0)
+                (each [_ op (ipairs (or per-file []))]
+                  (let [[next-delta bump] (apply-op-to-loaded-buffer! bufnr op delta)]
+                    (set delta next-delta)
+                    (set changed (+ changed bump))))
+                (set (. bo :modifiable) old-mod)
+                (set (. bo :readonly) old-ro)
+                (when (> changed 0)
+                  (let [[ok-write] [(pcall
+                                     vim.api.nvim_buf_call
+                                     bufnr
+                                     (fn []
+                                       (vim.cmd "silent keepalt noautocmd write")))]]
+                    (if ok-write
+                        (do
+                          (set any-write true)
+                          (set total (+ total changed))
+                          (set (. touched-paths path) true)
+                          (set (. post-lines path) (vim.api.nvim_buf_get_lines bufnr 0 -1 false)))
+                        ;; Fallback: persist by path if buffer write failed.
+                        (let [[ok-read lines0] [(pcall vim.api.nvim_buf_get_lines bufnr 0 -1 false)]]
+                          (when (and ok-read (= (type lines0) "table"))
+                            (let [[ok-fallback] [(pcall vim.fn.writefile lines0 path)]]
+                              (when ok-fallback
+                                (set any-write true)
+                                (set total (+ total changed))
+                                (set (. touched-paths path) true)
+                                (set (. post-lines path) lines0))))))))))
+            (let [[ok-read lines0] [(pcall vim.fn.readfile path)]]
+              (when (and ok-read (= (type lines0) "table"))
+                (let [lines (vim.deepcopy lines0)]
+                  (var delta 0)
+                  (var changed 0)
+                  (each [_ op (ipairs (or per-file []))]
+                    (let [[next-delta bump] (apply-op-to-lines! lines op delta)]
+                      (set delta next-delta)
+                      (set changed (+ changed bump))))
+                  (when (> changed 0)
+                    (let [[ok-write] [(pcall vim.fn.writefile lines path)]]
+                      (when ok-write
+                        (set any-write true)
+                        (set total (+ total changed))
+                        (set (. touched-paths path) true)
+                        (set (. post-lines path) lines))))))))))
     {:wrote any-write :changed total :post-lines post-lines :paths touched-paths}))
 
 (fn update-session-refs-after-ops!
@@ -643,6 +856,17 @@
       ;; Enter editing context in Normal mode; prompt starts in Insert mode.
       (pcall vim.cmd "stopinsert"))))
 
+(fn M.sync-live-edits!
+  [deps prompt-buf]
+  (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+    (when (and session session.meta session.meta.buf)
+      (let [buf session.meta.buf.buffer
+            manual? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_manual_edit_active")]]
+                      (and ok v))]
+        (when (and manual? (vim.api.nvim_buf_is_valid buf))
+          (let [current-lines (vim.api.nvim_buf_get_lines buf 0 -1 false)]
+            (apply-live-edits-to-meta! session current-lines)))))))
+
 (fn M.maybe-restore-ui!
   [deps prompt-buf force]
   (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
@@ -653,6 +877,9 @@
                session.meta.buf
                (= (vim.api.nvim_get_current_buf) session.meta.buf.buffer))
       (set session.meta.win.window (vim.api.nvim_get_current_win))
-      (restore-session-ui! deps session))))
+      (restore-session-ui!
+        deps
+        session
+        {:preserve-focus (not force)}))))
 
 M

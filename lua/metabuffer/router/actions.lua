@@ -3,6 +3,14 @@ local M = {}
 local function session_by_prompt(active_by_prompt, prompt_buf)
   return active_by_prompt[prompt_buf]
 end
+local function clear_map_entry_21(tbl, key, expected)
+  if (tbl and key and (tbl[key] == expected)) then
+    tbl[key] = nil
+    return nil
+  else
+    return nil
+  end
+end
 local function remove_session_21(deps, session)
   local history_api = deps["history-api"]
   local sign_mod = deps["sign-mod"]
@@ -11,16 +19,18 @@ local function remove_session_21(deps, session)
   local preview_window = deps["preview-window"]
   local active_by_source = deps["active-by-source"]
   local active_by_prompt = deps["active-by-prompt"]
+  local instances = deps.instances
   if session then
-    local or_1_ = session["last-prompt-text"]
-    if not or_1_ then
+    session.closing = true
+    local or_2_ = session["last-prompt-text"]
+    if not or_2_ then
       if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
-        or_1_ = router_util_mod["prompt-text"](session)
+        or_2_ = router_util_mod["prompt-text"](session)
       else
-        or_1_ = ""
+        or_2_ = ""
       end
     end
-    history_api["push-history-entry!"](session, or_1_)
+    history_api["push-history-entry!"](session, or_2_)
     router_util_mod["persist-prompt-height!"](session)
     if session.augroup then
       pcall(vim.api.nvim_del_augroup_by_id, session.augroup)
@@ -41,17 +51,14 @@ local function remove_session_21(deps, session)
       sign_mod["clear-change-signs!"](session.meta.buf.buffer)
     else
     end
-    if session["source-buf"] then
-      active_by_source[session["source-buf"]] = nil
-    else
-    end
+    clear_map_entry_21(active_by_source, session["source-buf"], session)
     if (session.meta and session.meta.buf and session.meta.buf.buffer) then
-      active_by_source[session.meta.buf.buffer] = nil
+      clear_map_entry_21(active_by_source, session.meta.buf.buffer, session)
     else
     end
-    if session["prompt-buf"] then
-      active_by_prompt[session["prompt-buf"]] = nil
-      return nil
+    clear_map_entry_21(active_by_prompt, session["prompt-buf"], session)
+    if session["instance-id"] then
+      return clear_map_entry_21(instances, session["instance-id"], session)
     else
       return nil
     end
@@ -486,6 +493,51 @@ end
 M["remove-session!"] = function(deps, session)
   return remove_session_21(deps, session)
 end
+M["on-results-buffer-wipe!"] = function(deps, results_buf)
+  local active_by_source = deps["active-by-source"]
+  local history_api = deps["history-api"]
+  local router_util_mod = deps["router-util-mod"]
+  local info_window = deps["info-window"]
+  local preview_window = deps["preview-window"]
+  local instances = deps.instances
+  local active_by_prompt = deps["active-by-prompt"]
+  local session = active_by_source[results_buf]
+  if (session and not session._results_wiped) then
+    session._results_wiped = true
+    session.closing = true
+    local or_58_ = session["last-prompt-text"]
+    if not or_58_ then
+      if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
+        or_58_ = router_util_mod["prompt-text"](session)
+      else
+        or_58_ = ""
+      end
+    end
+    history_api["push-history-entry!"](session, or_58_)
+    router_util_mod["persist-prompt-height!"](session)
+    if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+      pcall(vim.api.nvim_win_close, session["prompt-win"], true)
+    else
+    end
+    if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
+      pcall(vim.api.nvim_buf_delete, session["prompt-buf"], {force = true})
+    else
+    end
+    info_window["close-window!"](session)
+    preview_window["close-window!"](session)
+    history_api["close-history-browser!"](session)
+    clear_map_entry_21(active_by_source, session["source-buf"], session)
+    clear_map_entry_21(active_by_source, results_buf, session)
+    clear_map_entry_21(active_by_prompt, session["prompt-buf"], session)
+    if session["instance-id"] then
+      return clear_map_entry_21(instances, session["instance-id"], session)
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
 local function set_results_edit_buffer_21(session)
   local buf = session.meta.buf.buffer
   local bo = vim.bo[buf]
@@ -542,11 +594,11 @@ local function collect_file_ops(session)
   local hunks = diff_hunks(baseline_lines, current_lines)
   local ops = {}
   for _, h in ipairs(hunks) do
-    local _let_60_ = hunk_indices(h)
-    local a_start = _let_60_[1]
-    local a_count = _let_60_[2]
-    local b_start = _let_60_[3]
-    local b_count = _let_60_[4]
+    local _let_66_ = hunk_indices(h)
+    local a_start = _let_66_[1]
+    local a_count = _let_66_[2]
+    local b_start = _let_66_[3]
+    local b_count = _let_66_[4]
     local common = math.min(a_count, b_count)
     local old_rows = slice_lines(baseline_rows, a_start, a_count)
     local new_lines = slice_lines(current_lines, b_start, b_count)
@@ -775,13 +827,13 @@ M["write-results!"] = function(deps, prompt_buf)
       pcall(sign_mod["refresh-change-signs!"], session)
     else
     end
-    local _91_
+    local _97_
     if (result.changed > 0) then
-      _91_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+      _97_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
     else
-      _91_ = "metabuffer: no changes"
+      _97_ = "metabuffer: no changes"
     end
-    return vim.notify(_91_, vim.log.levels.INFO)
+    return vim.notify(_97_, vim.log.levels.INFO)
   else
     return nil
   end

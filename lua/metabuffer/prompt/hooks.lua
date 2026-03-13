@@ -498,6 +498,9 @@ M.new = function(opts)
         end
         local function _87_()
           if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
+            pcall(router["sync-live-edits"], session["prompt-buf"])
+            pcall(maybe_sync_from_main_21, session, true)
+            pcall(update_info_window, session, true)
             return pcall(sign_mod["refresh-change-signs!"], session)
           else
             return nil
@@ -541,6 +544,13 @@ M.new = function(opts)
       return router["write-results"](session["prompt-buf"])
     end
     vim.api.nvim_create_autocmd("BufWriteCmd", {group = aug, buffer = session.meta.buf.buffer, callback = _96_})
+    local function _97_(_)
+      local function _98_()
+        return router["results-buffer-wiped"](session.meta.buf.buffer)
+      end
+      return vim.schedule(_98_)
+    end
+    vim.api.nvim_create_autocmd("BufWipeout", {group = aug, buffer = session.meta.buf.buffer, callback = _97_})
     disable_cmp(session)
     mark_prompt_buffer_21(session["prompt-buf"])
     refresh_prompt_highlights_21(session)

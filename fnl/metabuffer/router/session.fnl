@@ -48,6 +48,7 @@
         history-store (. deps :history-store)
         sign-mod (. deps :sign-mod)
         settings (. deps :settings)
+        next-instance-id! (. deps :next-instance-id!)
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
         apply-prompt-lines (. deps :apply-prompt-lines)
         update-info-window (. deps :update-info-window)
@@ -94,12 +95,17 @@
           query query0]
       (let [source-buf (vim.api.nvim_get_current_buf)
             existing (. active-by-source source-buf)]
-        (if (and existing existing.ui-hidden maybe-restore-hidden-ui!)
+        (if (and existing
+                 existing.ui-hidden
+                 maybe-restore-hidden-ui!
+                 existing.meta
+                 existing.meta.buf
+                 (= source-buf existing.meta.buf.buffer))
             (do
               (maybe-restore-hidden-ui! existing true)
               existing.meta)
             (do
-              (when existing
+              (when (and existing (not existing.ui-hidden))
                 (remove-session! existing))
               (let [origin-win (vim.api.nvim_get_current_win)
                     origin-buf source-buf
@@ -181,6 +187,7 @@
                                :file-query-lines (or (. parsed-query :file-lines) [])
                                :single-content (vim.deepcopy curr.buf.content)
                                :single-refs (vim.deepcopy (or curr.buf.source-refs []))
+                               :instance-id (next-instance-id!)
                                :meta curr}]
                   (let [initial-query-active session.initial-query-active]
                     (if session.project-mode
@@ -226,7 +233,7 @@
                           (when (= (. active-by-prompt session.prompt-buf) session)
                             (pcall curr.refresh_statusline)
                             (pcall update-info-window session)))))
-                    (set (. instances source-buf) curr)
+                    (set (. instances session.instance-id) session)
                     curr)))))))))
 
 M

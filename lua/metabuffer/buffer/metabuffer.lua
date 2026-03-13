@@ -334,6 +334,10 @@ M.new = function(nvim, model)
       else
       end
       vim.api.nvim_buf_set_lines(self.buffer, 0, -1, false, out)
+      if not manual_edit_active_3f then
+        pcall(vim.api.nvim_set_option_value, "modified", false, {buf = self.buffer})
+      else
+      end
       if undo_levels then
         pcall(vim.api.nvim_set_option_value, "undolevels", undo_levels, {buf = self.buffer})
       else
@@ -415,10 +419,10 @@ M.new = function(nvim, model)
     set_bvar_21(self.buffer, "meta_internal_render", false)
     for win, view in pairs(win_views) do
       if vim.api.nvim_win_is_valid(win) then
-        local function _54_()
+        local function _55_()
           return pcall(vim.fn.winrestview, view)
         end
-        vim.api.nvim_win_call(win, _54_)
+        vim.api.nvim_win_call(win, _55_)
       else
       end
     end

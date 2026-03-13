@@ -358,6 +358,9 @@
                              (fn []
                                (when (and session.prompt-buf
                                           (= (. active-by-prompt session.prompt-buf) session))
+                                 (pcall router.sync-live-edits session.prompt-buf)
+                                 (pcall maybe-sync-from-main! session true)
+                                 (pcall update-info-window session true)
                                  (pcall sign-mod.refresh-change-signs! session)))))))})
         (vim.api.nvim_create_autocmd "BufEnter"
           {:group aug
@@ -388,6 +391,13 @@
            :buffer session.meta.buf.buffer
            :callback (fn [_]
                        (router.write-results session.prompt-buf))})
+        (vim.api.nvim_create_autocmd "BufWipeout"
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       (vim.schedule
+                         (fn []
+                           (router.results-buffer-wiped session.meta.buf.buffer))))})
         (disable-cmp session)
         (mark-prompt-buffer! session.prompt-buf)
         (refresh-prompt-highlights! session)
