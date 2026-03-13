@@ -125,6 +125,7 @@
   (let [{: query-mod
          : project-source
          : update-info-window
+         : context-window
          : refresh-change-signs!
          : capture-sign-baseline!
          : settings
@@ -165,6 +166,7 @@
               next-files (choose-current-when-nil (. parsed :include-files) session.include-files)
               next-prefilter (choose-current-when-nil (. parsed :prefilter) session.prefilter-mode)
               next-lazy (choose-current-when-nil (. parsed :lazy) session.lazy-mode)
+              next-expansion (choose-current-when-nil (. parsed :expansion) session.expansion-mode)
               prev-effective-text (or session.prompt-last-applied-text "")
               text-changed? (~= effective-text prev-effective-text)
               changed (or (~= next-hidden session.effective-include-hidden)
@@ -174,7 +176,8 @@
                           (~= next-hex session.effective-include-hex)
                           (~= next-files session.effective-include-files)
                           (~= next-prefilter session.prefilter-mode)
-                          (~= next-lazy session.lazy-mode))]
+                          (~= next-lazy session.lazy-mode)
+                          (~= next-expansion session.expansion-mode))]
           (set session.effective-include-hidden next-hidden)
           (set session.effective-include-ignored next-ignored)
           (set session.effective-include-deps next-deps)
@@ -189,6 +192,7 @@
           (set session.include-files next-files)
           (set session.prefilter-mode next-prefilter)
           (set session.lazy-mode next-lazy)
+          (set session.expansion-mode next-expansion)
           (set session.last-parsed-query parsed)
           (set session.file-query-lines (or (. parsed :file-lines) []))
           (set session.last-prompt-text effective-text)
@@ -220,6 +224,8 @@
               (do
                 (session.meta.refresh_statusline)
                 (update-info-window session)
+                (when (and context-window context-window.update!)
+                  (context-window.update! session))
                 (when refresh-change-signs!
                   (refresh-change-signs! session))
                 (when capture-sign-baseline!
@@ -233,6 +239,8 @@
                       (pcall session.meta.on-update 0)
                       (pcall session.meta.refresh_statusline)
                       (pcall update-info-window session)
+                      (when (and context-window context-window.update!)
+                        (pcall context-window.update! session))
                       (when refresh-change-signs!
                         (pcall refresh-change-signs! session))
                       (when capture-sign-baseline!

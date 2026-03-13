@@ -86,6 +86,9 @@
     :info_max_lines 10000
     :info_min_width 28
     :info_max_width 52
+    :context_height 14
+    :context_around_lines 3
+    :context_max_blocks 24
     :info_file_entry_view "meta"
     :prompt_update_debounce_ms 170
     :prompt_update_idle_ms 90
@@ -206,6 +209,9 @@
       :info_max_lines (opt-value opts :info_max_lines :meta_info_max_lines (. defaults :info_max_lines))
       :info_min_width (opt-value opts :info_min_width :meta_info_width (. defaults :info_min_width))
       :info_max_width (opt-value opts :info_max_width :meta_info_max_width (. defaults :info_max_width))
+      :context_height (opt-value opts :context_height :meta_context_height (. defaults :context_height))
+      :context_around_lines (opt-value opts :context_around_lines :meta_context_around_lines (. defaults :context_around_lines))
+      :context_max_blocks (opt-value opts :context_max_blocks :meta_context_max_blocks (. defaults :context_max_blocks))
       :info_file_entry_view (opt-value opts :info_file_entry_view :meta_info_file_entry_view (. defaults :info_file_entry_view))
       :prompt_update_debounce_ms (opt-value opts :prompt_update_debounce_ms :meta_prompt_update_debounce_ms (. defaults :prompt_update_debounce_ms))
       :prompt_update_idle_ms (opt-value opts :prompt_update_idle_ms :meta_prompt_update_idle_ms (. defaults :prompt_update_idle_ms))
@@ -257,6 +263,9 @@
     (set router.info-max-lines (. options :info_max_lines))
     (set router.info-min-width (. options :info_min_width))
     (set router.info-max-width (. options :info_max_width))
+    (set router.context-height (. options :context_height))
+    (set router.context-around-lines (. options :context_around_lines))
+    (set router.context-max-blocks (. options :context_max_blocks))
     (set router.info-file-entry-view (. options :info_file_entry_view))
     (set router.prompt-update-debounce-ms (. options :prompt_update_debounce_ms))
     (set router.prompt-update-idle-ms (. options :prompt_update_idle_ms))

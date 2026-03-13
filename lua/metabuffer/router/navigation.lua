@@ -39,6 +39,7 @@ end
 M["move-selection!"] = function(deps, prompt_buf, delta)
   local active_by_prompt = deps["active-by-prompt"]
   local update_info_window = deps["update-info-window"]
+  local context_window = deps["context-window"]
   local session = active_by_prompt[prompt_buf]
   if session then
     local runner
@@ -55,7 +56,12 @@ M["move-selection!"] = function(deps, prompt_buf, delta)
           end
         end
         pcall(meta.refresh_statusline)
-        return pcall(update_info_window, session, false)
+        pcall(update_info_window, session, false)
+        if (context_window and context_window["update!"]) then
+          return pcall(context_window["update!"], session)
+        else
+          return nil
+        end
       else
         return nil
       end
@@ -74,12 +80,13 @@ end
 M["scroll-main!"] = function(deps, prompt_buf, action)
   local active_by_prompt = deps["active-by-prompt"]
   local update_info_window = deps["update-info-window"]
+  local context_window = deps["context-window"]
   local session_view = deps["session-view"]
   local session = active_by_prompt[prompt_buf]
   if (session and vim.api.nvim_win_is_valid(session.meta.win.window)) then
     local runner
-    local function _12_()
-      local function _13_()
+    local function _13_()
+      local function _14_()
         local line_count = vim.api.nvim_buf_line_count(session.meta.buf.buffer)
         local win_height = math.max(1, vim.api.nvim_win_get_height(session.meta.win.window))
         local half_step = math.max(1, math.floor((win_height / 2)))
@@ -111,12 +118,17 @@ M["scroll-main!"] = function(deps, prompt_buf, action)
         view["col"] = old_col
         return vim.fn.winrestview(view)
       end
-      vim.api.nvim_win_call(session.meta.win.window, _13_)
+      vim.api.nvim_win_call(session.meta.win.window, _14_)
       session_view["sync-selected-from-main-cursor!"](session)
       pcall(session.meta.refresh_statusline)
-      return pcall(update_info_window, session, false)
+      pcall(update_info_window, session, false)
+      if (context_window and context_window["update!"]) then
+        return pcall(context_window["update!"], session)
+      else
+        return nil
+      end
     end
-    runner = _12_
+    runner = _13_
     local mode = vim.api.nvim_get_mode().mode
     if ((type(mode) == "string") and vim.startswith(mode, "i")) then
       return vim.schedule(runner)
@@ -130,18 +142,26 @@ end
 M["maybe-sync-from-main!"] = function(deps, session, force_refresh)
   local active_by_prompt = deps["active-by-prompt"]
   local update_info_window = deps["update-info-window"]
+  local context_window = deps["context-window"]
   local session_view = deps["session-view"]
-  local function _18_(s)
+  local function _20_(s)
     return schedule_source_syntax_refresh_21(deps, s)
   end
-  return session_view["maybe-sync-from-main!"](session, force_refresh, {["active-by-prompt"] = active_by_prompt, ["schedule-source-syntax-refresh!"] = _18_, ["update-info-window"] = update_info_window})
+  local function _21_(s)
+    if (context_window and context_window["update!"]) then
+      return context_window["update!"](s)
+    else
+      return nil
+    end
+  end
+  return session_view["maybe-sync-from-main!"](session, force_refresh, {["active-by-prompt"] = active_by_prompt, ["schedule-source-syntax-refresh!"] = _20_, ["update-info-window"] = update_info_window, ["update-context-window!"] = _21_})
 end
 M["schedule-scroll-sync!"] = function(deps, session)
   local scroll_sync_debounce_ms = deps["scroll-sync-debounce-ms"]
   local session_view = deps["session-view"]
-  local function _19_(s, force_refresh)
+  local function _23_(s, force_refresh)
     return M["maybe-sync-from-main!"](deps, s, force_refresh)
   end
-  return session_view["schedule-scroll-sync!"](session, {["scroll-sync-debounce-ms"] = scroll_sync_debounce_ms, ["maybe-sync-from-main!"] = _19_})
+  return session_view["schedule-scroll-sync!"](session, {["scroll-sync-debounce-ms"] = scroll_sync_debounce_ms, ["maybe-sync-from-main!"] = _23_})
 end
 return M

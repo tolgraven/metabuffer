@@ -23,6 +23,8 @@
 (fn parse-option-token
   [tok]
   (let [prefix (option-prefix)
+        expansion-mode (or (string.match tok "^#exp:(.+)$")
+                           (string.match tok (.. "^" (vim.pesc prefix) "exp:(.+)$")))
         hidden-on (or (= tok "#hidden") (= tok "+hidden") (= tok "#+hidden") (= tok (.. prefix "hidden")))
         hidden-off (or (= tok "#nohidden") (= tok "-hidden") (= tok "#-hidden") (= tok (.. prefix "nohidden")))
         ignored-on (or (= tok "#ignored") (= tok "+ignored") (= tok "#+ignored") (= tok (.. prefix "ignored")))
@@ -61,6 +63,7 @@
       lazy-on [:lazy true]
       files-off [:files false]
       files-on [:files true]
+      (and expansion-mode (~= (vim.trim expansion-mode) "")) [:expansion (vim.trim expansion-mode)]
       history-merge? [:history true]
       save-tag [:save-tag save-tag]
       (and saved-tag (~= (vim.trim saved-tag) "")) [:saved-tag (vim.trim saved-tag)]
@@ -174,6 +177,7 @@
               :hex nil
               :prefilter nil
               :lazy nil
+              :expansion nil
               :files nil
               :history nil
               :save-tag nil
@@ -206,6 +210,7 @@
        :include-files (. parsed :files)
        :prefilter (. parsed :prefilter)
        :lazy (. parsed :lazy)
+       :expansion (. parsed :expansion)
        :file-lines (or (. parsed :file-lines) [])
        :history (. parsed :history)
        :save-tag (. parsed :save-tag)
@@ -223,6 +228,7 @@
      :include-files nil
      :prefilter nil
      :lazy nil
+     :expansion nil
      :file-lines []
      :history nil
      :save-tag nil

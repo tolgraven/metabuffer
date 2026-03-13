@@ -259,6 +259,29 @@ function M.session_first_file_entry_line()
   ]])
 end
 
+function M.session_context_exists()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      return s and s['context-win'] and vim.api.nvim_win_is_valid(s['context-win']) or false
+    end)()
+  ]])
+end
+
+function M.session_context_lines()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s['context-buf'] and vim.api.nvim_buf_is_valid(s['context-buf'])) then
+        return {}
+      end
+      return vim.api.nvim_buf_get_lines(s['context-buf'], 0, -1, false)
+    end)()
+  ]])
+end
+
 function M.session_matcher_name()
   return M.child.lua_get([[
     (function()

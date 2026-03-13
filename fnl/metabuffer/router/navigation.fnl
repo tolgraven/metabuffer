@@ -38,6 +38,7 @@
   [deps prompt-buf delta]
   (let [active-by-prompt (. deps :active-by-prompt)
         update-info-window (. deps :update-info-window)
+        context-window (. deps :context-window)
         session (. active-by-prompt prompt-buf)]
     (when session
       (let [runner (fn []
@@ -50,7 +51,9 @@
                            (when (vim.api.nvim_win_is_valid meta.win.window)
                              (pcall vim.api.nvim_win_set_cursor meta.win.window [row 0])))
                          (pcall meta.refresh_statusline)
-                         (pcall update-info-window session false))))
+                         (pcall update-info-window session false)
+                         (when (and context-window context-window.update!)
+                           (pcall context-window.update! session)))))
             mode (. (vim.api.nvim_get_mode) :mode)]
         (if (and (= (type mode) "string") (vim.startswith mode "i"))
             (vim.schedule runner)
@@ -60,6 +63,7 @@
   [deps prompt-buf action]
   (let [active-by-prompt (. deps :active-by-prompt)
         update-info-window (. deps :update-info-window)
+        context-window (. deps :context-window)
         session-view (. deps :session-view)
         session (. active-by-prompt prompt-buf)]
     (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
@@ -90,7 +94,9 @@
                            (vim.fn.winrestview view))))
                      (session-view.sync-selected-from-main-cursor! session)
                      (pcall session.meta.refresh_statusline)
-                     (pcall update-info-window session false))
+                     (pcall update-info-window session false)
+                     (when (and context-window context-window.update!)
+                       (pcall context-window.update! session)))
             mode (. (vim.api.nvim_get_mode) :mode)]
         (if (and (= (type mode) "string") (vim.startswith mode "i"))
             (vim.schedule runner)
@@ -100,6 +106,7 @@
   [deps session force-refresh]
   (let [active-by-prompt (. deps :active-by-prompt)
         update-info-window (. deps :update-info-window)
+        context-window (. deps :context-window)
         session-view (. deps :session-view)]
     (session-view.maybe-sync-from-main!
     session
@@ -107,7 +114,10 @@
     {:active-by-prompt active-by-prompt
      :schedule-source-syntax-refresh! (fn [s]
                                         (schedule-source-syntax-refresh! deps s))
-     :update-info-window update-info-window})))
+     :update-info-window update-info-window
+     :update-context-window! (fn [s]
+                               (when (and context-window context-window.update!)
+                                 (context-window.update! s)))})))
 
 (fn M.schedule-scroll-sync!
   [deps session]

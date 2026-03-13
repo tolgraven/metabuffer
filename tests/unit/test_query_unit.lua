@@ -20,6 +20,12 @@ T['parse-query-lines consumes project flags and keeps search text'] = function()
   eq(parsed.lines, { 'alpha beta' })
 end
 
+T['parse-query-lines consumes expansion directives and keeps search text'] = function()
+  local parsed = query['parse-query-lines']({ '#exp:fn alpha beta' })
+  eq(parsed.expansion, 'fn')
+  eq(parsed.lines, { 'alpha beta' })
+end
+
 T['parse-query-lines consumes file flag and captures file token on that line only'] = function()
   local parsed = query['parse-query-lines']({ 'alpha #file README.md', 'beta' })
   eq(parsed.files, true)

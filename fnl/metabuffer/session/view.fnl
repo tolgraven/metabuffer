@@ -73,7 +73,8 @@
   "Sync selection and UI state from main window cursor when session is active."
   (let [{: active-by-prompt
          : schedule-source-syntax-refresh!
-         : update-info-window}
+         : update-info-window
+         : update-context-window!}
         (or opts {})]
     (when (and session
                (not session.startup-initializing)
@@ -86,7 +87,9 @@
           (schedule-source-syntax-refresh! session))
         (when (or force-refresh (~= before session.meta.selected_index))
           (pcall session.meta.refresh_statusline)
-          (pcall update-info-window session false))))))
+          (pcall update-info-window session false)
+          (when update-context-window!
+            (pcall update-context-window! session)))))))
 
 (fn M.schedule-scroll-sync!
   [session opts]

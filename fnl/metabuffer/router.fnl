@@ -5,6 +5,7 @@
 (local floating_window_mod (require :metabuffer.window.floating))
 ; hey
 (local preview_window_mod (require :metabuffer.window.preview))
+(local context_window_mod (require :metabuffer.window.context))
 (local info_window_mod (require :metabuffer.window.info))
 (local history_browser_window_mod (require :metabuffer.window.history_browser))
 (local project_source_mod (require :metabuffer.project.source))
@@ -47,6 +48,7 @@
 (var update-info-window nil)
 (var apply-prompt-lines nil)
 (var preview-window nil)
+(var context-window nil)
 (var info-window nil)
 (var history-browser-window nil)
 (var history-api nil)
@@ -126,6 +128,14 @@
             (info-window.close-window! session))
           (when (and info-window info-window.update!)
             (info-window.update! session refresh-lines))))))
+
+(set context-window
+  (context_window_mod.new
+    {:read-file-lines-cached (fn [path opts]
+                               (router_util_mod.read-file-lines-cached M path opts))
+     :height-fn (fn [_session] (or M.context-height 14))
+     :around-lines M.context-around-lines
+     :max-blocks M.context-max-blocks}))
 ;; fuuuuh
 
 (local project-source
@@ -177,6 +187,7 @@
    :query-mod query_mod
    :project-source project-source
    :update-info-window update-info-window
+   :context-window context-window
    :settings M
    :prompt-scheduler-ctx prompt-scheduler-ctx
    :merge-history-into-session! history-api.merge-history-into-session!
@@ -228,6 +239,7 @@
    :base-buffer base_buffer
    :info-window info-window
    :preview-window preview-window
+   :context-window context-window
    :project-source project-source
    :update-info-window update-info-window
    :sync-prompt-buffer-name! sync-prompt-buffer-name!
@@ -237,6 +249,7 @@
 (set navigation-deps
   {:active-by-prompt M.active-by-prompt
    :update-info-window update-info-window
+   :context-window context-window
    :session-view session_view
    :scroll-sync-debounce-ms M.scroll-sync-debounce-ms
    :source-syntax-refresh-debounce-ms M.source-syntax-refresh-debounce-ms})
@@ -258,6 +271,7 @@
    :project-source project-source
    :meta-window-mod meta_window_mod
    :preview-window preview-window
+   :context-window context-window
    :history-store history_store
    :sign-mod sign_mod
    :next-instance-id! (fn []
@@ -597,6 +611,8 @@
           (pcall info-window.close-window! session))
         (when (and preview-window preview-window.close-window!)
           (pcall preview-window.close-window! session))
+        (when (and context-window context-window.close-window!)
+          (pcall context-window.close-window! session))
         (when history-api
           (pcall history-api.close-history-browser! session))))
     (clear-table! M.instances)

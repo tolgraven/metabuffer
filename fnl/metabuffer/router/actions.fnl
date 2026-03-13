@@ -29,6 +29,7 @@
         router-util-mod (. deps :router-util-mod)
         info-window (. deps :info-window)
         preview-window (. deps :preview-window)
+        context-window (. deps :context-window)
         active-by-source (. deps :active-by-source)
         active-by-prompt (. deps :active-by-prompt)
         instances (. deps :instances)]
@@ -52,6 +53,8 @@
         (clear-buffer-modified! session.meta.buf.buffer))
       (info-window.close-window! session)
       (preview-window.close-window! session)
+      (when (and context-window context-window.close-window!)
+        (context-window.close-window! session))
       (history-api.close-history-browser! session)
       (when (and sign-mod session.meta session.meta.buf session.meta.buf.buffer)
         (sign-mod.clear-change-signs! session.meta.buf.buffer))
@@ -80,6 +83,7 @@
   (let [router-util-mod (. deps :router-util-mod)
         info-window (. deps :info-window)
         preview-window (. deps :preview-window)
+        context-window (. deps :context-window)
         history-api (. deps :history-api)
         active-by-source (. deps :active-by-source)]
     (set session.ui-hidden true)
@@ -100,6 +104,8 @@
       (clear-buffer-modified! session.meta.buf.buffer))
     (info-window.close-window! session)
     (preview-window.close-window! session)
+    (when (and context-window context-window.close-window!)
+      (context-window.close-window! session))
     (history-api.close-history-browser! session)
     (when (and session.meta session.meta.buf session.meta.buf.buffer)
       (set (. active-by-source session.meta.buf.buffer) session))))
@@ -111,6 +117,7 @@
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
         router-util-mod (. deps :router-util-mod)
         update-info-window (. deps :update-info-window)
+        context-window (. deps :context-window)
         preserve-focus? (and opts (. opts :preserve-focus))
         curr session.meta]
     (when (and session.ui-hidden
@@ -162,6 +169,8 @@
           (pcall vim.api.nvim_win_set_cursor prompt-win [row* col*]))
         (pcall curr.refresh_statusline)
         (pcall update-info-window session true)
+        (when (and context-window context-window.update!)
+          (pcall context-window.update! session))
         (when-not preserve-focus?
           (vim.api.nvim_set_current_win prompt-win)
           (if session.ui-last-insert-mode
@@ -861,7 +870,8 @@
   (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)
         sign-mod (. deps :sign-mod)
         update-info-window (. deps :update-info-window)
-        preview-window (. deps :preview-window)]
+        preview-window (. deps :preview-window)
+        context-window (. deps :context-window)]
     (when session
       (let [collected (collect-file-ops session)
             ops (. collected :ops)
@@ -876,6 +886,8 @@
         (pcall session.meta.refresh_statusline)
         (pcall update-info-window session true)
         (pcall preview-window.maybe-update-for-selection! session)
+        (when (and context-window context-window.update!)
+          (pcall context-window.update! session))
         (when sign-mod
           (pcall sign-mod.capture-baseline! session)
           (pcall sign-mod.refresh-change-signs! session))

@@ -18,6 +18,7 @@ local function option_prefix()
 end
 local function parse_option_token(tok)
   local prefix = option_prefix()
+  local expansion_mode = (string.match(tok, "^#exp:(.+)$") or string.match(tok, ("^" .. vim.pesc(prefix) .. "exp:(.+)$")))
   local hidden_on = ((tok == "#hidden") or (tok == "+hidden") or (tok == "#+hidden") or (tok == (prefix .. "hidden")))
   local hidden_off = ((tok == "#nohidden") or (tok == "-hidden") or (tok == "#-hidden") or (tok == (prefix .. "nohidden")))
   local ignored_on = ((tok == "#ignored") or (tok == "+ignored") or (tok == "#+ignored") or (tok == (prefix .. "ignored")))
@@ -70,6 +71,8 @@ local function parse_option_token(tok)
     return {"files", false}
   elseif files_on then
     return {"files", true}
+  elseif (expansion_mode and (vim.trim(expansion_mode) ~= "")) then
+    return {"expansion", vim.trim(expansion_mode)}
   elseif history_merge_3f then
     return {"history", true}
   elseif save_tag then
@@ -203,7 +206,7 @@ local function parse_lines(lines, idx, state)
   end
 end
 M["parse-query-lines"] = function(lines)
-  local init = {lines = {}, hidden = nil, ignored = nil, deps = nil, binary = nil, hex = nil, prefilter = nil, lazy = nil, files = nil, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil, ["file-lines"] = {}, ["file-await-token"] = false}
+  local init = {lines = {}, hidden = nil, ignored = nil, deps = nil, binary = nil, hex = nil, prefilter = nil, lazy = nil, expansion = nil, files = nil, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil, ["file-lines"] = {}, ["file-await-token"] = false}
   local parsed = parse_lines((lines or {}), 1, init)
   parsed["include-hidden"] = parsed.hidden
   parsed["include-ignored"] = parsed.ignored
@@ -217,7 +220,7 @@ M["parse-query-text"] = function(query)
   if ((type(query) == "string") and (query ~= "")) then
     local lines = vim.split(query, "\n", {plain = true})
     local parsed = M["parse-query-lines"](lines)
-    return {query = table.concat(parsed.lines, "\n"), lines = (parsed.lines or {}), ["include-hidden"] = parsed.hidden, ["include-ignored"] = parsed.ignored, ["include-deps"] = parsed.deps, ["include-binary"] = parsed.binary, ["include-hex"] = parsed.hex, ["include-files"] = parsed.files, prefilter = parsed.prefilter, lazy = parsed.lazy, ["file-lines"] = (parsed["file-lines"] or {}), history = parsed.history, ["save-tag"] = parsed["save-tag"], ["saved-tag"] = parsed["saved-tag"], ["saved-browser"] = parsed["saved-browser"]}
+    return {query = table.concat(parsed.lines, "\n"), lines = (parsed.lines or {}), ["include-hidden"] = parsed.hidden, ["include-ignored"] = parsed.ignored, ["include-deps"] = parsed.deps, ["include-binary"] = parsed.binary, ["include-hex"] = parsed.hex, ["include-files"] = parsed.files, prefilter = parsed.prefilter, lazy = parsed.lazy, expansion = parsed.expansion, ["file-lines"] = (parsed["file-lines"] or {}), history = parsed.history, ["save-tag"] = parsed["save-tag"], ["saved-tag"] = parsed["saved-tag"], ["saved-browser"] = parsed["saved-browser"]}
   else
     local _18_
     if ((type(query) == "string") and (query ~= "")) then
@@ -225,7 +228,7 @@ M["parse-query-text"] = function(query)
     else
       _18_ = {}
     end
-    return {query = query, lines = _18_, ["include-hidden"] = nil, ["include-ignored"] = nil, ["include-deps"] = nil, ["include-binary"] = nil, ["include-hex"] = nil, ["include-files"] = nil, prefilter = nil, lazy = nil, ["file-lines"] = {}, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil}
+    return {query = query, lines = _18_, ["include-hidden"] = nil, ["include-ignored"] = nil, ["include-deps"] = nil, ["include-binary"] = nil, ["include-hex"] = nil, ["include-files"] = nil, prefilter = nil, lazy = nil, expansion = nil, ["file-lines"] = {}, history = nil, ["save-tag"] = nil, ["saved-tag"] = nil, ["saved-browser"] = nil}
   end
 end
 local function lines_has_active_3f(lines, idx)

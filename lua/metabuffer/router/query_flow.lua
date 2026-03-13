@@ -95,6 +95,7 @@ M["apply-prompt-lines!"] = function(deps, session)
   local query_mod = deps["query-mod"]
   local project_source = deps["project-source"]
   local update_info_window = deps["update-info-window"]
+  local context_window = deps["context-window"]
   local refresh_change_signs_21 = deps["refresh-change-signs!"]
   local capture_sign_baseline_21 = deps["capture-sign-baseline!"]
   local settings = deps.settings
@@ -143,9 +144,10 @@ M["apply-prompt-lines!"] = function(deps, session)
       local next_files = choose_current_when_nil(parsed["include-files"], session["include-files"])
       local next_prefilter = choose_current_when_nil(parsed.prefilter, session["prefilter-mode"])
       local next_lazy = choose_current_when_nil(parsed.lazy, session["lazy-mode"])
+      local next_expansion = choose_current_when_nil(parsed.expansion, session["expansion-mode"])
       local prev_effective_text = (session["prompt-last-applied-text"] or "")
       local text_changed_3f = (effective_text ~= prev_effective_text)
-      local changed = ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_binary ~= session["effective-include-binary"]) or (next_hex ~= session["effective-include-hex"]) or (next_files ~= session["effective-include-files"]) or (next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]))
+      local changed = ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_binary ~= session["effective-include-binary"]) or (next_hex ~= session["effective-include-hex"]) or (next_files ~= session["effective-include-files"]) or (next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]) or (next_expansion ~= session["expansion-mode"]))
       session["effective-include-hidden"] = next_hidden
       session["effective-include-ignored"] = next_ignored
       session["effective-include-deps"] = next_deps
@@ -160,6 +162,7 @@ M["apply-prompt-lines!"] = function(deps, session)
       session["include-files"] = next_files
       session["prefilter-mode"] = next_prefilter
       session["lazy-mode"] = next_lazy
+      session["expansion-mode"] = next_expansion
       session["last-parsed-query"] = parsed
       session["file-query-lines"] = (parsed["file-lines"] or {})
       session["last-prompt-text"] = effective_text
@@ -199,6 +202,10 @@ M["apply-prompt-lines!"] = function(deps, session)
     if ok then
       session.meta.refresh_statusline()
       update_info_window(session)
+      if (context_window and context_window["update!"]) then
+        context_window["update!"](session)
+      else
+      end
       if refresh_change_signs_21 then
         refresh_change_signs_21(session)
       else
@@ -210,11 +217,15 @@ M["apply-prompt-lines!"] = function(deps, session)
       end
     else
       if string.find(tostring(err), "E565") then
-        local function _19_()
+        local function _20_()
           if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
             pcall(session.meta["on-update"], 0)
             pcall(session.meta.refresh_statusline)
             pcall(update_info_window, session)
+            if (context_window and context_window["update!"]) then
+              pcall(context_window["update!"], session)
+            else
+            end
             if refresh_change_signs_21 then
               pcall(refresh_change_signs_21, session)
             else
@@ -228,7 +239,7 @@ M["apply-prompt-lines!"] = function(deps, session)
             return nil
           end
         end
-        return vim.defer_fn(_19_, 1)
+        return vim.defer_fn(_20_, 1)
       else
         return nil
       end

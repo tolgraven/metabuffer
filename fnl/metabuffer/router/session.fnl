@@ -15,6 +15,7 @@
         schedule-scroll-sync! (. deps :schedule-scroll-sync!)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)
         preview-window (. deps :preview-window)
+        context-window (. deps :context-window)
         sign-mod (. deps :sign-mod)
         router-api (. deps :router-api)
         hooks
@@ -28,10 +29,13 @@
            :maybe-sync-from-main! maybe-sync-from-main!
            :schedule-scroll-sync! schedule-scroll-sync!
            :maybe-restore-hidden-ui! maybe-restore-hidden-ui!
-           :maybe-refresh-preview-statusline! (fn [s]
-                                               (when (and preview-window
-                                                          preview-window.refresh-statusline!)
+          :maybe-refresh-preview-statusline! (fn [s]
+                                              (when (and preview-window
+                                                         preview-window.refresh-statusline!)
                                                  (preview-window.refresh-statusline! s)))
+           :update-context-window! (fn [s]
+                                     (when (and context-window context-window.update!)
+                                       (context-window.update! s)))
            :sign-mod sign-mod})]
     (hooks.register! router-api session)))
 
@@ -57,6 +61,7 @@
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
         apply-prompt-lines (. deps :apply-prompt-lines)
         update-info-window (. deps :update-info-window)
+        context-window (. deps :context-window)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)]
     (pcall vim.cmd "silent! nohlsearch")
     (let [start-query (or query "")
@@ -103,6 +108,7 @@
           start-lazy (if-some [v (. parsed-query :lazy)]
                              v
                              (query-mod.truthy? settings.project-lazy-enabled))
+          start-expansion (or (. parsed-query :expansion) "none")
           query query0]
       (let [source-buf (vim.api.nvim_get_current_buf)
             existing (. active-by-source source-buf)]
@@ -189,6 +195,7 @@
                                :project-bootstrapped (not (or project-mode false))
                                :prefilter-mode start-prefilter
                                :lazy-mode start-lazy
+                               :expansion-mode start-expansion
                                :last-parsed-query {:lines (if (and query (~= query ""))
                                                               (vim.split query "\n" {:plain true})
                                                               [""])
@@ -200,7 +207,8 @@
                                                    :include-files start-files
                                                    :file-lines (or (. parsed-query :file-lines) [])
                                                    :prefilter start-prefilter
-                                                   :lazy start-lazy}
+                                                   :lazy start-lazy
+                                                   :expansion start-expansion}
                                :file-query-lines (or (. parsed-query :file-lines) [])
                                :single-content (vim.deepcopy curr.buf.content)
                                :single-refs (vim.deepcopy (or curr.buf.source-refs []))
@@ -249,7 +257,11 @@
                         (fn []
                           (when (= (. active-by-prompt session.prompt-buf) session)
                             (pcall curr.refresh_statusline)
-                            (pcall update-info-window session)))))
+                            (pcall update-info-window session)
+                            (when (and context-window context-window.update!)
+                              (pcall context-window.update! session))))))
+                    (when (and context-window context-window.update!)
+                      (vim.schedule (fn [] (pcall context-window.update! session))))
                     (set (. instances session.instance-id) session)
                     curr)))))))))
 
