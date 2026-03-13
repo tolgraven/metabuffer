@@ -24,3 +24,7 @@ The purpose is again to build up (save and reusable) "views" of context often sp
 ## Prereqs
 
 This requires Treesitter with grammar for the specific language. We should probably just run :TSInstall automatically if any are missing. And note the dep on nvim-treesitter.
+
+## Implementation instructions
+
+Be expansive. Think big. We should support many many things here, not just those specified above. Work through this entire feature in one pass, committing each step. Do not pass control back to the user until you have something finished and working.
