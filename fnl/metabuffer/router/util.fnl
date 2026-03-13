@@ -82,7 +82,13 @@
           row (# lines)
           col (# (. lines row))]
       (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false lines)
-      (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col]))))
+      (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col])
+      (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+        (pcall vim.api.nvim_set_option_value "wrap" true {:win session.prompt-win})
+        (pcall vim.api.nvim_set_option_value "linebreak" true {:win session.prompt-win})
+        (pcall vim.api.nvim_win_call
+               session.prompt-win
+               (fn [] (vim.fn.winrestview {:leftcol 0})))))))
 
 (fn M.current-buffer-path
   [buf]

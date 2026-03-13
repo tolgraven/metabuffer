@@ -90,22 +90,32 @@ M["set-prompt-text!"] = function(session, text)
     local row = #lines
     local col = #lines[row]
     vim.api.nvim_buf_set_lines(session["prompt-buf"], 0, -1, false, lines)
-    return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, col})
+    pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, col})
+    if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+      pcall(vim.api.nvim_set_option_value, "wrap", true, {win = session["prompt-win"]})
+      pcall(vim.api.nvim_set_option_value, "linebreak", true, {win = session["prompt-win"]})
+      local function _11_()
+        return vim.fn.winrestview({leftcol = 0})
+      end
+      return pcall(vim.api.nvim_win_call, session["prompt-win"], _11_)
+    else
+      return nil
+    end
   else
     return nil
   end
 end
 M["current-buffer-path"] = function(buf)
-  local and_12_ = buf and vim.api.nvim_buf_is_valid(buf)
-  if and_12_ then
+  local and_14_ = buf and vim.api.nvim_buf_is_valid(buf)
+  if and_14_ then
     local ok,name = pcall(vim.api.nvim_buf_get_name, buf)
     if (ok and (type(name) == "string") and (name ~= "")) then
-      and_12_ = name
+      and_14_ = name
     else
-      and_12_ = nil
+      and_14_ = nil
     end
   end
-  return and_12_
+  return and_14_
 end
 M["meta-buffer-name"] = function(session)
   if session["project-mode"] then
@@ -219,10 +229,10 @@ M["project-file-list"] = function(settings, root, include_hidden, include_ignore
       _2 = nil
     end
     local rel = vim.fn.systemlist(cmd)
-    local function _25_(p)
+    local function _27_(p)
       return vim.fn.fnamemodify((root .. "/" .. p), ":p")
     end
-    return vim.tbl_map(_25_, (rel or {}))
+    return vim.tbl_map(_27_, (rel or {}))
   else
     return vim.fn.globpath(root, (settings["project-fallback-glob-pattern"] or "**/*"), true, true)
   end

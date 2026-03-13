@@ -44,7 +44,7 @@ M.new = function(nvim, opts)
     wo["foldcolumn"] = "0"
     wo["spell"] = false
     wo["wrap"] = true
-    wo["linebreak"] = false
+    wo["linebreak"] = true
   end
   local function _4_()
     return pcall(vim.fn.winrestview, {leftcol = 0})

@@ -40,7 +40,7 @@
         (set (. wo :foldcolumn) "0")
         (set (. wo :spell) false)
         (set (. wo :wrap) true)
-        (set (. wo :linebreak) false))
+        (set (. wo :linebreak) true))
       (vim.api.nvim_win_call
         win
         (fn []
