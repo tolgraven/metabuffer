@@ -425,6 +425,16 @@
   "Append <cword> from main results window into prompt query."
   (router_actions_mod.insert-symbol-under-cursor! actions-deps prompt-buf))
 
+(fn M.insert-symbol-under-cursor-newline
+  [prompt-buf]
+  "Append <cword> from results into prompt on a new line (OR)."
+  (router_actions_mod.insert-symbol-under-cursor-newline! actions-deps prompt-buf))
+
+(fn M.toggle-prompt-results-focus
+  [prompt-buf]
+  "Toggle focus between prompt and results window."
+  (router_actions_mod.toggle-prompt-results-focus! actions-deps prompt-buf))
+
 (fn M.accept-main
   [prompt-buf]
   "Accept current selection from the main results window."

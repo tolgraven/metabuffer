@@ -171,6 +171,10 @@
         (fn [] (schedule-when-valid session
                  (fn []
                    (router.insert-last-tail session.prompt-buf))))
+        (= action "toggle-prompt-results-focus")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.toggle-prompt-results-focus session.prompt-buf))))
         (= action "negate-current-token")
         (fn [] (schedule-when-valid session
                  (fn []
@@ -240,6 +244,10 @@
         (fn [] (router.exclude-symbol-under-cursor session.prompt-buf))
         (= action "insert-symbol-under-cursor")
         (fn [] (router.insert-symbol-under-cursor session.prompt-buf))
+        (= action "insert-symbol-under-cursor-newline")
+        (fn [] (router.insert-symbol-under-cursor-newline session.prompt-buf))
+        (= action "toggle-prompt-results-focus")
+        (fn [] (router.toggle-prompt-results-focus session.prompt-buf))
         (= action "scroll-main")
         (fn [] (router.scroll-main session.prompt-buf arg))
         (= action "toggle-info-file-entry-view")

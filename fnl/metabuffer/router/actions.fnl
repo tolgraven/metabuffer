@@ -306,9 +306,10 @@
       (history-api.refresh-history-browser! session))))
 
 (fn append-current-symbol!
-  [deps prompt-buf f]
+  [deps prompt-buf f opts]
   (let [active-by-prompt (. deps :active-by-prompt)
         router-util-mod (. deps :router-util-mod)
+        on-newline? (and opts (. opts :newline))
         session (session-by-prompt active-by-prompt prompt-buf)]
     (when session
       (let [word (vim.api.nvim_win_call
@@ -317,11 +318,13 @@
             token (f word)]
         (when (~= token "")
           (let [current (router-util-mod.prompt-text session)
-                sep (if (or (= current "")
-                            (vim.endswith current " ")
-                            (vim.endswith current "\n"))
-                        ""
-                        " ")
+                sep (if on-newline?
+                        (if (or (= current "") (vim.endswith current "\n")) "" "\n")
+                        (if (or (= current "")
+                                (vim.endswith current " ")
+                                (vim.endswith current "\n"))
+                            ""
+                            " "))
                 next (.. current sep token)]
             (router-util-mod.set-prompt-text! session next)))))))
 
@@ -341,9 +344,45 @@
     deps
     prompt-buf
     (fn [word]
+          (if (and (= (type word) "string") (~= (vim.trim word) ""))
+              word
+              ""))))
+
+(fn M.insert-symbol-under-cursor-newline!
+  [deps prompt-buf]
+  (append-current-symbol!
+    deps
+    prompt-buf
+    (fn [word]
       (if (and (= (type word) "string") (~= (vim.trim word) ""))
           word
-          ""))))
+          ""))
+    {:newline true}))
+
+(fn M.toggle-prompt-results-focus!
+  [deps prompt-buf]
+  (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+    (when session
+      (let [meta-win (and session.meta session.meta.win session.meta.win.window)
+            prompt-win session.prompt-win
+            cur-win (vim.api.nvim_get_current_win)]
+        (if (and session.ui-hidden
+                 session.meta
+                 session.meta.buf
+                 (= (vim.api.nvim_get_current_buf) session.meta.buf.buffer))
+            (do
+              (restore-session-ui! deps session {:preserve-focus false})
+              (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+                (pcall vim.api.nvim_set_current_win session.prompt-win)
+                (pcall vim.cmd "startinsert")))
+            (if (and prompt-win (vim.api.nvim_win_is_valid prompt-win) (= cur-win prompt-win))
+                (do
+                  (when (and meta-win (vim.api.nvim_win_is_valid meta-win))
+                    (pcall vim.api.nvim_set_current_win meta-win))
+                  (pcall vim.cmd "stopinsert"))
+                (when (and prompt-win (vim.api.nvim_win_is_valid prompt-win))
+                  (pcall vim.api.nvim_set_current_win prompt-win)
+                  (pcall vim.cmd "startinsert"))))))))
 
 (fn M.toggle-scan-option!
   [deps prompt-buf which]

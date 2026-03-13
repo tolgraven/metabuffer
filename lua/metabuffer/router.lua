@@ -273,6 +273,12 @@ end
 M["insert-symbol-under-cursor"] = function(prompt_buf)
   return router_actions_mod["insert-symbol-under-cursor!"](actions_deps, prompt_buf)
 end
+M["insert-symbol-under-cursor-newline"] = function(prompt_buf)
+  return router_actions_mod["insert-symbol-under-cursor-newline!"](actions_deps, prompt_buf)
+end
+M["toggle-prompt-results-focus"] = function(prompt_buf)
+  return router_actions_mod["toggle-prompt-results-focus!"](actions_deps, prompt_buf)
+end
 M["accept-main"] = function(prompt_buf)
   return router_actions_mod["accept-main!"](actions_deps, prompt_buf)
 end

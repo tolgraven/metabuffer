@@ -3,6 +3,8 @@
 
 (local default-prompt-keymaps
   [ [["n" "i"] "<CR>" "accept"]
+    [["n" "i"] "<M-CR>" "toggle-prompt-results-focus"]
+    [["n" "i"] "<A-CR>" "toggle-prompt-results-focus"]
     ["n" "<Esc>" "cancel"]
     ["n" "<C-p>" "move-selection" -1]
     ["n" "<C-n>" "move-selection" 1]
@@ -50,12 +52,13 @@
 
 (local default-main-keymaps
   [ ["n" "!" "exclude-symbol-under-cursor"]
+    ["n" "#" "insert-symbol-under-cursor-newline"]
     ["n" "<CR>" "accept-main"]
     ["n" "<LocalLeader>i" "toggle-info-file-entry-view"]
     ["n" "<ScrollWheelDown>" "scroll-main" "line-down"]
     ["n" "<ScrollWheelUp>" "scroll-main" "line-up"]
-    ["n" "<M-CR>" "insert-symbol-under-cursor"]
-    ["n" "<A-CR>" "insert-symbol-under-cursor"]])
+    [["n" "i"] "<M-CR>" "toggle-prompt-results-focus"]
+    [["n" "i"] "<A-CR>" "toggle-prompt-results-focus"]])
 
 (local default-prompt-fallback-keymaps
   [ ["i" "<C-a>" "prompt-home"]
