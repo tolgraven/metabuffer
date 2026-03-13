@@ -186,60 +186,7 @@ M["apply-prompt-lines!"] = function(deps, session)
         end
       else
       end
-      if session["project-mode"] then
-        local flags
-        local _15_
-        if session["effective-include-hidden"] then
-          _15_ = "+hid"
-        else
-          _15_ = "-hid"
-        end
-        local _17_
-        if session["effective-include-ignored"] then
-          _17_ = "+ig"
-        else
-          _17_ = "-ig"
-        end
-        local _19_
-        if session["effective-include-deps"] then
-          _19_ = "+dep"
-        else
-          _19_ = "-dep"
-        end
-        local _21_
-        if session["effective-include-binary"] then
-          _21_ = "+bin"
-        else
-          _21_ = "-bin"
-        end
-        local _23_
-        if session["effective-include-hex"] then
-          _23_ = "+hex"
-        else
-          _23_ = "-hex"
-        end
-        local _25_
-        if session["effective-include-files"] then
-          _25_ = "+fil"
-        else
-          _25_ = "-fil"
-        end
-        local function _27_()
-          if session["prefilter-mode"] then
-            return "+prf"
-          else
-            return "-prf"
-          end
-        end
-        flags = {_15_, _17_, _19_, _21_, _23_, _25_, _27_()}
-        if not session["lazy-mode"] then
-          table.insert(flags, "nlz")
-        else
-        end
-        session.meta.debug_out = (" [" .. table.concat(flags, " ") .. "]")
-      else
-        session.meta.debug_out = ""
-      end
+      session.meta.debug_out = ""
       if (changed or text_changed_3f) then
         invalidate_filter_cache_21(session)
       else
@@ -269,7 +216,7 @@ M["apply-prompt-lines!"] = function(deps, session)
       end
     else
       if string.find(tostring(err), "E565") then
-        local function _35_()
+        local function _20_()
           if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
             pcall(session.meta["on-update"], 0)
             pcall(session.meta.refresh_statusline)
@@ -287,7 +234,7 @@ M["apply-prompt-lines!"] = function(deps, session)
             return nil
           end
         end
-        return vim.defer_fn(_35_, 1)
+        return vim.defer_fn(_20_, 1)
       else
         return nil
       end

@@ -231,19 +231,7 @@
                 (set session._rewriting-visible-controls true)
                 (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false visible-lines)
                 (set session._rewriting-visible-controls false))))
-          (set session.meta.debug_out
-            (if session.project-mode
-                (let [flags [(if session.effective-include-hidden "+hid" "-hid")
-                             (if session.effective-include-ignored "+ig" "-ig")
-                             (if session.effective-include-deps "+dep" "-dep")
-                             (if session.effective-include-binary "+bin" "-bin")
-                             (if session.effective-include-hex "+hex" "-hex")
-                             (if session.effective-include-files "+fil" "-fil")
-                             (if session.prefilter-mode "+prf" "-prf")]]
-                  (when-not session.lazy-mode
-                    (table.insert flags "nlz"))
-                  (.. " [" (table.concat flags " ") "]"))
-                ""))
+          (set session.meta.debug_out "")
           (when (or changed text-changed?)
             (invalidate-filter-cache! session))
           (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))

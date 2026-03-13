@@ -173,9 +173,9 @@
   [opts]
   (apply-ui-config! opts)
   (let [hi vim.api.nvim_set_hl]
-    (hi 0 "MetaStatuslineModeInsert" (statusline-color-from "Tag"))
+    (hi 0 "MetaStatuslineModeInsert" (statusline-color-from "ErrorMsg"))
     (hi 0 "MetaStatuslineModeReplace" (statusline-color-from "Todo"))
-    (hi 0 "MetaStatuslineModeNormal" (statusline-color-from "Comment"))
+    (hi 0 "MetaStatuslineModeNormal" (statusline-color-from "Normal"))
     (hi 0 "MetaStatuslineQuery" (statusline-color-from "Normal"))
     (hi 0 "MetaStatuslineFile" (statusline-color-from "Comment"))
     ;; Fill area around %= should blend with the host statusline theme.
@@ -190,6 +190,8 @@
     (hi 0 "MetaStatuslineSyntaxMeta" (statusline-color-from "Number"))
     (hi 0 "MetaStatuslineIndicator" (statusline-color-from "Tag"))
     (hi 0 "MetaStatuslineKey" (statusline-color-from "Comment"))
+    (hi 0 "MetaStatuslineFlagOn" (statusline-color-from "String"))
+    (hi 0 "MetaStatuslineFlagOff" (statusline-color-from "ErrorMsg"))
     (hi 0 "MetaSearchHitAll" (hit-hl "Statement" "Error"))
     (hi 0 "MetaSearchHitBuffer" (hit-hl "Statement" "Error"))
     (hi 0 "MetaSearchHitFuzzy" (hit-hl "Number" "WarningMsg"))
@@ -199,6 +201,8 @@
     (hi 0 "MetaPromptNeg" {:default true :link "ErrorMsg"})
     (hi 0 "MetaPromptAnchor" {:default true :link "SpecialChar"})
     (hi 0 "MetaPromptRegex" {:default true :link "MetaSearchHitRegex" :underline true})
+    (hi 0 "MetaPromptFlagOn" {:default true :link "MetaStatuslineFlagOn"})
+    (hi 0 "MetaPromptFlagOff" {:default true :link "MetaStatuslineFlagOff"})
     (hi 0 "MetaSourceLineNr" {:default true :link "LineNr"})
     (hi 0 "MetaSourceDir" {:default true :link "Directory"})
     (hi 0 "MetaSourceBoundary" (thin-underline-from "Error"))

@@ -35,6 +35,130 @@
           (when (session-prompt-valid? session)
             (f)))))
 
+    (fn option-prefix
+      []
+      (let [p (. vim.g "meta#prefix")]
+        (if (and (= (type p) "string") (~= p ""))
+            p
+            "#")))
+
+    (fn control-token-hl
+      [tok]
+      (let [token (or tok "")
+            prefix (option-prefix)
+            escaped-prefix? (and (vim.startswith token "\\")
+                                 (vim.startswith (string.sub token 2) prefix))
+            sign (string.match token "^#([%+%-])")
+            base (if sign
+                     (string.sub token 3)
+                     (if (vim.startswith token "#")
+                         (string.sub token 2)
+                         (if (and (~= prefix "#") (vim.startswith token prefix))
+                             (string.sub token (+ (# prefix) 1))
+                             "")))
+            toggle-off? (or (= base "nohidden")
+                            (= base "noignored")
+                            (= base "nodeps")
+                            (= base "nobinary")
+                            (= base "nohex")
+                            (= base "nofile")
+                            (= base "noprefilter")
+                            (= base "nolazy")
+                            (= base "escape"))
+            toggle-on? (or (= base "hidden")
+                           (= base "ignored")
+                           (= base "deps")
+                           (= base "binary")
+                           (= base "hex")
+                           (= base "file")
+                           (= base "prefilter")
+                           (= base "lazy"))]
+        (if (or escaped-prefix? (= base ""))
+            nil
+            (if (or (= sign "-") toggle-off?)
+                "MetaPromptFlagOff"
+                (if (or (= sign "+") toggle-on?)
+                    "MetaPromptFlagOn"
+                    nil)))))
+
+    (fn project-flag-token
+      [name on?]
+      [(if on?
+           (.. "#" name)
+           (.. "#-" name))
+       (if on? "MetaPromptFlagOn" "MetaPromptFlagOff")])
+
+    (fn wrap-flag-pieces
+      [pieces max-cols]
+      (let [width (math.max 12 (or max-cols 12))
+            lines []
+            current0 {}
+            line-w0 0]
+        (var current current0)
+        (var line-w line-w0)
+        (fn flush-line!
+          []
+          (when (> (# current) 0)
+            (table.insert lines current)
+            (set current {})
+            (set line-w 0)))
+        (each [_ p (ipairs pieces)]
+          (let [txt (or (. p :text) "")
+                hl (or (. p :hl) "MetaPromptText")
+                w (vim.fn.strdisplaywidth txt)]
+            (if (and (> line-w 0) (> (+ line-w w) width))
+                (flush-line!))
+            (table.insert current [txt hl])
+            (set line-w (+ line-w w))))
+        (flush-line!)
+        (if (> (# lines) 0) lines [[["" "MetaPromptText"]]])))
+
+    (fn render-project-flags-footer!
+      [session]
+      (when (and session.prompt-buf
+                 (session-prompt-valid? session))
+        (let [ns (or session.prompt-footer-ns (vim.api.nvim_create_namespace "metabuffer.prompt.footer"))
+              row (math.max 0 (- (vim.api.nvim_buf_line_count session.prompt-buf) 1))
+              [hidden-token hidden-hl] (project-flag-token "hidden" (not (not session.effective-include-hidden)))
+              [ignored-token ignored-hl] (project-flag-token "ignored" (not (not session.effective-include-ignored)))
+              [deps-token deps-hl] (project-flag-token "deps" (not (not session.effective-include-deps)))
+              [file-token file-hl] (project-flag-token "file" (not (not session.effective-include-files)))
+              [binary-token binary-hl] (project-flag-token "binary" (not (not session.effective-include-binary)))
+              [hex-token hex-hl] (project-flag-token "hex" (not (not session.effective-include-hex)))
+              [prefilter-token prefilter-hl] (project-flag-token "prefilter" (not (not session.prefilter-mode)))
+              [lazy-token lazy-hl] (project-flag-token "lazy" (not (not session.lazy-mode)))
+              pieces [{:text "flags: " :hl "MetaPromptText"}
+                      {:text hidden-token :hl hidden-hl}
+                      {:text " " :hl "MetaPromptText"}
+                      {:text ignored-token :hl ignored-hl}
+                      {:text " " :hl "MetaPromptText"}
+                      {:text deps-token :hl deps-hl}
+                      {:text " " :hl "MetaPromptText"}
+                      {:text file-token :hl file-hl}
+                      {:text " " :hl "MetaPromptText"}
+                      {:text binary-token :hl binary-hl}
+                      {:text " " :hl "MetaPromptText"}
+                      {:text hex-token :hl hex-hl}
+                      {:text " " :hl "MetaPromptText"}
+                      {:text prefilter-token :hl prefilter-hl}
+                      {:text " " :hl "MetaPromptText"}
+                      {:text lazy-token :hl lazy-hl}]
+              max-cols (if (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+                           (vim.api.nvim_win_get_width session.prompt-win)
+                           80)
+              virt-lines (wrap-flag-pieces pieces max-cols)]
+          (set session.prompt-footer-ns ns)
+          (vim.api.nvim_buf_clear_namespace session.prompt-buf ns 0 -1)
+          (when session.project-mode
+            (vim.api.nvim_buf_set_extmark
+              session.prompt-buf
+              ns
+              row
+              0
+              {:virt_lines virt-lines
+               :virt_lines_above false
+               :hl_mode "combine"})))))
+
     (fn refresh-prompt-highlights!
   [session]
       (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
@@ -52,6 +176,9 @@
                       (let [token (string.sub txt s e)
                             s0 (- s 1)
                             e0 e]
+                        (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptText" r s0 e0)
+                        (when-let [flag-hl (control-token-hl token)]
+                          (vim.api.nvim_buf_add_highlight session.prompt-buf ns flag-hl r s0 e0))
                         (when (and (> (# token) 1) (= (string.sub token 1 1) "!"))
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptNeg" r s0 e0))
                         (let [core (if (and (> (# token) 1) (= (string.sub token 1 1) "!"))
@@ -65,7 +192,8 @@
                         (when (and (> (# token) 0) (= (string.sub token (# token)) "$"))
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r (- e0 1) e0))
                         (set pos (+ e 1)))
-                        (set pos (+ (# txt) 1))))))))))
+                        (set pos (+ (# txt) 1)))))))
+          (render-project-flags-footer! session))))
 
     (fn maybe-expand-history-shorthand!
   [router session]

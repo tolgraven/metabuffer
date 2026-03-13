@@ -7,6 +7,7 @@
 (local regex_matcher (require :metabuffer.matcher.regex))
 (local meta_buffer_mod (require :metabuffer.buffer.metabuffer))
 (local meta_window_mod (require :metabuffer.window.metawindow))
+(local path-highlight (require :metabuffer.path_highlight))
 (local util (require :metabuffer.util))
 
 (local M {})
@@ -116,13 +117,29 @@
         {:group "Insert" :label (if (nerd-font-enabled?) "𝐈" "Insert")}
         {:group "Normal" :label (if (nerd-font-enabled?) "𝗡" "Normal")})))
 
+(fn statusline-escape
+  [s]
+  (string.gsub (or s "") "%%" "%%%%"))
+
 (fn selected-preview-file
   [self]
   (let [src-idx (. self.buf.indices (+ self.selected_index 1))
         ref (and src-idx (. (or self.buf.source-refs []) src-idx))
         path (and ref ref.path)]
     (if (and (= (type path) "string") (~= path ""))
-        (vim.fn.pathshorten (vim.fn.fnamemodify path ":~:."))
+        (let [short (vim.fn.pathshorten (vim.fn.fnamemodify path ":~:.") 2)
+              file (vim.fn.fnamemodify short ":t")
+              dir0 (vim.fn.fnamemodify short ":h")
+              dir (if (= dir0 ".") "" dir0)
+              dirtxt (if (= dir "") "" (.. dir "/"))
+              ranges (path-highlight.ranges-for-dir dirtxt 0)
+              out []]
+          (each [_ dr (ipairs ranges)]
+            (let [seg (string.sub dirtxt (+ (. dr :start) 1) (. dr :end))]
+              (table.insert out (.. "%#" (. dr :hl) "#" (statusline-escape seg)))))
+          (when (> (# file) 0)
+            (table.insert out (.. "%#MetaStatuslineFile#" (statusline-escape file))))
+          (table.concat out ""))
         "")))
 
 (fn highlight-pattern->vim-query
