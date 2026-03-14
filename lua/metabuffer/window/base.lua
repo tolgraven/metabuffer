@@ -5,9 +5,13 @@ M.new = function(nvim, win, opts_to_stash, opts)
   local self = handle.new(nvim, win, win, opts_to_stash, opts)
   self.window = win
   self["set-statusline"] = function(text)
-    local wo = vim.wo[self.window]
-    wo["statusline"] = text
-    return nil
+    if vim.api.nvim_win_is_valid(self.window) then
+      local wo = vim.wo[self.window]
+      wo["statusline"] = text
+      return nil
+    else
+      return nil
+    end
   end
   self["set-cursor"] = function(row, col)
     return vim.api.nvim_win_set_cursor(self.window, {row, (col or 0)})

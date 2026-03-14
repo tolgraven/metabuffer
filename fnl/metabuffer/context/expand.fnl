@@ -50,10 +50,11 @@
             (let [bo (. vim.bo buf)]
               (set (. bo :bufhidden) "hide")
               (set (. bo :buftype) "nofile")
-              (set (. bo :swapfile) false)
+              (set (. bo :swapfile) false))
+            (apply-ft-buffer-vars! buf ft)
+            (let [bo (. vim.bo buf)]
               (set (. bo :modifiable) true)
               (set (. bo :filetype) (if (~= ft "") ft "text")))
-            (apply-ft-buffer-vars! buf ft)
             (vim.api.nvim_buf_set_lines buf 0 -1 false lines)
             (let [bo (. vim.bo buf)]
               (set (. bo :modifiable) false))

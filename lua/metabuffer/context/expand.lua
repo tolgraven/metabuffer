@@ -87,6 +87,10 @@ local function ensure_ts_buf(session, ref, read_file_lines_cached)
           bo["bufhidden"] = "hide"
           bo["buftype"] = "nofile"
           bo["swapfile"] = false
+        end
+        apply_ft_buffer_vars_21(buf, ft)
+        do
+          local bo = vim.bo[buf]
           bo["modifiable"] = true
           if (ft ~= "") then
             bo["filetype"] = ft
@@ -94,7 +98,6 @@ local function ensure_ts_buf(session, ref, read_file_lines_cached)
             bo["filetype"] = "text"
           end
         end
-        apply_ft_buffer_vars_21(buf, ft)
         vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
         do
           local bo = vim.bo[buf]

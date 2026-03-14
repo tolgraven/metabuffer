@@ -313,7 +313,24 @@ local function apply_ui_config_21(opts)
   vim.g["meta#prefix"] = (ui.prefix or "#")
   return nil
 end
+local function ensure_fennel_syntax_defaults_21()
+  if (vim.g.fennel_lua_version == nil) then
+    vim.g["fennel_lua_version"] = "5.1"
+  else
+  end
+  if (vim.g.fennel_use_luajit == nil) then
+    if jit then
+      vim.g["fennel_use_luajit"] = 1
+    else
+      vim.g["fennel_use_luajit"] = 0
+    end
+    return nil
+  else
+    return nil
+  end
+end
 local function ensure_defaults_and_highlights_21(opts)
+  ensure_fennel_syntax_defaults_21()
   apply_ui_config_21(opts)
   local hi = vim.api.nvim_set_hl
   hi(0, "MetaStatuslineModeInsert", statusline_color_from("ErrorMsg"))
@@ -450,43 +467,43 @@ M.reload = function(opts)
   clear_module_cache()
   clear_plugin_loaded_flags_21()
   source_plugin_bootstrap_21()
-  local _54_
+  local _57_
   if do_compile then
-    _54_ = "[metabuffer] reloaded (compiled)"
+    _57_ = "[metabuffer] reloaded (compiled)"
   else
-    _54_ = "[metabuffer] reloaded"
+    _57_ = "[metabuffer] reloaded"
   end
-  vim.notify(_54_, vim.log.levels.INFO)
+  vim.notify(_57_, vim.log.levels.INFO)
   return true
 end
 M.setup = function(opts)
   router.configure(opts)
   ensure_defaults_and_highlights_21(opts)
-  local function _56_(args)
+  local function _59_(args)
     return router.entry_start(args.args, args.bang)
   end
-  ensure_command("Meta", _56_, {nargs = "?", bang = true})
-  local function _57_(args)
+  ensure_command("Meta", _59_, {nargs = "?", bang = true})
+  local function _60_(args)
     return router.entry_resume(args.args)
   end
-  ensure_command("MetaResume", _57_, {nargs = "?"})
-  local function _58_()
+  ensure_command("MetaResume", _60_, {nargs = "?"})
+  local function _61_()
     return router.entry_cursor_word(false)
   end
-  ensure_command("MetaCursorWord", _58_, {nargs = 0})
-  local function _59_()
+  ensure_command("MetaCursorWord", _61_, {nargs = 0})
+  local function _62_()
     return router.entry_cursor_word(true)
   end
-  ensure_command("MetaResumeCursorWord", _59_, {nargs = 0})
-  local function _60_(args)
+  ensure_command("MetaResumeCursorWord", _62_, {nargs = 0})
+  local function _63_(args)
     return router.entry_sync(args.args)
   end
-  ensure_command("MetaSync", _60_, {nargs = "?"})
-  local function _61_()
+  ensure_command("MetaSync", _63_, {nargs = "?"})
+  local function _64_()
     return router.entry_push()
   end
-  ensure_command("MetaPush", _61_, {nargs = 0})
-  local function _62_(args)
+  ensure_command("MetaPush", _64_, {nargs = 0})
+  local function _65_(args)
     local ok,err = pcall(M.reload, {compile = args.bang})
     if not ok then
       return vim.notify(("[metabuffer] reload failed: " .. tostring(err)), vim.log.levels.ERROR)
@@ -494,7 +511,7 @@ M.setup = function(opts)
       return nil
     end
   end
-  ensure_command("MetaReload", _62_, {nargs = 0, bang = true})
+  ensure_command("MetaReload", _65_, {nargs = 0, bang = true})
   return true
 end
 M.defaults = config.defaults

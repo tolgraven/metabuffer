@@ -7,7 +7,7 @@ T['project <CR> hides Meta UI but restores full state when returning to results 
   local root = H.make_temp_project()
   H.open_project_meta_in_dir(root, 'main.txt')
 
-  H.type_prompt_human('meta', 90)
+  H.type_prompt_text('meta')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
   H.type_prompt('<C-n>')
 

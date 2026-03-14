@@ -23,6 +23,7 @@ end
 
 _G.MiniTest = mini_test
 mini_test.setup()
+require("tests.support.profiler").setup()
 
 -- Keep project lazy behavior active in headless mini.test child sessions so
 -- :Meta! tests exercise the same async path as interactive use.

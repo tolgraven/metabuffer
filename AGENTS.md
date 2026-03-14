@@ -39,10 +39,14 @@
   - debug: `NVIM_LOG_FILE=.nvimlog ./scripts/compile-fennel.sh`
 - Run full test suite (screen + unit, parallel):
   - `./scripts/test-mini.sh`
+- Run full suite with profiling output written under `/tmp`:
+  - `./scripts/test-mini.sh --profile`
 - Rerun single failing file quickly while iterating:
-  - `TEST_ONLY='tests/unit/test_query_unit.lua' ./scripts/test-mini.sh`
+  - `./scripts/test-mini.sh tests/unit/test_query_unit.lua`
 - Rerun only files that failed on previous run:
   - `TEST_FAILED_ONLY=1 ./scripts/test-mini.sh`
+- Run screen tests against the real repo instead of the default generated fixture project:
+  - `TEST_REAL_REPO=1 ./scripts/test-mini.sh`
 
 ## Important Session Notes
 
@@ -83,6 +87,8 @@
 - Always update/extend tests when functionality changes:
   - unit tests under `tests/unit/` for pure logic and parser/matcher behavior.
   - screen/integration tests under `tests/screen/` for end-to-end prompt/router/window behavior.
+  - screen tests default to a generated project fixture from `tests/screen/support/screen_helpers.lua`; only opt into full-repo coverage with `TEST_REAL_REPO=1`.
+  - keep screen files grouped by dir (`context/`, `history/`, `matchers/`, `persistence/`, `project/`) and split any file trending above ~2-3s.
   - keep `tests/testing.md` synchronized with current test coverage and rerun workflows.
   - when multiple tests fail, use `.cache/metabuffer-tests/failed-files.txt` and parallel sub-agents (one per failing file) to investigate/fix in parallel, then run a full suite check.
 
@@ -91,7 +97,7 @@
 - Never stop work unecessarily. User should never have to simply type "go", unless you make an optional (somewhat unlikely to be wanted) suggestion. Generally stop when there are multiple paths to take and user needs to choose. But if both can be implemented without issue and seem reasonable based on spec, simply implement them without asking.
 - Features in `features` should always result in feature branches in git. Commit each step when doing that, without asking. Don't push unless asked. Other work can be done straight on mainline, and then you should defer committing until told.
 - Try to avoid commands that need escalated permissions and hence user input (to confirm), since these disrupt work. Always see if there is an in-sandbox alternative.
-- Since you lack full access to `~/.local/state/nvim` you need to always use `/tmp` and set appropriate exports for such things when trying to test using a full neovim config/setup.
+- Since you lack full access to `~/.local/state/nvim`, always route ad hoc Neovim state through `/tmp` to avoid `shada`/state permission errors. For manual/headless runs, set `XDG_STATE_HOME=/tmp`, `XDG_DATA_HOME=/tmp`, `XDG_CACHE_HOME=/tmp`, and if needed `NVIM_APPNAME` to a tmp-specific value instead of touching the real local state dirs.
 - Remember `fennel-ls` should be run directly after any file edit.
 
 ## Symbol Index

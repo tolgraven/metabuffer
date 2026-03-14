@@ -1,21 +1,45 @@
 local M = {}
+local profiler = require('tests.support.profiler')
 
 M.child = MiniTest.new_child_neovim()
 M.eq = MiniTest.expect.equality
 
 local debug_dump_path = "/tmp/metabuffer-mini-integration.log"
+local debug_dump_enabled = vim.env.TEST_DEBUG_DUMP == '1'
 
 function M.wait_for(pred, timeout_ms)
-  local ok = vim.wait(timeout_ms or 3000, pred, 20)
+  local ok = profiler.measure('wait', profiler.caller_label(2, 'wait_for'), function()
+    return vim.wait(timeout_ms or 3000, pred, 20)
+  end)
   M.eq(ok, true)
 end
 
 function M.child_setup()
   local root = vim.fn.getcwd()
-  M.child.restart(
-    { "-u", root .. "/tests/minimal_init.lua", "-n", "-i", "NONE" },
-    { connection_timeout = 20000 }
-  )
+  local worker_idx = tonumber(vim.env.TEST_WORKER_INDEX or '') or 1
+  local startup_jitter = (worker_idx % 8) * 35
+
+  if startup_jitter > 0 then
+    vim.loop.sleep(startup_jitter)
+  end
+
+  profiler.measure('child', 'child.restart', function()
+    local last_err = nil
+    for attempt = 1, 4 do
+      local ok, err = pcall(function()
+        M.child.restart(
+          { "-u", root .. "/tests/minimal_init.lua", "-n", "-i", "NONE" },
+          { connection_timeout = 20000 }
+        )
+      end)
+      if ok then
+        return
+      end
+      last_err = err
+      vim.loop.sleep(80 * attempt)
+    end
+    error(last_err)
+  end)
   M.child.o.hidden = true
   M.child.o.swapfile = false
   M.child.cmd("cd " .. root)
@@ -48,50 +72,16 @@ end
 function M.case_hooks()
   return {
     pre_case = function()
-      if M._timings == nil then
-        M._timings = {}
-      end
       M.child_setup()
     end,
     post_once = function()
-      if type(M._timings) == 'table' and #M._timings > 0 then
-        io.stdout:write('\n[mini-runner] CASE TIMINGS SUMMARY\n')
-        for i, item in ipairs(M._timings) do
-          io.stdout:write(string.format('[mini-runner]   %02d. %s | %.1fms\n', i, item.name, item.ms))
-        end
-        io.stdout:flush()
-      end
-      M._timings = nil
       M.stop_child_once()
     end,
   }
 end
 
 function M.timed_case(fn)
-  return function(...)
-    local args = { ... }
-    local t0 = vim.loop.hrtime() / 1e6
-    local name = M.case_name()
-    io.stdout:write(string.format('\n[mini-runner] CASE START %s\n', name))
-    io.stdout:flush()
-
-    local ok, res = xpcall(function()
-      return fn(unpack(args))
-    end, debug.traceback)
-
-    local dt = (vim.loop.hrtime() / 1e6) - t0
-    if type(M._timings) ~= 'table' then
-      M._timings = {}
-    end
-    table.insert(M._timings, { name = name, ms = dt })
-    io.stdout:write(string.format('\n[mini-runner] CASE DONE  %s | %.1fms\n', name, dt))
-    io.stdout:flush()
-
-    if not ok then
-      error(res)
-    end
-    return res
-  end
+  return fn
 end
 
 function M.open_meta_with_lines(lines)
@@ -110,8 +100,162 @@ function M.open_meta_with_lines(lines)
   end)
 end
 
+local function project_root_for_tests()
+  if vim.env.TEST_REAL_REPO == '1' then
+    return M.child.fn.getcwd()
+  end
+
+  if M._fixture_root then
+    return M._fixture_root
+  end
+
+  M._fixture_root = M.child.lua_get([[
+    (function()
+      local root = vim.fn.tempname()
+      local function mkdir(path)
+        vim.fn.mkdir(path, 'p')
+      end
+      local function write(path, lines, mode)
+        if mode == nil then
+          vim.fn.writefile(lines, path)
+          return
+        end
+        vim.fn.writefile(lines, path, mode)
+      end
+      local function repeat_lines(prefix, count)
+        local out = {}
+        for i = 1, count do
+          out[#out + 1] = string.format('%s %03d', prefix, i)
+        end
+        return out
+      end
+      local function binary_blob()
+        return {
+          137, 80, 78, 71, 13, 10, 26, 10,
+          0, 0, 0, 13, 73, 72, 68, 82,
+          0, 0, 0, 1, 0, 0, 0, 1,
+          8, 2, 0, 0, 0, 144, 119, 83,
+          222, 0, 0, 0, 12, 73, 68, 65,
+          84, 8, 153, 99, 248, 15, 4, 0,
+          9, 251, 3, 253, 160, 132, 81, 106,
+          0, 0, 0, 0, 73, 69, 78, 68,
+          174, 66, 96, 130,
+        }
+      end
+
+      mkdir(root)
+      mkdir(root .. '/lua/metabuffer/core')
+      mkdir(root .. '/lua/metabuffer/window')
+      mkdir(root .. '/fnl/metabuffer/router')
+      mkdir(root .. '/fnl/metabuffer/window')
+      mkdir(root .. '/doc')
+      mkdir(root .. '/deps/demo/src')
+      mkdir(root .. '/ignored')
+      mkdir(root .. '/nested/deeper/even-deeper')
+      mkdir(root .. '/.hidden')
+
+      write(root .. '/.gitignore', {
+        'ignored/',
+        '*.tmp',
+      })
+
+      write(root .. '/README.md', vim.list_extend({
+        '# Metabuffer Fixture',
+        '',
+        'local meta fixture text',
+        'metam token lives here',
+        'preview-window appears in this readme',
+        'info-window appears in this readme',
+        'lua file query content for README.md',
+      }, repeat_lines('fixture readme line with meta local lua content', 80)))
+
+      write(root .. '/lua/metabuffer/core/init.lua', vim.list_extend({
+        'local M = {}',
+        '',
+        'function M.setup(opts)',
+        '  local meta = opts and opts.meta or "meta"',
+        '  local metam = opts and opts.metam or "metam"',
+        '  return { meta = meta, metam = metam }',
+        'end',
+        '',
+        'return M',
+      }, repeat_lines('local fixture_lua_value = "meta local lua"', 60)))
+
+      write(root .. '/lua/metabuffer/window/info_window.lua', vim.list_extend({
+        'local function info_window_state()',
+        '  local local_value = "info-window"',
+        '  return local_value',
+        'end',
+        '',
+        'return info_window_state',
+      }, repeat_lines('local info_window_meta = "local lua info-window"', 45)))
+
+      write(root .. '/fnl/metabuffer/router/query_flow.fnl', vim.list_extend({
+        '(local M {})',
+        '',
+        '(fn setup',
+        '  [opts]',
+        '  (let [local-value "meta"]',
+        '    {:meta local-value',
+        '     :opts opts}))',
+        '',
+        'M',
+      }, repeat_lines('(local local-meta "local meta fnl")', 55)))
+
+      write(root .. '/fnl/metabuffer/window/preview_window.fnl', vim.list_extend({
+        '(fn preview-window',
+        '  []',
+        '  {:title "preview-window"})',
+      }, repeat_lines('(local preview-window-local "preview-window meta")', 35)))
+
+      write(root .. '/doc/testing.md', vim.list_extend({
+        '# Testing',
+        '',
+        'local project docs mention meta and lua',
+        'preview-window and info-window are documented here',
+      }, repeat_lines('doc file local meta line', 30)))
+
+      write(root .. '/deps/demo/src/lib.lua', vim.list_extend({
+        'local dep_meta = true',
+        'return dep_meta',
+      }, repeat_lines('local dep_line = "meta from deps"', 25)))
+
+      write(root .. '/ignored/generated.log', vim.list_extend({
+        'ignored meta content',
+      }, repeat_lines('ignored line meta local', 20)))
+
+      write(root .. '/.hidden/secret.lua', vim.list_extend({
+        'local hidden_meta = "secret meta"',
+        'return hidden_meta',
+      }, repeat_lines('local hidden_line = "hidden meta"', 20)))
+
+      write(root .. '/nested/deeper/even-deeper/sample.lua', vim.list_extend({
+        'local nested = "meta"',
+        'return nested',
+      }, repeat_lines('local nested_local = "lua meta local"', 40)))
+
+      write(root .. '/metabuffer.png', binary_blob(), 'b')
+
+      for i = 1, 24 do
+        local dir = string.format('%s/fixtures/pack_%02d', root, i)
+        mkdir(dir)
+        write(dir .. '/module.lua', vim.list_extend({
+          string.format('local module_%02d = "meta"', i),
+          string.format('local local_value_%02d = "lua"', i),
+          string.format('return module_%02d', i),
+        }, repeat_lines(string.format('local fixture_pack_%02d = "meta local lua"', i), 24)))
+      end
+
+      return root
+    end)()
+  ]])
+  return M._fixture_root
+end
+
 function M.open_project_meta_from_file(path)
-  M.child.cmd("edit " .. path)
+  local root = project_root_for_tests()
+  M.child.cmd("cd " .. root)
+  M.child.cmd("edit " .. root .. "/" .. path)
   M.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
   M.child.cmd("Meta!")
 
@@ -467,6 +611,9 @@ function M.str_contains(hay, needle)
 end
 
 function M.dump_state(tag)
+  if not debug_dump_enabled then
+    return
+  end
   M.child.lua(string.format([[
     (function()
       local path = _G.__meta_debug_dump_path
@@ -505,29 +652,43 @@ function M.dump_state(tag)
 end
 
 function M.type_prompt(keys)
-  M.child.type_keys(0, keys)
+  local encoded = M.child.api.nvim_replace_termcodes(keys, true, false, true)
+  M.child.api.nvim_input(encoded)
   M.dump_state("type " .. keys)
+end
+
+function M.type_prompt_text(text)
+  for i = 1, #text do
+    M.child.api.nvim_input(string.sub(text, i, i))
+  end
+  M.dump_state("type_text " .. text)
 end
 
 function M.type_prompt_human(text, per_key_ms)
   local delay = per_key_ms or 25
+  local slept = 0
   for i = 1, #text do
-    M.child.type_keys(0, string.sub(text, i, i))
+    M.child.api.nvim_input(string.sub(text, i, i))
     if delay > 0 then
       vim.loop.sleep(delay)
+      slept = slept + delay
     end
   end
+  profiler.record('sleep', profiler.caller_label(2, 'type_prompt_human'), slept)
   M.dump_state("type_human " .. text)
 end
 
 function M.type_prompt_tokens(tokens, per_key_ms)
   local delay = per_key_ms or 25
+  local slept = 0
   for _, key in ipairs(tokens) do
     M.child.type_keys(0, key)
     if delay > 0 then
       vim.loop.sleep(delay)
+      slept = slept + delay
     end
   end
+  profiler.record('sleep', profiler.caller_label(2, 'type_prompt_tokens'), slept)
   M.dump_state("type_tokens " .. table.concat(tokens, " "))
 end
 

@@ -72,6 +72,61 @@ local function invalidate_filter_cache_21(session)
     return nil
   end
 end
+local function source_flags_changed_3f(session, parsed)
+  local next_hidden = choose_current_when_nil(parsed["include-hidden"], session["include-hidden"])
+  local next_ignored = choose_current_when_nil(parsed["include-ignored"], session["include-ignored"])
+  local next_deps = choose_current_when_nil(parsed["include-deps"], session["include-deps"])
+  local next_binary = choose_current_when_nil(parsed["include-binary"], session["include-binary"])
+  local next_hex = choose_current_when_nil(parsed["include-hex"], session["include-hex"])
+  local next_files = choose_current_when_nil(parsed["include-files"], session["include-files"])
+  return ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_binary ~= session["effective-include-binary"]) or (next_hex ~= session["effective-include-hex"]) or (next_files ~= session["effective-include-files"]))
+end
+local function render_flags_changed_3f(session, parsed)
+  local next_prefilter = choose_current_when_nil(parsed.prefilter, session["prefilter-mode"])
+  local next_lazy = choose_current_when_nil(parsed.lazy, session["lazy-mode"])
+  local next_expansion = choose_current_when_nil(parsed.expansion, session["expansion-mode"])
+  return ((next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]) or (next_expansion ~= session["expansion-mode"]))
+end
+local function refresh_session_ui_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+  session.meta.refresh_statusline()
+  update_info_window(session)
+  if (context_window and context_window["update!"]) then
+    context_window["update!"](session)
+  else
+  end
+  if refresh_change_signs_21 then
+    refresh_change_signs_21(session)
+  else
+  end
+  if capture_sign_baseline_21 then
+    return capture_sign_baseline_21(session)
+  else
+    return nil
+  end
+end
+local function retry_textlock_update_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+  local function _10_()
+    if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
+      pcall(session.meta["on-update"], 0)
+      return pcall(refresh_session_ui_21, session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+    else
+      return nil
+    end
+  end
+  return vim.defer_fn(_10_, 1)
+end
+local function run_meta_update_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+  local ok,err = pcall(session.meta["on-update"], 0)
+  if ok then
+    return refresh_session_ui_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+  else
+    if string.find(tostring(err), "E565") then
+      return retry_textlock_update_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+    else
+      return nil
+    end
+  end
+end
 local function consume_visible_control_token_3f(query_mod, tok)
   local parsed = query_mod["parse-query-lines"]({(tok or "")})
   return (((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed["include-binary"] ~= nil) or (parsed["include-hex"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= ""))) and (parsed["include-files"] == nil) and (parsed["include-binary"] == nil) and (parsed["include-hex"] == nil))
@@ -105,153 +160,103 @@ M["apply-prompt-lines!"] = function(deps, session)
   local open_saved_browser_21 = deps["open-saved-browser!"]
   if (session and not session.closing and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and not session["_rewriting-visible-controls"]) then
     local raw_lines = vim.api.nvim_buf_get_lines(session["prompt-buf"], 0, -1, false)
-    do
-      local parsed = query_mod["parse-query-lines"](raw_lines)
-      local lines = parsed.lines
-      local consume_visible_controls_3f = false
-      local effective_lines = lines
-      local effective_text = table.concat(effective_lines, "\n")
-      local _ = false
-      local _0
-      if (parsed.history and merge_history_into_session_21) then
-        _0 = merge_history_into_session_21(session)
-      else
-        _0 = nil
-      end
-      local _1
-      if ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "") and save_current_prompt_tag_21) then
-        _1 = save_current_prompt_tag_21(session, parsed["save-tag"], effective_text)
-      else
-        _1 = nil
-      end
-      local _2
-      if ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "") and restore_saved_prompt_tag_21) then
-        _2 = restore_saved_prompt_tag_21(session, parsed["saved-tag"])
-      else
-        _2 = nil
-      end
-      local _3
-      if (parsed["saved-browser"] and open_saved_browser_21) then
-        _3 = open_saved_browser_21(session)
-      else
-        _3 = nil
-      end
-      local next_hidden = choose_current_when_nil(parsed["include-hidden"], session["include-hidden"])
-      local next_ignored = choose_current_when_nil(parsed["include-ignored"], session["include-ignored"])
-      local next_deps = choose_current_when_nil(parsed["include-deps"], session["include-deps"])
-      local next_binary = choose_current_when_nil(parsed["include-binary"], session["include-binary"])
-      local next_hex = choose_current_when_nil(parsed["include-hex"], session["include-hex"])
-      local next_files = choose_current_when_nil(parsed["include-files"], session["include-files"])
-      local next_prefilter = choose_current_when_nil(parsed.prefilter, session["prefilter-mode"])
-      local next_lazy = choose_current_when_nil(parsed.lazy, session["lazy-mode"])
-      local next_expansion = choose_current_when_nil(parsed.expansion, session["expansion-mode"])
-      local schedule_source_set_rebuild_21 = project_source["schedule-source-set-rebuild!"]
-      local apply_source_set_21 = project_source["apply-source-set!"]
-      local prev_effective_text = (session["prompt-last-applied-text"] or "")
-      local text_changed_3f = (effective_text ~= prev_effective_text)
-      local changed = ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_binary ~= session["effective-include-binary"]) or (next_hex ~= session["effective-include-hex"]) or (next_files ~= session["effective-include-files"]) or (next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]) or (next_expansion ~= session["expansion-mode"]))
-      session["effective-include-hidden"] = next_hidden
-      session["effective-include-ignored"] = next_ignored
-      session["effective-include-deps"] = next_deps
-      session["effective-include-binary"] = next_binary
-      session["effective-include-hex"] = next_hex
-      session["effective-include-files"] = next_files
-      session["include-hidden"] = next_hidden
-      session["include-ignored"] = next_ignored
-      session["include-deps"] = next_deps
-      session["include-binary"] = next_binary
-      session["include-hex"] = next_hex
-      session["include-files"] = next_files
-      session["prefilter-mode"] = next_prefilter
-      session["lazy-mode"] = next_lazy
-      session["expansion-mode"] = next_expansion
-      session["last-parsed-query"] = parsed
-      session["file-query-lines"] = (parsed["file-lines"] or {})
-      session["last-prompt-text"] = effective_text
-      session["prompt-last-applied-text"] = effective_text
-      session.meta["file-query-lines"] = (parsed["file-lines"] or {})
-      session.meta["include-binary"] = next_binary
-      session.meta["include-hex"] = next_hex
-      session.meta["include-files"] = next_files
-      if consume_visible_controls_3f then
-        local visible_lines = consume_visible_controls_lines(query_mod, raw_lines)
-        local visible_text = table.concat(visible_lines, "\n")
-        local raw_text = table.concat(raw_lines, "\n")
-        if (visible_text ~= raw_text) then
-          session["_rewriting-visible-controls"] = true
-          vim.api.nvim_buf_set_lines(session["prompt-buf"], 0, -1, false, visible_lines)
-          session["_rewriting-visible-controls"] = false
-        else
-        end
-      else
-      end
-      session.meta.debug_out = ""
-      if (changed or text_changed_3f) then
-        invalidate_filter_cache_21(session)
-      else
-      end
-      if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
-        pcall(vim.api.nvim_buf_set_var, session.meta.buf.buffer, "meta_manual_edit_active", false)
-      else
-      end
-      if (session["project-mode"] and changed) then
-        if schedule_source_set_rebuild_21 then
-          schedule_source_set_rebuild_21(session, 0)
-        else
-          if apply_source_set_21 then
-            apply_source_set_21(session)
-          else
-          end
-        end
-      else
-      end
-      session.meta["set-query-lines"](effective_lines)
+    local parsed = query_mod["parse-query-lines"](raw_lines)
+    local lines = parsed.lines
+    local consume_visible_controls_3f = false
+    local effective_lines = lines
+    local effective_text = table.concat(effective_lines, "\n")
+    local next_hidden = choose_current_when_nil(parsed["include-hidden"], session["include-hidden"])
+    local next_ignored = choose_current_when_nil(parsed["include-ignored"], session["include-ignored"])
+    local next_deps = choose_current_when_nil(parsed["include-deps"], session["include-deps"])
+    local next_binary = choose_current_when_nil(parsed["include-binary"], session["include-binary"])
+    local next_hex = choose_current_when_nil(parsed["include-hex"], session["include-hex"])
+    local next_files = choose_current_when_nil(parsed["include-files"], session["include-files"])
+    local next_prefilter = choose_current_when_nil(parsed.prefilter, session["prefilter-mode"])
+    local next_lazy = choose_current_when_nil(parsed.lazy, session["lazy-mode"])
+    local next_expansion = choose_current_when_nil(parsed.expansion, session["expansion-mode"])
+    local schedule_source_set_rebuild_21 = project_source["schedule-source-set-rebuild!"]
+    local apply_source_set_21 = project_source["apply-source-set!"]
+    local prev_effective_text = (session["prompt-last-applied-text"] or "")
+    local text_changed_3f = (effective_text ~= prev_effective_text)
+    local source_changed_3f = source_flags_changed_3f(session, parsed)
+    local render_changed_3f = render_flags_changed_3f(session, parsed)
+    local changed = (source_changed_3f or render_changed_3f)
+    if (parsed.history and merge_history_into_session_21) then
+      merge_history_into_session_21(session)
+    else
     end
-    local ok,err = pcall(session.meta["on-update"], 0)
-    if ok then
-      session.meta.refresh_statusline()
-      update_info_window(session)
-      if (context_window and context_window["update!"]) then
-        context_window["update!"](session)
+    if ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "") and save_current_prompt_tag_21) then
+      save_current_prompt_tag_21(session, parsed["save-tag"], effective_text)
+    else
+    end
+    if ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= "") and restore_saved_prompt_tag_21) then
+      restore_saved_prompt_tag_21(session, parsed["saved-tag"])
+    else
+    end
+    if (parsed["saved-browser"] and open_saved_browser_21) then
+      open_saved_browser_21(session)
+    else
+    end
+    session["effective-include-hidden"] = next_hidden
+    session["effective-include-ignored"] = next_ignored
+    session["effective-include-deps"] = next_deps
+    session["effective-include-binary"] = next_binary
+    session["effective-include-hex"] = next_hex
+    session["effective-include-files"] = next_files
+    session["include-hidden"] = next_hidden
+    session["include-ignored"] = next_ignored
+    session["include-deps"] = next_deps
+    session["include-binary"] = next_binary
+    session["include-hex"] = next_hex
+    session["include-files"] = next_files
+    session["prefilter-mode"] = next_prefilter
+    session["lazy-mode"] = next_lazy
+    session["expansion-mode"] = next_expansion
+    session["last-parsed-query"] = parsed
+    session["file-query-lines"] = (parsed["file-lines"] or {})
+    session["last-prompt-text"] = effective_text
+    session["prompt-last-applied-text"] = effective_text
+    session.meta["file-query-lines"] = (parsed["file-lines"] or {})
+    session.meta["include-binary"] = next_binary
+    session.meta["include-hex"] = next_hex
+    session.meta["include-files"] = next_files
+    if consume_visible_controls_3f then
+      local visible_lines = consume_visible_controls_lines(query_mod, raw_lines)
+      local visible_text = table.concat(visible_lines, "\n")
+      local raw_text = table.concat(raw_lines, "\n")
+      if (visible_text ~= raw_text) then
+        session["_rewriting-visible-controls"] = true
+        vim.api.nvim_buf_set_lines(session["prompt-buf"], 0, -1, false, visible_lines)
+        session["_rewriting-visible-controls"] = false
       else
-      end
-      if refresh_change_signs_21 then
-        refresh_change_signs_21(session)
-      else
-      end
-      if capture_sign_baseline_21 then
-        return capture_sign_baseline_21(session)
-      else
-        return nil
       end
     else
-      if string.find(tostring(err), "E565") then
-        local function _22_()
-          if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
-            pcall(session.meta["on-update"], 0)
-            pcall(session.meta.refresh_statusline)
-            pcall(update_info_window, session)
-            if (context_window and context_window["update!"]) then
-              pcall(context_window["update!"], session)
-            else
-            end
-            if refresh_change_signs_21 then
-              pcall(refresh_change_signs_21, session)
-            else
-            end
-            if capture_sign_baseline_21 then
-              return pcall(capture_sign_baseline_21, session)
-            else
-              return nil
-            end
-          else
-            return nil
-          end
-        end
-        return vim.defer_fn(_22_, 1)
+    end
+    session.meta.debug_out = ""
+    if (changed or text_changed_3f) then
+      invalidate_filter_cache_21(session)
+    else
+    end
+    if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
+      pcall(vim.api.nvim_buf_set_var, session.meta.buf.buffer, "meta_manual_edit_active", false)
+    else
+    end
+    if (session["project-mode"] and source_changed_3f) then
+      if schedule_source_set_rebuild_21 then
+        schedule_source_set_rebuild_21(session, 0)
       else
-        return nil
+        if apply_source_set_21 then
+          apply_source_set_21(session)
+        else
+        end
       end
+    else
+    end
+    session.meta["set-query-lines"](effective_lines)
+    if (session["project-mode"] and source_changed_3f and not text_changed_3f) then
+      return refresh_session_ui_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+    else
+      return run_meta_update_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
     end
   else
     return nil
@@ -265,6 +270,10 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
   local prompt_scheduler_ctx = deps["prompt-scheduler-ctx"]
   local session = active_by_prompt[prompt_buf]
   if (session and not session.closing) then
+    local lines = router_util_mod["prompt-lines"](session)
+    local parsed = query_mod["parse-query-lines"](lines)
+    local effective_text = table.concat((parsed.lines or {}), "\n")
+    local pure_flag_edit_3f = ((effective_text ~= (session["prompt-last-event-text"] or "")) and (effective_text == (session["prompt-last-applied-text"] or "")) and (source_flags_changed_3f(session, parsed) or render_flags_changed_3f(session, parsed)))
     local now = router_prompt_mod["now-ms"]()
     local delay = prompt_delay_ms(settings, query_mod, session)
     if (not force and event_tick) then
@@ -285,7 +294,16 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
       project_source["schedule-project-bootstrap!"](session, settings["project-bootstrap-delay-ms"])
     else
     end
-    return queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, "", now, delay)
+    if pure_flag_edit_3f then
+      session["prompt-last-event-text"] = effective_text
+      session["last-prompt-text"] = effective_text
+      session["prompt-last-change-ms"] = now
+      session["prompt-update-dirty"] = false
+      router_prompt_mod["cancel-prompt-update!"](session)
+      return M["apply-prompt-lines!"](deps, session)
+    else
+      return queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, "", now, delay)
+    end
   else
     return nil
   end

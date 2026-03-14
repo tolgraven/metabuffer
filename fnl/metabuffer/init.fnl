@@ -264,8 +264,16 @@
     (set (. vim.g "meta#syntax_on_init") (or (. ui :syntax_on_init) "buffer"))
     (set (. vim.g "meta#prefix") (or (. ui :prefix) "#"))))
 
+(fn ensure-fennel-syntax-defaults!
+  []
+  (when (= (. vim.g :fennel_lua_version) nil)
+    (set (. vim.g :fennel_lua_version) "5.1"))
+  (when (= (. vim.g :fennel_use_luajit) nil)
+    (set (. vim.g :fennel_use_luajit) (if jit 1 0))))
+
 (fn ensure-defaults-and-highlights!
   [opts]
+  (ensure-fennel-syntax-defaults!)
   (apply-ui-config! opts)
   (let [hi vim.api.nvim_set_hl]
     (hi 0 "MetaStatuslineModeInsert" (statusline-color-from "ErrorMsg"))

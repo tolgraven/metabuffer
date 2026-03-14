@@ -8,6 +8,11 @@ This repo now has two parallelized suites:
 
 - Full run (screen + unit, parallel workers):
   - `./scripts/test-mini.sh`
+- Full run with profiling:
+  - `./scripts/test-mini.sh --profile`
+  - runner prints the persistent `/tmp/...` profile directory and each worker profile file path
+- Use the real metabuffer repo instead of the default generated project fixture:
+  - `TEST_REAL_REPO=1 ./scripts/test-mini.sh`
 - Override worker count:
   - `TEST_JOBS=4 ./scripts/test-mini.sh`
 - Override default oversubscription:
@@ -15,7 +20,7 @@ This repo now has two parallelized suites:
   - `TEST_JOBS_EXTRA=4 ./scripts/test-mini.sh`
   - `TEST_MAX_JOBS=16 ./scripts/test-mini.sh`
 - Rerun a single file:
-  - `TEST_ONLY='tests/unit/test_query_unit.lua' ./scripts/test-mini.sh`
+  - `./scripts/test-mini.sh tests/unit/test_query_unit.lua`
 - Rerun only previously failing files:
   - `TEST_FAILED_ONLY=1 ./scripts/test-mini.sh`
 
@@ -26,6 +31,14 @@ Runner behavior:
   - default jobs = `min(test_files, TEST_MAX_JOBS or (cpu_count * 2), cpu_count * (TEST_JOBS_MULTIPLIER or 1) + (TEST_JOBS_EXTRA or 2))`
 - Isolates each worker via `NVIM_APPNAME`.
 - Prints file start/end, case names from MiniTest, and total elapsed ms.
+- Prints a sorted per-file timing summary after each run.
+- Optional profiling (`--profile`) adds per-file and per-case breakdowns for:
+  - wall time
+  - CPU time
+  - blocked time (`wall - CPU`)
+  - explicit `wait_for()` time
+  - simulated typing sleep time
+  - child Neovim startup time
 - Returns non-zero if any file has failing cases.
 
 ## Screen Tests
@@ -37,61 +50,78 @@ Key helper coverage:
 - Real-typing simulation with per-character delay.
 - Delayed token typing for special keys.
 - Session probes (query/hits/matcher/case/statusline/info window/selection/prompt height).
+- Default generated project fixture with:
+  - nested `lua/`, `fnl/`, `doc/`, `deps/`, hidden, ignored, and deeply nested dirs
+  - text files containing stable query terms (`meta`, `metam`, `local`, `lua`, `preview-window`, `info-window`)
+  - a synthetic binary `metabuffer.png`
+  - enough files to exercise lazy project bootstrap without using the full repo
 
-### `tests/screen/test_screen_matchers_basic.lua`
+### `tests/screen/matchers/test_screen_matchers_basic_*.lua`
 - Prompt edit hotkeys (`<C-a>`, `<C-e>`, `<C-u>`, `<C-y>`).
 - Fuzzy mode switching and non-contiguous matching.
 - Regex mode filtering and broaden-after-delete behavior.
 - Main-window navigation and statusline liveness.
 
-### `tests/screen/test_screen_matchers_edges.lua`
+### `tests/screen/matchers/test_screen_matchers_edges_*.lua`
 - Unclosed regex-like tokens treated as literals in `all` matcher.
 - Negation filtering + broadening on deletion.
 - Escaped `#` control-like token stays literal.
 
-### `tests/screen/test_screen_project_filtering.lua`
+### `tests/screen/project/test_screen_project_filtering_*.lua`
 - Project mode immediate typing during lazy stream.
 - Clear-query broadening while preserving source pool.
 
-### `tests/screen/test_screen_project_flags_core.lua`
+### `tests/screen/project/test_screen_project_flags_core_*.lua`
 - `#hidden/#deps/#nolazy` consumption + status/debug reflection.
 - `#binary/#hex` visibility and toggle-state reflection.
 
-### `tests/screen/test_screen_project_flags_file_mode.lua`
+### `tests/screen/project/test_screen_project_file_mode_file_entries.lua`
 - `#file <token>` file-entry activation and file-only result sets.
-- `./query` file shortcut behavior.
+
+### `tests/screen/project/test_screen_project_file_mode_binary.lua`
 - `-binary` exclusion from file-entry mode.
 
-### `tests/screen/test_screen_project_flags_query_split.lua`
+### `tests/screen/project/test_screen_project_file_mode_shortcut.lua`
+- `./query` file shortcut behavior.
+
+### `tests/screen/project/test_screen_project_file_query_split_basic.lua`
 - Separation of file tokens from normal query terms.
+
+### `tests/screen/project/test_screen_project_file_query_split_partial.lua`
 - `#file` without a file token preserves regular hits.
+
+### `tests/screen/project/test_screen_project_file_query_split_paths.lua`
 - File token constrains regular hits by matching paths.
 
-### `tests/screen/test_screen_project_flags_clear.lua`
+### `tests/screen/project/test_screen_project_flags_clear.lua`
 - Clearing file tokens removes stale file-query filtering.
 
-### `tests/screen/test_screen_project_info_sync.lua`
+### `tests/screen/project/test_screen_project_info_sync.lua`
 - Hit-buffer and info-window sync/alignment while typing/deleting.
 
-### `tests/screen/test_screen_project_deps_toggle.lua`
+### `tests/screen/project/test_screen_project_deps_toggle.lua`
 - Deterministic deps toggle transitions (`#deps`, `#-deps`).
 
-### `tests/screen/test_screen_persistence_resume.lua`
+### `tests/screen/persistence/test_screen_persistence_resume_*.lua`
 - `:Meta <query>` immediate application.
 - Prompt height persistence across invocations.
 - Accept + `MetaResume` restores query/modes.
 
-### `tests/screen/test_screen_persistence_history_commands.lua`
+### `tests/screen/persistence/test_screen_persistence_history_commands_*.lua`
 - `:Meta !!` and `:Meta !$` history expansion.
 - `<CR>` from results opens selected hit correctly.
 - Repeated `!!` insertion does not duplicate payload.
 
-### `tests/screen/test_screen_persistence_history_project.lua`
+### `tests/screen/persistence/test_screen_persistence_history_project_replay.lua`
 - Project history replay preserves non-consumed flags.
+
+### `tests/screen/persistence/test_screen_persistence_history_project_up.lua`
 - Up-recall does not accumulate duplicate consumed setting tokens.
+
+### `tests/screen/persistence/test_screen_persistence_history_project_legacy.lua`
 - Legacy `#+file` history normalizes to `#file`.
 
-### `tests/screen/test_screen_persistence_history_recall.lua`
+### `tests/screen/persistence/test_screen_persistence_history_recall.lua`
 - Minimal replay-only coverage for `Meta !!` after accept.
 
 ## Unit Tests
@@ -126,10 +156,10 @@ Key helper coverage:
 - Filter-cache invalidation when project flags transition.
 - Project source refresh on query text broadening with prefilter enabled.
 
-### `tests/screen/test_screen_project_mode_churn.lua`
+### `tests/screen/project/test_screen_project_mode_churn.lua`
 - Rapid matcher/case/syntax toggles while lazy project loading is active.
 - Confirms query and hit state settle after mode churn.
 
-### `tests/screen/test_screen_history_browser.lua`
+### `tests/screen/history/test_screen_history_browser.lua`
 - Saved prompt browser activation via `##`.
 - Keyboard navigation and accept flow restore selected saved query.

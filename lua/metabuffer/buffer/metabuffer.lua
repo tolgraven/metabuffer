@@ -1,6 +1,7 @@
 -- [nfnl] fnl/metabuffer/buffer/metabuffer.fnl
 local base = require("metabuffer.buffer.base")
 local ui = require("metabuffer.buffer.ui")
+local query_mod = require("metabuffer.query")
 local source_mod = require("metabuffer.source")
 local util = require("metabuffer.util")
 local M = {}
@@ -55,6 +56,21 @@ local function syntax_files_for_ft(ft)
   end
   return files
 end
+local function apply_ft_buffer_vars_21(buf, ft)
+  if (buf and vim.api.nvim_buf_is_valid(buf) and (ft == "fennel")) then
+    pcall(vim.api.nvim_buf_set_var, buf, "fennel_lua_version", "5.1")
+    local function _5_()
+      if jit then
+        return 1
+      else
+        return 0
+      end
+    end
+    return pcall(vim.api.nvim_buf_set_var, buf, "fennel_use_luajit", _5_())
+  else
+    return nil
+  end
+end
 local function normalize_render_line(line)
   local txt = tostring((line or ""))
   local s1 = string.gsub(txt, "\r\n", " ")
@@ -81,17 +97,22 @@ local function session_has_pending_work(self)
   local session = self.model.session
   return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["lazy-refresh-pending"] or session["lazy-refresh-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["project-bootstrapped"])))
 end
+local function session_has_active_query(self)
+  local session = self.model.session
+  local parsed = (session and session["last-parsed-query"])
+  return (parsed and query_mod["query-lines-has-active?"]((parsed.lines or {})))
+end
 local function should_defer_empty_frame(self, frame)
-  return ((#(frame.lines or {}) == 0) and (#(self["last-rendered-lines"] or {}) > 0) and session_has_pending_work(self))
+  return ((#(frame.lines or {}) == 0) and (#(self["last-rendered-lines"] or {}) > 0) and not session_has_active_query(self) and session_has_pending_work(self))
 end
 local function save_window_views(self)
   local views = {}
   for _, win in ipairs(vim.fn.win_findbuf(self.buffer)) do
     if vim.api.nvim_win_is_valid(win) then
-      local function _7_()
+      local function _9_()
         return vim.fn.winsaveview()
       end
-      views[win] = vim.api.nvim_win_call(win, _7_)
+      views[win] = vim.api.nvim_win_call(win, _9_)
     else
     end
   end
@@ -100,10 +121,10 @@ end
 local function restore_window_views(views)
   for win, view in pairs(views) do
     if vim.api.nvim_win_is_valid(win) then
-      local function _9_()
+      local function _11_()
         return pcall(vim.fn.winrestview, view)
       end
-      vim.api.nvim_win_call(win, _9_)
+      vim.api.nvim_win_call(win, _11_)
     else
     end
   end
@@ -114,17 +135,17 @@ local function rendered_line(self, idx)
   if (self["show-source-prefix"] and self["source-refs"] and self["source-refs"][idx]) then
     local ref = self["source-refs"][idx]
     local pfx = source_prefix(ref)
-    local _11_
+    local _13_
     if ((pfx.text or "") == "") then
-      _11_ = normalize_render_line(line)
+      _13_ = normalize_render_line(line)
     else
       if ((line or "") == "") then
-        _11_ = normalize_render_line(pfx.text)
+        _13_ = normalize_render_line(pfx.text)
       else
-        _11_ = normalize_render_line((pfx.text .. "  " .. line))
+        _13_ = normalize_render_line((pfx.text .. "  " .. line))
       end
     end
-    return {text = _11_, range = {["lnum-end"] = pfx["lnum-end"], ["icon-start"] = pfx["icon-start"], ["icon-end"] = pfx["icon-end"], ["icon-hl"] = pfx["icon-hl"], ["dir-ranges"] = (pfx["dir-ranges"] or {}), ["file-start"] = pfx["file-start"], ["file-end"] = pfx["file-end"], ["file-hl"] = pfx["file-hl"], ["ext-start"] = pfx["ext-start"], ["ext-end"] = pfx["ext-end"], ["ext-hl"] = pfx["ext-hl"]}}
+    return {text = _13_, range = {["lnum-end"] = pfx["lnum-end"], ["icon-start"] = pfx["icon-start"], ["icon-end"] = pfx["icon-end"], ["icon-hl"] = pfx["icon-hl"], ["dir-ranges"] = (pfx["dir-ranges"] or {}), ["file-start"] = pfx["file-start"], ["file-end"] = pfx["file-end"], ["file-hl"] = pfx["file-hl"], ["ext-start"] = pfx["ext-start"], ["ext-end"] = pfx["ext-end"], ["ext-hl"] = pfx["ext-hl"]}}
   else
     return {text = normalize_render_line(line)}
   end
@@ -318,13 +339,13 @@ M.new = function(nvim, model)
   end
   self["clear-source-syntax"] = function()
     if (self["source-syntax-groups"] and (#self["source-syntax-groups"] > 0)) then
-      local function _34_()
+      local function _36_()
         for _, g in ipairs(self["source-syntax-groups"]) do
           vim.cmd(("silent! syntax clear " .. g))
         end
         return nil
       end
-      vim.api.nvim_buf_call(self.buffer, _34_)
+      vim.api.nvim_buf_call(self.buffer, _36_)
     else
     end
     self["source-syntax-groups"] = {}
@@ -338,7 +359,7 @@ M.new = function(nvim, model)
       local included = {}
       local groups = {}
       self["clear-source-syntax"]()
-      local function _36_()
+      local function _38_()
         local reset_base_syntax_3f = false
         local block_id = 0
         local function add_block(start, stop, ft)
@@ -356,6 +377,7 @@ M.new = function(nvim, model)
               else
               end
               if not included[cluster] then
+                apply_ft_buffer_vars_21(self.buffer, ft)
                 for _, synfile in ipairs(synfiles) do
                   pcall(vim.api.nvim_buf_del_var, self.buffer, "current_syntax")
                   vim.cmd(("silent! syntax include @" .. cluster .. " " .. vim.fn.fnameescape(synfile)))
@@ -397,7 +419,7 @@ M.new = function(nvim, model)
         end
         return vim.cmd("silent! syntax sync fromstart")
       end
-      vim.api.nvim_buf_call(self.buffer, _36_)
+      vim.api.nvim_buf_call(self.buffer, _38_)
       self["source-syntax-groups"] = groups
       return nil
     end
@@ -420,6 +442,7 @@ M.new = function(nvim, model)
         local ft = vim.bo[self.model].filetype
         local syn = vim.bo[self.model].syntax
         if (ft and (ft ~= "")) then
+          apply_ft_buffer_vars_21(self.buffer, ft)
           bo["filetype"] = ft
         else
         end

@@ -115,16 +115,15 @@
       (set meta.buf.indices (vim.deepcopy all-indices))))
 
   (fn push-file-entry-into-pool!
-    [session path lines]
+    [session path]
     (let [meta session.meta
           content meta.buf.content
           refs meta.buf.source-refs
           rel (vim.fn.fnamemodify path ":.")
-          line ""
-          total-lines (if (= (type lines) "table") (# lines) 0)]
+          line ""]
       (table.insert content line)
       (table.insert refs {:path path
-                          :lnum total-lines
+                          :lnum 1
                           :line (if (and (= (type rel) "string") (~= rel ""))
                                     rel
                                     path)
@@ -155,6 +154,33 @@
       (set meta.buf.source-refs (vim.deepcopy session.single-refs))
       (set meta.buf.show-source-prefix false)
       (set meta.buf.show-source-separators show-separators)
+      (reset-meta-indices! meta)))
+
+  (fn normal-query-active?
+    [session]
+    (let [lines (or (and session.last-parsed-query session.last-parsed-query.lines) [])]
+      (prompt-has-active-query? {:last-parsed-query {:lines lines}})))
+
+  (fn file-only-mode?
+    [session]
+    (and session.project-mode
+         session.effective-include-files
+         (not (normal-query-active? session))))
+
+  (fn set-file-entry-source-content!
+    [session include-hidden include-ignored include-deps include-binary]
+    (let [meta session.meta]
+      (set meta.buf.content [])
+      (set meta.buf.source-refs [])
+      (each [_ path (ipairs (all-project-file-paths
+                              session
+                              include-hidden
+                              include-ignored
+                              include-deps
+                              include-binary))]
+        (push-file-entry-into-pool! session path))
+      (set meta.buf.show-source-prefix true)
+      (set meta.buf.show-source-separators true)
       (reset-meta-indices! meta)))
 
   (fn best-project-selection-index
@@ -297,6 +323,25 @@
           _ (set session.preview-file-cache file-cache)
           content []
           refs []]
+      (when (file-only-mode? session)
+        (let [meta session.meta]
+          (each [_ path (ipairs (all-project-file-paths
+                                  session
+                                  include-hidden
+                                  include-ignored
+                                  include-deps
+                                  include-binary))]
+            (table.insert content "")
+            (table.insert refs {:path path
+                                :lnum 1
+                                :line (let [rel (vim.fn.fnamemodify path ":.")]
+                                        (if (and (= (type rel) "string") (~= rel ""))
+                                            rel
+                                            path))
+                                :kind "file-entry"
+                                :open-lnum 1
+                                :preview-lnum 1}))
+          {:content content :refs refs}))
       (var total-lines 0)
       (let [push-line! (fn [path lnum line]
                          (table.insert content line)
@@ -314,10 +359,7 @@
                                 include-ignored
                                 include-deps
                                 include-binary))]
-          (push-file-entry-into-pool!
-            session
-            path
-            (read-file-lines-cached path {:include-binary include-binary :hex-view include-hex}))))
+          (push-file-entry-into-pool! session path)))
       (each [_ path (ipairs (project-file-list root include-hidden include-ignored include-deps))]
         (let [rel (vim.fn.fnamemodify path ":.")]
           (when (and (< total-lines settings.project-max-total-lines)
@@ -336,7 +378,6 @@
 
   (fn init-project-pool!
     [session prefilter]
-    (set-single-source-content! session session.project-mode)
       (let [root (vim.fn.getcwd)
           include-hidden session.effective-include-hidden
           include-ignored session.effective-include-ignored
@@ -357,11 +398,19 @@
                                [])
           deferred []
           deferred-seen {}]
+      (if (file-only-mode? session)
+          (do
+            (set-file-entry-source-content!
+              session
+              include-hidden
+              include-ignored
+              include-deps
+              include-binary)
+            {:deferred-paths [] :estimated-lines 0})
+          (do
+      (set-single-source-content! session session.project-mode)
       (each [_ path (ipairs file-entry-paths)]
-        (push-file-entry-into-pool!
-          session
-          path
-          (read-file-lines-cached path {:include-binary include-binary :hex-view include-hex})))
+        (push-file-entry-into-pool! session path))
       ;; Prioritize nearby context by materializing already-open buffers first.
       (each [_ path (ipairs open-paths)]
         (let [p (canonical-path path)]
@@ -379,7 +428,7 @@
                      (or (not current) (~= p current)))
             (set (. deferred-seen p) true)
             (table.insert deferred p))))
-      {:deferred-paths deferred :estimated-lines (estimate-lines-from-files deferred)}))
+      {:deferred-paths deferred :estimated-lines (estimate-lines-from-files deferred)}))))
 
   (fn lazy-preferred?
     [session estimated-lines]
