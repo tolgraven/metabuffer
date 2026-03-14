@@ -121,6 +121,12 @@
                     session.preview-buf
                     (vim.api.nvim_create_buf false true))
             width (target-preview-width session)
+            animate-preview? (and animation-mod
+                                  animate-enter?
+                                  (animate-enter? session)
+                                  (animation-mod.enabled? session :preview)
+                                  (not session.preview-animated?))
+            start-width (if animate-preview? 24 width)
             win-id (vim.api.nvim_win_call
                      session.prompt-win
                      (fn []
@@ -131,7 +137,7 @@
         (set session.preview-layout nil)
         (set session.preview-last-path nil)
         (pcall vim.api.nvim_win_set_buf win-id buf)
-        (pcall vim.api.nvim_win_set_width win-id width)
+        (pcall vim.api.nvim_win_set_width win-id start-width)
         (let [bo (. vim.bo buf)]
           ;; Keep scratch alive even when preview window temporarily shows source
           ;; buffers, and disable swapfile side effects.
@@ -150,18 +156,13 @@
         (mark-preview-buffer! buf)
         (ensure-preview-statusline-autocmds! session)
         (apply-preview-window-opts! session session.preview-win)
-        (when (and animation-mod
-                   animate-enter?
-                   (animate-enter? session)
-                   (animation-mod.enabled? session :preview)
-                   (not session.preview-animated?))
+        (when animate-preview?
           (set session.preview-animated? true)
-          (pcall vim.api.nvim_win_set_width win-id 24)
           (animation-mod.animate-win-width!
             session
             "preview-enter"
             win-id
-            24
+            start-width
             width
             (animation-mod.duration-ms session :preview (or preview-slide-ms 180)))))))
 

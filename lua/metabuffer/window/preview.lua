@@ -135,18 +135,25 @@ M.new = function(opts)
         buf = vim.api.nvim_create_buf(false, true)
       end
       local width = target_preview_width(session)
+      local animate_preview_3f = (animation_mod and animate_enter_3f and animate_enter_3f(session) and animation_mod["enabled?"](session, "preview") and not session["preview-animated?"])
+      local start_width
+      if animate_preview_3f then
+        start_width = 24
+      else
+        start_width = width
+      end
       local win_id
-      local function _14_()
+      local function _15_()
         vim.cmd("rightbelow vsplit")
         return vim.api.nvim_get_current_win()
       end
-      win_id = vim.api.nvim_win_call(session["prompt-win"], _14_)
+      win_id = vim.api.nvim_win_call(session["prompt-win"], _15_)
       session["preview-buf"] = buf
       session["preview-win"] = win_id
       session["preview-layout"] = nil
       session["preview-last-path"] = nil
       pcall(vim.api.nvim_win_set_buf, win_id, buf)
-      pcall(vim.api.nvim_win_set_width, win_id, width)
+      pcall(vim.api.nvim_win_set_width, win_id, start_width)
       do
         local bo = vim.bo[buf]
         bo["bufhidden"] = "hide"
@@ -167,10 +174,9 @@ M.new = function(opts)
       mark_preview_buffer_21(buf)
       ensure_preview_statusline_autocmds_21(session)
       apply_preview_window_opts_21(session, session["preview-win"])
-      if (animation_mod and animate_enter_3f and animate_enter_3f(session) and animation_mod["enabled?"](session, "preview") and not session["preview-animated?"]) then
+      if animate_preview_3f then
         session["preview-animated?"] = true
-        pcall(vim.api.nvim_win_set_width, win_id, 24)
-        return animation_mod["animate-win-width!"](session, "preview-enter", win_id, 24, width, animation_mod["duration-ms"](session, "preview", (preview_slide_ms or 180)))
+        return animation_mod["animate-win-width!"](session, "preview-enter", win_id, start_width, width, animation_mod["duration-ms"](session, "preview", (preview_slide_ms or 180)))
       else
         return nil
       end
@@ -222,15 +228,15 @@ M.new = function(opts)
     local lines = (preview_data.lines or trim_or_pad_lines({}, p_height))
     local src_lnum = math.max(1, (preview_data["focus-lnum"] or (ref and (ref["preview-lnum"] or ref.lnum)) or 1))
     local start_lnum
-    local or_21_ = preview_data["start-lnum"]
-    if not or_21_ then
+    local or_22_ = preview_data["start-lnum"]
+    if not or_22_ then
       if ref then
-        or_21_ = (src_lnum - 1)
+        or_22_ = (src_lnum - 1)
       else
-        or_21_ = 1
+        or_22_ = 1
       end
     end
-    start_lnum = math.max(1, or_21_)
+    start_lnum = math.max(1, or_22_)
     local focus_row
     if ref then
       local row = ((src_lnum - start_lnum) + 1)
@@ -286,10 +292,10 @@ M.new = function(opts)
         pcall(vim.api.nvim_buf_add_highlight, session["preview-buf"], ns, "LineNr", (row - 1), 0, field_width)
       end
       pcall(vim.api.nvim_win_set_cursor, session["preview-win"], {ctx["focus-row"], 0})
-      local function _27_()
+      local function _28_()
         return vim.fn.winrestview({leftcol = target_leftcol})
       end
-      pcall(vim.api.nvim_win_call, session["preview-win"], _27_)
+      pcall(vim.api.nvim_win_call, session["preview-win"], _28_)
     end
     local bo = vim.bo[session["preview-buf"]]
     local ft = ctx.ft
@@ -362,7 +368,7 @@ M.new = function(opts)
       local target_path = selected_preview_path(session)
       local timer = vim.loop.new_timer()
       session["preview-update-timer"] = timer
-      local function _35_()
+      local function _36_()
         if (session["preview-update-timer"] and (session["preview-update-timer"] == timer)) then
           local stopf = timer.stop
           local closef = timer.close
@@ -384,7 +390,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return timer.start(timer, math.max(0, (wait_ms or 0)), 0, vim.schedule_wrap(_35_))
+      return timer.start(timer, math.max(0, (wait_ms or 0)), 0, vim.schedule_wrap(_36_))
     else
       return nil
     end

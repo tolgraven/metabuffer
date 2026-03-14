@@ -46,9 +46,16 @@
         active-by-prompt (. deps :active-by-prompt)
         animation-mod (. deps :animation-mod)
         update-info-window (. deps :update-info-window)
+        session-view (. deps :session-view)
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
         prompt-buf session.prompt-buf
         prompt-win session.prompt-win]
+    (fn restore-main-view!
+      []
+      (when (and session.meta
+                 session.meta.win
+                 (vim.api.nvim_win_is_valid session.meta.win.window))
+        (session-view.restore-meta-view! session.meta session.source-view)))
     (fn schedule-layout-refresh!
       []
       (when (and session.project-mode update-info-window)
@@ -83,7 +90,9 @@
         prompt-win
         1
         (math.max 1 (or session.prompt-target-height 1))
-        (animation-mod.duration-ms session :prompt (or (. deps :ui-animation-prompt-ms) 140))))
+        (animation-mod.duration-ms session :prompt (or (. deps :ui-animation-prompt-ms) 140))
+        {:tick! (fn [_ _] (restore-main-view!))
+         :done! (fn [_] (restore-main-view!))}))
     (schedule-layout-refresh!)
     (vim.schedule
       (fn []

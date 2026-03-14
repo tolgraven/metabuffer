@@ -113,11 +113,22 @@
 (fn M.new
   [opts]
   "Create right-side info window renderer/synchronizer."
-  (let [{: floating-window-mod : info-min-width : info-max-width
-         : info-max-lines : info-height : debug-log : update-preview
-         : read-file-lines-cached : animation-mod : animate-enter? : info-fade-ms} opts]
+  (let [deps (or opts {})
+        floating_window_mod (. deps :floating-window-mod)
+        info_min_width (. deps :info-min-width)
+        info_max_width (. deps :info-max-width)
+        info_max_lines (. deps :info-max-lines)
+        info_height (. deps :info-height)
+        debug_log (. deps :debug-log)
+        update_preview (. deps :update-preview)
+        read_file_lines_cached (. deps :read-file-lines-cached)
+        animation_mod (. deps :animation-mod)
+        animate_enter? (. deps :animate-enter?)
+        info_fade_ms (. deps :info-fade-ms)]
+    (do
 
-  (fn info-window-config
+  (local info_window_config
+    (fn
     [session width height]
     (let [host-win (if (and session
                             session.meta
@@ -138,16 +149,27 @@
          :row 1
          :col vim.o.columns
          :width width
-         :height height})))
+         :height height}))))
 
-  (fn ensure-info-window!
+  (local ensure_info_window!
+    (fn
     [session]
     (when-not (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
       (let [buf (vim.api.nvim_create_buf false true)
-            width info-min-width
-            height (info-height session)
-            cfg (info-window-config session width height)
-            win (floating-window-mod.new vim buf cfg)]
+            width info_min_width
+            height (info_height session)
+            target (info_window_config session width height)
+            animate-info? (and animation_mod
+                               animate_enter?
+                               (animate_enter? session)
+                               (animation_mod.enabled? session :info)
+                               (not session.info-animated?))
+            cfg (if animate-info?
+                    (let [start (vim.deepcopy target)]
+                      (set (. start :col) (+ (. target :col) 8))
+                      start)
+                    target)
+            win (floating_window_mod.new vim buf cfg)]
         (set session.info-buf buf)
         (set session.info-win win.window)
         (let [bo (. vim.bo buf)]
@@ -166,32 +188,25 @@
           (set (. wo :signcolumn) "no")
           (set (. wo :foldcolumn) "0")
           (set (. wo :spell) false))
-        (when (and animation-mod
-                   animate-enter?
-                   (animate-enter? session)
-                   (animation-mod.enabled? session :info)
-                   (not session.info-animated?))
+        (when animate-info?
           (set session.info-animated? true)
-          (let [target (info-window-config session width height)
-                start (vim.deepcopy target)]
-            (set (. start :col) (+ (. target :col) 8))
-            (pcall vim.api.nvim_set_option_value "winblend" 85 {:win session.info-win})
-          (animation-mod.animate-float!
+          (pcall vim.api.nvim_set_option_value "winblend" 85 {:win session.info-win})
+          (animation_mod.animate-float!
               session
               "info-enter"
               session.info-win
-              start
+              cfg
               target
               85
               (or vim.g.meta_float_winblend 13)
-              (animation-mod.duration-ms session :info (or info-fade-ms 220))))))))
+              (animation_mod.duration-ms session :info (or info_fade_ms 220)))))))))
 
   (fn settle-info-window!
     [session]
     (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
       (let [width (vim.api.nvim_win_get_width session.info-win)
-            height (info-height session)
-            cfg (info-window-config session width height)]
+            height (info_height session)
+            cfg (info_window_config session width height)]
         (pcall vim.api.nvim_win_set_config session.info-win cfg))))
 
   (fn close-info-window!
@@ -215,11 +230,11 @@
                            (if session.window-local-layout
                                (vim.api.nvim_win_get_width session.prompt-win)
                                vim.o.columns))
-            max-available (math.max info-min-width (math.floor (* host-width 0.34)))
-            upper (math.min info-max-width max-available)
-            target (math.max info-min-width (math.min needed upper))
-            height (info-height session)
-            cfg (info-window-config session target height)]
+            max-available (math.max info_min_width (math.floor (* host-width 0.34)))
+            upper (math.min info_max_width max-available)
+            target (math.max info_min_width (math.min needed upper))
+            height (info_height session)
+            cfg (info_window_config session target height)]
         (pcall vim.api.nvim_win_set_config session.info-win cfg))))
 
   (fn info-max-width-now
@@ -233,8 +248,8 @@
                          (if (and session session.window-local-layout)
                              (vim.api.nvim_win_get_width session.prompt-win)
                              vim.o.columns))
-          max-available (math.max info-min-width (math.floor (* host-width 0.34)))]
-      (math.min info-max-width max-available)))
+          max-available (math.max info_min_width (math.floor (* host-width 0.34)))]
+      (math.min info_max_width max-available)))
 
   (fn info-visible-range
     [session meta total cap]
@@ -255,7 +270,7 @@
             (info-range meta.selected_index total cap))))
 
   (fn build-info-lines
-    [session refs idxs target-width start-index stop-index read-file-lines-cached]
+    [session refs idxs target-width start-index stop-index read_file_lines_cached]
     (let [line-hl "LineNr"
           signcol-display-width 2
           file-hl (if (= 1 (vim.fn.hlexists "NERDTreeFile"))
@@ -265,7 +280,7 @@
                           (if (= 1 (vim.fn.hlexists "NvimTreeFileName"))
                               "NvimTreeFileName"
                               "Normal")))
-          lnum-digit-width (let [limit (math.min (# idxs) info-max-lines)
+          lnum-digit-width (let [limit (math.min (# idxs) info_max_lines)
                            max-lnum-len (if (> limit 0)
                                             (let [lens []]
                                               (for [i 1 limit]
@@ -294,7 +309,7 @@
                                ref
                                {:mode view-mode
                                 :path-width path-width
-                                :read-file-lines-cached read-file-lines-cached})
+                                :read-file-lines-cached read_file_lines_cached})
                     sign (or (. info-view :sign) {:text "  " :hl "LineNr"})
                     sign-raw (or (. sign :text) "")
                     sign-pad (math.max 0 (- signcol-display-width (vim.fn.strdisplaywidth sign-raw)))
@@ -376,21 +391,21 @@
           idxs (or meta.buf.indices [])
           _ (set session.info-start-index start-index)
           _ (set session.info-stop-index stop-index)
-          built (build-info-lines session refs idxs (info-max-width-now session) start-index stop-index read-file-lines-cached)
+          built (build-info-lines session refs idxs (info-max-width-now session) start-index stop-index read_file_lines_cached)
           raw-lines (. built :lines)
           lines (if (= (type raw-lines) "table")
                     (vim.tbl_map tostring raw-lines)
                     [(tostring raw-lines)])
           highlights (or (. built :highlights) [])
           ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
-      (debug-log (.. "info render hits=" (tostring (# idxs))
+      (debug_log (.. "info render hits=" (tostring (# idxs))
                      " lines=" (tostring (# lines))))
       (let [bo (. vim.bo session.info-buf)]
         (set (. bo :modifiable) true))
       (fit-info-width! session lines)
       (let [[ok-set err-set] [(pcall vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)]]
         (when-not ok-set
-          (debug-log (.. "info set_lines failed: " (tostring err-set)))))
+          (debug_log (.. "info set_lines failed: " (tostring err-set)))))
       (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
       (each [_ h (ipairs highlights)]
         (vim.api.nvim_buf_add_highlight session.info-buf ns (. h 2) (. h 1) (. h 3) (. h 4)))
@@ -409,19 +424,19 @@
         (when (> info-lines 0)
           (let [[ok-cur err-cur] [(pcall vim.api.nvim_win_set_cursor session.info-win [row 0])]]
             (when-not ok-cur
-              (debug-log (.. "info set_cursor failed: " (tostring err-cur)))))))))
+              (debug_log (.. "info set_cursor failed: " (tostring err-cur)))))))))
 
   (fn update-regular!
     [session]
     (close-info-window! session)
-    (update-preview session))
+    (update_preview session))
 
   (fn update-project!
     [session refresh-lines]
-    (update-preview session)
-    (ensure-info-window! session)
+    (update_preview session)
+    (ensure_info_window! session)
     (settle-info-window! session)
-    (debug-log (.. "info enter refresh=" (tostring refresh-lines)
+    (debug_log (.. "info enter refresh=" (tostring refresh-lines)
                    " selected=" (tostring session.meta.selected_index)
                    " info-win=" (tostring session.info-win)
                    " info-buf=" (tostring session.info-buf)))
@@ -431,7 +446,7 @@
     (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
       (let [meta session.meta]
         (let [selected1 (+ meta.selected_index 1)
-              [wanted-start wanted-stop] (info-visible-range session meta (# (or meta.buf.indices [])) info-max-lines)
+              [wanted-start wanted-stop] (info-visible-range session meta (# (or meta.buf.indices [])) info_max_lines)
               start-index (or session.info-start-index 1)
               stop-index (or session.info-stop-index 0)
               out-of-range (or (< selected1 start-index) (> selected1 stop-index))
@@ -448,7 +463,7 @@
                           "|"
                           (tostring (info-max-width-now session))
                           "|"
-                          (tostring (info-height session))
+                          (tostring (info_height session))
                           "|"
                           (tostring vim.o.columns))]
               ;; Selection can move outside currently rendered slice while
