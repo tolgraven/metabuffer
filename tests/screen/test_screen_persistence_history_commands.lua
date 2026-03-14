@@ -10,7 +10,7 @@ T['Meta !! and Meta !$ expand from previous invocation history'] = H.timed_case(
     'gamma',
   })
 
-  H.type_prompt_human('alpha meta', 80)
+  H.type_prompt_text('alpha meta')
   H.wait_for(function() return H.session_query_text() == 'alpha meta' end)
   H.type_prompt('<CR>')
   H.wait_for(function() return not H.session_active() end)
@@ -35,7 +35,7 @@ T['enter from results window accepts selection and jumps to hit'] = H.timed_case
     'gamma meta row',
   })
 
-  H.type_prompt_human('meta', 90)
+  H.type_prompt_text('meta')
   H.wait_for(function() return H.session_hit_count() == 2 end)
 
   H.type_prompt('<C-n>')
@@ -55,7 +55,7 @@ T['insert-last-prompt does not append duplicate payload repeatedly'] = H.timed_c
     'gamma',
   })
 
-  H.type_prompt_human('alpha meta', 80)
+  H.type_prompt_text('alpha meta')
   H.wait_for(function() return H.session_query_text() == 'alpha meta' end)
   H.type_prompt('<CR>')
   H.wait_for(function() return not H.session_active() end)

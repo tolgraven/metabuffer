@@ -10,7 +10,7 @@ T['expansion directive opens and closes context window'] = H.timed_case(function
     'return alpha + beta',
   })
 
-  H.type_prompt_human('#exp:line alpha', 90)
+  H.type_prompt_text('#exp:line alpha')
   H.wait_for(function() return H.session_query_text() == 'alpha' end, 4000)
   H.wait_for(function()
     return H.child.lua_get([[
@@ -57,7 +57,7 @@ T['file expansion renders full file context for filtered hits'] = H.timed_case(f
     'return alpha + beta',
   })
 
-  H.type_prompt_human('#exp:file alpha', 90)
+  H.type_prompt_text('#exp:file alpha')
   H.wait_for(function()
     return H.child.lua_get([[
       (function()
@@ -97,7 +97,7 @@ T['fennel fn expansion widens to containing fn_form'] = H.timed_case(function()
   ]])
 
   H.open_project_meta_in_dir(root, 'probe.fnl')
-  H.type_prompt_human('preview-window #exp:fn', 90)
+  H.type_prompt_text('preview-window #exp:fn')
   H.wait_for(function()
     return H.child.lua_get([[
       (function()

@@ -24,7 +24,7 @@ T['binary and hex flags stay visible in prompt and toggle state'] = H.timed_case
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
 
-  H.type_prompt_human('#binary #hex metabuffer.png', 90)
+  H.type_prompt_text('#binary #hex metabuffer.png')
   H.wait_for(function() return H.session_prompt_text() == '#binary #hex metabuffer.png' end, 6000)
 
   local dbg = H.session_debug_out()

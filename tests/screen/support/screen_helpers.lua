@@ -6,6 +6,7 @@ M.eq = MiniTest.expect.equality
 
 local debug_dump_path = "/tmp/metabuffer-mini-integration.log"
 local profile_file = vim.env.TEST_PROFILE_PATH or ''
+local debug_dump_enabled = vim.env.TEST_DEBUG_DUMP == '1'
 
 local function hr_ms()
   return vim.loop.hrtime() / 1e6
@@ -570,6 +571,9 @@ function M.str_contains(hay, needle)
 end
 
 function M.dump_state(tag)
+  if not debug_dump_enabled then
+    return
+  end
   M.child.lua(string.format([[
     (function()
       local path = _G.__meta_debug_dump_path
@@ -610,6 +614,11 @@ end
 function M.type_prompt(keys)
   M.child.type_keys(0, keys)
   M.dump_state("type " .. keys)
+end
+
+function M.type_prompt_text(text)
+  M.child.type_keys(0, text)
+  M.dump_state("type_text " .. text)
 end
 
 function M.type_prompt_human(text, per_key_ms)

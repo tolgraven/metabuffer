@@ -6,7 +6,7 @@ T['file flag token is separate from normal query terms on same line'] = H.timed_
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
 
-  H.type_prompt_human('#file README lua', 90)
+  H.type_prompt_text('#file README lua')
   H.wait_for(function() return H.session_query_text() == 'lua' end, 6000)
   H.wait_for(function() return H.session_file_entry_hit_count() > 0 end, 6000)
 end)
@@ -15,10 +15,10 @@ T['file flag without file token keeps existing regular hits'] = H.timed_case(fun
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
 
-  H.type_prompt_human('local', 90)
+  H.type_prompt_text('local')
   H.wait_for(function() return H.session_query_text() == 'local' end, 6000)
 
-  H.type_prompt_human(' #file', 90)
+  H.type_prompt_text(' #file')
   H.wait_for(function() return H.session_query_text() == 'local' end, 6000)
   H.wait_for(function()
     return H.child.lua_get([[
@@ -44,7 +44,7 @@ T['file token constrains regular hits to matching paths'] = H.timed_case(functio
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
 
-  H.type_prompt_human('local #file lua', 90)
+  H.type_prompt_text('local #file lua')
   H.wait_for(function() return H.session_query_text() == 'local' end, 6000)
   H.wait_for(function()
     return H.child.lua_get([[

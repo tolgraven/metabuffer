@@ -9,7 +9,7 @@ T['all matcher treats unclosed regex-like token as literal'] = H.timed_case(func
     'plain line',
   })
 
-  H.type_prompt_human('(let', 90)
+  H.type_prompt_text('(let')
   H.type_prompt(' ')
   H.wait_for(function() return H.session_query_text() == '(let' end)
   H.wait_for(function() return H.session_hit_count() == 1 end)
@@ -23,15 +23,15 @@ T['negation token excludes matching rows and broadens on delete'] = H.timed_case
     'vim.api other function',
   })
 
-  H.type_prompt_human('vim.api !pcall', 95)
+  H.type_prompt_text('vim.api !pcall')
   H.wait_for(function() return H.session_query_text() == 'vim.api !pcall' end)
   H.wait_for(function() return H.session_hit_count() == 2 end)
 
-  H.type_prompt_human(' extra', 90)
+  H.type_prompt_text(' extra')
   H.wait_for(function() return H.session_query_text() == 'vim.api !pcall extra' end)
   H.wait_for(function() return H.session_hit_count() == 0 end)
 
-  H.type_prompt_tokens({ '<BS>', '<BS>', '<BS>', '<BS>', '<BS>', '<BS>' }, 90)
+  H.type_prompt_tokens({ '<BS>', '<BS>', '<BS>', '<BS>', '<BS>', '<BS>' }, 0)
   H.wait_for(function() return H.session_query_text() == 'vim.api !pcall' end)
   H.wait_for(function() return H.session_hit_count() == 2 end)
 end)
@@ -43,7 +43,7 @@ T['escaped control-like token stays literal and is not consumed'] = H.timed_case
     'other row',
   })
 
-  H.type_prompt_human('\\#deps', 95)
+  H.type_prompt_text('\\#deps')
   H.wait_for(function() return H.session_query_text() == '\\#deps' end)
   H.wait_for(function() return H.session_hit_count() == 1 end)
 end)

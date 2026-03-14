@@ -13,7 +13,7 @@ T['filters short tokens and supports prompt edit hotkeys'] = H.timed_case(functi
     'other',
   })
 
-  H.type_prompt_human('meta', 90)
+  H.type_prompt_text('meta')
   H.wait_for(function() return H.session_query_text() == 'meta' end)
   H.wait_for(function() return H.session_hit_count() == 2 end)
 
@@ -25,7 +25,7 @@ T['filters short tokens and supports prompt edit hotkeys'] = H.timed_case(functi
 
   H.type_prompt('<C-u>')
   H.wait_for(function() return H.session_query_text() == '' end)
-  H.type_prompt_human('metabuffer', 70)
+  H.type_prompt_text('metabuffer')
   H.type_prompt('<C-u>')
   H.type_prompt('<C-y>')
   H.wait_for(function() return H.session_query_text() == 'metabuffer' end)
@@ -43,7 +43,7 @@ T['fuzzy matcher is testable via key switch and non-contiguous query'] = H.timed
   H.type_prompt('<C-^>')
   H.wait_for(function() return H.session_matcher_name() == 'fuzzy' end)
 
-  H.type_prompt_human('mbr', 80)
+  H.type_prompt_text('mbr')
   H.wait_for(function() return H.session_query_text() == 'mbr' end)
   H.wait_for(function() return H.session_hit_count() == 1 end)
 end)
@@ -59,14 +59,14 @@ T['regex matcher supports regex tokens and returns expected hits'] = H.timed_cas
   H.type_prompt('<C-^><C-^>')
   H.wait_for(function() return H.session_matcher_name() == 'regex' end)
 
-  H.type_prompt_human('valid', 80)
+  H.type_prompt_text('valid')
   H.type_prompt(' ')
-  H.type_prompt_human('\\w.*', 80)
+  H.type_prompt_text('\\w.*')
 
   H.wait_for(function() return H.session_query_text() == 'valid \\w.*' end)
   H.wait_for(function() return H.session_hit_count() == 3 end)
 
-  H.type_prompt_tokens({ '<BS>', '<BS>' }, 80)
+  H.type_prompt_tokens({ '<BS>', '<BS>' }, 0)
   H.wait_for(function() return H.session_query_text() == 'valid \\w' end)
   H.wait_for(function() return H.session_hit_count() == 3 end)
 end)
@@ -79,7 +79,7 @@ T['main-window hotkeys move selection and keep statusline live'] = H.timed_case(
     'meta four',
   })
 
-  H.type_prompt_human('meta', 80)
+  H.type_prompt_text('meta')
   H.wait_for(function() return H.session_hit_count() == 4 end)
 
   child.cmd('stopinsert')
@@ -101,7 +101,7 @@ T['main hotkeys support newline token insertion and prompt/results toggle'] = H.
     'gamma third',
   })
 
-  H.type_prompt_human('alpha', 80)
+  H.type_prompt_text('alpha')
   H.wait_for(function() return H.session_hit_count() == 1 end)
 
   H.type_prompt('<M-CR>')

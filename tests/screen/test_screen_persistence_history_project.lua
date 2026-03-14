@@ -7,7 +7,7 @@ T['project history replay keeps typed non-consumed flags and avoids synthetic de
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
 
-  H.type_prompt_human('#file README.md', 90)
+  H.type_prompt_text('#file README.md')
   H.wait_for(function() return H.session_prompt_text() == '#file README.md' end, 6000)
   H.type_prompt('<CR>')
   H.wait_for(function() return not H.session_active() end, 6000)
@@ -28,7 +28,7 @@ T['history up-recall does not accumulate duplicate consumed setting tokens'] = H
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
 
-  H.type_prompt_human('#deps meta', 90)
+  H.type_prompt_text('#deps meta')
   H.wait_for(function() return H.session_prompt_text() == 'meta' end, 6000)
   H.type_prompt('<CR>')
   H.wait_for(function() return not H.session_active() end, 6000)

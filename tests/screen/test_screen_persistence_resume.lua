@@ -45,7 +45,7 @@ T['accept hit then MetaResume restores previous prompt and mode state'] = H.time
     'other',
   })
 
-  H.type_prompt_human('metabuffer', 90)
+  H.type_prompt_text('metabuffer')
   H.wait_for(function() return H.session_query_text() == 'metabuffer' end)
 
   H.type_prompt('<C-^>')

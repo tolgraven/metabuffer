@@ -9,7 +9,7 @@ T['Meta !! replay restores prompt after accept'] = H.timed_case(function()
     'gamma',
   })
 
-  H.type_prompt_human('alpha meta', 80)
+  H.type_prompt_text('alpha meta')
   H.wait_for(function() return H.session_query_text() == 'alpha meta' end)
   H.type_prompt('<CR>')
   H.wait_for(function() return not H.session_active() end)
