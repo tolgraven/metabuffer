@@ -232,6 +232,7 @@
 
 (set M.enabled? enabled?)
 (set M.duration-ms duration-ms)
+(set M.with-split-mins with-split-mins)
 (set M.run! run!)
 (set M.animate-win-height! animate-win-height!)
 (set M.animate-win-height-stepwise! animate-win-height-stepwise!)

@@ -294,16 +294,18 @@
                 (pcall vim.api.nvim_buf_set_var curr.buf.buffer "meta_manual_edit_active" false)
                 (pcall vim.api.nvim_buf_set_var curr.buf.buffer "meta_internal_render" false)
                 (pcall curr.buf.render)
-                (let [initial-lines (if (and prompt-query (~= prompt-query ""))
+                      (let [initial-lines (if (and prompt-query (~= prompt-query ""))
                                         (vim.split prompt-query "\n" {:plain true})
                                         [""])
+                      prompt-animates? (and ui-animations-enabled
+                                            (not (= false ui-animation-prompt-enabled)))
+                      saved-laststatus (when prompt-animates? vim.o.laststatus)
+                      _ (when prompt-animates?
+                          (set vim.o.laststatus 0))
                       prompt-win (prompt-window-mod.new
                                    vim
                                    {:height (router-util-mod.prompt-height)
-                                    :start-height (if (and ui-animations-enabled
-                                                           (not (= false ui-animation-prompt-enabled)))
-                                                      1
-                                                      (router-util-mod.prompt-height))
+                                    :start-height (if prompt-animates? 1 (router-util-mod.prompt-height))
                                     :window-local-layout settings.window-local-layout
                                     :origin-win origin-win})
                       prompt-buf prompt-win.buffer
@@ -315,6 +317,7 @@
                                :prompt-win prompt-win.window
                                :prompt-target-height (router-util-mod.prompt-height)
                                :prompt-buf prompt-buf
+                               :saved-laststatus saved-laststatus
                                :window-local-layout settings.window-local-layout
                                :prompt-keymaps settings.prompt-keymaps
                                :main-keymaps settings.main-keymaps

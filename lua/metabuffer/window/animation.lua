@@ -290,6 +290,7 @@ local function animate_view_21(session, key, win, from_view, to_view, duration_m
 end
 M["enabled?"] = enabled_3f
 M["duration-ms"] = duration_ms
+M["with-split-mins"] = with_split_mins
 M["run!"] = run_21
 M["animate-win-height!"] = animate_win_height_21
 M["animate-win-height-stepwise!"] = animate_win_height_stepwise_21

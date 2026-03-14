@@ -1,5 +1,6 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local base (require :metabuffer.window.base))
+(local animation-mod (require :metabuffer.window.animation))
 (local M {})
 
 (fn M.new
@@ -10,17 +11,19 @@
         start-height (math.max 1 (or cfg.start-height height))
         local-layout? (if (= cfg.window-local-layout nil) true cfg.window-local-layout)
         origin-win cfg.origin-win
-        win (if (and local-layout?
-                     origin-win
-                     (vim.api.nvim_win_is_valid origin-win))
-                (vim.api.nvim_win_call
-                  origin-win
-                  (fn []
-                    (vim.cmd (.. "belowright " (tostring start-height) "new"))
-                    (vim.api.nvim_get_current_win)))
-                (do
-                  (vim.cmd (.. "botright " (tostring start-height) "new"))
-                  (vim.api.nvim_get_current_win)))
+        open-prompt-win! (fn []
+                           (if (and local-layout?
+                                    origin-win
+                                    (vim.api.nvim_win_is_valid origin-win))
+                               (vim.api.nvim_win_call
+                                 origin-win
+                                 (fn []
+                                   (vim.cmd (.. "belowright " (tostring start-height) "new"))
+                                   (vim.api.nvim_get_current_win)))
+                               (do
+                                 (vim.cmd (.. "botright " (tostring start-height) "new"))
+                                 (vim.api.nvim_get_current_win))))
+        win (animation-mod.with-split-mins open-prompt-win!)
         buf (vim.api.nvim_win_get_buf win)
           self (base.new nvim win [] {})]
       (pcall vim.api.nvim_win_set_height win start-height)
