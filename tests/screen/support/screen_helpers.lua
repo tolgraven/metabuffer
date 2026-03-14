@@ -89,11 +89,29 @@ end
 function M.child_setup()
   local root = vim.fn.getcwd()
   local started = hr_ms()
+  local worker_idx = tonumber(vim.env.TEST_WORKER_INDEX or '') or 1
+  local startup_jitter = (worker_idx % 8) * 35
+
+  if startup_jitter > 0 then
+    vim.loop.sleep(startup_jitter)
+  end
+
   profiler.measure('child', 'child.restart', function()
-    M.child.restart(
-      { "-u", root .. "/tests/minimal_init.lua", "-n", "-i", "NONE" },
-      { connection_timeout = 20000 }
-    )
+    local last_err = nil
+    for attempt = 1, 4 do
+      local ok, err = pcall(function()
+        M.child.restart(
+          { "-u", root .. "/tests/minimal_init.lua", "-n", "-i", "NONE" },
+          { connection_timeout = 20000 }
+        )
+      end)
+      if ok then
+        return
+      end
+      last_err = err
+      vim.loop.sleep(80 * attempt)
+    end
+    error(last_err)
   end)
   if M._profile_case then
     M._profile_case.child = M._profile_case.child + (hr_ms() - started)

@@ -54,7 +54,7 @@ Key helper coverage:
 - Regex mode filtering and broaden-after-delete behavior.
 - Main-window navigation and statusline liveness.
 
-### `tests/screen/matchers/test_screen_matchers_edges.lua`
+### `tests/screen/matchers/test_screen_matchers_edges_*.lua`
 - Unclosed regex-like tokens treated as literals in `all` matcher.
 - Negation filtering + broadening on deletion.
 - Escaped `#` control-like token stays literal.
@@ -99,7 +99,7 @@ Key helper coverage:
 - Prompt height persistence across invocations.
 - Accept + `MetaResume` restores query/modes.
 
-### `tests/screen/persistence/test_screen_persistence_history_commands.lua`
+### `tests/screen/persistence/test_screen_persistence_history_commands_*.lua`
 - `:Meta !!` and `:Meta !$` history expansion.
 - `<CR>` from results opens selected hit correctly.
 - Repeated `!!` insertion does not duplicate payload.

@@ -207,7 +207,7 @@ run_worker() {
     if (( PROFILE_MODE == 1 )); then
       echo "[worker $idx] PROFILE FILE $profile"
     fi
-    TEST_FILE="$file" TEST_PROFILE="$PROFILE_MODE" TEST_PROFILE_PATH="$profile" NVIM_APPNAME="$appname" \
+    TEST_FILE="$file" TEST_PROFILE="$PROFILE_MODE" TEST_PROFILE_PATH="$profile" TEST_WORKER_INDEX="$idx" NVIM_APPNAME="$appname" \
       TMPDIR="/tmp" \
       XDG_DATA_HOME="$xdg_root/data" \
       XDG_STATE_HOME="$xdg_root/state" \
