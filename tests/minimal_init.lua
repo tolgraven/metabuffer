@@ -24,9 +24,20 @@ end
 _G.MiniTest = mini_test
 mini_test.setup()
 require("tests.support.profiler").setup()
+vim.o.showmode = false
+vim.g.meta_test_no_startinsert = true
 
 -- Keep project lazy behavior active in headless mini.test child sessions so
 -- :Meta! tests exercise the same async path as interactive use.
 vim.g.meta_project_lazy_disable_headless = false
 
-require("metabuffer").setup()
+local animations_enabled = vim.env.TEST_UI_ANIMATIONS == "1"
+
+require("metabuffer").setup({
+  ui = {
+    animation = {
+      enabled = animations_enabled,
+      loading_indicator = animations_enabled,
+    },
+  },
+})

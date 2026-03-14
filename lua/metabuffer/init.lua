@@ -304,6 +304,26 @@ local function prompt_text_hl()
   end
   return opts
 end
+local function loading_hl(group, factor)
+  local opts = {default = true, bold = true, cterm = {bold = true}}
+  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  local base = (ok and (type(hl) == "table") and hl.fg)
+  local fg
+  if (base and (factor < 0)) then
+    fg = darken_rgb(base, math.abs(factor))
+  else
+    if base then
+      fg = brighten_rgb(base, factor)
+    else
+      fg = nil
+    end
+  end
+  if fg then
+    opts["fg"] = fg
+  else
+  end
+  return opts
+end
 local function apply_ui_config_21(opts)
   local resolved = config.resolve(opts)
   local ui = resolved.ui
@@ -319,7 +339,7 @@ local function ensure_fennel_syntax_defaults_21()
   else
   end
   if (vim.g.fennel_use_luajit == nil) then
-    if jit then
+    if _G.jit then
       vim.g["fennel_use_luajit"] = 1
     else
       vim.g["fennel_use_luajit"] = 0
@@ -371,6 +391,12 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaPromptFlagTextOff", fg_only_hl_from("ErrorMsg"))
   hi(0, "MetaPromptFlagTextFuncOn", underlined_text_from("String", "Special"))
   hi(0, "MetaPromptFlagTextFuncOff", underlined_text_from("ErrorMsg", "Special"))
+  hi(0, "MetaLoading1", loading_hl("Comment", -0.1))
+  hi(0, "MetaLoading2", loading_hl("Comment", 0))
+  hi(0, "MetaLoading3", loading_hl("Comment", 0.14))
+  hi(0, "MetaLoading4", loading_hl("Title", 0.08))
+  hi(0, "MetaLoading5", loading_hl("Title", 0.2))
+  hi(0, "MetaLoading6", loading_hl("Title", 0.32))
   hi(0, "MetaSourceLineNr", {default = true, link = "LineNr"})
   hi(0, "MetaSourceDir", {default = true, link = "Directory"})
   hi(0, "MetaSourceBoundary", thin_underline_from("Error"))
@@ -467,43 +493,43 @@ M.reload = function(opts)
   clear_module_cache()
   clear_plugin_loaded_flags_21()
   source_plugin_bootstrap_21()
-  local _57_
+  local _60_
   if do_compile then
-    _57_ = "[metabuffer] reloaded (compiled)"
+    _60_ = "[metabuffer] reloaded (compiled)"
   else
-    _57_ = "[metabuffer] reloaded"
+    _60_ = "[metabuffer] reloaded"
   end
-  vim.notify(_57_, vim.log.levels.INFO)
+  vim.notify(_60_, vim.log.levels.INFO)
   return true
 end
 M.setup = function(opts)
   router.configure(opts)
   ensure_defaults_and_highlights_21(opts)
-  local function _59_(args)
+  local function _62_(args)
     return router.entry_start(args.args, args.bang)
   end
-  ensure_command("Meta", _59_, {nargs = "?", bang = true})
-  local function _60_(args)
+  ensure_command("Meta", _62_, {nargs = "?", bang = true})
+  local function _63_(args)
     return router.entry_resume(args.args)
   end
-  ensure_command("MetaResume", _60_, {nargs = "?"})
-  local function _61_()
+  ensure_command("MetaResume", _63_, {nargs = "?"})
+  local function _64_()
     return router.entry_cursor_word(false)
   end
-  ensure_command("MetaCursorWord", _61_, {nargs = 0})
-  local function _62_()
+  ensure_command("MetaCursorWord", _64_, {nargs = 0})
+  local function _65_()
     return router.entry_cursor_word(true)
   end
-  ensure_command("MetaResumeCursorWord", _62_, {nargs = 0})
-  local function _63_(args)
+  ensure_command("MetaResumeCursorWord", _65_, {nargs = 0})
+  local function _66_(args)
     return router.entry_sync(args.args)
   end
-  ensure_command("MetaSync", _63_, {nargs = "?"})
-  local function _64_()
+  ensure_command("MetaSync", _66_, {nargs = "?"})
+  local function _67_()
     return router.entry_push()
   end
-  ensure_command("MetaPush", _64_, {nargs = 0})
-  local function _65_(args)
+  ensure_command("MetaPush", _67_, {nargs = 0})
+  local function _68_(args)
     local ok,err = pcall(M.reload, {compile = args.bang})
     if not ok then
       return vim.notify(("[metabuffer] reload failed: " .. tostring(err)), vim.log.levels.ERROR)
@@ -511,7 +537,7 @@ M.setup = function(opts)
       return nil
     end
   end
-  ensure_command("MetaReload", _65_, {nargs = 0, bang = true})
+  ensure_command("MetaReload", _68_, {nargs = 0, bang = true})
   return true
 end
 M.defaults = config.defaults

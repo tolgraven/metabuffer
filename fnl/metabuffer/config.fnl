@@ -108,6 +108,24 @@
     :preview_source_switch_debounce_ms 60
     :source_syntax_refresh_debounce_ms 80
     :scroll_sync_debounce_ms 20
+    :ui_animations_enabled true
+    :ui_animations_time_scale 1.0
+    :ui_animation_prompt_enabled true
+    :ui_animation_prompt_ms 140
+    :ui_animation_prompt_time_scale 1.0
+    :ui_animation_preview_enabled true
+    :ui_animation_preview_ms 180
+    :ui_animation_preview_time_scale 1.0
+    :ui_animation_info_enabled true
+    :ui_animation_info_ms 220
+    :ui_animation_info_time_scale 1.0
+    :ui_animation_loading_enabled true
+    :ui_animation_loading_ms 90
+    :ui_animation_loading_time_scale 1.0
+    :ui_loading_indicator true
+    :ui_animation_scroll_enabled true
+    :ui_animation_scroll_ms 140
+    :ui_animation_scroll_time_scale 1.0
     :window_local_layout true
     :dep_dir_names
     {"node_modules" true
@@ -144,6 +162,19 @@
   [opts k]
   (and (table? opts) (table? (. opts k)) (. opts k)))
 
+(fn nested-in
+  [root ks]
+  (let [cur0 root]
+    (var cur cur0)
+    (var ok true)
+    (each [_ k (ipairs ks)]
+      (if (and ok (table? cur) (table? (. cur k)))
+          (set cur (. cur k))
+          (do
+            (set ok false)
+            (set cur nil))))
+    cur))
+
 (fn opt-value
   [opts k legacy-g default]
   (let [options (nested opts :options)]
@@ -154,6 +185,19 @@
             (if (~= legacy-g nil)
                 (or (. vim.g legacy-g) default)
                 default)))))
+
+(fn nested-value
+  [opts ks default]
+  (let [cur0 opts]
+    (var cur cur0)
+    (var found true)
+    (each [_ k (ipairs ks)]
+      (if (and found (table? cur) (~= (. cur k) nil))
+          (set cur (. cur k))
+          (do
+            (set found false)
+            (set cur nil))))
+    (if found cur default)))
 
 (fn resolve-keymaps
   [opts]
@@ -173,7 +217,8 @@
 
 (fn resolve-ui
   [opts]
-  (let [ui (nested opts :ui)]
+  (let [ui (nested opts :ui)
+        anim (nested-in opts [:ui :animation])]
     {:custom_mappings (or (and ui (~= (. ui :custom_mappings) nil) (. ui :custom_mappings))
                           (. vim.g "meta#custom_mappings")
                           (. (. M.defaults :ui) :custom_mappings))
@@ -183,6 +228,7 @@
      :syntax_on_init (or (and ui (~= (. ui :syntax_on_init) nil) (. ui :syntax_on_init))
                          (. vim.g "meta#syntax_on_init")
                          (. (. M.defaults :ui) :syntax_on_init))
+     :animation anim
      :prefix (or (and ui (~= (. ui :prefix) nil) (. ui :prefix))
                  (. vim.g "meta#prefix")
                  (. (. M.defaults :ui) :prefix))}))
@@ -231,6 +277,43 @@
       :preview_source_switch_debounce_ms (opt-value opts :preview_source_switch_debounce_ms :meta_preview_source_switch_debounce_ms (. defaults :preview_source_switch_debounce_ms))
       :source_syntax_refresh_debounce_ms (opt-value opts :source_syntax_refresh_debounce_ms :meta_source_syntax_refresh_debounce_ms (. defaults :source_syntax_refresh_debounce_ms))
       :scroll_sync_debounce_ms (opt-value opts :scroll_sync_debounce_ms :meta_scroll_sync_debounce_ms (. defaults :scroll_sync_debounce_ms))
+      :ui_animations_enabled (nested-value opts [:ui :animation :enabled]
+                                           (opt-value opts :ui_animations_enabled :meta_ui_animations_enabled
+                                                      (opt-value opts :ui_animate_enter :meta_ui_animate_enter (. defaults :ui_animations_enabled))))
+      :ui_animations_time_scale (nested-value opts [:ui :animation :time_scale]
+                                              (opt-value opts :ui_animations_time_scale :meta_ui_animations_time_scale (. defaults :ui_animations_time_scale)))
+      :ui_animation_prompt_enabled (nested-value opts [:ui :animation :prompt :enabled]
+                                                   (opt-value opts :ui_animation_prompt_enabled :meta_ui_animation_prompt_enabled (. defaults :ui_animation_prompt_enabled)))
+      :ui_animation_prompt_ms (. defaults :ui_animation_prompt_ms)
+      :ui_animation_prompt_time_scale (nested-value opts [:ui :animation :prompt :time_scale]
+                                                      (opt-value opts :ui_animation_prompt_time_scale :meta_ui_animation_prompt_time_scale
+                                                                 (. defaults :ui_animation_prompt_time_scale)))
+      :ui_animation_preview_enabled (nested-value opts [:ui :animation :preview :enabled]
+                                                    (opt-value opts :ui_animation_preview_enabled :meta_ui_animation_preview_enabled (. defaults :ui_animation_preview_enabled)))
+      :ui_animation_preview_ms (. defaults :ui_animation_preview_ms)
+      :ui_animation_preview_time_scale (nested-value opts [:ui :animation :preview :time_scale]
+                                                       (opt-value opts :ui_animation_preview_time_scale :meta_ui_animation_preview_time_scale
+                                                                  (. defaults :ui_animation_preview_time_scale)))
+      :ui_animation_info_enabled (nested-value opts [:ui :animation :info :enabled]
+                                                 (opt-value opts :ui_animation_info_enabled :meta_ui_animation_info_enabled (. defaults :ui_animation_info_enabled)))
+      :ui_animation_info_ms (. defaults :ui_animation_info_ms)
+      :ui_animation_info_time_scale (nested-value opts [:ui :animation :info :time_scale]
+                                                    (opt-value opts :ui_animation_info_time_scale :meta_ui_animation_info_time_scale
+                                                               (. defaults :ui_animation_info_time_scale)))
+      :ui_animation_loading_enabled (nested-value opts [:ui :animation :loading :enabled]
+                                                    (opt-value opts :ui_animation_loading_enabled :meta_ui_animation_loading_enabled (. defaults :ui_animation_loading_enabled)))
+      :ui_animation_loading_ms (. defaults :ui_animation_loading_ms)
+      :ui_animation_loading_time_scale (nested-value opts [:ui :animation :loading :time_scale]
+                                                       (opt-value opts :ui_animation_loading_time_scale :meta_ui_animation_loading_time_scale
+                                                                  (. defaults :ui_animation_loading_time_scale)))
+      :ui_loading_indicator (nested-value opts [:ui :animation :loading_indicator]
+                                          (opt-value opts :ui_loading_indicator :meta_ui_loading_indicator (. defaults :ui_loading_indicator)))
+      :ui_animation_scroll_enabled (nested-value opts [:ui :animation :scroll :enabled]
+                                                   (opt-value opts :ui_animation_scroll_enabled :meta_ui_animation_scroll_enabled (. defaults :ui_animation_scroll_enabled)))
+      :ui_animation_scroll_ms (. defaults :ui_animation_scroll_ms)
+      :ui_animation_scroll_time_scale (nested-value opts [:ui :animation :scroll :time_scale]
+                                                      (opt-value opts :ui_animation_scroll_time_scale :meta_ui_animation_scroll_time_scale
+                                                                 (. defaults :ui_animation_scroll_time_scale)))
       :window_local_layout (if (= (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)) nil)
                                true
                                (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)))
@@ -286,6 +369,24 @@
     (set router.preview-source-switch-debounce-ms (. options :preview_source_switch_debounce_ms))
     (set router.source-syntax-refresh-debounce-ms (. options :source_syntax_refresh_debounce_ms))
     (set router.scroll-sync-debounce-ms (. options :scroll_sync_debounce_ms))
+    (set router.ui-animations-enabled (. options :ui_animations_enabled))
+    (set router.ui-animations-time-scale (. options :ui_animations_time_scale))
+    (set router.ui-animation-prompt-enabled (. options :ui_animation_prompt_enabled))
+    (set router.ui-animation-prompt-ms (. options :ui_animation_prompt_ms))
+    (set router.ui-animation-prompt-time-scale (. options :ui_animation_prompt_time_scale))
+    (set router.ui-animation-preview-enabled (. options :ui_animation_preview_enabled))
+    (set router.ui-animation-preview-ms (. options :ui_animation_preview_ms))
+    (set router.ui-animation-preview-time-scale (. options :ui_animation_preview_time_scale))
+    (set router.ui-animation-info-enabled (. options :ui_animation_info_enabled))
+    (set router.ui-animation-info-ms (. options :ui_animation_info_ms))
+    (set router.ui-animation-info-time-scale (. options :ui_animation_info_time_scale))
+    (set router.ui-animation-loading-enabled (. options :ui_animation_loading_enabled))
+    (set router.ui-animation-loading-ms (. options :ui_animation_loading_ms))
+    (set router.ui-animation-loading-time-scale (. options :ui_animation_loading_time_scale))
+    (set router.ui-loading-indicator (. options :ui_loading_indicator))
+    (set router.ui-animation-scroll-enabled (. options :ui_animation_scroll_enabled))
+    (set router.ui-animation-scroll-ms (. options :ui_animation_scroll_ms))
+    (set router.ui-animation-scroll-time-scale (. options :ui_animation_scroll_time_scale))
     (set router.window-local-layout (. options :window_local_layout))
     (set router.default-prompt-keymaps (. (. M.defaults :keymaps) :prompt))
     (set router.default-main-keymaps (. (. M.defaults :keymaps) :main))

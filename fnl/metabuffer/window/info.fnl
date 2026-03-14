@@ -115,7 +115,7 @@
   "Create right-side info window renderer/synchronizer."
   (let [{: floating-window-mod : info-min-width : info-max-width
          : info-max-lines : info-height : debug-log : update-preview
-         : read-file-lines-cached} opts]
+         : read-file-lines-cached : animation-mod : animate-enter? : info-fade-ms} opts]
 
   (fn info-window-config
     [session width height]
@@ -165,7 +165,26 @@
           (set (. wo :linebreak) false)
           (set (. wo :signcolumn) "no")
           (set (. wo :foldcolumn) "0")
-          (set (. wo :spell) false)))))
+          (set (. wo :spell) false))
+        (when (and animation-mod
+                   animate-enter?
+                   (animate-enter? session)
+                   (animation-mod.enabled? session :info)
+                   (not session.info-animated?))
+          (set session.info-animated? true)
+          (let [target (info-window-config session width height)
+                start (vim.deepcopy target)]
+            (set (. start :col) (+ (. target :col) 8))
+            (pcall vim.api.nvim_set_option_value "winblend" 85 {:win session.info-win})
+            (animation-mod.animate-float!
+              session
+              "info-enter"
+              session.info-win
+              start
+              target
+              85
+              (or vim.g.meta_float_winblend 13)
+              (animation-mod.duration-ms session :info (or info-fade-ms 220))))))))
 
   (fn close-info-window!
     [session]

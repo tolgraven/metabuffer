@@ -44,6 +44,7 @@
   (let [router-util-mod (. deps :router-util-mod)
         active-by-source (. deps :active-by-source)
         active-by-prompt (. deps :active-by-prompt)
+        animation-mod (. deps :animation-mod)
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
         prompt-buf session.prompt-buf
         prompt-win session.prompt-win]
@@ -53,12 +54,30 @@
     (register-prompt-hooks! deps session)
     (set (. active-by-source session.source-buf) session)
     (set (. active-by-prompt prompt-buf) session)
-    (vim.api.nvim_set_current_win prompt-win)
-    (let [row (math.max 1 (# initial-lines))
-          line (or (. initial-lines row) "")
-          col (# line)]
-      (pcall vim.api.nvim_win_set_cursor prompt-win [row col]))
-    (vim.cmd "startinsert")))
+    (when (and session.animate-enter?
+               animation-mod
+               prompt-win
+               (vim.api.nvim_win_is_valid prompt-win)
+               (animation-mod.enabled? session :prompt)
+               (not session.prompt-animated?))
+      (set session.prompt-animated? true)
+      (animation-mod.animate-win-height!
+        session
+        "prompt-enter"
+        prompt-win
+        1
+        (math.max 1 (or session.prompt-target-height 1))
+        (animation-mod.duration-ms session :prompt (or (. deps :ui-animation-prompt-ms) 140))))
+    (vim.schedule
+      (fn []
+        (when (and prompt-win (vim.api.nvim_win_is_valid prompt-win))
+          (let [row (math.max 1 (# initial-lines))
+                line (or (. initial-lines row) "")
+                col (# line)]
+            (pcall vim.api.nvim_win_set_cursor prompt-win [row col]))
+          (when-not vim.g.meta_test_no_startinsert
+            (vim.api.nvim_set_current_win prompt-win)
+            (vim.cmd "startinsert")))))))
 
 (fn finish-session-startup!
   [deps curr session initial-query-active]
@@ -96,6 +115,7 @@
     (vim.schedule
       (fn []
         (set session.startup-initializing false)
+        (vim.defer_fn (fn [] (set session.animate-enter? false)) 320)
         (when (and session.project-mode (not session.project-bootstrapped))
           (project-source.schedule-project-bootstrap! session 0))))
     (when (or (and session.project-mode (not initial-query-active))
@@ -116,6 +136,24 @@
         history-store (. deps :history-store)
         read-file-lines-cached (. deps :read-file-lines-cached)
         settings (. deps :settings)
+        ui-animations-enabled (. deps :ui-animations-enabled)
+        ui-animations-time-scale (. deps :ui-animations-time-scale)
+        ui-animation-prompt-enabled (. deps :ui-animation-prompt-enabled)
+        ui-animation-prompt-ms (. deps :ui-animation-prompt-ms)
+        ui-animation-prompt-time-scale (. deps :ui-animation-prompt-time-scale)
+        ui-animation-preview-enabled (. deps :ui-animation-preview-enabled)
+        ui-animation-preview-ms (. deps :ui-animation-preview-ms)
+        ui-animation-preview-time-scale (. deps :ui-animation-preview-time-scale)
+        ui-animation-info-enabled (. deps :ui-animation-info-enabled)
+        ui-animation-info-ms (. deps :ui-animation-info-ms)
+        ui-animation-info-time-scale (. deps :ui-animation-info-time-scale)
+        ui-animation-loading-enabled (. deps :ui-animation-loading-enabled)
+        ui-animation-loading-ms (. deps :ui-animation-loading-ms)
+        ui-animation-loading-time-scale (. deps :ui-animation-loading-time-scale)
+        ui-animation-scroll-enabled (. deps :ui-animation-scroll-enabled)
+        ui-animation-scroll-ms (. deps :ui-animation-scroll-ms)
+        ui-animation-scroll-time-scale (. deps :ui-animation-scroll-time-scale)
+        ui-loading-indicator (. deps :ui-loading-indicator)
         next-instance-id! (. deps :next-instance-id!)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)]
     (pcall vim.cmd "silent! nohlsearch")
@@ -211,6 +249,7 @@
                                :source-view source-view
                                :initial-source-line (math.max 1 (or (. source-view :lnum) (+ (or condition.selected-index 0) 1)))
                                :prompt-win prompt-win.window
+                               :prompt-target-height (router-util-mod.prompt-height)
                                :prompt-buf prompt-buf
                                :window-local-layout settings.window-local-layout
                                :prompt-keymaps settings.prompt-keymaps
@@ -229,6 +268,25 @@
                                :prompt-last-event-text (table.concat initial-lines "\n")
                                :initial-query-active (query-mod.query-lines-has-active? (. parsed-query :lines))
                                :startup-initializing true
+                               :animate-enter? (not (not ui-animations-enabled))
+                               :loading-indicator? (not (not ui-loading-indicator))
+                               :animation-settings {:enabled (not (= false ui-animations-enabled))
+                                                    :time-scale (or ui-animations-time-scale 1.0)
+                                                    :prompt {:enabled (not (= false ui-animation-prompt-enabled))
+                                                             :ms ui-animation-prompt-ms
+                                                             :time-scale (or ui-animation-prompt-time-scale 1.0)}
+                                                    :preview {:enabled (not (= false ui-animation-preview-enabled))
+                                                              :ms ui-animation-preview-ms
+                                                              :time-scale (or ui-animation-preview-time-scale 1.0)}
+                                                    :info {:enabled (not (= false ui-animation-info-enabled))
+                                                           :ms ui-animation-info-ms
+                                                           :time-scale (or ui-animation-info-time-scale 1.0)}
+                                                    :loading {:enabled (not (= false ui-animation-loading-enabled))
+                                                              :ms ui-animation-loading-ms
+                                                              :time-scale (or ui-animation-loading-time-scale 1.0)}
+                                                    :scroll {:enabled (not (= false ui-animation-scroll-enabled))
+                                                             :ms ui-animation-scroll-ms
+                                                             :time-scale (or ui-animation-scroll-time-scale 1.0)}}
                                :project-mode (or project-mode false)
                                :read-file-lines-cached read-file-lines-cached
                                :include-hidden start-hidden

@@ -29,13 +29,14 @@
   [buf ft]
   (when (and buf (vim.api.nvim_buf_is_valid buf) (= ft "fennel"))
     (pcall vim.api.nvim_buf_set_var buf "fennel_lua_version" "5.1")
-    (pcall vim.api.nvim_buf_set_var buf "fennel_use_luajit" (if jit 1 0))))
+    (pcall vim.api.nvim_buf_set_var buf "fennel_use_luajit" (if _G.jit 1 0))))
 
 (fn M.new
   [opts]
   "Create preview window manager for selected source refs."
   (let [{: selected-ref : read-file-lines-cached
-         : is-active-session : debug-log : source-switch-debounce-ms} opts]
+         : is-active-session : debug-log : source-switch-debounce-ms
+         : animation-mod : animate-enter? : preview-slide-ms} opts]
 
 	  (fn target-preview-width
 	    [session]
@@ -146,9 +147,23 @@
           (set (. wo :linebreak) false)
           (set (. wo :cursorline) true)
           (set (. wo :signcolumn) "no"))
-        (mark-preview-buffer! buf))
-	      (ensure-preview-statusline-autocmds! session)
-	      (apply-preview-window-opts! session session.preview-win)))
+        (mark-preview-buffer! buf)
+        (ensure-preview-statusline-autocmds! session)
+        (apply-preview-window-opts! session session.preview-win)
+        (when (and animation-mod
+                   animate-enter?
+                   (animate-enter? session)
+                   (animation-mod.enabled? session :preview)
+                   (not session.preview-animated?))
+          (set session.preview-animated? true)
+          (pcall vim.api.nvim_win_set_width win-id 24)
+          (animation-mod.animate-win-width!
+            session
+            "preview-enter"
+            win-id
+            24
+            width
+            (animation-mod.duration-ms session :preview (or preview-slide-ms 180)))))))
 
   (fn close-preview-window!
     [session]

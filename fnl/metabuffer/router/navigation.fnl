@@ -65,6 +65,7 @@
         update-info-window (. deps :update-info-window)
         context-window (. deps :context-window)
         session-view (. deps :session-view)
+        animation-mod (. deps :animation-mod)
         session (. active-by-prompt prompt-buf)]
     (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
       (let [runner (fn []
@@ -87,11 +88,20 @@
                                old-col (or (. view :col) 0)
                                row-off (math.max 0 (- old-lnum old-top))
                                new-top (math.max 1 (math.min (+ old-top (* dir step)) max-top))
-                               new-lnum (math.max 1 (math.min (+ new-top row-off) line-count))]
-                           (set (. view :topline) new-top)
-                           (set (. view :lnum) new-lnum)
-                           (set (. view :col) old-col)
-                           (vim.fn.winrestview view))))
+                               new-lnum (math.max 1 (math.min (+ new-top row-off) line-count))
+                               target {:topline new-top :lnum new-lnum :col old-col :leftcol (or (. view :leftcol) 0)}]
+                           (if (and animation-mod
+                                    (animation-mod.enabled? session :scroll)
+                                    (> (animation-mod.duration-ms session :scroll 140) 0)
+                                    (not (= step 1)))
+                               (animation-mod.animate-view!
+                                 session
+                                 "smooth-scroll"
+                                 session.meta.win.window
+                                 view
+                                 target
+                                 (animation-mod.duration-ms session :scroll 140))
+                               (vim.fn.winrestview target)))))
                      (session-view.sync-selected-from-main-cursor! session)
                      (pcall session.meta.refresh_statusline)
                      (pcall update-info-window session false)

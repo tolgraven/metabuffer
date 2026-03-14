@@ -3,7 +3,7 @@
 (local prompt_window_mod (require :metabuffer.window.prompt))
 (local meta_window_mod (require :metabuffer.window.metawindow))
 (local floating_window_mod (require :metabuffer.window.floating))
-; hey
+(local animation_mod (require :metabuffer.window.animation))
 (local preview_window_mod (require :metabuffer.window.preview))
 (local context_window_mod (require :metabuffer.window.context))
 (local info_window_mod (require :metabuffer.window.info))
@@ -88,7 +88,12 @@
                                session.prompt-buf
                                (= (. M.active-by-prompt session.prompt-buf) session)))
      :debug-log debug-log
-     :source-switch-debounce-ms M.preview-source-switch-debounce-ms}))
+     :source-switch-debounce-ms M.preview-source-switch-debounce-ms
+     :animation-mod animation_mod
+     :animate-enter? (fn [session]
+                       (and session
+                            session.animate-enter?))
+     :preview-slide-ms M.ui-animation-preview-ms}))
 
 (set info-window
   (let [candidate
@@ -99,6 +104,11 @@
            :info-max-lines M.info-max-lines
            :info-height router_util_mod.info-height
            :debug-log debug-log
+           :animation-mod animation_mod
+           :animate-enter? (fn [session]
+                             (and session
+                                  session.animate-enter?))
+           :info-fade-ms M.ui-animation-info-ms
            :read-file-lines-cached (fn [path]
                                      (router_util_mod.read-file-lines-cached M path))
            :update-preview (fn [session]
@@ -251,6 +261,7 @@
    :update-info-window update-info-window
    :context-window context-window
    :session-view session_view
+   :animation-mod animation_mod
    :scroll-sync-debounce-ms M.scroll-sync-debounce-ms
    :source-syntax-refresh-debounce-ms M.source-syntax-refresh-debounce-ms})
 
@@ -274,6 +285,25 @@
    :context-window context-window
    :history-store history_store
    :sign-mod sign_mod
+   :animation-mod animation_mod
+   :ui-animations-enabled M.ui-animations-enabled
+   :ui-animations-time-scale M.ui-animations-time-scale
+   :ui-animation-prompt-enabled M.ui-animation-prompt-enabled
+   :ui-animation-prompt-ms M.ui-animation-prompt-ms
+   :ui-animation-prompt-time-scale M.ui-animation-prompt-time-scale
+   :ui-animation-preview-enabled M.ui-animation-preview-enabled
+   :ui-animation-preview-ms M.ui-animation-preview-ms
+   :ui-animation-preview-time-scale M.ui-animation-preview-time-scale
+   :ui-animation-info-enabled M.ui-animation-info-enabled
+   :ui-animation-info-ms M.ui-animation-info-ms
+   :ui-animation-info-time-scale M.ui-animation-info-time-scale
+   :ui-animation-loading-enabled M.ui-animation-loading-enabled
+   :ui-animation-loading-ms M.ui-animation-loading-ms
+   :ui-animation-loading-time-scale M.ui-animation-loading-time-scale
+   :ui-animation-scroll-enabled M.ui-animation-scroll-enabled
+   :ui-animation-scroll-ms M.ui-animation-scroll-ms
+   :ui-animation-scroll-time-scale M.ui-animation-scroll-time-scale
+   :ui-loading-indicator M.ui-loading-indicator
    :next-instance-id! (fn []
                         (set M._instance-seq (+ (or M._instance-seq 0) 1))
                         M._instance-seq)

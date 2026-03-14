@@ -47,6 +47,8 @@
   - `TEST_FAILED_ONLY=1 ./scripts/test-mini.sh`
 - Run screen tests against the real repo instead of the default generated fixture project:
   - `TEST_REAL_REPO=1 ./scripts/test-mini.sh`
+- Enable UI animations in headless mini.test child sessions when needed:
+  - `TEST_UI_ANIMATIONS=1 ./scripts/test-mini.sh`
 
 ## Important Session Notes
 
@@ -84,6 +86,7 @@
 
 - When appropriate, update this file with new learnings, conventions, information, but make sure it is important enough, and ensure anything outdated is replaced rather than just countinously appending.
 - Always update docs when new functionality is added or changed. Both README and vim docs should be comprehensive.
+- When adding or renaming setup options, update README, `doc/metabuffer.txt`, and config unit tests in the same pass.
 - Always update/extend tests when functionality changes:
   - unit tests under `tests/unit/` for pure logic and parser/matcher behavior.
   - screen/integration tests under `tests/screen/` for end-to-end prompt/router/window behavior.

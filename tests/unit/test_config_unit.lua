@@ -1,4 +1,5 @@
 local config = require('metabuffer.config')
+local animation = require('metabuffer.window.animation')
 local eq = MiniTest.expect.equality
 
 local T = MiniTest.new_set()
@@ -44,6 +45,58 @@ T['defaults treat deps directory as dependency content'] = function()
     if g == '!deps/**' then found = true end
   end
   eq(found, true)
+end
+
+T['resolve exposes animation controls with master and per-animation settings'] = function()
+  local resolved = config.resolve({
+    ui = {
+      animation = {
+        enabled = false,
+        time_scale = 0.5,
+        prompt = { enabled = true, time_scale = 2.0 },
+        preview = { enabled = false },
+        scroll = { time_scale = 0.75 },
+        loading_indicator = false,
+      },
+    },
+  })
+
+  eq(resolved.options.ui_animations_enabled, false)
+  eq(resolved.options.ui_animations_time_scale, 0.5)
+  eq(resolved.options.ui_animation_prompt_enabled, true)
+  eq(resolved.options.ui_animation_prompt_time_scale, 2.0)
+  eq(resolved.options.ui_animation_preview_enabled, false)
+  eq(resolved.options.ui_animation_scroll_time_scale, 0.75)
+  eq(resolved.options.ui_loading_indicator, false)
+end
+
+T['resolve keeps legacy animation option names as fallback aliases'] = function()
+  local resolved = config.resolve({
+    ui_animate_enter = false,
+  })
+
+  eq(resolved.options.ui_animations_enabled, false)
+  eq(resolved.options.ui_animation_prompt_ms, config.defaults.options.ui_animation_prompt_ms)
+  eq(resolved.options.ui_animation_preview_ms, config.defaults.options.ui_animation_preview_ms)
+  eq(resolved.options.ui_animation_info_ms, config.defaults.options.ui_animation_info_ms)
+  eq(resolved.options.ui_animation_loading_ms, config.defaults.options.ui_animation_loading_ms)
+  eq(resolved.options.ui_animation_scroll_ms, config.defaults.options.ui_animation_scroll_ms)
+end
+
+T['animation helper applies master and local time scales'] = function()
+  local session = {
+    ['animation-settings'] = {
+      enabled = true,
+      ['time-scale'] = 0.5,
+      prompt = { enabled = true, ms = 140, ['time-scale'] = 2.0 },
+      preview = { enabled = false, ms = 180, ['time-scale'] = 1.0 },
+    },
+  }
+
+  eq(animation['enabled?'](session, 'prompt'), true)
+  eq(animation['enabled?'](session, 'preview'), false)
+  eq(animation['duration-ms'](session, 'prompt', 140), 140)
+  eq(animation['duration-ms'](session, 'preview', 180), 90)
 end
 
 return T

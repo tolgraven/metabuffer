@@ -255,6 +255,20 @@
       (set (. opts :fg) fg))
     opts))
 
+(fn loading-hl
+  [group factor]
+  (let [opts {:default true :bold true :cterm {:bold true}}
+        [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
+        base (and ok (= (type hl) "table") (. hl :fg))
+        fg (if (and base (< factor 0))
+               (darken-rgb base (math.abs factor))
+               (if base
+                   (brighten-rgb base factor)
+                   nil))]
+    (when fg
+      (set (. opts :fg) fg))
+    opts))
+
 (fn apply-ui-config!
   [opts]
   (let [resolved (config.resolve opts)
@@ -269,7 +283,7 @@
   (when (= (. vim.g :fennel_lua_version) nil)
     (set (. vim.g :fennel_lua_version) "5.1"))
   (when (= (. vim.g :fennel_use_luajit) nil)
-    (set (. vim.g :fennel_use_luajit) (if jit 1 0))))
+    (set (. vim.g :fennel_use_luajit) (if _G.jit 1 0))))
 
 (fn ensure-defaults-and-highlights!
   [opts]
@@ -313,6 +327,12 @@
     (hi 0 "MetaPromptFlagTextOff" (fg-only-hl-from "ErrorMsg"))
     (hi 0 "MetaPromptFlagTextFuncOn" (underlined-text-from "String" "Special"))
     (hi 0 "MetaPromptFlagTextFuncOff" (underlined-text-from "ErrorMsg" "Special"))
+    (hi 0 "MetaLoading1" (loading-hl "Comment" -0.1))
+    (hi 0 "MetaLoading2" (loading-hl "Comment" 0.0))
+    (hi 0 "MetaLoading3" (loading-hl "Comment" 0.14))
+    (hi 0 "MetaLoading4" (loading-hl "Title" 0.08))
+    (hi 0 "MetaLoading5" (loading-hl "Title" 0.2))
+    (hi 0 "MetaLoading6" (loading-hl "Title" 0.32))
     (hi 0 "MetaSourceLineNr" {:default true :link "LineNr"})
     (hi 0 "MetaSourceDir" {:default true :link "Directory"})
     (hi 0 "MetaSourceBoundary" (thin-underline-from "Error"))

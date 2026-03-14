@@ -6,6 +6,7 @@ CONTENTS\t\t\t\t*metabuffer-contents*
 INTRODUCTION\t\t\t|metabuffer-introduction|
 USAGE\t\t\t\t|metabuffer-usage|
 COMMANDS\t\t\t|metabuffer-commands|
+SETUP OPTIONS\t\t\t|metabuffer-setup-options|
 PROMPT KEYS\t\t\t|metabuffer-prompt-keys|
 PROMPT DIRECTIVES\t\t|metabuffer-prompt-directives|
 PROMPT BEHAVIOR\t\t|metabuffer-prompt-behavior|
@@ -43,6 +44,44 @@ COMMANDS\t\t\t\t*metabuffer-commands*
 \t\t\t\t\t*:MetaPush*
 :MetaPush
 \tPush edited visible metabuffer lines back to source line locations.
+
+==============================================================================
+SETUP OPTIONS\t\t\t\t*metabuffer-setup-options*
+
+Animation setup options:
+
+\tui.animation.enabled
+\t\tMaster enable/disable switch for Meta animations.
+
+\tui.animation.time_scale
+\t\tMaster speed multiplier. 1.0 is normal speed, 0.5 is twice as
+\t\tfast, 2.0 is half speed.
+
+\tui.animation.prompt.enabled
+\tui.animation.prompt.time_scale
+\t\tControls prompt split slide animation.
+
+\tui.animation.preview.enabled
+\tui.animation.preview.time_scale
+\t\tControls preview window slide animation.
+
+\tui.animation.info.enabled
+\tui.animation.info.time_scale
+\t\tControls info window fade/slide animation.
+
+\tui.animation.loading.enabled
+\tui.animation.loading.time_scale
+\t\tControls animated loading word cadence in prompt footer.
+
+\tui.animation.scroll.enabled
+\tui.animation.scroll.time_scale
+\t\tControls animated half/page scrolling in the results window.
+
+\tui.animation.loading_indicator
+\t\tIndependent toggle for showing the loading indicator at all.
+
+\tBase durations stay internal. Public configuration uses enable flags and
+\ttime scales only.
 
 ==============================================================================
 PROMPT KEYS\t\t\t\t*metabuffer-prompt-keys*

@@ -1,5 +1,6 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
+(local animation-mod (require :metabuffer.window.animation))
 
 (fn M.new
   [opts]
@@ -126,6 +127,60 @@
             n (vim.fn.strdisplaywidth (or line ""))]
         (math.max 1 (math.ceil (/ n w)))))
 
+    (fn session-busy?
+      [session]
+      (and session
+           (or session.prompt-update-pending
+               session.prompt-update-dirty
+               session.lazy-refresh-pending
+               session.lazy-refresh-dirty
+               session.project-bootstrap-pending
+               (and session.project-mode
+                    (not session.project-bootstrapped)))))
+
+    (var refresh-prompt-highlights! nil)
+
+    (fn loading-pieces
+      [session]
+      (let [word "Working"
+            phase (or session.loading-anim-phase 0)
+            pieces []
+            center (+ 1 (% phase (# word)))]
+        (for [i 1 (# word)]
+          (let [dist (math.abs (- i center))
+                hl (if (= dist 0)
+                       "MetaLoading6"
+                       (= dist 1)
+                       "MetaLoading5"
+                       (= dist 2)
+                       "MetaLoading4"
+                       (= dist 3)
+                       "MetaLoading3"
+                       (= dist 4)
+                       "MetaLoading2"
+                       "MetaLoading1")]
+            (table.insert pieces [(string.sub word i i) hl])))
+        [{:chunks pieces :width (# word)}]))
+
+    (fn schedule-loading-indicator!
+      [session]
+      (when (and session
+                 (not session.loading-anim-pending)
+                 session.prompt-buf
+                 (session-prompt-valid? session)
+                 session.loading-indicator?
+                 (session-busy? session))
+        (set session.loading-anim-pending true)
+        (vim.defer_fn
+          (fn []
+            (set session.loading-anim-pending false)
+            (when (and (session-prompt-valid? session)
+                       (session-busy? session)
+                       (animation-mod.enabled? session :loading))
+              (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
+              (refresh-prompt-highlights! session)))
+          (animation-mod.duration-ms session :loading 90))))
+
     (fn prompt-content-display-rows
       [session width]
       (let [rows0 0]
@@ -157,7 +212,12 @@
                       [hex-token hex-style]
                       [prefilter-token prefilter-style]
                       [lazy-token lazy-style]]
+              loading0 (if (session-busy? session) (loading-pieces session) [])
               pieces0 []
+              _ (each [_ p (ipairs loading0)]
+                  (table.insert pieces0 p))
+              _ (when (> (# loading0) 0)
+                  (table.insert pieces0 {:chunks [["  " "MetaPromptText"]] :width 2}))
               _ (each [i pair (ipairs tokens)]
                   (let [tok (or (. pair 1) "")
                         style (. pair 2)
@@ -206,10 +266,11 @@
               0
               {:virt_lines virt-lines
                :virt_lines_above false
-               :hl_mode "combine"})))))
+               :hl_mode "combine"}))
+          (schedule-loading-indicator! session))))
 
-    (fn refresh-prompt-highlights!
-  [session]
+    (set refresh-prompt-highlights!
+      (fn [session]
       (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
         (let [ns (or session.prompt-hl-ns (vim.api.nvim_create_namespace "metabuffer.prompt"))
               lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
@@ -256,7 +317,7 @@
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptAnchor" r (- e0 1) e0))
                         (set pos (+ e 1)))
                         (set pos (+ (# txt) 1)))))))
-          (render-project-flags-footer! session))))
+          (render-project-flags-footer! session)))))
 
     (fn maybe-expand-history-shorthand!
   [router session]
