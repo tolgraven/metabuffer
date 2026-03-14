@@ -73,6 +73,7 @@
 - If you rework compile tooling, keep compatibility with `plugin/metabuffer.lua` and `lua/` output paths.
 - If vendored `nfnl` is refreshed, verify no plain `nfnl.*` namespace imports remain.
 - This repository will later on commit compiled Lua so users do not need nfnl at runtime.
+- Never ever commit on your own without first running the full test suite. Limited/targeted runs are preferable while you are working, but before handing back controls always ensure every single test passes.
 
 ## Fennel code style
 
@@ -97,7 +98,9 @@
 
 ## Agent behavior
 
-- Never stop work unecessarily. User should never have to simply type "go", unless you make an optional (somewhat unlikely to be wanted) suggestion. Generally stop when there are multiple paths to take and user needs to choose. But if both can be implemented without issue and seem reasonable based on spec, simply implement them without asking.
+- Never stop work unnecessarily. User should never have to simply type "go", unless you make an optional and unlikely suggestion. If you identify a clear bug or architectural issue and the next corrective step is obvious, implement it immediately instead of stopping at diagnosis.
+- Do not hand control back just to describe what should be changed next when that change is local, concrete, and within scope. Fix it, then report the result.
+- Prefer a single shared event source with independent listeners over one UI subsystem driving another. For example, selection changes should fan out to preview/info/context/status independently; one window module should not call another window module to keep it in sync.
 - Features in `features` should always result in feature branches in git. Commit each step when doing that, without asking. Don't push unless asked. Other work can be done straight on mainline, and then you should defer committing until told.
 - Try to avoid commands that need escalated permissions and hence user input (to confirm), since these disrupt work. Always see if there is an in-sandbox alternative.
 - Since you lack full access to `~/.local/state/nvim`, always route ad hoc Neovim state through `/tmp` to avoid `shada`/state permission errors. For manual/headless runs, set `XDG_STATE_HOME=/tmp`, `XDG_DATA_HOME=/tmp`, `XDG_CACHE_HOME=/tmp`, and if needed `NVIM_APPNAME` to a tmp-specific value instead of touching the real local state dirs.
@@ -118,3 +121,4 @@
 ## General workflow
 
 - When making changes, run `fennel-ls` to check for issues. Once that is ok, run `scripts/compile-fennel.sh`. If that is ok, run unit and integration tests. Only once all these are clear should you return to user.
+- Treat a successful compile, targeted repro, or targeted test as a checkpoint, not an excuse to stop. Keep going until the full requested fix is implemented end-to-end unless the user must choose between materially different paths.
