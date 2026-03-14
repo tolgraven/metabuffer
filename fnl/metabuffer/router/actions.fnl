@@ -24,15 +24,20 @@
 
 (fn remove-session!
   [deps session]
-  (let [history-api (. deps :history-api)
-        sign-mod (. deps :sign-mod)
-        router-util-mod (. deps :router-util-mod)
-        info-window (. deps :info-window)
-        preview-window (. deps :preview-window)
-        context-window (. deps :context-window)
-        active-by-source (. deps :active-by-source)
-        active-by-prompt (. deps :active-by-prompt)
-        instances (. deps :instances)]
+  (let [{: router
+         : mods
+         : windows
+         : history}
+        deps
+        history-api (. history :api)
+        sign-mod (. mods :sign)
+        router-util-mod (. mods :router-util)
+        info-window (. windows :info)
+        preview-window (. windows :preview)
+        context-window (. windows :context)
+        active-by-source (. router :active-by-source)
+        active-by-prompt (. router :active-by-prompt)
+        instances (. router :instances)]
     (when session
       (set session.closing true)
       (history-api.push-history-entry!
@@ -82,12 +87,13 @@
 
 (fn hide-session-ui!
   [deps session]
-  (let [router-util-mod (. deps :router-util-mod)
-        info-window (. deps :info-window)
-        preview-window (. deps :preview-window)
-        context-window (. deps :context-window)
-        history-api (. deps :history-api)
-        active-by-source (. deps :active-by-source)]
+  (let [{: router : mods : windows : history} deps
+        router-util-mod (. mods :router-util)
+        info-window (. windows :info)
+        preview-window (. windows :preview)
+        context-window (. windows :context)
+        history-api (. history :api)
+        active-by-source (. router :active-by-source)]
     (set session.ui-hidden true)
     (set session.ui-last-insert-mode (vim.startswith (. (vim.api.nvim_get_mode) :mode) "i"))
     (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
@@ -114,12 +120,12 @@
 
 (fn restore-session-ui!
   [deps session opts]
-  (let [prompt-window-mod (. deps :prompt-window-mod)
-        meta-window-mod (. deps :meta-window-mod)
-        sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
-        router-util-mod (. deps :router-util-mod)
-        update-info-window (. deps :update-info-window)
-        context-window (. deps :context-window)
+  (let [{: mods : windows : refresh} deps
+        meta-window-mod (. mods :meta-window)
+        sync-prompt-buffer-name! (. refresh :sync-prompt-buffer-name!)
+        router-util-mod (. mods :router-util)
+        update-info-window (. refresh :info!)
+        context-window (. windows :context)
         preserve-focus? (and opts (. opts :preserve-focus))
         curr session.meta]
     (when (and session.ui-hidden
@@ -181,15 +187,16 @@
 
 (fn finish-accept
   [deps session]
-  (let [active-by-prompt (. deps :active-by-prompt)
-        router-prompt-mod (. deps :router-prompt-mod)
-        sign-mod (. deps :sign-mod)
-        router-util-mod (. deps :router-util-mod)
-        session-view (. deps :session-view)
-        base-buffer (. deps :base-buffer)
-        history-api (. deps :history-api)
-        apply-prompt-lines (. deps :apply-prompt-lines)
-        wrapup (. deps :wrapup)
+  (let [{: router : mods : history : refresh} deps
+        active-by-prompt (. router :active-by-prompt)
+        router-prompt-mod (. mods :router-prompt)
+        sign-mod (. mods :sign)
+        router-util-mod (. mods :router-util)
+        session-view (. mods :session-view)
+        base-buffer (. mods :base-buffer)
+        history-api (. history :api)
+        apply-prompt-lines (. refresh :apply-prompt-lines!)
+        wrapup (. refresh :wrapup)
         curr session.meta]
     (set session.last-prompt-text (router-util-mod.prompt-text session))
     (history-api.push-history-entry! session session.last-prompt-text)
@@ -252,13 +259,14 @@
 
 (fn finish-cancel
   [deps session]
-  (let [router-prompt-mod (. deps :router-prompt-mod)
-        router-util-mod (. deps :router-util-mod)
-        sign-mod (. deps :sign-mod)
-        session-view (. deps :session-view)
-        base-buffer (. deps :base-buffer)
-        history-api (. deps :history-api)
-        wrapup (. deps :wrapup)
+  (let [{: mods : history : refresh} deps
+        router-prompt-mod (. mods :router-prompt)
+        router-util-mod (. mods :router-util)
+        sign-mod (. mods :sign)
+        session-view (. mods :session-view)
+        base-buffer (. mods :base-buffer)
+        history-api (. history :api)
+        wrapup (. refresh :wrapup)
         curr session.meta]
     (router-prompt-mod.begin-session-close!
       session
@@ -282,7 +290,8 @@
 
 (fn M.finish!
   [deps kind prompt-buf]
-  (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+  (let [{: router} deps
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when session
       (if (= kind "accept")
           (finish-accept deps session)
@@ -290,16 +299,18 @@
 
 (fn M.accept!
   [deps prompt-buf]
-  (let [history-api (. deps :history-api)
-        session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+  (let [{: router : history} deps
+        history-api (. history :api)
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (if (and session session.history-browser-active)
         (history-api.apply-history-browser-selection! session)
         (M.finish! deps "accept" prompt-buf))))
 
 (fn M.cancel!
   [deps prompt-buf]
-  (let [history-api (. deps :history-api)
-        session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+  (let [{: router : history} deps
+        history-api (. history :api)
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (if (and session session.history-browser-active)
         (history-api.close-history-browser! session)
         (M.finish! deps "cancel" prompt-buf))))
@@ -310,9 +321,10 @@
 
 (fn M.open-history-searchback!
   [deps prompt-buf]
-  (let [active-by-prompt (. deps :active-by-prompt)
-        history-store (. deps :history-store)
-        history-api (. deps :history-api)
+  (let [{: router : history} deps
+        active-by-prompt (. router :active-by-prompt)
+        history-store (. history :store)
+        history-api (. history :api)
         session (session-by-prompt active-by-prompt prompt-buf)]
     (when session
       (when-not session.history-cache
@@ -321,16 +333,18 @@
 
 (fn M.merge-history-cache!
   [deps prompt-buf]
-  (let [history-api (. deps :history-api)
-        session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+  (let [{: router : history} deps
+        history-api (. history :api)
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when session
       (history-api.merge-history-into-session! session)
       (history-api.refresh-history-browser! session))))
 
 (fn append-current-symbol!
   [deps prompt-buf f opts]
-  (let [active-by-prompt (. deps :active-by-prompt)
-        router-util-mod (. deps :router-util-mod)
+  (let [{: router : mods} deps
+        active-by-prompt (. router :active-by-prompt)
+        router-util-mod (. mods :router-util)
         on-newline? (and opts (. opts :newline))
         session (session-by-prompt active-by-prompt prompt-buf)]
     (when session
@@ -383,7 +397,8 @@
 
 (fn M.toggle-prompt-results-focus!
   [deps prompt-buf]
-  (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+  (let [{: router} deps
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when session
       (let [meta-win (and session.meta session.meta.win session.meta.win.window)
             prompt-win session.prompt-win
@@ -408,9 +423,10 @@
 
 (fn M.toggle-scan-option!
   [deps prompt-buf which]
-  (let [project-source (. deps :project-source)
-        apply-prompt-lines (. deps :apply-prompt-lines)
-        session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+  (let [{: router : project : refresh} deps
+        project-source (. project :source)
+        apply-prompt-lines (. refresh :apply-prompt-lines!)
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when session
       (if
         (= which "ignored")
@@ -428,11 +444,12 @@
 
 (fn M.toggle-project-mode!
   [deps prompt-buf]
-  (let [router-util-mod (. deps :router-util-mod)
-        sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
-        project-source (. deps :project-source)
-        apply-prompt-lines (. deps :apply-prompt-lines)
-        session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+  (let [{: router : mods : refresh : project} deps
+        router-util-mod (. mods :router-util)
+        sync-prompt-buffer-name! (. refresh :sync-prompt-buffer-name!)
+        project-source (. project :source)
+        apply-prompt-lines (. refresh :apply-prompt-lines!)
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when session
       (set session.project-mode (not session.project-mode))
       (set session.meta.project-mode session.project-mode)
@@ -443,8 +460,9 @@
 
 (fn M.toggle-info-file-entry-view!
   [deps prompt-buf]
-  (let [update-info-window (. deps :update-info-window)
-        session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+  (let [{: router : refresh} deps
+        update-info-window (. refresh :info!)
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when session
       (set session.info-file-entry-view
            (if (= (or session.info-file-entry-view "meta") "content")
@@ -459,13 +477,14 @@
 
 (fn M.on-results-buffer-wipe!
   [deps results-buf]
-  (let [active-by-source (. deps :active-by-source)
-        history-api (. deps :history-api)
-        router-util-mod (. deps :router-util-mod)
-        info-window (. deps :info-window)
-        preview-window (. deps :preview-window)
-        instances (. deps :instances)
-        active-by-prompt (. deps :active-by-prompt)
+  (let [{: router : history : mods : windows} deps
+        active-by-source (. router :active-by-source)
+        history-api (. history :api)
+        router-util-mod (. mods :router-util)
+        info-window (. windows :info)
+        preview-window (. windows :preview)
+        instances (. router :instances)
+        active-by-prompt (. router :active-by-prompt)
         session (. active-by-source results-buf)]
     (when (and session (not session._results_wiped))
       (set session._results_wiped true)
@@ -502,7 +521,8 @@
 
 (fn ensure-session-for-results-buf!
   [deps session]
-  (let [active-by-source (. deps :active-by-source)
+  (let [{: router} deps
+        active-by-source (. router :active-by-source)
         buf session.meta.buf.buffer]
     (set (. active-by-source buf) session)))
 
@@ -674,7 +694,7 @@
     {:ops ops :current-lines current-lines}))
 
 (fn apply-file-ops!
-  [session ops]
+  [ops]
   (let [post-lines {}
         touched-paths {}]
     (var total 0)
@@ -757,43 +777,42 @@
     (each [path per-file (pairs (or ops {}))]
       (let [bufnr (vim.fn.bufnr path)]
         (if (and bufnr (> bufnr 0) (vim.api.nvim_buf_is_loaded bufnr))
-            (do
+            (let [bo (. vim.bo bufnr)
+                  old-mod (. bo :modifiable)
+                  old-ro (. bo :readonly)]
               ;; Apply changes directly to loaded file buffer so undo history in
               ;; that real buffer reflects propagated edits accurately.
-              (let [bo (. vim.bo bufnr)
-                    old-mod (. bo :modifiable)
-                    old-ro (. bo :readonly)]
-                (set (. bo :modifiable) true)
-                (set (. bo :readonly) false)
-                (var delta 0)
-                (var changed 0)
-                (each [_ op (ipairs (or per-file []))]
-                  (let [[next-delta bump] (apply-op-to-loaded-buffer! bufnr op delta)]
-                    (set delta next-delta)
-                    (set changed (+ changed bump))))
-                (set (. bo :modifiable) old-mod)
-                (set (. bo :readonly) old-ro)
-                (when (> changed 0)
-                  (let [[ok-write] [(pcall
-                                     vim.api.nvim_buf_call
-                                     bufnr
-                                     (fn []
-                                       (vim.cmd "silent keepalt noautocmd write")))]]
-                    (if ok-write
-                        (do
-                          (set any-write true)
-                          (set total (+ total changed))
-                          (set (. touched-paths path) true)
-                          (set (. post-lines path) (vim.api.nvim_buf_get_lines bufnr 0 -1 false)))
-                        ;; Fallback: persist by path if buffer write failed.
-                        (let [[ok-read lines0] [(pcall vim.api.nvim_buf_get_lines bufnr 0 -1 false)]]
-                          (when (and ok-read (= (type lines0) "table"))
-                            (let [[ok-fallback] [(pcall vim.fn.writefile lines0 path)]]
-                              (when ok-fallback
-                                (set any-write true)
-                                (set total (+ total changed))
-                                (set (. touched-paths path) true)
-                                (set (. post-lines path) lines0))))))))))
+              (set (. bo :modifiable) true)
+              (set (. bo :readonly) false)
+              (var delta 0)
+              (var changed 0)
+              (each [_ op (ipairs (or per-file []))]
+                (let [[next-delta bump] (apply-op-to-loaded-buffer! bufnr op delta)]
+                  (set delta next-delta)
+                  (set changed (+ changed bump))))
+              (set (. bo :modifiable) old-mod)
+              (set (. bo :readonly) old-ro)
+              (when (> changed 0)
+                (let [[ok-write] [(pcall
+                                   vim.api.nvim_buf_call
+                                   bufnr
+                                   (fn []
+                                     (vim.cmd "silent keepalt noautocmd write")))]]
+                  (if ok-write
+                      (do
+                        (set any-write true)
+                        (set total (+ total changed))
+                        (set (. touched-paths path) true)
+                        (set (. post-lines path)
+                             (vim.api.nvim_buf_get_lines bufnr 0 -1 false)))
+                      (let [[ok-read lines0] [(pcall vim.api.nvim_buf_get_lines bufnr 0 -1 false)]]
+                        (when (and ok-read (= (type lines0) "table"))
+                          (let [[ok-fallback] [(pcall vim.fn.writefile lines0 path)]]
+                            (when ok-fallback
+                              (set any-write true)
+                              (set total (+ total changed))
+                              (set (. touched-paths path) true)
+                              (set (. post-lines path) lines0)))))))))
             (let [[ok-read lines0] [(pcall vim.fn.readfile path)]]
               (when (and ok-read (= (type lines0) "table"))
                 (let [lines (vim.deepcopy lines0)]
@@ -852,8 +871,8 @@
 
 (fn invalidate-caches-for-paths!
   [deps session updates]
-  (let [settings (. deps :settings)
-        project-file-cache (and settings settings.project-file-cache)
+  (let [{: router} deps
+        project-file-cache (and router router.project-file-cache)
         preview-file-cache (or session.preview-file-cache {})
         info-file-head-cache (or session.info-file-head-cache {})
         info-file-meta-cache (or session.info-file-meta-cache {})]
@@ -869,15 +888,16 @@
 
 (fn M.write-results!
   [deps prompt-buf]
-  (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)
-        sign-mod (. deps :sign-mod)
-        update-info-window (. deps :update-info-window)
-        preview-window (. deps :preview-window)
-        context-window (. deps :context-window)]
+  (let [{: router : mods : refresh : windows} deps
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)
+        sign-mod (. mods :sign)
+        update-info-window (. refresh :info!)
+        preview-window (. windows :preview)
+        context-window (. windows :context)]
     (when session
       (let [collected (collect-file-ops session)
             ops (. collected :ops)
-            result (apply-file-ops! session ops)
+            result (apply-file-ops! ops)
             buf session.meta.buf.buffer]
         (update-session-refs-after-ops! session ops (. result :post-lines))
         (invalidate-caches-for-paths! deps session (. result :paths))
@@ -901,10 +921,11 @@
 
 (fn M.enter-edit-mode!
   [deps prompt-buf]
-  (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)
-        router-util-mod (. deps :router-util-mod)
-        history-api (. deps :history-api)
-        apply-prompt-lines (. deps :apply-prompt-lines)]
+  (let [{: router : mods : history : refresh} deps
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)
+        router-util-mod (. mods :router-util)
+        history-api (. history :api)
+        apply-prompt-lines (. refresh :apply-prompt-lines!)]
     (when session
       (set session.last-prompt-text (router-util-mod.prompt-text session))
       (history-api.push-history-entry! session session.last-prompt-text)
@@ -921,7 +942,8 @@
 
 (fn M.sync-live-edits!
   [deps prompt-buf]
-  (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+  (let [{: router} deps
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when (and session session.meta session.meta.buf)
       (let [buf session.meta.buf.buffer
             manual? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_manual_edit_active")]]
@@ -932,7 +954,8 @@
 
 (fn M.maybe-restore-ui!
   [deps prompt-buf force]
-  (let [session (session-by-prompt (. deps :active-by-prompt) prompt-buf)]
+  (let [{: router} deps
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when (and session
                session.ui-hidden
                (or force (not session.results-edit-mode))

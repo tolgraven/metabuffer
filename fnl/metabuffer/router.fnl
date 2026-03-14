@@ -198,21 +198,20 @@
      :update-info-window update-info-window}))
 
 (set query-flow-deps
-  {:active-by-prompt M.active-by-prompt
-   :query-mod query_mod
-   :project-source project-source
-   :update-preview-window update-preview-window
-   :update-info-window update-info-window
-   :context-window context-window
-   :settings M
-   :prompt-scheduler-ctx prompt-scheduler-ctx
-   :merge-history-into-session! history-api.merge-history-into-session!
-   :save-current-prompt-tag! history-api.save-current-prompt-tag!
-   :restore-saved-prompt-tag! history-api.restore-saved-prompt-tag!
-   :open-saved-browser! (fn [session]
-                          (history-api.open-history-browser! session "saved"))
-   :refresh-change-signs! sign_mod.refresh-change-signs!
-   :capture-sign-baseline! sign_mod.capture-baseline!
+  {:router M
+   :mods {:query query_mod}
+   :project {:source project-source}
+   :windows {:context context-window}
+   :history {:merge-into-session! history-api.merge-history-into-session!
+             :save-current-prompt-tag! history-api.save-current-prompt-tag!
+             :restore-saved-prompt-tag! history-api.restore-saved-prompt-tag!
+             :open-saved-browser! (fn [session]
+                                    (history-api.open-history-browser! session "saved"))}
+   :refresh {:preview! update-preview-window
+             :info! update-info-window
+             :change-signs! sign_mod.refresh-change-signs!
+             :capture-sign-baseline! sign_mod.capture-baseline!}
+   :state {:prompt-scheduler-ctx prompt-scheduler-ctx}
    :apply-prompt-lines (fn [session]
                          (apply-prompt-lines session))})
 
@@ -240,27 +239,24 @@
     (router_query_flow_mod.apply-prompt-lines! query-flow-deps session)))
 
 (set actions-deps
-  {:active-by-source M.active-by-source
-   :active-by-prompt M.active-by-prompt
-   :instances M.instances
-   :settings M
-   :history-api history-api
-   :history-store history_store
-   :sign-mod sign_mod
-   :prompt-window-mod prompt_window_mod
-   :meta-window-mod meta_window_mod
-   :router-util-mod router_util_mod
-   :router-prompt-mod router_prompt_mod
-   :session-view session_view
-   :base-buffer base_buffer
-   :info-window info-window
-   :preview-window preview-window
-   :context-window context-window
-   :project-source project-source
-   :update-info-window update-info-window
-   :sync-prompt-buffer-name! sync-prompt-buffer-name!
-   :apply-prompt-lines apply-prompt-lines
-   :wrapup M._wrapup})
+  {:router M
+   :mods {:sign sign_mod
+          :prompt-window prompt_window_mod
+          :meta-window meta_window_mod
+          :router-util router_util_mod
+          :router-prompt router_prompt_mod
+          :session-view session_view
+          :base-buffer base_buffer}
+   :windows {:info info-window
+             :preview preview-window
+             :context context-window}
+   :history {:api history-api
+             :store history_store}
+   :project {:source project-source}
+   :refresh {:info! update-info-window
+             :sync-prompt-buffer-name! sync-prompt-buffer-name!
+             :apply-prompt-lines! apply-prompt-lines
+             :wrapup M._wrapup}})
 
 (local next-instance-id!
   (fn []
@@ -268,14 +264,14 @@
     M._instance-seq))
 
 (set navigation-deps
-  {:active-by-prompt M.active-by-prompt
-   :update-preview-window update-preview-window
-   :update-info-window update-info-window
-   :context-window context-window
-   :session-view session_view
-   :animation-mod animation_mod
-   :scroll-sync-debounce-ms M.scroll-sync-debounce-ms
-   :source-syntax-refresh-debounce-ms M.source-syntax-refresh-debounce-ms})
+  {:router M
+   :mods {:session-view session_view
+          :animation animation_mod}
+   :windows {:context context-window}
+   :refresh {:preview! update-preview-window
+             :info! update-info-window}
+   :timing {:scroll-sync-debounce-ms M.scroll-sync-debounce-ms
+            :source-syntax-refresh-debounce-ms M.source-syntax-refresh-debounce-ms}})
 
 
 (fn M.on-prompt-changed

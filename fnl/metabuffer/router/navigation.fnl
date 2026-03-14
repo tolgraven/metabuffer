@@ -13,8 +13,9 @@
 
 (fn schedule-source-syntax-refresh!
   [deps session]
-  (let [active-by-prompt (. deps :active-by-prompt)
-        source-syntax-refresh-debounce-ms (. deps :source-syntax-refresh-debounce-ms)]
+  (let [{: router : timing} deps
+        active-by-prompt (. router :active-by-prompt)
+        source-syntax-refresh-debounce-ms (. timing :source-syntax-refresh-debounce-ms)]
     (when (can-refresh-source-syntax? session)
     (set session.syntax-refresh-dirty true)
     (when-not session.syntax-refresh-pending
@@ -36,10 +37,11 @@
 
 (fn M.move-selection!
   [deps prompt-buf delta]
-  (let [active-by-prompt (. deps :active-by-prompt)
-        update-preview-window (. deps :update-preview-window)
-        update-info-window (. deps :update-info-window)
-        context-window (. deps :context-window)
+  (let [{: router : refresh : windows} deps
+        active-by-prompt (. router :active-by-prompt)
+        update-preview-window (. refresh :preview!)
+        update-info-window (. refresh :info!)
+        context-window (. windows :context)
         session (. active-by-prompt prompt-buf)]
     (when session
       (let [runner (fn []
@@ -64,12 +66,13 @@
 
 (fn M.scroll-main!
   [deps prompt-buf action]
-  (let [active-by-prompt (. deps :active-by-prompt)
-        update-preview-window (. deps :update-preview-window)
-        update-info-window (. deps :update-info-window)
-        context-window (. deps :context-window)
-        session-view (. deps :session-view)
-        animation-mod (. deps :animation-mod)
+  (let [{: router : refresh : windows : mods} deps
+        active-by-prompt (. router :active-by-prompt)
+        update-preview-window (. refresh :preview!)
+        update-info-window (. refresh :info!)
+        context-window (. windows :context)
+        session-view (. mods :session-view)
+        animation-mod (. mods :animation)
         session (. active-by-prompt prompt-buf)]
     (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
       (let [runner (fn []
@@ -120,11 +123,12 @@
 
 (fn M.maybe-sync-from-main!
   [deps session force-refresh]
-  (let [active-by-prompt (. deps :active-by-prompt)
-        update-preview-window (. deps :update-preview-window)
-        update-info-window (. deps :update-info-window)
-        context-window (. deps :context-window)
-        session-view (. deps :session-view)]
+  (let [{: router : refresh : windows : mods} deps
+        active-by-prompt (. router :active-by-prompt)
+        update-preview-window (. refresh :preview!)
+        update-info-window (. refresh :info!)
+        context-window (. windows :context)
+        session-view (. mods :session-view)]
     (session-view.maybe-sync-from-main!
     session
     force-refresh
@@ -139,8 +143,9 @@
 
 (fn M.schedule-scroll-sync!
   [deps session]
-  (let [scroll-sync-debounce-ms (. deps :scroll-sync-debounce-ms)
-        session-view (. deps :session-view)]
+  (let [{: timing : mods} deps
+        scroll-sync-debounce-ms (. timing :scroll-sync-debounce-ms)
+        session-view (. mods :session-view)]
     (session-view.schedule-scroll-sync!
     session
     {:scroll-sync-debounce-ms scroll-sync-debounce-ms
