@@ -115,16 +115,15 @@
       (set meta.buf.indices (vim.deepcopy all-indices))))
 
   (fn push-file-entry-into-pool!
-    [session path lines]
+    [session path]
     (let [meta session.meta
           content meta.buf.content
           refs meta.buf.source-refs
           rel (vim.fn.fnamemodify path ":.")
-          line ""
-          total-lines (if (= (type lines) "table") (# lines) 0)]
+          line ""]
       (table.insert content line)
       (table.insert refs {:path path
-                          :lnum total-lines
+                          :lnum 1
                           :line (if (and (= (type rel) "string") (~= rel ""))
                                     rel
                                     path)
@@ -314,10 +313,7 @@
                                 include-ignored
                                 include-deps
                                 include-binary))]
-          (push-file-entry-into-pool!
-            session
-            path
-            (read-file-lines-cached path {:include-binary include-binary :hex-view include-hex}))))
+          (push-file-entry-into-pool! session path)))
       (each [_ path (ipairs (project-file-list root include-hidden include-ignored include-deps))]
         (let [rel (vim.fn.fnamemodify path ":.")]
           (when (and (< total-lines settings.project-max-total-lines)
@@ -358,10 +354,7 @@
           deferred []
           deferred-seen {}]
       (each [_ path (ipairs file-entry-paths)]
-        (push-file-entry-into-pool!
-          session
-          path
-          (read-file-lines-cached path {:include-binary include-binary :hex-view include-hex})))
+        (push-file-entry-into-pool! session path))
       ;; Prioritize nearby context by materializing already-open buffers first.
       (each [_ path (ipairs open-paths)]
         (let [p (canonical-path path)]
