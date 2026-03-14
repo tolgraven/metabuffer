@@ -63,6 +63,16 @@
         {:text text :width (vim.fn.strdisplaywidth text)})
       {:text "" :width 0}))
 
+(fn ref-path
+  [session ref]
+  (or (and ref ref.path)
+      (and session session.source-buf
+           (vim.api.nvim_buf_is_valid session.source-buf)
+           (let [name (vim.api.nvim_buf_get_name session.source-buf)]
+             (when (and (= (type name) "string") (~= name ""))
+               name)))
+      ""))
+
 (fn compact-dir
   [dir]
   (if (or (= dir "") (= dir "."))
@@ -185,59 +195,57 @@
   (var ensure_info_window nil)
   (set ensure_info_window
     (fn [session]
-    (when-not (valid-info-win? session)
-      (let [buf (vim.api.nvim_create_buf false true)
-            width info_min_width
-            height (info_height session)
-            target (info_window_config session width height)
-            animate-info? (and animation_mod
-                               animate_enter?
-                               (animate_enter? session)
-                               (animation_mod.enabled? session :info)
-                               (not session.info-animated?))
-            cfg (if animate-info?
-                    (let [start (vim.deepcopy target)]
-                      (set (. start :col) (+ (. target :col) 8))
-                      start)
-                    target)
-            win (floating_window_mod.new vim buf cfg)]
-        (set session.info-buf buf)
-        (set session.info-win win.window)
-        (disable-airline-statusline! session.info-win)
-        (let [bo (. vim.bo buf)]
-          (set (. bo :buftype) "nofile")
-          (set (. bo :bufhidden) "wipe")
-          (set (. bo :swapfile) false)
-          (set (. bo :modifiable) false)
-          (set (. bo :filetype) "metabuffer"))
-        (let [wo (. vim.wo win.window)]
-          (set (. wo :statusline) "")
-          (set (. wo :winbar) "")
-          (set (. wo :number) false)
-          (set (. wo :relativenumber) false)
-          (set (. wo :wrap) false)
-          (set (. wo :linebreak) false)
-          (set (. wo :signcolumn) "no")
-          (set (. wo :foldcolumn) "0")
-          (set (. wo :spell) false))
-        (when animate-info?
-          (set session.info-animated? true)
-          (pcall vim.api.nvim_set_option_value "winblend" 85 {:win session.info-win})
-          (vim.defer_fn
-            (fn []
-              (when (valid-info-win? session)
-                (animation_mod.animate-float!
-                  session
-                  "info-enter"
-                  session.info-win
-                  cfg
-                  target
-                  85
-                  (or vim.g.meta_float_winblend 13)
-                  (animation_mod.duration-ms session :info (or info_fade_ms 220)))))
-            (if (and animation_mod (animation_mod.enabled? session :prompt))
-                (animation_mod.duration-ms session :prompt 140)
-                0)))))))
+      (when-not (valid-info-win? session)
+        (let [buf (vim.api.nvim_create_buf false true)
+              width info_min_width
+              height (info_height session)
+              target (info_window_config session width height)
+              animate-info? (and animation_mod
+                                 animate_enter?
+                                 (animate_enter? session)
+                                 (animation_mod.enabled? session :info)
+                                 (not session.info-animated?))
+              cfg (if animate-info?
+                      (let [start (vim.deepcopy target)]
+                        (set (. start :col) (+ (. target :col) 8))
+                        start)
+                      target)
+              win (floating_window_mod.new vim buf cfg)]
+          (set session.info-buf buf)
+          (set session.info-win win.window)
+          (disable-airline-statusline! session.info-win)
+          (let [bo (. vim.bo buf)]
+            (set (. bo :buftype) "nofile")
+            (set (. bo :bufhidden) "wipe")
+            (set (. bo :swapfile) false)
+            (set (. bo :modifiable) false)
+            (set (. bo :filetype) "metabuffer"))
+          (let [wo (. vim.wo win.window)]
+            (set (. wo :statusline) "")
+            (set (. wo :winbar) "")
+            (set (. wo :number) false)
+            (set (. wo :relativenumber) false)
+            (set (. wo :wrap) false)
+            (set (. wo :linebreak) false)
+            (set (. wo :signcolumn) "no")
+            (set (. wo :foldcolumn) "0")
+            (set (. wo :spell) false))
+          (when animate-info?
+            (set session.info-animated? true)
+            (pcall vim.api.nvim_set_option_value "winblend" 85 {:win session.info-win})
+            (vim.defer_fn
+              (fn []
+                (when (valid-info-win? session)
+                  (animation_mod.animate-float!
+                    session
+                    "info-enter"
+                    session.info-win
+                    cfg
+                    target
+                    85
+                    (or vim.g.meta_float_winblend 13)
+                    (animation_mod.duration-ms session :info (or info_fade_ms 220)))))
+              17))))))
 
   (fn settle-info-window!
     [session]
@@ -257,7 +265,8 @@
   (fn fit-info-width!
     [session lines]
     (when (valid-info-win? session)
-      (let [widths (vim.tbl_map (fn [line] (vim.fn.strdisplaywidth (or line ""))) (or lines []))
+      (let [current-width (vim.api.nvim_win_get_width session.info-win)
+            widths (vim.tbl_map (fn [line] (vim.fn.strdisplaywidth (or line ""))) (or lines []))
             max-len (numeric-max widths 0)
             needed max-len
             host-win (session-host-win session)
@@ -268,9 +277,15 @@
                            vim.o.columns)
             max-available (math.max info_min_width (math.floor (* host-width 0.34)))
             upper (math.min info_max_width max-available)
-            target (math.max info_min_width (math.min needed upper))
+            fit-target (math.max info_min_width (math.min needed upper))
+            frozen-width (and (not session.project-mode) session.info-fixed-width)
+            target (or frozen-width fit-target)
             height (info_height session)
             cfg (info_window_config session target height)]
+        (when (and (not session.project-mode)
+                   (not frozen-width)
+                   (> current-width 0))
+          (set session.info-fixed-width current-width))
         (pcall vim.api.nvim_win_set_config session.info-win cfg))))
 
   (fn info-max-width-now
@@ -470,51 +485,53 @@
       (sync-info-cursor! session meta)
       [start-index stop-index]))
 
-    (fn schedule-regular-line-meta-refresh!
-      [session meta start-index stop-index]
-      (let [refs (or meta.buf.source-refs [])
-            idxs (or meta.buf.indices [])
-            first-row (and (> (# idxs) 0) (. idxs start-index))
-            first-ref (and first-row (. refs first-row))
-            path (and first-ref first-ref.path)
-            lnums []]
-        (when (and path (= 1 (vim.fn.filereadable path)))
+  (fn schedule-regular-line-meta-refresh!
+    [session meta start-index stop-index]
+    (let [refs (or meta.buf.source-refs [])
+          idxs (or meta.buf.indices [])
+          first-row (and (> (# idxs) 0) (. idxs start-index))
+          first-ref (and first-row (. refs first-row))
+          path (ref-path session first-ref)
+          rerender! (fn []
+                      (when (and session
+                                 session.info-buf
+                                 (vim.api.nvim_buf_is_valid session.info-buf)
+                                 (not session.project-mode)
+                                 session.single-file-info-ready)
+                        (let [[start1 stop1] (render-current-range! session meta)]
+                          (set session.info-start-index start1)
+                          (set session.info-stop-index stop1))))]
+      (when (and session.single-file-info-fetch-ready
+                 (~= path "")
+                 (= 1 (vim.fn.filereadable path)))
+        (let [lnums []]
           (for [i start-index stop-index]
             (let [src-idx (. idxs i)
                   ref (. refs src-idx)]
-              (when (and ref (= ref.path path) (= (type ref.lnum) "number"))
+              (when (and ref
+                         (= (ref-path session ref) path)
+                         (= (type ref.lnum) "number"))
                 (table.insert lnums ref.lnum))))
           (table.sort lnums)
-          (let [first-lnum (. lnums 1)
-                last-lnum (. lnums (# lnums))
-                range-key (.. path ":" start-index ":" stop-index ":" (or first-lnum 0) ":" (or last-lnum 0))]
-            (when (~= range-key session.info-line-meta-range-key)
-              (set session.info-line-meta-range-key range-key)
-              ((. file-info :ensure-file-status-async!)
-                session
-                path
-                (fn []
-                  (when (and session
-                             session.info-buf
-                             (vim.api.nvim_buf_is_valid session.info-buf)
-                             (not session.project-mode)
-                             (= range-key session.info-line-meta-range-key))
-                    (let [[start1 stop1] (render-current-range! session meta)]
-                      (set session.info-start-index start1)
-                      (set session.info-stop-index stop1)))))
-              ((. file-info :ensure-line-meta-range-async!)
-                session
-                path
-                lnums
-                (fn []
-                  (when (and session
-                             session.info-buf
-                             (vim.api.nvim_buf_is_valid session.info-buf)
-                             (not session.project-mode)
-                             (= range-key session.info-line-meta-range-key))
-                    (let [[start1 stop1] (render-current-range! session meta)]
-                      (set session.info-start-index start1)
-                      (set session.info-stop-index stop1))))))))))
+          (when (> (# lnums) 0)
+            (let [first-lnum (. lnums 1)
+                  last-lnum (. lnums (# lnums))
+                  range-key (.. path ":" start-index ":" stop-index ":" first-lnum ":" last-lnum)]
+              (when (~= range-key session.info-line-meta-range-key)
+                (set session.info-line-meta-range-key range-key)
+                ((. file-info :ensure-file-status-async!)
+                  session
+                  path
+                  (fn []
+                    (when (= range-key session.info-line-meta-range-key)
+                      (rerender!))))
+                ((. file-info :ensure-line-meta-range-async!)
+                  session
+                  path
+                  lnums
+                  (fn []
+                    (when (= range-key session.info-line-meta-range-key)
+                      (rerender!)))))))))))
 
     (fn update-regular!
       [session]
@@ -522,67 +539,76 @@
       (settle-info-window! session)
       (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
         (let [[start-index stop-index] (render-current-range! session session.meta)]
-          (when session.single-file-info-ready
-            (schedule-regular-line-meta-refresh! session session.meta start-index stop-index)))))
+          (schedule-regular-line-meta-refresh! session session.meta start-index stop-index))))
 
-    (fn startup-layout-pending?
-      [session]
-      (and session
-           session.project-mode
-           (or session.startup-initializing session.prompt-animating?)))
+  (fn startup-layout-pending?
+    [session]
+    (and session
+         session.project-mode
+         (or session.startup-initializing session.prompt-animating?)))
 
-    (fn update-project-startup!
-      [session]
-      (ensure_info_window session)
-      (settle-info-window! session)
-      (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
-        (render-current-range! session session.meta)))
+  (fn update-project-startup!
+    [session]
+    (ensure_info_window session)
+    (settle-info-window! session)
+    (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
+      (render-current-range! session session.meta)))
 
-    (fn update-project!
-      [session refresh-lines]
-      (if (startup-layout-pending? session)
-          (update-project-startup! session)
-          (do
-            (ensure_info_window session)
-            (settle-info-window! session)
-             (debug_log (join-str " "
-                                  ["info enter"
-                                   (.. "refresh=" (str refresh-lines))
-                                   (.. "selected=" session.meta.selected_index)
-                                   (.. "info-win=" session.info-win)
-                                   (.. "info-buf=" session.info-buf)]))
-            (when (valid-info-win? session)
-              (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
-              (pcall vim.api.nvim_set_option_value "winbar" "" {:win session.info-win}))
-            (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
-              (let [meta session.meta
-                    selected1 (+ meta.selected_index 1)
-                    [wanted-start wanted-stop] (info-visible-range session meta (# (or meta.buf.indices [])) info_max_lines)
-                    start-index (or session.info-start-index 1)
-                    stop-index (or session.info-stop-index 0)
-                    out-of-range (or (< selected1 start-index) (> selected1 stop-index))
-                    range-changed (or (~= wanted-start start-index) (~= wanted-stop stop-index))]
-                (when (or refresh-lines out-of-range range-changed)
-                  (let [idxs (or meta.buf.indices [])
-                        sig (join-str "|"
-                                      [idxs
-                                       (# idxs)
-                                       wanted-start
-                                       wanted-stop
-                                       (info-max-width-now session)
-                                       (info_height session)
-                                       vim.o.columns])]
-                    (when (or out-of-range range-changed (~= session.info-render-sig sig))
-                      (set session.info-render-sig sig)
-                      (render-info-lines! session meta wanted-start wanted-stop))))
-                (sync-info-cursor! session meta))))))
+  (fn update-project!
+    [session refresh-lines]
+    (if (startup-layout-pending? session)
+        (update-project-startup! session)
+        (do
+          (ensure_info_window session)
+          (settle-info-window! session)
+          (debug_log
+            (join-str
+              " "
+              ["info enter"
+               (.. "refresh=" (str refresh-lines))
+               (.. "selected=" session.meta.selected_index)
+               (.. "info-win=" session.info-win)
+               (.. "info-buf=" session.info-buf)]))
+          (when (valid-info-win? session)
+            (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
+            (pcall vim.api.nvim_set_option_value "winbar" "" {:win session.info-win}))
+          (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
+            (let [meta session.meta
+                  selected1 (+ meta.selected_index 1)
+                  [wanted-start wanted-stop] (info-visible-range
+                                               session
+                                               meta
+                                               (# (or meta.buf.indices []))
+                                               info_max_lines)
+                  start-index (or session.info-start-index 1)
+                  stop-index (or session.info-stop-index 0)
+                  out-of-range (or (< selected1 start-index) (> selected1 stop-index))
+                  range-changed (or (~= wanted-start start-index)
+                                    (~= wanted-stop stop-index))]
+              (when (or refresh-lines out-of-range range-changed)
+                (let [idxs (or meta.buf.indices [])
+                      sig (join-str
+                            "|"
+                            [idxs
+                             (# idxs)
+                             wanted-start
+                             wanted-stop
+                             (info-max-width-now session)
+                             (info_height session)
+                             vim.o.columns])]
+                  (when (or out-of-range
+                            range-changed
+                            (~= session.info-render-sig sig))
+                    (set session.info-render-sig sig)
+                    (render-info-lines! session meta wanted-start wanted-stop))))
+              (sync-info-cursor! session meta))))))
 
-    (let [update! (fn [session refresh-lines]
-                    (let [refresh-lines (if (= refresh-lines nil) true refresh-lines)]
-                      (if session.project-mode
-                          (update-project! session refresh-lines)
-                          (update-regular! session))))]
-      {:close-window! close-info-window!
-       :update! update!})))
+  (let [update! (fn [session refresh-lines]
+                  (let [refresh-lines (if (= refresh-lines nil) true refresh-lines)]
+                    (if session.project-mode
+                        (update-project! session refresh-lines)
+                        (update-regular! session))))]
+    {:close-window! close-info-window!
+     :update! update!})))
 
 M

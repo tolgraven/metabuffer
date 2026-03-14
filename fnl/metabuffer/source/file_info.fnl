@@ -7,10 +7,8 @@
 (var line_meta_cache_hit? nil)
 (var normalized_line_numbers nil)
 (var missing_line_numbers nil)
-(var parse_line_blame_stdout nil)
 (var clear_pending_line_meta nil)
-(var store_line_meta nil)
-(var start_line_meta_job nil)
+(var parse_range_blame_stdout nil)
 
 (fn M.file-first-line
   [session read-file-lines-cached path]
@@ -287,51 +285,27 @@
           (table.insert missing lnum)))
       missing)))
 
-(set parse_line_blame_stdout
-  (fn [stdout]
-    {:author (or (string.match (.. "\n" (or stdout "")) "\nauthor ([^\n]+)") "")
-     :author-time (or (tonumber (or (string.match (.. "\n" (or stdout "")) "\nauthor%-time (%d+)") "")) 0)}))
-
 (set clear_pending_line_meta
   (fn [session key]
     (let [pending (or session.info-line-meta-pending {})]
       (set (. pending key) nil)
       (set session.info-line-meta-pending pending))))
 
-(set store_line_meta
-  (fn [session path lnum mtime stdout]
-    (let [cache (or session.info-line-meta-cache {})
-          meta (line-meta-from-blame session path lnum mtime (parse_line_blame_stdout stdout))]
-      (set (. cache (line_meta_key path lnum)) meta)
-      (set session.info-line-meta-cache cache))))
-
-(set start_line_meta_job
-  (fn [session path rel lnum mtime remaining on-ready]
-    (let [pending (or session.info-line-meta-pending {})
-          key (.. (line_meta_key path lnum) ":" mtime)]
-      (if (. pending key)
-          false
-          (do
-            (set (. pending key) true)
-            (set session.info-line-meta-pending pending)
-            (set (. remaining :count) (+ (. remaining :count) 1))
-            (vim.system
-              ["git" "-C" (vim.fn.getcwd)
-               "blame" "--line-porcelain"
-               "-L" (.. (tostring lnum) "," (tostring lnum))
-               "--" rel]
-              {}
-              (fn [obj]
-                (vim.schedule
-                  (fn []
-                    (clear_pending_line_meta session key)
-                    (when (and (= (. obj :code) 0)
-                               (= 1 (vim.fn.filereadable path)))
-                      (store_line_meta session path lnum mtime (. obj :stdout)))
-                    (set (. remaining :count) (- (. remaining :count) 1))
-                    (when (and (= (. remaining :count) 0) on-ready)
-                      (on-ready)))))))
-            true)))))
+(set parse_range_blame_stdout
+  (fn [stdout]
+    (let [rows []
+          state {:author "" :author-time 0}]
+      (each [_ line (ipairs (vim.split (or stdout "") "\n" {:plain true}))]
+        (when (vim.startswith line "author ")
+          (set (. state :author) (string.sub line 8)))
+        (when (vim.startswith line "author-time ")
+          (set (. state :author-time) (or (tonumber (string.sub line 13)) 0)))
+        (when (vim.startswith line "\t")
+          (table.insert rows {:author (. state :author)
+                              :author-time (. state :author-time)})
+          (set (. state :author) "")
+          (set (. state :author-time) 0)))
+      rows)))
 
 (fn M.ensure-line-meta-range-async!
   [session path lnums on-ready]
@@ -342,10 +316,37 @@
       (let [cache (or session.info-line-meta-cache {})
             mtime (vim.fn.getftime path)
             rel (vim.fn.fnamemodify path ":.")
-            missing (missing_line_numbers cache path vals mtime)
-            remaining {:count 0}]
-        (each [_ lnum (ipairs missing)]
-          (start_line_meta_job session path rel lnum mtime remaining on-ready))))))
+            missing (missing_line_numbers cache path vals mtime)]
+        (when (> (# missing) 0)
+          (let [start-lnum (. missing 1)
+                stop-lnum (. missing (# missing))
+                key (.. path ":" (tostring start-lnum) ":" (tostring stop-lnum) ":" (tostring mtime))
+                pending (or session.info-line-meta-pending {})]
+            (when-not (. pending key)
+              (set (. pending key) true)
+              (set session.info-line-meta-pending pending)
+              (vim.system
+                ["git" "-C" (vim.fn.getcwd)
+                 "blame" "--line-porcelain"
+                 "-L" (.. (tostring start-lnum) "," (tostring stop-lnum))
+                 "--" rel]
+                {}
+                (fn [obj]
+                  (vim.schedule
+                    (fn []
+                      (clear_pending_line_meta session key)
+                      (when (and (= (. obj :code) 0)
+                                 (= 1 (vim.fn.filereadable path)))
+                        (let [rows (parse_range_blame_stdout (. obj :stdout))
+                              cache1 (or session.info-line-meta-cache {})]
+                          (for [i 1 (math.min (# missing) (# rows))]
+                            (let [lnum (. missing i)
+                                  blame (. rows i)
+                                  meta (line-meta-from-blame session path lnum mtime blame)]
+                              (set (. cache1 (line_meta_key path lnum)) meta)))
+                          (set session.info-line-meta-cache cache1)))
+                      (when on-ready
+                        (on-ready))))))))))))))
 
 (fn age-hl-group
   [age-token]

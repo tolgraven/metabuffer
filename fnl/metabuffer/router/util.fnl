@@ -48,8 +48,7 @@
   [session]
   (cond
     (and session
-         session.project-mode
-         (or session.startup-initializing session.prompt-animating?)
+         (or session.startup-initializing session.prompt-animating? session.animate-enter?)
          session.source-view)
     (let [host-height (or (. session.source-view :_meta_win_height)
                           (and session.origin-win
