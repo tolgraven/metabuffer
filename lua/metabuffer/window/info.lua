@@ -228,7 +228,21 @@ M.new = function(opts)
         if animate_info_3f then
           session["info-animated?"] = true
           pcall(vim.api.nvim_set_option_value, "winblend", 85, {win = session["info-win"]})
-          return animation_mod["animate-float!"](session, "info-enter", session["info-win"], cfg, target, 85, (vim.g.meta_float_winblend or 13), animation_mod["duration-ms"](session, "info", (info_fade_ms or 220)))
+          local function _28_()
+            if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
+              return animation_mod["animate-float!"](session, "info-enter", session["info-win"], cfg, target, 85, (vim.g.meta_float_winblend or 13), animation_mod["duration-ms"](session, "info", (info_fade_ms or 220)))
+            else
+              return nil
+            end
+          end
+          local function _30_()
+            if (animation_mod and animation_mod["enabled?"](session, "prompt")) then
+              return animation_mod["duration-ms"](session, "prompt", 140)
+            else
+              return 0
+            end
+          end
+          return vim.defer_fn(_28_, _30_())
         else
           return nil
         end
@@ -260,10 +274,10 @@ M.new = function(opts)
   local function fit_info_width_21(session, lines)
     if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
       local widths
-      local function _32_(line)
+      local function _35_(line)
         return vim.fn.strdisplaywidth((line or ""))
       end
-      widths = vim.tbl_map(_32_, (lines or {}))
+      widths = vim.tbl_map(_35_, (lines or {}))
       local max_len = numeric_max(widths, 0)
       local needed = max_len
       local host_width
@@ -306,10 +320,10 @@ M.new = function(opts)
     else
       if (session and meta and meta.win and vim.api.nvim_win_is_valid(meta.win.window)) then
         local view
-        local function _38_()
+        local function _41_()
           return vim.fn.winsaveview()
         end
-        view = vim.api.nvim_win_call(meta.win.window, _38_)
+        view = vim.api.nvim_win_call(meta.win.window, _41_)
         local top = math.max(1, math.min(total, (view.topline or 1)))
         local height = math.max(1, vim.api.nvim_win_get_height(meta.win.window))
         local stop0 = math.min(total, (top + height + -1))
@@ -438,9 +452,9 @@ M.new = function(opts)
         else
           icon_width = 0
         end
-        local _let_54_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
-        local dir = _let_54_[1]
-        local file0 = _let_54_[2]
+        local _let_57_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
+        local dir = _let_57_[1]
+        local file0 = _let_57_[2]
         local this_file_hl = (icon_info["file-hl"] or file_hl)
         local row = #lines
         local line = (sign_prefix .. lnum_cell0 .. icon_prefix .. dir .. file0 .. suffix_prefix .. suffix0)
@@ -583,9 +597,9 @@ M.new = function(opts)
     if (session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
       local meta = session.meta
       local selected1 = (meta.selected_index + 1)
-      local _let_72_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-      local wanted_start = _let_72_[1]
-      local wanted_stop = _let_72_[2]
+      local _let_75_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
+      local wanted_start = _let_75_[1]
+      local wanted_stop = _let_75_[2]
       local start_index = (session["info-start-index"] or 1)
       local stop_index = (session["info-stop-index"] or 0)
       local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
@@ -605,7 +619,7 @@ M.new = function(opts)
       return nil
     end
   end
-  local function _76_(session, refresh_lines)
+  local function _79_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -618,6 +632,6 @@ M.new = function(opts)
       return update_regular_21(session)
     end
   end
-  return {["close-window!"] = close_info_window_21, ["update!"] = _76_}
+  return {["close-window!"] = close_info_window_21, ["update!"] = _79_}
 end
 return M

@@ -191,15 +191,21 @@
         (when animate-info?
           (set session.info-animated? true)
           (pcall vim.api.nvim_set_option_value "winblend" 85 {:win session.info-win})
-          (animation_mod.animate-float!
-              session
-              "info-enter"
-              session.info-win
-              cfg
-              target
-              85
-              (or vim.g.meta_float_winblend 13)
-              (animation_mod.duration-ms session :info (or info_fade_ms 220)))))))))
+          (vim.defer_fn
+            (fn []
+              (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
+                (animation_mod.animate-float!
+                  session
+                  "info-enter"
+                  session.info-win
+                  cfg
+                  target
+                  85
+                  (or vim.g.meta_float_winblend 13)
+                  (animation_mod.duration-ms session :info (or info_fade_ms 220)))))
+            (if (and animation_mod (animation_mod.enabled? session :prompt))
+                (animation_mod.duration-ms session :prompt 140)
+                0))))))))
 
   (fn settle-info-window!
     [session]

@@ -54,6 +54,13 @@
     [session]
     (and session session.meta (selected-ref session.meta)))
 
+  (fn startup-delay-ms
+    [session]
+    (if (and animation-mod
+             (animation-mod.enabled? session :prompt))
+        (animation-mod.duration-ms session :prompt 140)
+        0))
+
   (fn refresh-preview-statusline!
     [session]
     (when (and session session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
@@ -158,13 +165,17 @@
         (apply-preview-window-opts! session session.preview-win)
         (when animate-preview?
           (set session.preview-animated? true)
-          (animation-mod.animate-win-width!
-            session
-            "preview-enter"
-            win-id
-            start-width
-            width
-            (animation-mod.duration-ms session :preview (or preview-slide-ms 180)))))))
+          (vim.defer_fn
+            (fn []
+              (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
+                (animation-mod.animate-win-width!
+                  session
+                  "preview-enter"
+                  win-id
+                  start-width
+                  width
+                  (animation-mod.duration-ms session :preview (or preview-slide-ms 180)))))
+            (startup-delay-ms session))))))
 
   (fn close-preview-window!
     [session]
