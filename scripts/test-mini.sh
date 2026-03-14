@@ -191,12 +191,17 @@ run_worker() {
   base=$(basename "$file")
   local log="$tmp_dir/$idx.log"
   local status="$tmp_dir/$idx.status"
+  local elapsed_ms_file="$tmp_dir/$idx.elapsed_ms"
   local profile="$PROFILE_DIR/$idx-$(basename "$file" .lua).profile.log"
   local appname="metabuffer-mini-${idx}-$$"
   local xdg_root="$tmp_dir/xdg-$idx"
 
-  local file_start_s
-  file_start_s=$(date +%s)
+  local file_start_ms
+  file_start_ms=$(python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+)
   mkdir -p "$xdg_root/data" "$xdg_root/state" "$xdg_root/cache" "$xdg_root/config"
   if (( PROFILE_MODE == 1 )); then
     : > "$profile"
@@ -220,15 +225,20 @@ run_worker() {
   } 2>&1 | sed -u "s/^/[w${idx}:${base}] /" | tee "$log"
   local rc=${PIPESTATUS[0]}
 
-  local file_end_s
-  file_end_s=$(date +%s)
-  local file_dt=$((file_end_s - file_start_s))
+  local file_end_ms
+  file_end_ms=$(python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+)
+  local file_dt_ms=$((file_end_ms - file_start_ms))
 
   if (( PROFILE_MODE == 1 )) && [[ -s "$profile" ]]; then
     sed -u "s/^/[w${idx}:${base}] /" "$profile" | tee -a "$log"
   fi
 
-  echo "[worker $idx] FILE END $file | rc=$rc | ${file_dt}s" | sed -u "s/^/[w${idx}:${base}] /" | tee -a "$log"
+  echo "$file_dt_ms" > "$elapsed_ms_file"
+  echo "[worker $idx] FILE END $file | rc=$rc | ${file_dt_ms}ms" | sed -u "s/^/[w${idx}:${base}] /" | tee -a "$log"
   echo "$rc" > "$status"
   return 0
 }
@@ -265,6 +275,26 @@ print(int(time.time() * 1000))
 PY
 )
 TOTAL_DT_MS=$((TOTAL_END_MS - TOTAL_START_MS))
+
+TIMING_ROWS=()
+for i in "${!TEST_FILES[@]}"; do
+  idx=$((i + 1))
+  file="${TEST_FILES[$i]}"
+  elapsed_ms_path="$TMP_DIR/$idx.elapsed_ms"
+  if [[ -f "$elapsed_ms_path" ]]; then
+    elapsed_ms=$(cat "$elapsed_ms_path")
+    TIMING_ROWS+=("${elapsed_ms}"$'\t'"$file")
+  fi
+done
+
+if (( ${#TIMING_ROWS[@]} > 0 )); then
+  echo "[mini-runner] FILE TIMINGS"
+  rank=0
+  while IFS=$'\t' read -r elapsed_ms file; do
+    rank=$((rank + 1))
+    printf '[mini-runner]   %02d. %6sms | %s\n' "$rank" "$elapsed_ms" "$file"
+  done < <(printf '%s\n' "${TIMING_ROWS[@]}" | sort -rn -k1,1)
+fi
 
 echo "[mini-runner] TOTAL ${#TEST_FILES[@]} file(s) | failed=$FAIL_FILES | elapsed=${TOTAL_DT_MS}ms"
 
