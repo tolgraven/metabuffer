@@ -74,6 +74,7 @@
   (let [{: active-by-prompt
          : schedule-source-syntax-refresh!
          : update-info-window
+         : update-preview-window!
          : update-context-window!}
         (or opts {})]
     (when (and session
@@ -87,6 +88,8 @@
           (schedule-source-syntax-refresh! session))
         (when (or force-refresh (~= before session.meta.selected_index))
           (pcall session.meta.refresh_statusline)
+          (when update-preview-window!
+            (pcall update-preview-window! session))
           (pcall update-info-window session false)
           (when update-context-window!
             (pcall update-context-window! session)))))))

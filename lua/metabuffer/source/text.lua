@@ -1,6 +1,7 @@
 -- [nfnl] fnl/metabuffer/source/text.fnl
 local path_hl = require("metabuffer.path_highlight")
 local util = require("metabuffer.util")
+local file_info = require("metabuffer.source.file_info")
 local M = {}
 local function icon_field(icon)
   if ((type(icon) == "string") and (icon ~= "")) then
@@ -73,7 +74,16 @@ end
 M["info-view"] = function(session, ref, ctx)
   local mode = ((ctx and ctx.mode) or "meta")
   local read_file_lines_cached = (ctx and ctx["read-file-lines-cached"])
-  return {path = M["info-path"](ref, false), ["icon-path"] = M["info-path"](ref, false), ["show-icon"] = true, ["highlight-dir"] = true, ["highlight-file"] = true, sign = {text = "  ", hl = "LineNr"}, suffix = M["info-suffix"](session, ref, mode, read_file_lines_cached), ["suffix-prefix"] = "  ", ["suffix-highlights"] = {}}
+  local single_source_3f = not not (ctx and ctx["single-source?"])
+  if single_source_3f then
+    if (session["single-file-info-ready"] and ref and ref.path and ref.lnum and (1 == vim.fn.filereadable(ref.path))) then
+      return file_info["line-meta-info-view"](session, ref.path, ref.lnum, 1)
+    else
+      return {path = "", ["icon-path"] = "", sign = {text = "  ", hl = "LineNr"}, suffix = M["info-suffix"](session, ref, mode, read_file_lines_cached), ["suffix-prefix"] = "", ["suffix-highlights"] = {}, ["highlight-dir"] = false, ["highlight-file"] = false, ["show-icon"] = false}
+    end
+  else
+    return {path = M["info-path"](ref, false), ["icon-path"] = M["info-path"](ref, false), ["show-icon"] = true, ["highlight-dir"] = true, ["highlight-file"] = true, sign = {text = "  ", hl = "LineNr"}, suffix = M["info-suffix"](session, ref, mode, read_file_lines_cached), ["suffix-prefix"] = "  ", ["suffix-highlights"] = {}}
+  end
 end
 M["preview-filetype"] = function(ref)
   if (ref and ref.buf and vim.api.nvim_buf_is_valid(ref.buf)) then

@@ -3,6 +3,7 @@
 (local source-mod (require :metabuffer.source))
 (local lineno-mod (require :metabuffer.window.lineno))
 (local statusline-mod (require :metabuffer.window.statusline))
+(local base-window-mod (require :metabuffer.window.base))
 
 (fn trim-or-pad-lines
   [lines target]
@@ -126,6 +127,7 @@
   (local apply-preview-window-opts!
     (fn [session win]
       (when (and win (vim.api.nvim_win_is_valid win))
+        (base-window-mod.disable-airline-statusline! win)
         (let [win-opts {:number false
                         :relativenumber false
                         :wrap false
@@ -194,14 +196,19 @@
 
   (set close-preview-window!
     (fn [session]
-	    (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
-	      (pcall vim.api.nvim_win_close session.preview-win true))
+      (let [buf session.preview-buf]
+	      (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
+	        (pcall vim.api.nvim_win_close session.preview-win true))
       (when session.preview-statusline-aug
         (pcall vim.api.nvim_del_augroup_by_id session.preview-statusline-aug))
       (set session.preview-statusline-aug nil)
-	    (set session.preview-win nil)
+        (when (and buf
+                   (vim.api.nvim_buf_is_valid buf)
+                   (= true (pcall vim.api.nvim_buf_get_var buf "meta_preview")))
+          (pcall vim.api.nvim_buf_delete buf {:force true}))
+	      (set session.preview-win nil)
       (set session.preview-float? false)
-	    (set session.preview-buf nil)))
+	      (set session.preview-buf nil))))
 
   (fn ensure-preview-scratch-buf!
     [session]
@@ -285,7 +292,10 @@
         (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0])
         (pcall vim.api.nvim_win_call
                session.preview-win
-               (fn [] (vim.fn.winrestview {:leftcol target-leftcol})))))
+               (fn []
+                 (let [view (vim.fn.winsaveview)]
+                   (set (. view :leftcol) target-leftcol)
+                   (vim.fn.winrestview view))))))
     (let [bo (. vim.bo session.preview-buf)
           ft (. ctx :ft)]
       (set (. bo :modifiable) false)

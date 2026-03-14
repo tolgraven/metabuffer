@@ -1,6 +1,13 @@
 -- [nfnl] fnl/metabuffer/window/base.fnl
 local handle = require("metabuffer.handle")
 local M = {}
+local function disable_airline_statusline_21(win)
+  if (win and vim.api.nvim_win_is_valid(win)) then
+    return pcall(vim.api.nvim_win_set_var, win, "airline_disable_statusline", 1)
+  else
+    return nil
+  end
+end
 M.new = function(nvim, win, opts_to_stash, opts)
   local self = handle.new(nvim, win, win, opts_to_stash, opts)
   self.window = win
@@ -32,4 +39,5 @@ M.new = function(nvim, win, opts_to_stash, opts)
   end
   return self
 end
+M["disable-airline-statusline!"] = disable_airline_statusline_21
 return M

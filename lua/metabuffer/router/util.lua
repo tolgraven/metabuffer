@@ -47,7 +47,11 @@ M["persist-prompt-height!"] = function(session)
   end
 end
 M["info-height"] = function(session)
-  if (session and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
+  if (session and session["project-mode"] and (session["startup-initializing"] or session["prompt-animating?"]) and session["source-view"]) then
+    local host_height = (session["source-view"]._meta_win_height or (session["origin-win"] and vim.api.nvim_win_is_valid(session["origin-win"]) and vim.api.nvim_win_get_height(session["origin-win"])) or (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_win_get_height(session.meta.win.window)) or 0)
+    local prompt_height = math.max(1, (session["prompt-target-height"] or M["prompt-height"]()))
+    return math.max(7, (host_height - prompt_height))
+  elseif (session and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
     return math.max(7, vim.api.nvim_win_get_height(session.meta.win.window))
   elseif (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
     local p_row_col = vim.api.nvim_win_get_position(session["prompt-win"])
@@ -58,7 +62,7 @@ M["info-height"] = function(session)
   end
 end
 M["prompt-lines"] = function(session)
-  if (session and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
+  if (session and (type(session["prompt-buf"]) == "number") and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
     return vim.api.nvim_buf_get_lines(session["prompt-buf"], 0, -1, false)
   else
     return {}

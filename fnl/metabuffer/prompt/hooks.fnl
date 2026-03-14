@@ -693,6 +693,7 @@
         (apply-keymaps router session)
         (apply-emacs-insert-fallbacks router session)))
 
-    {:register! register!})))
+    {:register! register!
+     :refresh! refresh-prompt-highlights!})))
 
 M

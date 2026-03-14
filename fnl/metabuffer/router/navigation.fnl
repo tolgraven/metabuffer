@@ -37,6 +37,7 @@
 (fn M.move-selection!
   [deps prompt-buf delta]
   (let [active-by-prompt (. deps :active-by-prompt)
+        update-preview-window (. deps :update-preview-window)
         update-info-window (. deps :update-info-window)
         context-window (. deps :context-window)
         session (. active-by-prompt prompt-buf)]
@@ -51,6 +52,8 @@
                            (when (vim.api.nvim_win_is_valid meta.win.window)
                              (pcall vim.api.nvim_win_set_cursor meta.win.window [row 0])))
                          (pcall meta.refresh_statusline)
+                         (when update-preview-window
+                           (pcall update-preview-window session))
                          (pcall update-info-window session false)
                          (when (and context-window context-window.update!)
                            (pcall context-window.update! session)))))
@@ -62,6 +65,7 @@
 (fn M.scroll-main!
   [deps prompt-buf action]
   (let [active-by-prompt (. deps :active-by-prompt)
+        update-preview-window (. deps :update-preview-window)
         update-info-window (. deps :update-info-window)
         context-window (. deps :context-window)
         session-view (. deps :session-view)
@@ -104,6 +108,8 @@
                                (vim.fn.winrestview target)))))
                      (session-view.sync-selected-from-main-cursor! session)
                      (pcall session.meta.refresh_statusline)
+                     (when update-preview-window
+                       (pcall update-preview-window session))
                      (pcall update-info-window session false)
                      (when (and context-window context-window.update!)
                        (pcall context-window.update! session)))
@@ -115,6 +121,7 @@
 (fn M.maybe-sync-from-main!
   [deps session force-refresh]
   (let [active-by-prompt (. deps :active-by-prompt)
+        update-preview-window (. deps :update-preview-window)
         update-info-window (. deps :update-info-window)
         context-window (. deps :context-window)
         session-view (. deps :session-view)]
@@ -124,6 +131,7 @@
     {:active-by-prompt active-by-prompt
      :schedule-source-syntax-refresh! (fn [s]
                                         (schedule-source-syntax-refresh! deps s))
+     :update-preview-window! update-preview-window
      :update-info-window update-info-window
      :update-context-window! (fn [s]
                                (when (and context-window context-window.update!)

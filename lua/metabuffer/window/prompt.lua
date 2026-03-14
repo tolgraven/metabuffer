@@ -15,13 +15,14 @@ local function prompt_buffer_21(win)
   return buf
 end
 local function prompt_window_opts_21(win)
+  base["disable-airline-statusline!"](win)
   local wo = vim.wo[win]
   wo["winfixheight"] = true
   wo["number"] = false
   wo["relativenumber"] = false
   wo["signcolumn"] = "no"
   wo["foldcolumn"] = "0"
-  wo["statusline"] = ""
+  wo["statusline"] = " "
   wo["winbar"] = ""
   wo["spell"] = false
   wo["wrap"] = true

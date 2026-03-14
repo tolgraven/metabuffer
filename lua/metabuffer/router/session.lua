@@ -1,20 +1,20 @@
 -- [nfnl] fnl/metabuffer/router/session.fnl
 local M = {}
 local function register_prompt_hooks_21(deps, session)
-  local prompt_hooks_mod = deps["prompt-hooks-mod"]
-  local router_util_mod = deps["router-util-mod"]
-  local default_prompt_keymaps = deps["default-prompt-keymaps"]
-  local default_main_keymaps = deps["default-main-keymaps"]
-  local active_by_prompt = deps["active-by-prompt"]
+  local router = deps.router
+  local mods = deps.mods
+  local windows = deps.windows
+  local prompt_hooks_mod = mods["prompt-hooks"]
+  local router_util_mod = mods["router-util"]
+  local active_by_prompt = router["active-by-prompt"]
   local on_prompt_changed = deps["on-prompt-changed"]
   local update_info_window = deps["update-info-window"]
   local maybe_sync_from_main_21 = deps["maybe-sync-from-main!"]
   local schedule_scroll_sync_21 = deps["schedule-scroll-sync!"]
   local maybe_restore_hidden_ui_21 = deps["maybe-restore-hidden-ui!"]
-  local preview_window = deps["preview-window"]
-  local context_window = deps["context-window"]
+  local preview_window = windows.preview
+  local context_window = windows.context
   local sign_mod = deps["sign-mod"]
-  local router_api = deps["router-api"]
   local hooks
   local function _1_(s)
     if (preview_window and preview_window["refresh-statusline!"]) then
@@ -30,18 +30,23 @@ local function register_prompt_hooks_21(deps, session)
       return nil
     end
   end
-  hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = default_prompt_keymaps, ["default-main-keymaps"] = default_main_keymaps, ["active-by-prompt"] = active_by_prompt, ["on-prompt-changed"] = on_prompt_changed, ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21, ["maybe-restore-hidden-ui!"] = maybe_restore_hidden_ui_21, ["maybe-refresh-preview-statusline!"] = _1_, ["update-context-window!"] = _3_, ["sign-mod"] = sign_mod})
-  return hooks["register!"](router_api, session)
+  hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = router["prompt-keymaps"], ["default-main-keymaps"] = router["main-keymaps"], ["active-by-prompt"] = active_by_prompt, ["on-prompt-changed"] = on_prompt_changed, ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21, ["maybe-restore-hidden-ui!"] = maybe_restore_hidden_ui_21, ["maybe-refresh-preview-statusline!"] = _1_, ["update-context-window!"] = _3_, ["sign-mod"] = sign_mod})
+  session["prompt-hooks"] = hooks
+  return hooks["register!"](router, session)
 end
 local function activate_session_ui_21(deps, session, initial_lines)
-  local router_util_mod = deps["router-util-mod"]
-  local active_by_source = deps["active-by-source"]
-  local active_by_prompt = deps["active-by-prompt"]
-  local animation_mod = deps["animation-mod"]
-  local preview_window = deps["preview-window"]
+  local router = deps.router
+  local mods = deps.mods
+  local router_util_mod = mods["router-util"]
+  local active_by_source = router["active-by-source"]
+  local active_by_prompt = router["active-by-prompt"]
+  local animation_mod = mods.animation
+  local prompt_window_mod = mods["prompt-window"]
+  local preview_window = deps.windows.preview
   local update_info_window = deps["update-info-window"]
   local session_view = deps["session-view"]
   local sync_prompt_buffer_name_21 = deps["sync-prompt-buffer-name!"]
+  local ui_animation_prompt_ms = deps.ui.animation.prompt.ms
   local prompt_buf = session["prompt-buf"]
   local prompt_win = session["prompt-win"]
   local function restore_main_view_21()
@@ -53,31 +58,46 @@ local function activate_session_ui_21(deps, session, initial_lines)
   end
   local function prompt_enter_duration_ms()
     if (animation_mod and animation_mod["enabled?"](session, "prompt")) then
-      return animation_mod["duration-ms"](session, "prompt", (deps["ui-animation-prompt-ms"] or 140))
+      return animation_mod["duration-ms"](session, "prompt", (ui_animation_prompt_ms or 140))
     else
       return 0
     end
+  end
+  local function prompt_float_config(height)
+    local host_win = (session["origin-win"] or (session.meta and session.meta.win and session.meta.win.window) or prompt_win)
+    local host_width
+    if (host_win and vim.api.nvim_win_is_valid(host_win)) then
+      host_width = vim.api.nvim_win_get_width(host_win)
+    else
+      host_width = vim.o.columns
+    end
+    local host_height
+    if (host_win and vim.api.nvim_win_is_valid(host_win)) then
+      host_height = vim.api.nvim_win_get_height(host_win)
+    else
+      host_height = (vim.o.lines - 2)
+    end
+    return {relative = "win", win = host_win, anchor = "SW", row = host_height, col = 0, width = host_width, height = math.max(1, height), style = "minimal"}
   end
   local function schedule_layout_refresh_21()
     if (session["project-mode"] and update_info_window) then
       local base_delay
       if (animation_mod and animation_mod["enabled?"](session, "prompt")) then
-        base_delay = animation_mod["duration-ms"](session, "prompt", (deps["ui-animation-prompt-ms"] or 140))
+        base_delay = animation_mod["duration-ms"](session, "prompt", (ui_animation_prompt_ms or 140))
       else
         base_delay = 0
       end
       local function refresh_after_21(delay)
-        local function _8_()
+        local function _10_()
           if (active_by_prompt[prompt_buf] == session) then
             return pcall(update_info_window, session, true)
           else
             return nil
           end
         end
-        return vim.defer_fn(_8_, delay)
+        return vim.defer_fn(_10_, delay)
       end
-      refresh_after_21((24 + base_delay))
-      return refresh_after_21((120 + base_delay))
+      return refresh_after_21((24 + base_delay))
     else
       return nil
     end
@@ -98,42 +118,71 @@ local function activate_session_ui_21(deps, session, initial_lines)
   else
   end
   if (prompt_win and vim.api.nvim_win_is_valid(prompt_win)) then
-    pcall(vim.api.nvim_win_set_height, prompt_win, 1)
+    if session["prompt-floating?"] then
+      pcall(vim.api.nvim_win_set_config, prompt_win, prompt_float_config(1))
+    else
+      pcall(vim.api.nvim_win_set_height, prompt_win, 1)
+    end
   else
   end
   if (session["animate-enter?"] and animation_mod and prompt_win and vim.api.nvim_win_is_valid(prompt_win) and animation_mod["enabled?"](session, "prompt") and session["prompt-animating?"]) then
-    local function _14_()
+    local function _17_()
       if (session["prompt-animating?"] and prompt_win and vim.api.nvim_win_is_valid(prompt_win)) then
-        local function _15_(_, _0)
-          return restore_main_view_21()
-        end
-        local function _16_(_)
+        local function done_21(_)
           session["prompt-animating?"] = false
+          if (session["prompt-floating?"] and prompt_window_mod and prompt_window_mod["handoff-to-split!"]) then
+            local split = prompt_window_mod["handoff-to-split!"](vim, session["prompt-window"], {["origin-win"] = session["origin-win"], ["window-local-layout"] = session["window-local-layout"], height = math.max(1, (session["prompt-target-height"] or 1))})
+            session["prompt-window"] = split
+            session["prompt-win"] = split.window
+            session["prompt-floating?"] = false
+            if (session.meta and session.meta["status-win"]) then
+              session.meta["status-win"]["window"] = session["prompt-win"]
+              pcall(session.meta.refresh_statusline)
+            else
+            end
+          else
+          end
           if (preview_window and preview_window["update!"]) then
             pcall(preview_window["update!"], session)
           else
           end
+          restore_main_view_21()
+          if not vim.g.meta_test_no_startinsert then
+            return pcall(vim.api.nvim_set_current_win, session["prompt-win"])
+          else
+            return nil
+          end
+        end
+        local tick_21
+        local function _22_(_, _0)
           return restore_main_view_21()
         end
-        return animation_mod["animate-win-height-stepwise!"](session, "prompt-enter", prompt_win, 1, math.max(1, (session["prompt-target-height"] or 1)), prompt_enter_duration_ms(), {["tick!"] = _15_, ["done!"] = _16_})
+        tick_21 = _22_
+        local target_height = math.max(1, (session["prompt-target-height"] or 1))
+        local duration = prompt_enter_duration_ms()
+        if session["prompt-floating?"] then
+          return animation_mod["animate-float!"](session, "prompt-enter", prompt_win, prompt_float_config(1), prompt_float_config(target_height), 0, 0, duration, {["tick!"] = tick_21, ["done!"] = done_21})
+        else
+          return animation_mod["animate-win-height-stepwise!"](session, "prompt-enter", prompt_win, 1, target_height, duration, {["tick!"] = tick_21, ["done!"] = done_21})
+        end
       else
         return nil
       end
     end
-    vim.schedule(_14_)
+    vim.schedule(_17_)
   else
   end
   schedule_layout_refresh_21()
-  local function _20_()
-    if (prompt_win and vim.api.nvim_win_is_valid(prompt_win)) then
+  local function _26_()
+    if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
       do
         local row = math.max(1, #initial_lines)
         local line = (initial_lines[row] or "")
         local col = #line
-        pcall(vim.api.nvim_win_set_cursor, prompt_win, {row, col})
+        pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, col})
       end
       if not vim.g.meta_test_no_startinsert then
-        vim.api.nvim_set_current_win(prompt_win)
+        vim.api.nvim_set_current_win(session["prompt-win"])
         return vim.cmd("startinsert")
       else
         return nil
@@ -142,21 +191,27 @@ local function activate_session_ui_21(deps, session, initial_lines)
       return nil
     end
   end
-  return vim.defer_fn(_20_, prompt_enter_duration_ms())
+  return vim.defer_fn(_26_, prompt_enter_duration_ms())
 end
 local function finish_session_startup_21(deps, curr, session, initial_query_active)
   local project_source = deps["project-source"]
-  local meta_window_mod = deps["meta-window-mod"]
+  local meta_window_mod = deps.mods["meta-window"]
   local sign_mod = deps["sign-mod"]
   local session_view = deps["session-view"]
   local apply_prompt_lines = deps["apply-prompt-lines"]
+  local update_preview_window = deps["update-preview-window"]
   local update_info_window = deps["update-info-window"]
-  local context_window = deps["context-window"]
-  local instances = deps.instances
+  local context_window = deps.windows.context
+  local active_by_prompt = deps.router["active-by-prompt"]
+  local instances = deps.router.instances
   local function schedule_aux_ui_refresh_21()
-    local function _23_()
-      if (deps["active-by-prompt"][session["prompt-buf"]] == session) then
+    local function _29_()
+      if (active_by_prompt[session["prompt-buf"]] == session) then
         pcall(curr.refresh_statusline)
+        if update_preview_window then
+          pcall(update_preview_window, session)
+        else
+        end
         pcall(update_info_window, session)
         if (context_window and context_window["update!"]) then
           return pcall(context_window["update!"], session)
@@ -167,7 +222,7 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
         return nil
       end
     end
-    return vim.schedule(_23_)
+    return vim.schedule(_29_)
   end
   if session["project-mode"] then
     project_source["apply-minimal-source-set!"](session)
@@ -175,7 +230,10 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
     project_source["apply-source-set!"](session)
   end
   curr["status-win"] = meta_window_mod.new(vim, session["prompt-win"])
-  curr.win["set-statusline"]("")
+  if not vim.g.loaded_airline then
+    curr.win["set-statusline"]("")
+  else
+  end
   curr["on-init"]()
   if sign_mod then
     pcall(sign_mod["capture-baseline!"], session)
@@ -193,20 +251,51 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
     session_view["restore-meta-view!"](curr, session["source-view"])
   else
   end
-  local function _31_()
+  if not session["project-mode"] then
+    if update_preview_window then
+      pcall(update_preview_window, session)
+    else
+    end
+    pcall(update_info_window, session, true)
+  else
+  end
+  if not session["project-mode"] then
+    local function _41_()
+      if (active_by_prompt[session["prompt-buf"]] == session) then
+        session["single-file-info-ready"] = true
+        return pcall(update_info_window, session)
+      else
+        return nil
+      end
+    end
+    vim.defer_fn(_41_, 120)
+  else
+  end
+  if not session["project-mode"] then
+    local function _44_()
+      if (active_by_prompt[session["prompt-buf"]] == session) then
+        return pcall(update_info_window, session, true)
+      else
+        return nil
+      end
+    end
+    vim.defer_fn(_44_, 260)
+  else
+  end
+  local function _47_()
     session["startup-initializing"] = false
-    local function _32_()
+    local function _48_()
       session["animate-enter?"] = false
       return nil
     end
-    vim.defer_fn(_32_, 320)
+    vim.defer_fn(_48_, 320)
     if (session["project-mode"] and not session["project-bootstrapped"]) then
       return project_source["schedule-project-bootstrap!"](session, 0)
     else
       return nil
     end
   end
-  vim.schedule(_31_)
+  vim.schedule(_47_)
   if ((session["project-mode"] and not initial_query_active) or (context_window and context_window["update!"])) then
     schedule_aux_ui_refresh_21()
   else
@@ -215,35 +304,26 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
   return nil
 end
 M["start!"] = function(deps, query, mode, _meta, project_mode)
+  local router = deps.router
+  local mods = deps.mods
+  local ui = deps.ui
+  local ui_animation = ui.animation
+  local ui_animation_prompt = ui_animation.prompt
+  local ui_animation_preview = ui_animation.preview
+  local ui_animation_info = ui_animation.info
+  local ui_animation_loading = ui_animation.loading
+  local ui_animation_scroll = ui_animation.scroll
   local history_api = deps["history-api"]
   local query_mod = deps["query-mod"]
   local remove_session_21 = deps["remove-session!"]
-  local active_by_source = deps["active-by-source"]
+  local active_by_source = router["active-by-source"]
   local session_view = deps["session-view"]
-  local meta_mod = deps["meta-mod"]
-  local router_util_mod = deps["router-util-mod"]
-  local prompt_window_mod = deps["prompt-window-mod"]
+  local meta_mod = mods.meta
+  local router_util_mod = mods["router-util"]
+  local prompt_window_mod = mods["prompt-window"]
   local history_store = deps["history-store"]
   local read_file_lines_cached = deps["read-file-lines-cached"]
-  local settings = deps.settings
-  local ui_animations_enabled = deps["ui-animations-enabled"]
-  local ui_animations_time_scale = deps["ui-animations-time-scale"]
-  local ui_animation_prompt_enabled = deps["ui-animation-prompt-enabled"]
-  local ui_animation_prompt_ms = deps["ui-animation-prompt-ms"]
-  local ui_animation_prompt_time_scale = deps["ui-animation-prompt-time-scale"]
-  local ui_animation_preview_enabled = deps["ui-animation-preview-enabled"]
-  local ui_animation_preview_ms = deps["ui-animation-preview-ms"]
-  local ui_animation_preview_time_scale = deps["ui-animation-preview-time-scale"]
-  local ui_animation_info_enabled = deps["ui-animation-info-enabled"]
-  local ui_animation_info_ms = deps["ui-animation-info-ms"]
-  local ui_animation_info_time_scale = deps["ui-animation-info-time-scale"]
-  local ui_animation_loading_enabled = deps["ui-animation-loading-enabled"]
-  local ui_animation_loading_ms = deps["ui-animation-loading-ms"]
-  local ui_animation_loading_time_scale = deps["ui-animation-loading-time-scale"]
-  local ui_animation_scroll_enabled = deps["ui-animation-scroll-enabled"]
-  local ui_animation_scroll_ms = deps["ui-animation-scroll-ms"]
-  local ui_animation_scroll_time_scale = deps["ui-animation-scroll-time-scale"]
-  local ui_loading_indicator = deps["ui-loading-indicator"]
+  local settings = router
   local next_instance_id_21 = deps["next-instance-id!"]
   local maybe_restore_hidden_ui_21 = deps["maybe-restore-hidden-ui!"]
   pcall(vim.cmd, "silent! nohlsearch")
@@ -392,30 +472,30 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
     else
       initial_lines = {""}
     end
-    local prompt_animates_3f = (ui_animations_enabled and not (false == ui_animation_prompt_enabled))
+    local prompt_animates_3f = (ui_animation.enabled and not (false == ui_animation_prompt.enabled))
     local prompt_win
-    local _48_
+    local _64_
     if prompt_animates_3f then
-      _48_ = 1
+      _64_ = 1
     else
-      _48_ = router_util_mod["prompt-height"]()
+      _64_ = router_util_mod["prompt-height"]()
     end
-    prompt_win = prompt_window_mod.new(vim, {height = router_util_mod["prompt-height"](), ["start-height"] = _48_, ["window-local-layout"] = settings["window-local-layout"], ["origin-win"] = origin_win})
+    prompt_win = prompt_window_mod.new(vim, {height = router_util_mod["prompt-height"](), ["start-height"] = _64_, ["floating?"] = prompt_animates_3f, ["window-local-layout"] = settings["window-local-layout"], ["origin-win"] = origin_win})
     local prompt_buf = prompt_win.buffer
     local session
-    local _50_
+    local _66_
     if query_mod["query-lines-has-active?"](parsed_query.lines) then
-      _50_ = settings["project-bootstrap-delay-ms"]
+      _66_ = settings["project-bootstrap-delay-ms"]
     else
-      _50_ = settings["project-bootstrap-idle-delay-ms"]
+      _66_ = settings["project-bootstrap-idle-delay-ms"]
     end
-    local _52_
+    local _68_
     if (query1 and (query1 ~= "")) then
-      _52_ = vim.split(query1, "\n", {plain = true})
+      _68_ = vim.split(query1, "\n", {plain = true})
     else
-      _52_ = {""}
+      _68_ = {""}
     end
-    session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-win"] = prompt_win.window, ["prompt-target-height"] = router_util_mod["prompt-height"](), ["prompt-buf"] = prompt_buf, ["window-local-layout"] = settings["window-local-layout"], ["prompt-keymaps"] = settings["prompt-keymaps"], ["main-keymaps"] = settings["main-keymaps"], ["prompt-fallback-keymaps"] = settings["prompt-fallback-keymaps"], ["info-file-entry-view"] = (settings["info-file-entry-view"] or "meta"), ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["animate-enter?"] = not not ui_animations_enabled, ["loading-indicator?"] = not not ui_loading_indicator, ["animation-settings"] = {enabled = not (false == ui_animations_enabled), ["time-scale"] = (ui_animations_time_scale or 1), prompt = {enabled = not (false == ui_animation_prompt_enabled), ms = ui_animation_prompt_ms, ["time-scale"] = (ui_animation_prompt_time_scale or 1)}, preview = {enabled = not (false == ui_animation_preview_enabled), ms = ui_animation_preview_ms, ["time-scale"] = (ui_animation_preview_time_scale or 1)}, info = {enabled = not (false == ui_animation_info_enabled), ms = ui_animation_info_ms, ["time-scale"] = (ui_animation_info_time_scale or 1)}, loading = {enabled = not (false == ui_animation_loading_enabled), ms = ui_animation_loading_ms, ["time-scale"] = (ui_animation_loading_time_scale or 1)}, scroll = {enabled = not (false == ui_animation_scroll_enabled), ms = ui_animation_scroll_ms, ["time-scale"] = (ui_animation_scroll_time_scale or 1)}}, ["project-mode"] = (project_mode or false), ["read-file-lines-cached"] = read_file_lines_cached, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-hex"] = start_hex, ["include-files"] = start_files, ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["effective-include-binary"] = start_binary, ["effective-include-hex"] = start_hex, ["effective-include-files"] = start_files, ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _50_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["expansion-mode"] = start_expansion, ["last-parsed-query"] = {lines = _52_, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-hex"] = start_hex, ["include-files"] = start_files, ["file-lines"] = (parsed_query["file-lines"] or {}), prefilter = start_prefilter, lazy = start_lazy, expansion = start_expansion}, ["file-query-lines"] = (parsed_query["file-lines"] or {}), ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), ["instance-id"] = next_instance_id_21(), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
+    session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-window"] = prompt_win, ["prompt-win"] = prompt_win.window, ["prompt-target-height"] = router_util_mod["prompt-height"](), ["prompt-buf"] = prompt_buf, ["prompt-floating?"] = prompt_win["floating?"], ["window-local-layout"] = settings["window-local-layout"], ["prompt-keymaps"] = settings["prompt-keymaps"], ["main-keymaps"] = settings["main-keymaps"], ["prompt-fallback-keymaps"] = settings["prompt-fallback-keymaps"], ["info-file-entry-view"] = (settings["info-file-entry-view"] or "meta"), ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["animate-enter?"] = not not ui_animation.enabled, ["loading-indicator?"] = not not ui["loading-indicator"], ["animation-settings"] = {enabled = not (false == ui_animation.enabled), ["time-scale"] = (ui_animation["time-scale"] or 1), prompt = {enabled = not (false == ui_animation_prompt.enabled), ms = ui_animation_prompt.ms, ["time-scale"] = (ui_animation_prompt["time-scale"] or 1)}, preview = {enabled = not (false == ui_animation_preview.enabled), ms = ui_animation_preview.ms, ["time-scale"] = (ui_animation_preview["time-scale"] or 1)}, info = {enabled = not (false == ui_animation_info.enabled), ms = ui_animation_info.ms, ["time-scale"] = (ui_animation_info["time-scale"] or 1)}, loading = {enabled = not (false == ui_animation_loading.enabled), ms = ui_animation_loading.ms, ["time-scale"] = (ui_animation_loading["time-scale"] or 1)}, scroll = {enabled = not (false == ui_animation_scroll.enabled), ms = ui_animation_scroll.ms, ["time-scale"] = (ui_animation_scroll["time-scale"] or 1)}}, ["project-mode"] = (project_mode or false), ["read-file-lines-cached"] = read_file_lines_cached, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-hex"] = start_hex, ["include-files"] = start_files, ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["effective-include-binary"] = start_binary, ["effective-include-hex"] = start_hex, ["effective-include-files"] = start_files, ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _66_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["expansion-mode"] = start_expansion, ["last-parsed-query"] = {lines = _68_, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-hex"] = start_hex, ["include-files"] = start_files, ["file-lines"] = (parsed_query["file-lines"] or {}), prefilter = start_prefilter, lazy = start_lazy, expansion = start_expansion}, ["file-query-lines"] = (parsed_query["file-lines"] or {}), ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), ["instance-id"] = next_instance_id_21(), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
     if vim.api.nvim_win_is_valid(origin_win) then
       pcall(vim.api.nvim_win_set_buf, origin_win, curr.buf.buffer)
     else

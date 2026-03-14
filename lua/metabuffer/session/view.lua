@@ -96,6 +96,7 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
   local active_by_prompt = _let_15_["active-by-prompt"]
   local schedule_source_syntax_refresh_21 = _let_15_["schedule-source-syntax-refresh!"]
   local update_info_window = _let_15_["update-info-window"]
+  local update_preview_window_21 = _let_15_["update-preview-window!"]
   local update_context_window_21 = _let_15_["update-context-window!"]
   if (session and not session["startup-initializing"] and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
     local before = session.meta.selected_index
@@ -106,6 +107,10 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
     end
     if (force_refresh or (before ~= session.meta.selected_index)) then
       pcall(session.meta.refresh_statusline)
+      if update_preview_window_21 then
+        pcall(update_preview_window_21, session)
+      else
+      end
       pcall(update_info_window, session, false)
       if update_context_window_21 then
         return pcall(update_context_window_21, session)
@@ -120,16 +125,16 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
   end
 end
 M["schedule-scroll-sync!"] = function(session, opts)
-  local _let_20_ = (opts or {})
-  local maybe_sync_from_main_21 = _let_20_["maybe-sync-from-main!"]
-  local scroll_sync_debounce_ms = _let_20_["scroll-sync-debounce-ms"]
+  local _let_21_ = (opts or {})
+  local maybe_sync_from_main_21 = _let_21_["maybe-sync-from-main!"]
+  local scroll_sync_debounce_ms = _let_21_["scroll-sync-debounce-ms"]
   if (session and not session["scroll-sync-pending"]) then
     session["scroll-sync-pending"] = true
-    local function _21_()
+    local function _22_()
       session["scroll-sync-pending"] = false
       return maybe_sync_from_main_21(session, true)
     end
-    return vim.defer_fn(_21_, scroll_sync_debounce_ms)
+    return vim.defer_fn(_22_, scroll_sync_debounce_ms)
   else
     return nil
   end

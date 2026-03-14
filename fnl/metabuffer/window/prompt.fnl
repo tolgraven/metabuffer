@@ -16,13 +16,14 @@
 
 (fn prompt-window-opts!
   [win]
+  (base.disable-airline-statusline! win)
   (let [wo (. vim.wo win)]
     (set (. wo :winfixheight) true)
     (set (. wo :number) false)
     (set (. wo :relativenumber) false)
     (set (. wo :signcolumn) "no")
     (set (. wo :foldcolumn) "0")
-    (set (. wo :statusline) "")
+    (set (. wo :statusline) " ")
     (set (. wo :winbar) "")
     (set (. wo :spell) false)
     (set (. wo :wrap) true)

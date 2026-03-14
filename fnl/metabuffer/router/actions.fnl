@@ -68,12 +68,14 @@
 (fn apply-prompt-window-opts!
   [win]
   (when (and win (vim.api.nvim_win_is_valid win))
+    (pcall vim.api.nvim_win_set_var win "airline_disable_statusline" 1)
     (let [wo (. vim.wo win)]
       (set (. wo :winfixheight) true)
       (set (. wo :number) false)
       (set (. wo :relativenumber) false)
       (set (. wo :signcolumn) "no")
       (set (. wo :foldcolumn) "0")
+      (set (. wo :statusline) " ")
       (set (. wo :spell) false)
       (set (. wo :wrap) true)
       (set (. wo :linebreak) true))))

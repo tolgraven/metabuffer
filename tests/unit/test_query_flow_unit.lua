@@ -1,4 +1,5 @@
 local query_flow = require('metabuffer.router.query_flow')
+local router_util = require('metabuffer.router.util')
 local eq = MiniTest.expect.equality
 
 local T = MiniTest.new_set()
@@ -177,6 +178,10 @@ T['apply-prompt-lines does not rebuild project source on text-only changes'] = f
 
   eq(session['prompt-last-applied-text'], 'meta')
   eq(deps._state.apply_calls, first_calls)
+end
+
+T['prompt-lines ignores non-buffer prompt handles'] = function()
+  eq(router_util['prompt-lines']({ ['prompt-buf'] = { bogus = true } }), {})
 end
 
 return T

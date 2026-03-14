@@ -9,6 +9,7 @@ T['editing results buffer directly and :write propagates edits to source files']
 
   H.type_prompt_text('meta')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
+  H.wait_for(function() return type(H.session_info_snapshot()) == 'table' end, 3000)
 
   local info_before = H.session_info_snapshot()
   eq(type(info_before), 'table')

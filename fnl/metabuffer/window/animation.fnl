@@ -24,10 +24,13 @@
   [session key token]
   (= (. (or session.anim-state {}) key) token))
 
-(fn ease-out-cubic
+(fn ease-in-out-cubic
   [t]
-  (let [x (- 1 (math.max 0 (math.min t 1)))]
-    (- 1 (* x x x))))
+  (let [x (math.max 0 (math.min t 1))]
+    (if (< x 0.5)
+        (* 4 x x x)
+        (let [y (- (* 2 x) 2)]
+          (+ 1 (/ (* y y y) 2))))))
 
 (fn lerp
   [a b t]
@@ -71,7 +74,7 @@
 
 (fn run!
   [session key opts]
-  (let [{: duration-ms : steps : tick! : done! : active?} opts
+  (let [{: steps : tick! : done! : active?} opts
         token (next-token! session key)
         total (math.max 1 (or steps 1))
         delay (math.max 8 target-frame-ms)
@@ -87,7 +90,7 @@
               (vim.defer_fn (fn [] (frame! idx)) (- delay elapsed))
               (do
                 (set last-frame-ms now)
-                (let [t (ease-out-cubic (/ idx total))]
+                (let [t (ease-in-out-cubic (/ idx total))]
                   (tick! t idx total)
                   (if (< idx total)
                       (vim.defer_fn (fn [] (frame! (+ idx 1))) delay)
@@ -173,38 +176,38 @@
 (fn animate-float!
   [session key win from-cfg to-cfg from-blend to-blend duration-ms opts]
   (let [opts (or opts {})]
-  (run! session key
-        {:duration-ms duration-ms
-         :steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
-         :active? (fn [] (vim.api.nvim_win_is_valid win))
-         :tick! (fn [t]
-                  (let [cfg {:relative (. to-cfg :relative)
-                             :anchor (. to-cfg :anchor)
-                             :row (lerp (or (. from-cfg :row) (. to-cfg :row))
-                                        (. to-cfg :row)
-                                        t)
-                             :col (lerp (or (. from-cfg :col) (. to-cfg :col))
-                                        (. to-cfg :col)
-                                        t)
-                             :width (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-cfg :width) (. to-cfg :width))
-                                                                          (. to-cfg :width)
-                                                                          t))))
-                             :height (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-cfg :height) (. to-cfg :height))
-                                                                           (. to-cfg :height)
-                                                                           t))))
-                             :style "minimal"}
-                        _ (when-let [host (. to-cfg :win)]
-                            (set (. cfg :win) host))
-                        blend (math.max 0 (math.min 100 (math.floor (+ 0.5 (lerp from-blend to-blend t)))))]
-                    (pcall vim.api.nvim_win_set_config win cfg)
-                    (pcall vim.api.nvim_set_option_value "winblend" blend {:win win})
-                    (when-let [tick! (. opts :tick!)]
-                      (tick! cfg t))))
-         :done! (fn []
-                  (pcall vim.api.nvim_win_set_config win to-cfg)
-                  (pcall vim.api.nvim_set_option_value "winblend" to-blend {:win win})
-                  (when-let [done! (. opts :done!)]
-                    (done! to-cfg))))}))
+    (run! session key
+          {:duration-ms duration-ms
+           :steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
+           :active? (fn [] (vim.api.nvim_win_is_valid win))
+           :tick! (fn [t]
+                    (let [cfg {:relative (. to-cfg :relative)
+                               :anchor (. to-cfg :anchor)
+                               :row (lerp (or (. from-cfg :row) (. to-cfg :row))
+                                          (. to-cfg :row)
+                                          t)
+                               :col (lerp (or (. from-cfg :col) (. to-cfg :col))
+                                          (. to-cfg :col)
+                                          t)
+                               :width (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-cfg :width) (. to-cfg :width))
+                                                                            (. to-cfg :width)
+                                                                            t))))
+                               :height (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-cfg :height) (. to-cfg :height))
+                                                                             (. to-cfg :height)
+                                                                             t))))
+                               :style "minimal"}
+                          _ (when-let [host (. to-cfg :win)]
+                              (set (. cfg :win) host))
+                          blend (math.max 0 (math.min 100 (math.floor (+ 0.5 (lerp from-blend to-blend t)))))]
+                      (pcall vim.api.nvim_win_set_config win cfg)
+                      (pcall vim.api.nvim_set_option_value "winblend" blend {:win win})
+                      (when-let [tick! (. opts :tick!)]
+                        (tick! cfg t))))
+           :done! (fn []
+                    (pcall vim.api.nvim_win_set_config win to-cfg)
+                    (pcall vim.api.nvim_set_option_value "winblend" to-blend {:win win})
+                    (when-let [done! (. opts :done!)]
+                      (done! to-cfg)))})))
 
 (fn animate-view!
   [session key win from-view to-view duration-ms]

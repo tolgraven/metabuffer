@@ -4,25 +4,25 @@
 
 (fn register-prompt-hooks!
   [deps session]
-  (let [prompt-hooks-mod (. deps :prompt-hooks-mod)
-        router-util-mod (. deps :router-util-mod)
-        default-prompt-keymaps (. deps :default-prompt-keymaps)
-        default-main-keymaps (. deps :default-main-keymaps)
-        active-by-prompt (. deps :active-by-prompt)
+    (let [router (. deps :router)
+        mods (. deps :mods)
+        windows (. deps :windows)
+        prompt-hooks-mod (. mods :prompt-hooks)
+        router-util-mod (. mods :router-util)
+        active-by-prompt router.active-by-prompt
         on-prompt-changed (. deps :on-prompt-changed)
         update-info-window (. deps :update-info-window)
         maybe-sync-from-main! (. deps :maybe-sync-from-main!)
         schedule-scroll-sync! (. deps :schedule-scroll-sync!)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)
-        preview-window (. deps :preview-window)
-        context-window (. deps :context-window)
+        preview-window (. windows :preview)
+        context-window (. windows :context)
         sign-mod (. deps :sign-mod)
-        router-api (. deps :router-api)
         hooks
         (prompt-hooks-mod.new
           {:mark-prompt-buffer! router-util-mod.mark-prompt-buffer!
-           :default-prompt-keymaps default-prompt-keymaps
-           :default-main-keymaps default-main-keymaps
+           :default-prompt-keymaps router.prompt-keymaps
+           :default-main-keymaps router.main-keymaps
            :active-by-prompt active-by-prompt
            :on-prompt-changed on-prompt-changed
            :update-info-window update-info-window
@@ -37,19 +37,23 @@
                                      (when (and context-window context-window.update!)
                                        (context-window.update! s)))
            :sign-mod sign-mod})]
-    (hooks.register! router-api session)))
+    (set session.prompt-hooks hooks)
+    (hooks.register! router session)))
 
 (fn activate-session-ui!
   [deps session initial-lines]
-  (let [router-util-mod (. deps :router-util-mod)
-        active-by-source (. deps :active-by-source)
-        active-by-prompt (. deps :active-by-prompt)
-        animation-mod (. deps :animation-mod)
-        prompt-window-mod (. deps :prompt-window-mod)
-        preview-window (. deps :preview-window)
+  (let [router (. deps :router)
+        mods (. deps :mods)
+        router-util-mod (. mods :router-util)
+        active-by-source router.active-by-source
+        active-by-prompt router.active-by-prompt
+        animation-mod (. mods :animation)
+        prompt-window-mod (. mods :prompt-window)
+        preview-window (. (. deps :windows) :preview)
         update-info-window (. deps :update-info-window)
         session-view (. deps :session-view)
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
+        ui-animation-prompt-ms (. (. (. deps :ui) :animation) :prompt :ms)
         prompt-buf session.prompt-buf
         prompt-win session.prompt-win]
     (fn restore-main-view!
@@ -62,7 +66,7 @@
       []
       (if (and animation-mod
                (animation-mod.enabled? session :prompt))
-          (animation-mod.duration-ms session :prompt (or (. deps :ui-animation-prompt-ms) 140))
+          (animation-mod.duration-ms session :prompt (or ui-animation-prompt-ms 140))
           0))
     (fn prompt-float-config
       [height]
@@ -87,7 +91,7 @@
       []
       (when (and session.project-mode update-info-window)
         (let [base-delay (if (and animation-mod (animation-mod.enabled? session :prompt))
-                             (animation-mod.duration-ms session :prompt (or (. deps :ui-animation-prompt-ms) 140))
+                             (animation-mod.duration-ms session :prompt (or ui-animation-prompt-ms 140))
                              0)]
           (fn refresh-after!
             [delay]
@@ -96,8 +100,7 @@
                 (when (= (. active-by-prompt prompt-buf) session)
                   (pcall update-info-window session true)))
               delay))
-          (refresh-after! (+ 24 base-delay))
-          (refresh-after! (+ 120 base-delay)))))
+          (refresh-after! (+ 24 base-delay)))))
     (sync-prompt-buffer-name! session)
     (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
     (router-util-mod.mark-prompt-buffer! prompt-buf)
@@ -129,73 +132,86 @@
           (when (and session.prompt-animating?
                      prompt-win
                      (vim.api.nvim_win_is_valid prompt-win))
-            (let [done! (fn [_]
-                          (set session.prompt-animating? false)
-                          (when (and session.prompt-floating?
-                                     prompt-window-mod
-                                     prompt-window-mod.handoff-to-split!)
-                            (let [split (prompt-window-mod.handoff-to-split!
-                                          vim
-                                          session.prompt-window
-                                          {:origin-win session.origin-win
-                                           :window-local-layout session.window-local-layout
-                                           :height (math.max 1 (or session.prompt-target-height 1))})]
-                              (set session.prompt-window split)
-                              (set session.prompt-win split.window)
-                              (set session.prompt-floating? false)))
-                          (when (and preview-window preview-window.update!)
-                            (pcall preview-window.update! session))
-                          (restore-main-view!))]
-              (if session.prompt-floating?
-                  (animation-mod.animate-float!
-                    session
-                    "prompt-enter"
-                    prompt-win
-                    (prompt-float-config 1)
-                    (prompt-float-config (math.max 1 (or session.prompt-target-height 1)))
-                    0
-                    0
-                    (prompt-enter-duration-ms)
-                    {:tick! (fn [_ _] (restore-main-view!))
-                     :done! done!})
-                  (animation-mod.animate-win-height-stepwise!
-                    session
-                    "prompt-enter"
-                    prompt-win
-                    1
-                    (math.max 1 (or session.prompt-target-height 1))
-                    (prompt-enter-duration-ms)
-                    {:tick! (fn [_ _] (restore-main-view!))
-                     :done! done!}))))))))
+            (fn done!
+              [_]
+              (set session.prompt-animating? false)
+              (when (and session.prompt-floating?
+                         prompt-window-mod
+                         prompt-window-mod.handoff-to-split!)
+                (let [split (prompt-window-mod.handoff-to-split!
+                              vim
+                              session.prompt-window
+                              {:origin-win session.origin-win
+                               :window-local-layout session.window-local-layout
+                               :height (math.max 1 (or session.prompt-target-height 1))})]
+                  (set session.prompt-window split)
+                  (set session.prompt-win split.window)
+                  (set session.prompt-floating? false)
+                  (when (and session.meta session.meta.status-win)
+                    (set (. session.meta.status-win :window) session.prompt-win)
+                    (pcall session.meta.refresh_statusline))))
+              (when (and preview-window preview-window.update!)
+                (pcall preview-window.update! session))
+              (restore-main-view!)
+              (when-not vim.g.meta_test_no_startinsert
+                (pcall vim.api.nvim_set_current_win session.prompt-win)))
+            (let [tick! (fn [_ _] (restore-main-view!))
+                  target-height (math.max 1 (or session.prompt-target-height 1))
+                  duration (prompt-enter-duration-ms)]
+               (if session.prompt-floating?
+                   (animation-mod.animate-float!
+                     session
+                     "prompt-enter"
+                     prompt-win
+                     (prompt-float-config 1)
+                     (prompt-float-config target-height)
+                     0
+                     0
+                     duration
+                     {:tick! tick!
+                      :done! done!})
+                   (animation-mod.animate-win-height-stepwise!
+                     session
+                     "prompt-enter"
+                     prompt-win
+                     1
+                     target-height
+                     duration
+                     {:tick! tick!
+                      :done! done!})))))))
     (schedule-layout-refresh!)
     (vim.defer_fn
       (fn []
-        (when (and prompt-win (vim.api.nvim_win_is_valid prompt-win))
+        (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
           (let [row (math.max 1 (# initial-lines))
                 line (or (. initial-lines row) "")
                 col (# line)]
-            (pcall vim.api.nvim_win_set_cursor prompt-win [row col]))
+            (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col]))
           (when-not vim.g.meta_test_no_startinsert
-            (vim.api.nvim_set_current_win prompt-win)
+            (vim.api.nvim_set_current_win session.prompt-win)
             (vim.cmd "startinsert"))))
       (prompt-enter-duration-ms))))
 
 (fn finish-session-startup!
   [deps curr session initial-query-active]
   (let [project-source (. deps :project-source)
-        meta-window-mod (. deps :meta-window-mod)
+        meta-window-mod (. (. deps :mods) :meta-window)
         sign-mod (. deps :sign-mod)
         session-view (. deps :session-view)
         apply-prompt-lines (. deps :apply-prompt-lines)
+        update-preview-window (. deps :update-preview-window)
         update-info-window (. deps :update-info-window)
-        context-window (. deps :context-window)
-        instances (. deps :instances)]
+        context-window (. (. deps :windows) :context)
+        active-by-prompt (. (. deps :router) :active-by-prompt)
+        instances (. (. deps :router) :instances)]
     (fn schedule-aux-ui-refresh!
       []
       (vim.schedule
         (fn []
-          (when (= (. (. deps :active-by-prompt) session.prompt-buf) session)
+          (when (= (. active-by-prompt session.prompt-buf) session)
             (pcall curr.refresh_statusline)
+            (when update-preview-window
+              (pcall update-preview-window session))
             (pcall update-info-window session)
             (when (and context-window context-window.update!)
               (pcall context-window.update! session))))))
@@ -203,7 +219,8 @@
         (project-source.apply-minimal-source-set! session)
         (project-source.apply-source-set! session))
     (set curr.status-win (meta-window-mod.new vim session.prompt-win))
-    (curr.win.set-statusline "")
+    (when-not vim.g.loaded_airline
+      (curr.win.set-statusline ""))
     (curr.on-init)
     (when sign-mod
       (pcall sign-mod.capture-baseline! session))
@@ -213,6 +230,23 @@
       (apply-prompt-lines session))
     (when-not session.project-mode
       (session-view.restore-meta-view! curr session.source-view))
+    (when-not session.project-mode
+      (when update-preview-window
+        (pcall update-preview-window session))
+      (pcall update-info-window session true))
+    (when-not session.project-mode
+      (vim.defer_fn
+        (fn []
+          (when (= (. active-by-prompt session.prompt-buf) session)
+            (set session.single-file-info-ready true)
+            (pcall update-info-window session)))
+        120))
+    (when-not session.project-mode
+      (vim.defer_fn
+        (fn []
+          (when (= (. active-by-prompt session.prompt-buf) session)
+            (pcall update-info-window session true)))
+        260))
     (vim.schedule
       (fn []
         (set session.startup-initializing false)
@@ -226,35 +260,26 @@
 
 (fn M.start!
   [deps query mode _meta project-mode]
-  (let [history-api (. deps :history-api)
+  (let [router (. deps :router)
+        mods (. deps :mods)
+        ui (. deps :ui)
+        ui-animation (. ui :animation)
+        ui-animation-prompt (. ui-animation :prompt)
+        ui-animation-preview (. ui-animation :preview)
+        ui-animation-info (. ui-animation :info)
+        ui-animation-loading (. ui-animation :loading)
+        ui-animation-scroll (. ui-animation :scroll)
+        history-api (. deps :history-api)
         query-mod (. deps :query-mod)
         remove-session! (. deps :remove-session!)
-        active-by-source (. deps :active-by-source)
+        active-by-source router.active-by-source
         session-view (. deps :session-view)
-        meta-mod (. deps :meta-mod)
-        router-util-mod (. deps :router-util-mod)
-        prompt-window-mod (. deps :prompt-window-mod)
+        meta-mod (. mods :meta)
+        router-util-mod (. mods :router-util)
+        prompt-window-mod (. mods :prompt-window)
         history-store (. deps :history-store)
         read-file-lines-cached (. deps :read-file-lines-cached)
-        settings (. deps :settings)
-        ui-animations-enabled (. deps :ui-animations-enabled)
-        ui-animations-time-scale (. deps :ui-animations-time-scale)
-        ui-animation-prompt-enabled (. deps :ui-animation-prompt-enabled)
-        ui-animation-prompt-ms (. deps :ui-animation-prompt-ms)
-        ui-animation-prompt-time-scale (. deps :ui-animation-prompt-time-scale)
-        ui-animation-preview-enabled (. deps :ui-animation-preview-enabled)
-        ui-animation-preview-ms (. deps :ui-animation-preview-ms)
-        ui-animation-preview-time-scale (. deps :ui-animation-preview-time-scale)
-        ui-animation-info-enabled (. deps :ui-animation-info-enabled)
-        ui-animation-info-ms (. deps :ui-animation-info-ms)
-        ui-animation-info-time-scale (. deps :ui-animation-info-time-scale)
-        ui-animation-loading-enabled (. deps :ui-animation-loading-enabled)
-        ui-animation-loading-ms (. deps :ui-animation-loading-ms)
-        ui-animation-loading-time-scale (. deps :ui-animation-loading-time-scale)
-        ui-animation-scroll-enabled (. deps :ui-animation-scroll-enabled)
-        ui-animation-scroll-ms (. deps :ui-animation-scroll-ms)
-        ui-animation-scroll-time-scale (. deps :ui-animation-scroll-time-scale)
-        ui-loading-indicator (. deps :ui-loading-indicator)
+        settings router
         next-instance-id! (. deps :next-instance-id!)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)]
     (pcall vim.cmd "silent! nohlsearch")
@@ -338,8 +363,8 @@
                       (let [initial-lines (if (and prompt-query (~= prompt-query ""))
                                         (vim.split prompt-query "\n" {:plain true})
                                         [""])
-                      prompt-animates? (and ui-animations-enabled
-                                            (not (= false ui-animation-prompt-enabled)))
+                      prompt-animates? (and (. ui-animation :enabled)
+                                            (not (= false (. ui-animation-prompt :enabled))))
                       prompt-win (prompt-window-mod.new
                                    vim
                                    {:height (router-util-mod.prompt-height)
@@ -375,25 +400,25 @@
                                :prompt-last-event-text (table.concat initial-lines "\n")
                                :initial-query-active (query-mod.query-lines-has-active? (. parsed-query :lines))
                                :startup-initializing true
-                               :animate-enter? (not (not ui-animations-enabled))
-                               :loading-indicator? (not (not ui-loading-indicator))
-                               :animation-settings {:enabled (not (= false ui-animations-enabled))
-                                                    :time-scale (or ui-animations-time-scale 1.0)
-                                                    :prompt {:enabled (not (= false ui-animation-prompt-enabled))
-                                                             :ms ui-animation-prompt-ms
-                                                             :time-scale (or ui-animation-prompt-time-scale 1.0)}
-                                                    :preview {:enabled (not (= false ui-animation-preview-enabled))
-                                                              :ms ui-animation-preview-ms
-                                                              :time-scale (or ui-animation-preview-time-scale 1.0)}
-                                                    :info {:enabled (not (= false ui-animation-info-enabled))
-                                                           :ms ui-animation-info-ms
-                                                           :time-scale (or ui-animation-info-time-scale 1.0)}
-                                                    :loading {:enabled (not (= false ui-animation-loading-enabled))
-                                                              :ms ui-animation-loading-ms
-                                                              :time-scale (or ui-animation-loading-time-scale 1.0)}
-                                                    :scroll {:enabled (not (= false ui-animation-scroll-enabled))
-                                                             :ms ui-animation-scroll-ms
-                                                             :time-scale (or ui-animation-scroll-time-scale 1.0)}}
+                               :animate-enter? (not (not (. ui-animation :enabled)))
+                               :loading-indicator? (not (not (. ui :loading-indicator)))
+                               :animation-settings {:enabled (not (= false (. ui-animation :enabled)))
+                                                    :time-scale (or (. ui-animation :time-scale) 1.0)
+                                                    :prompt {:enabled (not (= false (. ui-animation-prompt :enabled)))
+                                                             :ms (. ui-animation-prompt :ms)
+                                                             :time-scale (or (. ui-animation-prompt :time-scale) 1.0)}
+                                                    :preview {:enabled (not (= false (. ui-animation-preview :enabled)))
+                                                              :ms (. ui-animation-preview :ms)
+                                                              :time-scale (or (. ui-animation-preview :time-scale) 1.0)}
+                                                    :info {:enabled (not (= false (. ui-animation-info :enabled)))
+                                                           :ms (. ui-animation-info :ms)
+                                                           :time-scale (or (. ui-animation-info :time-scale) 1.0)}
+                                                    :loading {:enabled (not (= false (. ui-animation-loading :enabled)))
+                                                              :ms (. ui-animation-loading :ms)
+                                                              :time-scale (or (. ui-animation-loading :time-scale) 1.0)}
+                                                    :scroll {:enabled (not (= false (. ui-animation-scroll :enabled)))
+                                                             :ms (. ui-animation-scroll :ms)
+                                                             :time-scale (or (. ui-animation-scroll :time-scale) 1.0)}}
                                :project-mode (or project-mode false)
                                :read-file-lines-cached read-file-lines-cached
                                :include-hidden start-hidden

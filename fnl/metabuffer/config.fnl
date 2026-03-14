@@ -109,7 +109,7 @@
     :source_syntax_refresh_debounce_ms 80
     :scroll_sync_debounce_ms 20
     :ui_animations_enabled true
-    :ui_animations_time_scale 1.0
+    :ui_animations_time_scale 1.5
     :ui_animation_prompt_enabled true
     :ui_animation_prompt_ms 140
     :ui_animation_prompt_time_scale 1.0

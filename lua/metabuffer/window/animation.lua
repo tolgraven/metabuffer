@@ -18,9 +18,14 @@ end
 local function active_token_3f(session, key, token)
   return ((session["anim-state"] or {})[key] == token)
 end
-local function ease_out_cubic(t)
-  local x = (1 - math.max(0, math.min(t, 1)))
-  return (1 - (x * x * x))
+local function ease_in_out_cubic(t)
+  local x = math.max(0, math.min(t, 1))
+  if (x < 0.5) then
+    return (4 * x * x * x)
+  else
+    local y = ((2 * x) - 2)
+    return (1 + ((y * y * y) / 2))
+  end
 end
 local function lerp(a, b, t)
   return (a + ((b - a) * t))
@@ -63,7 +68,6 @@ local function duration_ms(session, kind, fallback)
   return math.max(0, math.floor((0.5 + (base * global_scale * local_scale))))
 end
 local function run_21(session, key, opts)
-  local duration_ms0 = opts["duration-ms"]
   local steps = opts.steps
   local tick_21 = opts["tick!"]
   local done_21 = opts["done!"]
@@ -83,19 +87,19 @@ local function run_21(session, key, opts)
         elapsed = delay
       end
       if (elapsed < delay) then
-        local function _4_()
+        local function _5_()
           return frame_21(idx)
         end
-        return vim.defer_fn(_4_, (delay - elapsed))
+        return vim.defer_fn(_5_, (delay - elapsed))
       else
         last_frame_ms = now
-        local t = ease_out_cubic((idx / total))
+        local t = ease_in_out_cubic((idx / total))
         tick_21(t, idx, total)
         if (idx < total) then
-          local function _5_()
+          local function _6_()
             return frame_21((idx + 1))
           end
-          return vim.defer_fn(_5_, delay)
+          return vim.defer_fn(_6_, delay)
         else
           if done_21 then
             return done_21()
@@ -120,20 +124,20 @@ local function animate_win_height_21(session, key, win, from, to, duration_ms0, 
     step = -1
   end
   local opts0 = (opts or {})
-  local function _11_()
-    local function _12_()
+  local function _12_()
+    local function _13_()
       return vim.api.nvim_win_is_valid(win)
     end
-    local function _13_(_, idx)
+    local function _14_(_, idx)
       local height
-      local function _14_()
+      local function _15_()
         if (idx == 0) then
           return start
         else
           return (start + (idx * step))
         end
       end
-      height = math.max(1, _14_())
+      height = math.max(1, _15_())
       pcall(vim.api.nvim_win_set_height, win, height)
       local val_110_auto = opts0["tick!"]
       if val_110_auto then
@@ -143,7 +147,7 @@ local function animate_win_height_21(session, key, win, from, to, duration_ms0, 
         return nil
       end
     end
-    local function _16_()
+    local function _17_()
       pcall(vim.api.nvim_win_set_height, win, stop)
       local val_110_auto = opts0["done!"]
       if val_110_auto then
@@ -153,9 +157,9 @@ local function animate_win_height_21(session, key, win, from, to, duration_ms0, 
         return nil
       end
     end
-    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(1, math.abs((stop - start))), ["active?"] = _12_, ["tick!"] = _13_, ["done!"] = _16_})
+    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(1, math.abs((stop - start))), ["active?"] = _13_, ["tick!"] = _14_, ["done!"] = _17_})
   end
-  return with_split_mins(_11_)
+  return with_split_mins(_12_)
 end
 local function animate_win_height_stepwise_21(session, key, win, from, to, duration_ms0, opts)
   local start = math.max(1, from)
@@ -170,11 +174,11 @@ local function animate_win_height_stepwise_21(session, key, win, from, to, durat
   local frame_budget = math.max(1, math.floor((math.max(duration_ms0, target_frame_ms) / target_frame_ms)))
   local stride = math.max(1, math.ceil((math.max(1, delta) / frame_budget)))
   local opts0 = (opts or {})
-  local function _19_()
-    local function _20_()
+  local function _20_()
+    local function _21_()
       return vim.api.nvim_win_is_valid(win)
     end
-    local function _21_(_, idx)
+    local function _22_(_, idx)
       local next_height
       if (idx == 0) then
         next_height = start
@@ -196,7 +200,7 @@ local function animate_win_height_stepwise_21(session, key, win, from, to, durat
         return nil
       end
     end
-    local function _25_()
+    local function _26_()
       pcall(vim.api.nvim_win_set_height, win, stop)
       local val_110_auto = opts0["done!"]
       if val_110_auto then
@@ -206,19 +210,19 @@ local function animate_win_height_stepwise_21(session, key, win, from, to, durat
         return nil
       end
     end
-    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(1, math.ceil((math.max(1, delta) / stride))), ["active?"] = _20_, ["tick!"] = _21_, ["done!"] = _25_})
+    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(1, math.ceil((math.max(1, delta) / stride))), ["active?"] = _21_, ["tick!"] = _22_, ["done!"] = _26_})
   end
-  return with_split_mins(_19_)
+  return with_split_mins(_20_)
 end
 local function animate_win_width_21(session, key, win, from, to, duration_ms0, opts)
   local start = math.max(1, from)
   local stop = math.max(1, to)
   local opts0 = (opts or {})
-  local function _27_()
-    local function _28_()
+  local function _28_()
+    local function _29_()
       return vim.api.nvim_win_is_valid(win)
     end
-    local function _29_(t)
+    local function _30_(t)
       local width = math.max(1, math.floor((0.5 + lerp(start, stop, t))))
       pcall(vim.api.nvim_win_set_width, win, width)
       local val_110_auto = opts0["tick!"]
@@ -229,7 +233,7 @@ local function animate_win_width_21(session, key, win, from, to, duration_ms0, o
         return nil
       end
     end
-    local function _31_()
+    local function _32_()
       pcall(vim.api.nvim_win_set_width, win, stop)
       local val_110_auto = opts0["done!"]
       if val_110_auto then
@@ -239,15 +243,16 @@ local function animate_win_width_21(session, key, win, from, to, duration_ms0, o
         return nil
       end
     end
-    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _28_, ["tick!"] = _29_, ["done!"] = _31_})
+    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _29_, ["tick!"] = _30_, ["done!"] = _32_})
   end
-  return with_split_mins(_27_)
+  return with_split_mins(_28_)
 end
-local function animate_float_21(session, key, win, from_cfg, to_cfg, from_blend, to_blend, duration_ms0)
-  local function _33_()
+local function animate_float_21(session, key, win, from_cfg, to_cfg, from_blend, to_blend, duration_ms0, opts)
+  local opts0 = (opts or {})
+  local function _34_()
     return vim.api.nvim_win_is_valid(win)
   end
-  local function _34_(t)
+  local function _35_(t)
     local cfg = {relative = to_cfg.relative, anchor = to_cfg.anchor, row = lerp((from_cfg.row or to_cfg.row), to_cfg.row, t), col = lerp((from_cfg.col or to_cfg.col), to_cfg.col, t), width = math.max(1, math.floor((0.5 + lerp((from_cfg.width or to_cfg.width), to_cfg.width, t)))), height = math.max(1, math.floor((0.5 + lerp((from_cfg.height or to_cfg.height), to_cfg.height, t)))), style = "minimal"}
     local _
     do
@@ -262,31 +267,45 @@ local function animate_float_21(session, key, win, from_cfg, to_cfg, from_blend,
     end
     local blend = math.max(0, math.min(100, math.floor((0.5 + lerp(from_blend, to_blend, t)))))
     pcall(vim.api.nvim_win_set_config, win, cfg)
-    return pcall(vim.api.nvim_set_option_value, "winblend", blend, {win = win})
+    pcall(vim.api.nvim_set_option_value, "winblend", blend, {win = win})
+    local val_110_auto = opts0["tick!"]
+    if val_110_auto then
+      local tick_21 = val_110_auto
+      return tick_21(cfg, t)
+    else
+      return nil
+    end
   end
-  local function _36_()
+  local function _38_()
     pcall(vim.api.nvim_win_set_config, win, to_cfg)
-    return pcall(vim.api.nvim_set_option_value, "winblend", to_blend, {win = win})
+    pcall(vim.api.nvim_set_option_value, "winblend", to_blend, {win = win})
+    local val_110_auto = opts0["done!"]
+    if val_110_auto then
+      local done_21 = val_110_auto
+      return done_21(to_cfg)
+    else
+      return nil
+    end
   end
-  return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _33_, ["tick!"] = _34_, ["done!"] = _36_})
+  return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _34_, ["tick!"] = _35_, ["done!"] = _38_})
 end
 local function animate_view_21(session, key, win, from_view, to_view, duration_ms0)
-  local function _37_()
+  local function _40_()
     return vim.api.nvim_win_is_valid(win)
   end
-  local function _38_(t)
-    local function _39_()
+  local function _41_(t)
+    local function _42_()
       return pcall(vim.fn.winrestview, {topline = math.max(1, math.floor((0.5 + lerp((from_view.topline or 1), (to_view.topline or 1), t)))), lnum = math.max(1, math.floor((0.5 + lerp((from_view.lnum or 1), (to_view.lnum or 1), t)))), leftcol = math.max(0, math.floor((0.5 + lerp((from_view.leftcol or 0), (to_view.leftcol or 0), t)))), col = math.max(0, math.floor((0.5 + lerp((from_view.col or 0), (to_view.col or 0), t))))})
     end
-    return vim.api.nvim_win_call(win, _39_)
+    return vim.api.nvim_win_call(win, _42_)
   end
-  local function _40_()
-    local function _41_()
+  local function _43_()
+    local function _44_()
       return pcall(vim.fn.winrestview, to_view)
     end
-    return vim.api.nvim_win_call(win, _41_)
+    return vim.api.nvim_win_call(win, _44_)
   end
-  return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _37_, ["tick!"] = _38_, ["done!"] = _40_})
+  return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _40_, ["tick!"] = _41_, ["done!"] = _43_})
 end
 M["enabled?"] = enabled_3f
 M["duration-ms"] = duration_ms

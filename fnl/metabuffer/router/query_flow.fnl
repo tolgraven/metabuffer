@@ -113,8 +113,10 @@
         (~= next-expansion session.expansion-mode))))
 
 (fn refresh-session-ui!
-  [session update-info-window context-window refresh-change-signs! capture-sign-baseline!]
+  [session update-preview-window update-info-window context-window refresh-change-signs! capture-sign-baseline!]
   (session.meta.refresh_statusline)
+  (when update-preview-window
+    (update-preview-window session))
   (update-info-window session)
   (when (and context-window context-window.update!)
     (context-window.update! session))
@@ -124,7 +126,7 @@
     (capture-sign-baseline! session)))
 
 (fn retry-textlock-update!
-  [session update-info-window context-window refresh-change-signs! capture-sign-baseline!]
+  [session update-preview-window update-info-window context-window refresh-change-signs! capture-sign-baseline!]
   (vim.defer_fn
     (fn []
       (when (and session.meta
@@ -132,6 +134,7 @@
         (pcall session.meta.on-update 0)
         (pcall refresh-session-ui!
                session
+               update-preview-window
                update-info-window
                context-window
                refresh-change-signs!
@@ -139,11 +142,12 @@
     1))
 
 (fn run-meta-update!
-  [session update-info-window context-window refresh-change-signs! capture-sign-baseline!]
+  [session update-preview-window update-info-window context-window refresh-change-signs! capture-sign-baseline!]
   (let [[ok err] [(pcall session.meta.on-update 0)]]
     (if ok
         (refresh-session-ui!
           session
+          update-preview-window
           update-info-window
           context-window
           refresh-change-signs!
@@ -151,6 +155,7 @@
         (when (string.find (tostring err) "E565")
           (retry-textlock-update!
             session
+            update-preview-window
             update-info-window
             context-window
             refresh-change-signs!
@@ -192,6 +197,7 @@
   [deps session]
   (let [{: query-mod
          : project-source
+         : update-preview-window
          : update-info-window
          : context-window
          : refresh-change-signs!
@@ -290,11 +296,12 @@
                 context-window
                 refresh-change-signs!
                 capture-sign-baseline!)
-              (run-meta-update!
-                session
-                update-info-window
-                context-window
-                refresh-change-signs!
+          (run-meta-update!
+            session
+            update-preview-window
+            update-info-window
+            context-window
+            refresh-change-signs!
                 capture-sign-baseline!))))))
       )
 

@@ -946,6 +946,6 @@ M.new = function(opts)
     apply_keymaps(router, session)
     return apply_emacs_insert_fallbacks(router, session)
   end
-  return {["register!"] = register_21}
+  return {["register!"] = register_21, ["refresh!"] = refresh_prompt_highlights_21}
 end
 return M

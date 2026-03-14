@@ -2,6 +2,11 @@
 (local handle (require :metabuffer.handle))
 (local M {})
 
+(fn disable-airline-statusline!
+  [win]
+  (when (and win (vim.api.nvim_win_is_valid win))
+    (pcall vim.api.nvim_win_set_var win "airline_disable_statusline" 1)))
+
 (fn M.new
   [nvim win opts-to-stash opts]
   "Public API: M.new."
@@ -34,5 +39,7 @@
       (vim.api.nvim_win_set_buf self.window buf))
 
     self))
+
+(set M.disable-airline-statusline! disable-airline-statusline!)
 
 M

@@ -1,5 +1,6 @@
 (local path-hl (require :metabuffer.path_highlight))
 (local util (require :metabuffer.util))
+(local file-info (require :metabuffer.source.file_info))
 
 (local M {})
 
@@ -93,16 +94,33 @@
 (fn M.info-view
   [session ref ctx]
   (let [mode (or (and ctx ctx.mode) "meta")
-        read-file-lines-cached (and ctx ctx.read-file-lines-cached)]
-    {:path (M.info-path ref false)
-     :icon-path (M.info-path ref false)
-     :show-icon true
-     :highlight-dir true
-     :highlight-file true
-     :sign {:text "  " :hl "LineNr"}
-     :suffix (M.info-suffix session ref mode read-file-lines-cached)
-     :suffix-prefix "  "
-     :suffix-highlights []}))
+        read-file-lines-cached (and ctx ctx.read-file-lines-cached)
+        single-source? (not (not (and ctx ctx.single-source?)))]
+    (if single-source?
+        (if (and session.single-file-info-ready
+                 ref
+                 ref.path
+                 ref.lnum
+                 (= 1 (vim.fn.filereadable ref.path)))
+            (file-info.line-meta-info-view session ref.path ref.lnum 1)
+            {:path ""
+             :icon-path ""
+             :show-icon false
+             :highlight-dir false
+             :highlight-file false
+             :sign {:text "  " :hl "LineNr"}
+             :suffix (M.info-suffix session ref mode read-file-lines-cached)
+             :suffix-prefix ""
+             :suffix-highlights []})
+        {:path (M.info-path ref false)
+         :icon-path (M.info-path ref false)
+         :show-icon true
+         :highlight-dir true
+         :highlight-file true
+         :sign {:text "  " :hl "LineNr"}
+         :suffix (M.info-suffix session ref mode read-file-lines-cached)
+         :suffix-prefix "  "
+         :suffix-highlights []})))
 
 (fn M.preview-filetype
   [ref]

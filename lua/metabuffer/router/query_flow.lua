@@ -87,8 +87,12 @@ local function render_flags_changed_3f(session, parsed)
   local next_expansion = choose_current_when_nil(parsed.expansion, session["expansion-mode"])
   return ((next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]) or (next_expansion ~= session["expansion-mode"]))
 end
-local function refresh_session_ui_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+local function refresh_session_ui_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
   session.meta.refresh_statusline()
+  if update_preview_window then
+    update_preview_window(session)
+  else
+  end
   update_info_window(session)
   if (context_window and context_window["update!"]) then
     context_window["update!"](session)
@@ -104,24 +108,24 @@ local function refresh_session_ui_21(session, update_info_window, context_window
     return nil
   end
 end
-local function retry_textlock_update_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
-  local function _10_()
+local function retry_textlock_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+  local function _11_()
     if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
       pcall(session.meta["on-update"], 0)
-      return pcall(refresh_session_ui_21, session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+      return pcall(refresh_session_ui_21, session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
     else
       return nil
     end
   end
-  return vim.defer_fn(_10_, 1)
+  return vim.defer_fn(_11_, 1)
 end
-local function run_meta_update_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+local function run_meta_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
   local ok,err = pcall(session.meta["on-update"], 0)
   if ok then
-    return refresh_session_ui_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+    return refresh_session_ui_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
   else
     if string.find(tostring(err), "E565") then
-      return retry_textlock_update_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+      return retry_textlock_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
     else
       return nil
     end
@@ -149,6 +153,7 @@ end
 M["apply-prompt-lines!"] = function(deps, session)
   local query_mod = deps["query-mod"]
   local project_source = deps["project-source"]
+  local update_preview_window = deps["update-preview-window"]
   local update_info_window = deps["update-info-window"]
   local context_window = deps["context-window"]
   local refresh_change_signs_21 = deps["refresh-change-signs!"]
@@ -256,7 +261,7 @@ M["apply-prompt-lines!"] = function(deps, session)
     if (session["project-mode"] and source_changed_3f and not text_changed_3f) then
       return refresh_session_ui_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
     else
-      return run_meta_update_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+      return run_meta_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
     end
   else
     return nil
