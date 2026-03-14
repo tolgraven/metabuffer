@@ -309,7 +309,14 @@
         deps
         session (. active-by-prompt prompt-buf)]
     (when (and session (not session.closing))
-      (let [now (router_prompt_mod.now-ms)
+      (let [lines (router_util_mod.prompt-lines session)
+            parsed (query-mod.parse-query-lines lines)
+            effective-text (table.concat (or (. parsed :lines) []) "\n")
+            pure-flag-edit? (and (~= effective-text (or session.prompt-last-event-text ""))
+                                 (= effective-text (or session.prompt-last-applied-text ""))
+                                 (or (source-flags-changed? session parsed)
+                                     (render-flags-changed? session parsed)))
+            now (router_prompt_mod.now-ms)
             delay (prompt-delay-ms settings query-mod session)]
         (when (and (not force) event-tick)
           (set session.prompt-last-event-tick event-tick))
@@ -323,6 +330,14 @@
                    (not session.project-bootstrapped)
                    (prompt-has-active-query? query-mod session))
           (project-source.schedule-project-bootstrap! session settings.project-bootstrap-delay-ms))
-        (queue-update-after-edit! settings prompt-scheduler-ctx session force "" now delay)))))
+        (if pure-flag-edit?
+            (do
+              (set session.prompt-last-event-text effective-text)
+              (set session.last-prompt-text effective-text)
+              (set session.prompt-last-change-ms now)
+              (set session.prompt-update-dirty false)
+              (router_prompt_mod.cancel-prompt-update! session)
+              (M.apply-prompt-lines! deps session))
+            (queue-update-after-edit! settings prompt-scheduler-ctx session force "" now delay))))))
 
 M

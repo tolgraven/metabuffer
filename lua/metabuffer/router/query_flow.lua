@@ -270,6 +270,10 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
   local prompt_scheduler_ctx = deps["prompt-scheduler-ctx"]
   local session = active_by_prompt[prompt_buf]
   if (session and not session.closing) then
+    local lines = router_util_mod["prompt-lines"](session)
+    local parsed = query_mod["parse-query-lines"](lines)
+    local effective_text = table.concat((parsed.lines or {}), "\n")
+    local pure_flag_edit_3f = ((effective_text ~= (session["prompt-last-event-text"] or "")) and (effective_text == (session["prompt-last-applied-text"] or "")) and (source_flags_changed_3f(session, parsed) or render_flags_changed_3f(session, parsed)))
     local now = router_prompt_mod["now-ms"]()
     local delay = prompt_delay_ms(settings, query_mod, session)
     if (not force and event_tick) then
@@ -290,7 +294,16 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
       project_source["schedule-project-bootstrap!"](session, settings["project-bootstrap-delay-ms"])
     else
     end
-    return queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, "", now, delay)
+    if pure_flag_edit_3f then
+      session["prompt-last-event-text"] = effective_text
+      session["last-prompt-text"] = effective_text
+      session["prompt-last-change-ms"] = now
+      session["prompt-update-dirty"] = false
+      router_prompt_mod["cancel-prompt-update!"](session)
+      return M["apply-prompt-lines!"](deps, session)
+    else
+      return queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, "", now, delay)
+    end
   else
     return nil
   end
