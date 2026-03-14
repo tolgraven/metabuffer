@@ -254,7 +254,7 @@
           lines []
           highlights []]
       (if (= (# idxs) 0)
-          (table.insert lines "No hits")
+          (table.insert lines "No matches")
           (do
             (for [i start-index stop-index]
               (let [src-idx (. idxs i)

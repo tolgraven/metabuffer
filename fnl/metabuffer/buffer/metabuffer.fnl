@@ -1,6 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local base (require :metabuffer.buffer.base))
 (local ui (require :metabuffer.buffer.ui))
+(local query-mod (require :metabuffer.query))
 (local source-mod (require :metabuffer.source))
 (local util (require :metabuffer.util))
 
@@ -45,6 +46,14 @@
       (table.insert files f))
     files))
 
+(fn apply-ft-buffer-vars!
+  [buf ft]
+  (when (and buf
+             (vim.api.nvim_buf_is_valid buf)
+             (= ft "fennel"))
+    (pcall vim.api.nvim_buf_set_var buf "fennel_lua_version" "5.1")
+    (pcall vim.api.nvim_buf_set_var buf "fennel_use_luajit" (if jit 1 0))))
+
 (fn normalize-render-line
   [line]
   (let [txt (tostring (or line ""))]
@@ -74,10 +83,18 @@
              session.project-bootstrap-pending
              (and session.project-mode (not session.project-bootstrapped))))))
 
+(fn session_has_active_query
+  [self]
+  (let [session self.model.session
+        parsed (and session session.last-parsed-query)]
+    (and parsed
+         (query-mod.query-lines-has-active? (or (. parsed :lines) [])))))
+
 (fn should_defer_empty_frame
   [self frame]
   (and (= (# (or frame.lines [])) 0)
        (> (# (or self.last-rendered-lines [])) 0)
+       (not (session_has_active_query self))
        (session_has_pending_work self)))
 
 (fn save_window_views
@@ -369,6 +386,7 @@
                         ;; Most syntax files early-return when b:current_syntax
                         ;; is set; clear it before each include so mixed
                         ;; filetype blocks can all load.
+                        (apply-ft-buffer-vars! self.buffer ft)
                         (each [_ synfile (ipairs synfiles)]
                           (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
                           (vim.cmd (.. "silent! syntax include @" cluster " " (vim.fn.fnameescape synfile))))
@@ -418,6 +436,7 @@
               (let [ft (. (. vim.bo self.model) :filetype)
                     syn (. (. vim.bo self.model) :syntax)]
                 (when (and ft (~= ft ""))
+                  (apply-ft-buffer-vars! self.buffer ft)
                   (set (. bo :filetype) ft))
                 (if (and syn (~= syn ""))
                     (set (. bo :syntax) syn)

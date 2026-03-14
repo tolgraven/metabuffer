@@ -91,6 +91,8 @@
       (session-view.restore-meta-view! curr session.source-view))
     (when-not (and session.project-mode (not initial-query-active))
       (apply-prompt-lines session))
+    (when-not session.project-mode
+      (session-view.restore-meta-view! curr session.source-view))
     (vim.schedule
       (fn []
         (set session.startup-initializing false)
@@ -109,7 +111,6 @@
         active-by-source (. deps :active-by-source)
         session-view (. deps :session-view)
         meta-mod (. deps :meta-mod)
-        base-buffer (. deps :base-buffer)
         router-util-mod (. deps :router-util-mod)
         prompt-window-mod (. deps :prompt-window-mod)
         history-store (. deps :history-store)
@@ -185,7 +186,6 @@
                     condition (session-view.setup-state query mode source-view)
                     curr (meta-mod.new vim condition)]
                 (set curr.project-mode (or project-mode false))
-                (base-buffer.switch-buf curr.buf.buffer)
                 (router-util-mod.ensure-source-refs! curr)
                 (set curr.buf.keep-modifiable true)
                 (let [bo (. vim.bo curr.buf.buffer)]
@@ -195,6 +195,7 @@
                   (set (. bo :bufhidden) "hide"))
                 (pcall vim.api.nvim_buf_set_var curr.buf.buffer "meta_manual_edit_active" false)
                 (pcall vim.api.nvim_buf_set_var curr.buf.buffer "meta_internal_render" false)
+                (pcall curr.buf.render)
                 (let [initial-lines (if (and prompt-query (~= prompt-query ""))
                                         (vim.split prompt-query "\n" {:plain true})
                                         [""])
@@ -269,6 +270,10 @@
                                :single-refs (vim.deepcopy (or curr.buf.source-refs []))
                                :instance-id (next-instance-id!)
                                :meta curr}]
+                  (when (vim.api.nvim_win_is_valid origin-win)
+                    (pcall vim.api.nvim_win_set_buf origin-win curr.buf.buffer))
+                  (when-not project-mode
+                    (session-view.restore-meta-view! curr source-view))
                   (let [initial-query-active session.initial-query-active]
                     (set curr.session session)
                     (activate-session-ui! deps session initial-lines)

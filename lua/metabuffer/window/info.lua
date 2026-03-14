@@ -327,7 +327,7 @@ M.new = function(opts)
     local lines = {}
     local highlights = {}
     if (#idxs == 0) then
-      table.insert(lines, "No hits")
+      table.insert(lines, "No matches")
     else
       for i = start_index, stop_index do
         local src_idx = idxs[i]
