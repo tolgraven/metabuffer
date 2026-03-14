@@ -10,6 +10,10 @@ This repo now has two parallelized suites:
   - `./scripts/test-mini.sh`
 - Override worker count:
   - `TEST_JOBS=4 ./scripts/test-mini.sh`
+- Override default oversubscription:
+  - `TEST_JOBS_MULTIPLIER=1 ./scripts/test-mini.sh`
+  - `TEST_JOBS_EXTRA=4 ./scripts/test-mini.sh`
+  - `TEST_MAX_JOBS=16 ./scripts/test-mini.sh`
 - Rerun a single file:
   - `TEST_ONLY='tests/unit/test_query_unit.lua' ./scripts/test-mini.sh`
 - Rerun only previously failing files:
@@ -18,6 +22,8 @@ This repo now has two parallelized suites:
 Runner behavior:
 - Discovers `tests/**/test_*.lua`.
 - Executes files concurrently in separate headless Neovim instances.
+- Defaults to oversubscribing workers for these mostly wait-heavy screen tests:
+  - default jobs = `min(test_files, TEST_MAX_JOBS or (cpu_count * 2), cpu_count * (TEST_JOBS_MULTIPLIER or 1) + (TEST_JOBS_EXTRA or 2))`
 - Isolates each worker via `NVIM_APPNAME`.
 - Prints file start/end, case names from MiniTest, and total elapsed ms.
 - Returns non-zero if any file has failing cases.
@@ -47,9 +53,22 @@ Key helper coverage:
 - Project mode immediate typing during lazy stream.
 - Clear-query broadening while preserving source pool.
 
-### `tests/screen/test_screen_project_flags.lua`
+### `tests/screen/test_screen_project_flags_core.lua`
 - `#hidden/#deps/#nolazy` consumption + status/debug reflection.
-- `#file <token>` consumption and file-entry hit activation.
+- `#binary/#hex` visibility and toggle-state reflection.
+
+### `tests/screen/test_screen_project_flags_file_mode.lua`
+- `#file <token>` file-entry activation and file-only result sets.
+- `./query` file shortcut behavior.
+- `-binary` exclusion from file-entry mode.
+
+### `tests/screen/test_screen_project_flags_query_split.lua`
+- Separation of file tokens from normal query terms.
+- `#file` without a file token preserves regular hits.
+- File token constrains regular hits by matching paths.
+
+### `tests/screen/test_screen_project_flags_clear.lua`
+- Clearing file tokens removes stale file-query filtering.
 
 ### `tests/screen/test_screen_project_info_sync.lua`
 - Hit-buffer and info-window sync/alignment while typing/deleting.
@@ -62,9 +81,18 @@ Key helper coverage:
 - Prompt height persistence across invocations.
 - Accept + `MetaResume` restores query/modes.
 
-### `tests/screen/test_screen_persistence_history.lua`
+### `tests/screen/test_screen_persistence_history_commands.lua`
 - `:Meta !!` and `:Meta !$` history expansion.
 - `<CR>` from results opens selected hit correctly.
+- Repeated `!!` insertion does not duplicate payload.
+
+### `tests/screen/test_screen_persistence_history_project.lua`
+- Project history replay preserves non-consumed flags.
+- Up-recall does not accumulate duplicate consumed setting tokens.
+- Legacy `#+file` history normalizes to `#file`.
+
+### `tests/screen/test_screen_persistence_history_recall.lua`
+- Minimal replay-only coverage for `Meta !!` after accept.
 
 ## Unit Tests
 
