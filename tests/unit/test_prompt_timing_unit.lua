@@ -76,4 +76,40 @@ T['prompt-update-delay-ms adds project streaming and size penalties'] = function
   eq(prompt['prompt-update-delay-ms'](settings, query_mod, prompt_lines, session), 182)
 end
 
+T['prompt-update-delay-ms holds incomplete directive tokens longer'] = function()
+  local settings = mk_settings({ ['prompt-incomplete-directive-ms'] = 1000 })
+  local prev_prefix = vim.g['meta#prefix']
+  vim.g['meta#prefix'] = '#'
+  local query_mod = {
+    ['parse-query-lines'] = function(lines)
+      return { lines = lines }
+    end,
+  }
+  local prompt_lines = function()
+    return { '#exp' }
+  end
+  local session = {
+    ['project-mode'] = true,
+    ['lazy-stream-done'] = true,
+    meta = { buf = { indices = { 1, 2, 3 } } },
+  }
+
+  prompt_lines = function()
+    return { '#' }
+  end
+  eq(prompt['prompt-update-delay-ms'](settings, query_mod, prompt_lines, session), 1000)
+
+  prompt_lines = function()
+    return { '#exp' }
+  end
+  eq(prompt['prompt-update-delay-ms'](settings, query_mod, prompt_lines, session), 1000)
+
+  prompt_lines = function()
+    return { '#exp ' }
+  end
+  eq(prompt['prompt-update-delay-ms'](settings, query_mod, prompt_lines, session), 170)
+
+  vim.g['meta#prefix'] = prev_prefix
+end
+
 return T

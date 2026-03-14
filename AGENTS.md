@@ -74,6 +74,7 @@
 - Function arguments always on separate line (unless entire thing oneliner).
 - Write (brief) docstrings for not immediately (from outside) self-descriptive functions and keep them up to date. Include expected output.
 - Beware of tendency to try to call locally defined functions globally (through vim dispatch), ensure no __fnl_global__ related errors by using vars in these instances. Forward declaration issue due to Lua transpilation.
+- Try keep functions below ~25 or at least ~40 lines. Try to use side-effecting helpers for nvim comms. If a function does many things within itself, something is wrong (unless it's an orchestration function simply calling many other smaller functions).
 
 ## Self-improvement
 

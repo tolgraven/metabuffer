@@ -22,11 +22,12 @@ T['expansion directive opens and closes context window'] = H.timed_case(function
     ]])
   end, 4000)
   H.wait_for(function()
-    return H.session_context_exists()
+    return H.session_hit_count() > 1
   end, 4000)
 
-  local context_line_count = #H.session_context_lines()
-  eq(context_line_count > 0, true)
+  local result_lines = H.session_result_lines()
+  eq(#result_lines > 1, true)
+  eq(vim.tbl_contains(result_lines, 'local alpha = 1'), true)
 
   H.child.lua([[
     local router = require('metabuffer.router')
@@ -45,7 +46,7 @@ T['expansion directive opens and closes context window'] = H.timed_case(function
     ]])
   end, 4000)
   H.wait_for(function()
-    return not H.session_context_exists()
+    return H.session_hit_count() == 1
   end, 4000)
 end)
 
@@ -67,13 +68,54 @@ T['file expansion renders full file context for filtered hits'] = H.timed_case(f
     ]])
   end, 4000)
   H.wait_for(function()
-    return H.session_context_exists()
+    return H.session_hit_count() == 3
   end, 4000)
 
-  local lines = H.session_context_lines()
-  eq(vim.tbl_contains(lines, '   1 local alpha = 1'), true)
-  eq(vim.tbl_contains(lines, '   2 local beta = alpha + 1'), true)
-  eq(vim.tbl_contains(lines, '   3 return alpha + beta'), true)
+  local lines = H.session_result_lines()
+  eq(vim.tbl_contains(lines, 'local alpha = 1'), true)
+  eq(vim.tbl_contains(lines, 'local beta = alpha + 1'), true)
+  eq(vim.tbl_contains(lines, 'return alpha + beta'), true)
+end)
+
+T['fennel fn expansion widens to containing fn_form'] = H.timed_case(function()
+  local root = H.child.lua_get([[
+    (function()
+      local root = vim.fn.tempname()
+      vim.fn.mkdir(root, 'p')
+      vim.fn.writefile({
+        '(local M {})',
+        '',
+        '(fn preview-window',
+        '  [x]',
+        '  (let [y (+ x 1)]',
+        '    y))',
+        '',
+        'M',
+      }, root .. '/probe.fnl')
+      return root
+    end)()
+  ]])
+
+  H.open_project_meta_in_dir(root, 'probe.fnl')
+  H.type_prompt_human('preview-window #exp:fn', 90)
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        return s and s['expansion-mode'] == 'fn'
+      end)()
+    ]])
+  end, 4000)
+  H.wait_for(function()
+    return H.session_hit_count() >= 4
+  end, 4000)
+
+  local lines = H.session_result_lines()
+  eq(vim.tbl_contains(lines, '(fn preview-window'), true)
+  eq(vim.tbl_contains(lines, '  [x]'), true)
+  eq(vim.tbl_contains(lines, '  (let [y (+ x 1)]'), true)
+  eq(vim.tbl_contains(lines, '    y))'), true)
 end)
 
 return T
