@@ -39,10 +39,14 @@
   - debug: `NVIM_LOG_FILE=.nvimlog ./scripts/compile-fennel.sh`
 - Run full test suite (screen + unit, parallel):
   - `./scripts/test-mini.sh`
+- Run full suite with profiling output written under `/tmp`:
+  - `./scripts/test-mini.sh --profile`
 - Rerun single failing file quickly while iterating:
-  - `TEST_ONLY='tests/unit/test_query_unit.lua' ./scripts/test-mini.sh`
+  - `./scripts/test-mini.sh tests/unit/test_query_unit.lua`
 - Rerun only files that failed on previous run:
   - `TEST_FAILED_ONLY=1 ./scripts/test-mini.sh`
+- Run screen tests against the real repo instead of the default generated fixture project:
+  - `TEST_REAL_REPO=1 ./scripts/test-mini.sh`
 
 ## Important Session Notes
 
@@ -83,6 +87,8 @@
 - Always update/extend tests when functionality changes:
   - unit tests under `tests/unit/` for pure logic and parser/matcher behavior.
   - screen/integration tests under `tests/screen/` for end-to-end prompt/router/window behavior.
+  - screen tests default to a generated project fixture from `tests/screen/support/screen_helpers.lua`; only opt into full-repo coverage with `TEST_REAL_REPO=1`.
+  - keep screen files grouped by dir (`context/`, `history/`, `matchers/`, `persistence/`, `project/`) and split any file trending above ~2-3s.
   - keep `tests/testing.md` synchronized with current test coverage and rerun workflows.
   - when multiple tests fail, use `.cache/metabuffer-tests/failed-files.txt` and parallel sub-agents (one per failing file) to investigate/fix in parallel, then run a full suite check.
 

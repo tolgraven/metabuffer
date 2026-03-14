@@ -232,8 +232,162 @@ function M.open_meta_with_lines(lines)
   end)
 end
 
+local function project_root_for_tests()
+  if vim.env.TEST_REAL_REPO == '1' then
+    return M.child.fn.getcwd()
+  end
+
+  if M._fixture_root then
+    return M._fixture_root
+  end
+
+  M._fixture_root = M.child.lua_get([[
+    (function()
+      local root = vim.fn.tempname()
+      local function mkdir(path)
+        vim.fn.mkdir(path, 'p')
+      end
+      local function write(path, lines, mode)
+        if mode == nil then
+          vim.fn.writefile(lines, path)
+          return
+        end
+        vim.fn.writefile(lines, path, mode)
+      end
+      local function repeat_lines(prefix, count)
+        local out = {}
+        for i = 1, count do
+          out[#out + 1] = string.format('%s %03d', prefix, i)
+        end
+        return out
+      end
+      local function binary_blob()
+        return {
+          137, 80, 78, 71, 13, 10, 26, 10,
+          0, 0, 0, 13, 73, 72, 68, 82,
+          0, 0, 0, 1, 0, 0, 0, 1,
+          8, 2, 0, 0, 0, 144, 119, 83,
+          222, 0, 0, 0, 12, 73, 68, 65,
+          84, 8, 153, 99, 248, 15, 4, 0,
+          9, 251, 3, 253, 160, 132, 81, 106,
+          0, 0, 0, 0, 73, 69, 78, 68,
+          174, 66, 96, 130,
+        }
+      end
+
+      mkdir(root)
+      mkdir(root .. '/lua/metabuffer/core')
+      mkdir(root .. '/lua/metabuffer/window')
+      mkdir(root .. '/fnl/metabuffer/router')
+      mkdir(root .. '/fnl/metabuffer/window')
+      mkdir(root .. '/doc')
+      mkdir(root .. '/deps/demo/src')
+      mkdir(root .. '/ignored')
+      mkdir(root .. '/nested/deeper/even-deeper')
+      mkdir(root .. '/.hidden')
+
+      write(root .. '/.gitignore', {
+        'ignored/',
+        '*.tmp',
+      })
+
+      write(root .. '/README.md', vim.list_extend({
+        '# Metabuffer Fixture',
+        '',
+        'local meta fixture text',
+        'metam token lives here',
+        'preview-window appears in this readme',
+        'info-window appears in this readme',
+        'lua file query content for README.md',
+      }, repeat_lines('fixture readme line with meta local lua content', 80)))
+
+      write(root .. '/lua/metabuffer/core/init.lua', vim.list_extend({
+        'local M = {}',
+        '',
+        'function M.setup(opts)',
+        '  local meta = opts and opts.meta or "meta"',
+        '  local metam = opts and opts.metam or "metam"',
+        '  return { meta = meta, metam = metam }',
+        'end',
+        '',
+        'return M',
+      }, repeat_lines('local fixture_lua_value = "meta local lua"', 60)))
+
+      write(root .. '/lua/metabuffer/window/info_window.lua', vim.list_extend({
+        'local function info_window_state()',
+        '  local local_value = "info-window"',
+        '  return local_value',
+        'end',
+        '',
+        'return info_window_state',
+      }, repeat_lines('local info_window_meta = "local lua info-window"', 45)))
+
+      write(root .. '/fnl/metabuffer/router/query_flow.fnl', vim.list_extend({
+        '(local M {})',
+        '',
+        '(fn setup',
+        '  [opts]',
+        '  (let [local-value "meta"]',
+        '    {:meta local-value',
+        '     :opts opts}))',
+        '',
+        'M',
+      }, repeat_lines('(local local-meta "local meta fnl")', 55)))
+
+      write(root .. '/fnl/metabuffer/window/preview_window.fnl', vim.list_extend({
+        '(fn preview-window',
+        '  []',
+        '  {:title "preview-window"})',
+      }, repeat_lines('(local preview-window-local "preview-window meta")', 35)))
+
+      write(root .. '/doc/testing.md', vim.list_extend({
+        '# Testing',
+        '',
+        'local project docs mention meta and lua',
+        'preview-window and info-window are documented here',
+      }, repeat_lines('doc file local meta line', 30)))
+
+      write(root .. '/deps/demo/src/lib.lua', vim.list_extend({
+        'local dep_meta = true',
+        'return dep_meta',
+      }, repeat_lines('local dep_line = "meta from deps"', 25)))
+
+      write(root .. '/ignored/generated.log', vim.list_extend({
+        'ignored meta content',
+      }, repeat_lines('ignored line meta local', 20)))
+
+      write(root .. '/.hidden/secret.lua', vim.list_extend({
+        'local hidden_meta = "secret meta"',
+        'return hidden_meta',
+      }, repeat_lines('local hidden_line = "hidden meta"', 20)))
+
+      write(root .. '/nested/deeper/even-deeper/sample.lua', vim.list_extend({
+        'local nested = "meta"',
+        'return nested',
+      }, repeat_lines('local nested_local = "lua meta local"', 40)))
+
+      write(root .. '/metabuffer.png', binary_blob(), 'b')
+
+      for i = 1, 24 do
+        local dir = string.format('%s/fixtures/pack_%02d', root, i)
+        mkdir(dir)
+        write(dir .. '/module.lua', vim.list_extend({
+          string.format('local module_%02d = "meta"', i),
+          string.format('local local_value_%02d = "lua"', i),
+          string.format('return module_%02d', i),
+        }, repeat_lines(string.format('local fixture_pack_%02d = "meta local lua"', i), 24)))
+      end
+
+      return root
+    end)()
+  ]])
+  return M._fixture_root
+end
+
 function M.open_project_meta_from_file(path)
-  M.child.cmd("edit " .. path)
+  local root = project_root_for_tests()
+  M.child.cmd("cd " .. root)
+  M.child.cmd("edit " .. root .. "/" .. path)
   M.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
   M.child.cmd("Meta!")
 
@@ -630,12 +784,15 @@ function M.dump_state(tag)
 end
 
 function M.type_prompt(keys)
-  M.child.type_keys(0, keys)
+  local encoded = M.child.api.nvim_replace_termcodes(keys, true, false, true)
+  M.child.api.nvim_input(encoded)
   M.dump_state("type " .. keys)
 end
 
 function M.type_prompt_text(text)
-  M.child.type_keys(0, text)
+  for i = 1, #text do
+    M.child.api.nvim_input(string.sub(text, i, i))
+  end
   M.dump_state("type_text " .. text)
 end
 
@@ -643,7 +800,7 @@ function M.type_prompt_human(text, per_key_ms)
   local delay = per_key_ms or 25
   local slept = 0
   for i = 1, #text do
-    M.child.type_keys(0, string.sub(text, i, i))
+    M.child.api.nvim_input(string.sub(text, i, i))
     if delay > 0 then
       vim.loop.sleep(delay)
       slept = slept + delay

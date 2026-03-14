@@ -11,6 +11,8 @@ This repo now has two parallelized suites:
 - Full run with profiling:
   - `./scripts/test-mini.sh --profile`
   - runner prints the persistent `/tmp/...` profile directory and each worker profile file path
+- Use the real metabuffer repo instead of the default generated project fixture:
+  - `TEST_REAL_REPO=1 ./scripts/test-mini.sh`
 - Override worker count:
   - `TEST_JOBS=4 ./scripts/test-mini.sh`
 - Override default oversubscription:
@@ -29,6 +31,7 @@ Runner behavior:
   - default jobs = `min(test_files, TEST_MAX_JOBS or (cpu_count * 2), cpu_count * (TEST_JOBS_MULTIPLIER or 1) + (TEST_JOBS_EXTRA or 2))`
 - Isolates each worker via `NVIM_APPNAME`.
 - Prints file start/end, case names from MiniTest, and total elapsed ms.
+- Prints a sorted per-file timing summary after each run.
 - Optional profiling (`--profile`) adds per-file and per-case breakdowns for:
   - wall time
   - CPU time
@@ -47,6 +50,11 @@ Key helper coverage:
 - Real-typing simulation with per-character delay.
 - Delayed token typing for special keys.
 - Session probes (query/hits/matcher/case/statusline/info window/selection/prompt height).
+- Default generated project fixture with:
+  - nested `lua/`, `fnl/`, `doc/`, `deps/`, hidden, ignored, and deeply nested dirs
+  - text files containing stable query terms (`meta`, `metam`, `local`, `lua`, `preview-window`, `info-window`)
+  - a synthetic binary `metabuffer.png`
+  - enough files to exercise lazy project bootstrap without using the full repo
 
 ### `tests/screen/matchers/test_screen_matchers_basic_*.lua`
 - Prompt edit hotkeys (`<C-a>`, `<C-e>`, `<C-u>`, `<C-y>`).

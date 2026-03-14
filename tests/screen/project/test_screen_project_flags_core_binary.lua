@@ -1,6 +1,4 @@
 local H = require('tests.screen.support.screen_helpers')
-local eq = H.eq
-
 local T = MiniTest.new_set({ hooks = H.case_hooks() })
 
 T['binary and hex flags stay visible in prompt and toggle state'] = H.timed_case(function()
@@ -10,9 +8,10 @@ T['binary and hex flags stay visible in prompt and toggle state'] = H.timed_case
   H.type_prompt_text('#binary #hex metabuffer.png')
   H.wait_for(function() return H.session_prompt_text() == '#binary #hex metabuffer.png' end, 6000)
 
-  local dbg = H.session_debug_out()
-  eq(H.str_contains(dbg, '+bin'), true)
-  eq(H.str_contains(dbg, '+hex'), true)
+  H.wait_for(function()
+    local dbg = H.session_debug_out()
+    return H.str_contains(dbg, '+bin') and H.str_contains(dbg, '+hex')
+  end, 6000)
 end)
 
 return T
