@@ -10,8 +10,9 @@
 
     (fn self.set-statusline
       [text]
-      (let [wo (. vim.wo self.window)]
-        (set (. wo :statusline) text)))
+      (when (vim.api.nvim_win_is_valid self.window)
+        (let [wo (. vim.wo self.window)]
+          (set (. wo :statusline) text))))
 
     (fn self.set-cursor
       [row col]
