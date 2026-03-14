@@ -64,6 +64,22 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
   local update_info_window = deps["update-info-window"]
   local context_window = deps["context-window"]
   local instances = deps.instances
+  local function schedule_aux_ui_refresh_21()
+    local function _5_()
+      if (deps["active-by-prompt"][session["prompt-buf"]] == session) then
+        pcall(curr.refresh_statusline)
+        pcall(update_info_window, session)
+        if (context_window and context_window["update!"]) then
+          return pcall(context_window["update!"], session)
+        else
+          return nil
+        end
+      else
+        return nil
+      end
+    end
+    return vim.schedule(_5_)
+  end
   if session["project-mode"] then
     project_source["apply-minimal-source-set!"](session)
   else
@@ -84,7 +100,7 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
     apply_prompt_lines(session)
   else
   end
-  local function _9_()
+  local function _12_()
     session["startup-initializing"] = false
     if (session["project-mode"] and not session["project-bootstrapped"]) then
       return project_source["schedule-project-bootstrap!"](session, 0)
@@ -92,29 +108,9 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
       return nil
     end
   end
-  vim.schedule(_9_)
-  if (session["project-mode"] and not initial_query_active) then
-    local function _11_()
-      if (deps["active-by-prompt"][session["prompt-buf"]] == session) then
-        pcall(curr.refresh_statusline)
-        pcall(update_info_window, session)
-        if (context_window and context_window["update!"]) then
-          return pcall(context_window["update!"], session)
-        else
-          return nil
-        end
-      else
-        return nil
-      end
-    end
-    vim.schedule(_11_)
-  else
-  end
-  if (context_window and context_window["update!"]) then
-    local function _15_()
-      return pcall(context_window["update!"], session)
-    end
-    vim.schedule(_15_)
+  vim.schedule(_12_)
+  if ((session["project-mode"] and not initial_query_active) or (context_window and context_window["update!"])) then
+    schedule_aux_ui_refresh_21()
   else
   end
   instances[session["instance-id"]] = session
@@ -284,19 +280,19 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
     local prompt_win = prompt_window_mod.new(vim, {height = router_util_mod["prompt-height"](), ["window-local-layout"] = settings["window-local-layout"], ["origin-win"] = origin_win})
     local prompt_buf = prompt_win.buffer
     local session
-    local _30_
+    local _28_
     if query_mod["query-lines-has-active?"](parsed_query.lines) then
-      _30_ = settings["project-bootstrap-delay-ms"]
+      _28_ = settings["project-bootstrap-delay-ms"]
     else
-      _30_ = settings["project-bootstrap-idle-delay-ms"]
+      _28_ = settings["project-bootstrap-idle-delay-ms"]
     end
-    local _32_
+    local _30_
     if (query1 and (query1 ~= "")) then
-      _32_ = vim.split(query1, "\n", {plain = true})
+      _30_ = vim.split(query1, "\n", {plain = true})
     else
-      _32_ = {""}
+      _30_ = {""}
     end
-    session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-win"] = prompt_win.window, ["prompt-buf"] = prompt_buf, ["window-local-layout"] = settings["window-local-layout"], ["prompt-keymaps"] = settings["prompt-keymaps"], ["main-keymaps"] = settings["main-keymaps"], ["prompt-fallback-keymaps"] = settings["prompt-fallback-keymaps"], ["info-file-entry-view"] = (settings["info-file-entry-view"] or "meta"), ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["project-mode"] = (project_mode or false), ["read-file-lines-cached"] = read_file_lines_cached, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-hex"] = start_hex, ["include-files"] = start_files, ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["effective-include-binary"] = start_binary, ["effective-include-hex"] = start_hex, ["effective-include-files"] = start_files, ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _30_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["expansion-mode"] = start_expansion, ["last-parsed-query"] = {lines = _32_, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-hex"] = start_hex, ["include-files"] = start_files, ["file-lines"] = (parsed_query["file-lines"] or {}), prefilter = start_prefilter, lazy = start_lazy, expansion = start_expansion}, ["file-query-lines"] = (parsed_query["file-lines"] or {}), ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), ["instance-id"] = next_instance_id_21(), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
+    session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-win"] = prompt_win.window, ["prompt-buf"] = prompt_buf, ["window-local-layout"] = settings["window-local-layout"], ["prompt-keymaps"] = settings["prompt-keymaps"], ["main-keymaps"] = settings["main-keymaps"], ["prompt-fallback-keymaps"] = settings["prompt-fallback-keymaps"], ["info-file-entry-view"] = (settings["info-file-entry-view"] or "meta"), ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["project-mode"] = (project_mode or false), ["read-file-lines-cached"] = read_file_lines_cached, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-hex"] = start_hex, ["include-files"] = start_files, ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["effective-include-binary"] = start_binary, ["effective-include-hex"] = start_hex, ["effective-include-files"] = start_files, ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _28_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["expansion-mode"] = start_expansion, ["last-parsed-query"] = {lines = _30_, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-hex"] = start_hex, ["include-files"] = start_files, ["file-lines"] = (parsed_query["file-lines"] or {}), prefilter = start_prefilter, lazy = start_lazy, expansion = start_expansion}, ["file-query-lines"] = (parsed_query["file-lines"] or {}), ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), ["instance-id"] = next_instance_id_21(), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
     local initial_query_active = session["initial-query-active"]
     curr.session = session
     activate_session_ui_21(deps, session, initial_lines)

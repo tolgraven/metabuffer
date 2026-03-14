@@ -70,6 +70,15 @@
         update-info-window (. deps :update-info-window)
         context-window (. deps :context-window)
         instances (. deps :instances)]
+    (fn schedule-aux-ui-refresh!
+      []
+      (vim.schedule
+        (fn []
+          (when (= (. (. deps :active-by-prompt) session.prompt-buf) session)
+            (pcall curr.refresh_statusline)
+            (pcall update-info-window session)
+            (when (and context-window context-window.update!)
+              (pcall context-window.update! session))))))
     (if session.project-mode
         (project-source.apply-minimal-source-set! session)
         (project-source.apply-source-set! session))
@@ -87,16 +96,9 @@
         (set session.startup-initializing false)
         (when (and session.project-mode (not session.project-bootstrapped))
           (project-source.schedule-project-bootstrap! session 0))))
-    (when (and session.project-mode (not initial-query-active))
-      (vim.schedule
-        (fn []
-          (when (= (. (. deps :active-by-prompt) session.prompt-buf) session)
-            (pcall curr.refresh_statusline)
-            (pcall update-info-window session)
-            (when (and context-window context-window.update!)
-              (pcall context-window.update! session))))))
-    (when (and context-window context-window.update!)
-      (vim.schedule (fn [] (pcall context-window.update! session))))
+    (when (or (and session.project-mode (not initial-query-active))
+              (and context-window context-window.update!))
+      (schedule-aux-ui-refresh!))
     (set (. instances session.instance-id) session)))
 
 (fn M.start!
