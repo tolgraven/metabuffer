@@ -32,6 +32,19 @@
   [v fallback]
   (if (= (type v) "number") v fallback))
 
+(fn with-split-mins
+  [f]
+  (let [old-height vim.o.winminheight
+        old-width vim.o.winminwidth]
+    (set vim.o.winminheight 0)
+    (set vim.o.winminwidth 0)
+    (let [[ok res] [(pcall f)]]
+      (set vim.o.winminheight old-height)
+      (set vim.o.winminwidth old-width)
+      (if ok
+          res
+          (error res)))))
+
 (fn enabled?
   [session kind]
   (let [settings (or session.animation-settings {})
@@ -69,35 +82,36 @@
 (fn animate-win-height!
   [session key win from to duration-ms]
   (let [start (math.max 1 from)
-        stop (math.max 1 to)
-        old-min vim.o.winminheight]
-    (set vim.o.winminheight 0)
-    (run! session key
-          {:duration-ms duration-ms
-           :steps (math.max 2 (math.floor (/ duration-ms 16)))
-           :active? (fn [] (vim.api.nvim_win_is_valid win))
-           :tick! (fn [t]
-                    (pcall vim.api.nvim_win_set_height
-                           win
-                           (math.max 1 (math.floor (+ 0.5 (lerp start stop t))))))
-           :done! (fn []
-                    (pcall vim.api.nvim_win_set_height win stop)
-                    (set vim.o.winminheight old-min))})))
+        stop (math.max 1 to)]
+    (with-split-mins
+      (fn []
+        (run! session key
+              {:duration-ms duration-ms
+               :steps (math.max 2 (math.floor (/ duration-ms 16)))
+               :active? (fn [] (vim.api.nvim_win_is_valid win))
+               :tick! (fn [t]
+                        (pcall vim.api.nvim_win_set_height
+                               win
+                               (math.max 1 (math.floor (+ 0.5 (lerp start stop t))))))
+               :done! (fn []
+                        (pcall vim.api.nvim_win_set_height win stop))})))))
 
 (fn animate-win-width!
   [session key win from to duration-ms]
   (let [start (math.max 1 from)
         stop (math.max 1 to)]
-    (run! session key
-          {:duration-ms duration-ms
-           :steps (math.max 2 (math.floor (/ duration-ms 16)))
-           :active? (fn [] (vim.api.nvim_win_is_valid win))
-           :tick! (fn [t]
-                    (pcall vim.api.nvim_win_set_width
-                           win
-                           (math.max 1 (math.floor (+ 0.5 (lerp start stop t)))) ))
-           :done! (fn []
-                    (pcall vim.api.nvim_win_set_width win stop))})))
+    (with-split-mins
+      (fn []
+        (run! session key
+              {:duration-ms duration-ms
+               :steps (math.max 2 (math.floor (/ duration-ms 16)))
+               :active? (fn [] (vim.api.nvim_win_is_valid win))
+               :tick! (fn [t]
+                        (pcall vim.api.nvim_win_set_width
+                               win
+                               (math.max 1 (math.floor (+ 0.5 (lerp start stop t)))) ))
+               :done! (fn []
+                        (pcall vim.api.nvim_win_set_width win stop))})))))
 
 (fn animate-float!
   [session key win from-cfg to-cfg from-blend to-blend duration-ms]

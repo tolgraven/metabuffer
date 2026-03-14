@@ -176,7 +176,7 @@
                 start (vim.deepcopy target)]
             (set (. start :col) (+ (. target :col) 8))
             (pcall vim.api.nvim_set_option_value "winblend" 85 {:win session.info-win})
-            (animation-mod.animate-float!
+          (animation-mod.animate-float!
               session
               "info-enter"
               session.info-win
@@ -185,6 +185,14 @@
               85
               (or vim.g.meta_float_winblend 13)
               (animation-mod.duration-ms session :info (or info-fade-ms 220))))))))
+
+  (fn settle-info-window!
+    [session]
+    (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
+      (let [width (vim.api.nvim_win_get_width session.info-win)
+            height (info-height session)
+            cfg (info-window-config session width height)]
+        (pcall vim.api.nvim_win_set_config session.info-win cfg))))
 
   (fn close-info-window!
     [session]
@@ -247,7 +255,7 @@
             (info-range meta.selected_index total cap))))
 
   (fn build-info-lines
-    [session meta refs idxs target-width start-index stop-index read-file-lines-cached]
+    [session refs idxs target-width start-index stop-index read-file-lines-cached]
     (let [line-hl "LineNr"
           signcol-display-width 2
           file-hl (if (= 1 (vim.fn.hlexists "NERDTreeFile"))
@@ -274,8 +282,7 @@
           highlights []]
       (if (= (# idxs) 0)
           (table.insert lines "No matches")
-          (do
-            (for [i start-index stop-index]
+          (for [i start-index stop-index]
               (let [src-idx (. idxs i)
                     ref (. refs src-idx)
                     view-mode (or session.info-file-entry-view "meta")
@@ -360,7 +367,7 @@
                   (let [s (+ suffix-start (or sh.start 0))
                         e (+ suffix-start (or sh.end 0))]
                     (when (> e s)
-                      (table.insert highlights [row (or sh.hl "Comment") s e]))))))))
+                      (table.insert highlights [row (or sh.hl "Comment") s e])))))))
       {:lines lines :highlights highlights}))
 
   (fn render-info-lines!
@@ -369,7 +376,7 @@
           idxs (or meta.buf.indices [])
           _ (set session.info-start-index start-index)
           _ (set session.info-stop-index stop-index)
-          built (build-info-lines session meta refs idxs (info-max-width-now session) start-index stop-index read-file-lines-cached)
+          built (build-info-lines session refs idxs (info-max-width-now session) start-index stop-index read-file-lines-cached)
           raw-lines (. built :lines)
           lines (if (= (type raw-lines) "table")
                     (vim.tbl_map tostring raw-lines)
@@ -393,10 +400,8 @@
   (fn sync-info-cursor!
     [session meta]
     (when (vim.api.nvim_win_is_valid session.info-win)
-      (let [idxs (or meta.buf.indices [])
-            info-lines (vim.api.nvim_buf_line_count session.info-buf)
+      (let [info-lines (vim.api.nvim_buf_line_count session.info-buf)
             start-index (or session.info-start-index 1)
-            stop-index (or session.info-stop-index (math.min (# idxs) info-max-lines))
             selected1 (+ meta.selected_index 1)
             row (if (> info-lines 0)
                     (math.max 1 (math.min (+ (- selected1 start-index) 1) info-lines))
@@ -413,14 +418,16 @@
 
   (fn update-project!
     [session refresh-lines]
+    (update-preview session)
     (ensure-info-window! session)
-    (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
-      (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
-      (pcall vim.api.nvim_set_option_value "winbar" "" {:win session.info-win}))
+    (settle-info-window! session)
     (debug-log (.. "info enter refresh=" (tostring refresh-lines)
                    " selected=" (tostring session.meta.selected_index)
                    " info-win=" (tostring session.info-win)
                    " info-buf=" (tostring session.info-buf)))
+    (when (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
+      (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
+      (pcall vim.api.nvim_set_option_value "winbar" "" {:win session.info-win}))
     (when (and session.info-buf (vim.api.nvim_buf_is_valid session.info-buf))
       (let [meta session.meta]
         (let [selected1 (+ meta.selected_index 1)
@@ -449,8 +456,7 @@
               (when (or out-of-range range-changed (~= session.info-render-sig sig))
                 (set session.info-render-sig sig)
                 (render-info-lines! session meta wanted-start wanted-stop))))
-          (sync-info-cursor! session meta))))
-    (update-preview session))
+          (sync-info-cursor! session meta)))))
 
   {:close-window! close-info-window!
    :update! (fn [session refresh-lines]

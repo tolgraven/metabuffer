@@ -45,9 +45,25 @@
         active-by-source (. deps :active-by-source)
         active-by-prompt (. deps :active-by-prompt)
         animation-mod (. deps :animation-mod)
+        update-info-window (. deps :update-info-window)
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
         prompt-buf session.prompt-buf
         prompt-win session.prompt-win]
+    (fn schedule-layout-refresh!
+      []
+      (when (and session.project-mode update-info-window)
+        (let [base-delay (if (and animation-mod (animation-mod.enabled? session :prompt))
+                             (animation-mod.duration-ms session :prompt (or (. deps :ui-animation-prompt-ms) 140))
+                             0)]
+          (fn refresh-after!
+            [delay]
+            (vim.defer_fn
+              (fn []
+                (when (= (. active-by-prompt prompt-buf) session)
+                  (pcall update-info-window session true)))
+              delay))
+          (refresh-after! (+ 24 base-delay))
+          (refresh-after! (+ 120 base-delay)))))
     (sync-prompt-buffer-name! session)
     (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
     (router-util-mod.mark-prompt-buffer! prompt-buf)
@@ -68,6 +84,7 @@
         1
         (math.max 1 (or session.prompt-target-height 1))
         (animation-mod.duration-ms session :prompt (or (. deps :ui-animation-prompt-ms) 140))))
+    (schedule-layout-refresh!)
     (vim.schedule
       (fn []
         (when (and prompt-win (vim.api.nvim_win_is_valid prompt-win))
@@ -240,6 +257,10 @@
                       prompt-win (prompt-window-mod.new
                                    vim
                                    {:height (router-util-mod.prompt-height)
+                                    :start-height (if (and ui-animations-enabled
+                                                           (not (= false ui-animation-prompt-enabled)))
+                                                      1
+                                                      (router-util-mod.prompt-height))
                                     :window-local-layout settings.window-local-layout
                                     :origin-win origin-win})
                       prompt-buf prompt-win.buffer

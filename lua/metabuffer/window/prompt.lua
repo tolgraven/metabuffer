@@ -4,6 +4,7 @@ local M = {}
 M.new = function(nvim, opts)
   local cfg = (opts or {})
   local height = (cfg.height or 3)
+  local start_height = math.max(1, (cfg["start-height"] or height))
   local local_layout_3f
   if (cfg["window-local-layout"] == nil) then
     local_layout_3f = true
@@ -14,17 +15,17 @@ M.new = function(nvim, opts)
   local win
   if (local_layout_3f and origin_win and vim.api.nvim_win_is_valid(origin_win)) then
     local function _2_()
-      vim.cmd(("belowright " .. tostring(height) .. "new"))
+      vim.cmd(("belowright " .. tostring(start_height) .. "new"))
       return vim.api.nvim_get_current_win()
     end
     win = vim.api.nvim_win_call(origin_win, _2_)
   else
-    vim.cmd(("botright " .. tostring(height) .. "new"))
+    vim.cmd(("botright " .. tostring(start_height) .. "new"))
     win = vim.api.nvim_get_current_win()
   end
   local buf = vim.api.nvim_win_get_buf(win)
   local self = base.new(nvim, win, {}, {})
-  pcall(vim.api.nvim_win_set_height, win, height)
+  pcall(vim.api.nvim_win_set_height, win, start_height)
   do
     local bo = vim.bo[buf]
     bo["buftype"] = "nofile"

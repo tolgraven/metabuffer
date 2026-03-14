@@ -47,7 +47,9 @@ M["persist-prompt-height!"] = function(session)
   end
 end
 M["info-height"] = function(session)
-  if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+  if (session and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
+    return math.max(7, vim.api.nvim_win_get_height(session.meta.win.window))
+  elseif (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
     local p_row_col = vim.api.nvim_win_get_position(session["prompt-win"])
     local p_row = p_row_col[1]
     return math.max(7, (p_row - 2))
