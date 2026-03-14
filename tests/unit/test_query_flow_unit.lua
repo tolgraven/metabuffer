@@ -11,19 +11,22 @@ local function mk_session(prompt_buf)
     ['include-hidden'] = false,
     ['include-ignored'] = false,
     ['include-deps'] = false,
+    ['include-binary'] = false,
+    ['include-hex'] = false,
     ['include-files'] = false,
     ['effective-include-hidden'] = false,
     ['effective-include-ignored'] = false,
     ['effective-include-deps'] = false,
+    ['effective-include-binary'] = false,
+    ['effective-include-hex'] = false,
     ['effective-include-files'] = false,
     ['prefilter-mode'] = true,
     ['lazy-mode'] = true,
+    ['expansion-mode'] = 'none',
     ['prompt-last-applied-text'] = '',
     meta = {
       _prev_text = 'cached',
       ['_filter-cache'] = { a = true },
-      ['on-update'] = function() end,
-      ['refresh_statusline'] = function() end,
       buf = {
         buffer = vim.api.nvim_get_current_buf(),
         content = { 'one', 'two', 'three' },
@@ -31,6 +34,12 @@ local function mk_session(prompt_buf)
       },
     },
   }
+  session.meta['on-update'] = function()
+    session._update_calls = (session._update_calls or 0) + 1
+  end
+  session.meta['refresh_statusline'] = function()
+    session._status_calls = (session._status_calls or 0) + 1
+  end
   session.meta['set-query-lines'] = function(lines)
     session._query_lines = lines
   end
@@ -111,6 +120,45 @@ T['apply-prompt-lines invalidates filter cache when project flags transition'] =
   eq(type(session.meta['_filter-cache']), 'table')
   eq(next(session.meta['_filter-cache']), nil)
   eq(session.meta['_filter-cache-line-count'], 3)
+  eq(deps._state.apply_calls >= 1, true)
+end
+
+T['apply-prompt-lines skips synchronous meta update on pure project flag changes'] = function()
+  local prompt_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(prompt_buf, 0, -1, false, { 'needle' })
+
+  local session = mk_session(prompt_buf)
+  session['prompt-last-applied-text'] = 'needle'
+  session.meta['on-update'] = function()
+    error('on-update should not run for pure project flag changes')
+  end
+
+  local deps = mk_deps({
+    ['query-mod'] = {
+      ['parse-query-lines'] = function(lines)
+        return {
+          lines = lines,
+          ['include-hidden'] = true,
+          ['include-ignored'] = nil,
+          ['include-deps'] = nil,
+          ['include-binary'] = nil,
+          ['include-hex'] = nil,
+          ['include-files'] = nil,
+          prefilter = nil,
+          lazy = nil,
+          expansion = nil,
+        }
+      end,
+    },
+  })
+  deps['project-source']['schedule-source-set-rebuild!'] = function()
+    deps._state.apply_calls = deps._state.apply_calls + 1
+  end
+  deps['project-source']['apply-source-set!'] = nil
+
+  query_flow['apply-prompt-lines!'](deps, session)
+
+  eq(session._status_calls >= 1, true)
   eq(deps._state.apply_calls >= 1, true)
 end
 

@@ -88,6 +88,74 @@
     (set session.meta._filter-cache {})
     (set session.meta._filter-cache-line-count (# session.meta.buf.content))))
 
+(fn source-flags-changed?
+  [session parsed]
+  (let [next-hidden (choose-current-when-nil (. parsed :include-hidden) session.include-hidden)
+        next-ignored (choose-current-when-nil (. parsed :include-ignored) session.include-ignored)
+        next-deps (choose-current-when-nil (. parsed :include-deps) session.include-deps)
+        next-binary (choose-current-when-nil (. parsed :include-binary) session.include-binary)
+        next-hex (choose-current-when-nil (. parsed :include-hex) session.include-hex)
+        next-files (choose-current-when-nil (. parsed :include-files) session.include-files)]
+    (or (~= next-hidden session.effective-include-hidden)
+        (~= next-ignored session.effective-include-ignored)
+        (~= next-deps session.effective-include-deps)
+        (~= next-binary session.effective-include-binary)
+        (~= next-hex session.effective-include-hex)
+        (~= next-files session.effective-include-files))))
+
+(fn render-flags-changed?
+  [session parsed]
+  (let [next-prefilter (choose-current-when-nil (. parsed :prefilter) session.prefilter-mode)
+        next-lazy (choose-current-when-nil (. parsed :lazy) session.lazy-mode)
+        next-expansion (choose-current-when-nil (. parsed :expansion) session.expansion-mode)]
+    (or (~= next-prefilter session.prefilter-mode)
+        (~= next-lazy session.lazy-mode)
+        (~= next-expansion session.expansion-mode))))
+
+(fn refresh-session-ui!
+  [session update-info-window context-window refresh-change-signs! capture-sign-baseline!]
+  (session.meta.refresh_statusline)
+  (update-info-window session)
+  (when (and context-window context-window.update!)
+    (context-window.update! session))
+  (when refresh-change-signs!
+    (refresh-change-signs! session))
+  (when capture-sign-baseline!
+    (capture-sign-baseline! session)))
+
+(fn retry-textlock-update!
+  [session update-info-window context-window refresh-change-signs! capture-sign-baseline!]
+  (vim.defer_fn
+    (fn []
+      (when (and session.meta
+                 (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+        (pcall session.meta.on-update 0)
+        (pcall refresh-session-ui!
+               session
+               update-info-window
+               context-window
+               refresh-change-signs!
+               capture-sign-baseline!)))
+    1))
+
+(fn run-meta-update!
+  [session update-info-window context-window refresh-change-signs! capture-sign-baseline!]
+  (let [[ok err] [(pcall session.meta.on-update 0)]]
+    (if ok
+        (refresh-session-ui!
+          session
+          update-info-window
+          context-window
+          refresh-change-signs!
+          capture-sign-baseline!)
+        (when (string.find (tostring err) "E565")
+          (retry-textlock-update!
+            session
+            update-info-window
+            context-window
+            refresh-change-signs!
+            capture-sign-baseline!)))))
+
 (fn consume-visible-control-token?
   [query-mod tok]
   (let [parsed (query-mod.parse-query-lines [(or tok "")])]
@@ -144,20 +212,6 @@
               consume-visible-controls? false
               effective-lines lines
               effective-text (table.concat effective-lines "\n")
-              _ false
-              _ (when (and (. parsed :history) merge-history-into-session!)
-                  (merge-history-into-session! session))
-              _ (when (and (= (type (. parsed :save-tag)) "string")
-                           (~= (vim.trim (. parsed :save-tag)) "")
-                           save-current-prompt-tag!)
-                  (save-current-prompt-tag! session (. parsed :save-tag) effective-text))
-              _ (when (and (= (type (. parsed :saved-tag)) "string")
-                           (~= (vim.trim (. parsed :saved-tag)) "")
-                           restore-saved-prompt-tag!)
-                  (restore-saved-prompt-tag! session (. parsed :saved-tag)))
-              _ (when (and (. parsed :saved-browser)
-                           open-saved-browser!)
-                  (open-saved-browser! session))
               next-hidden (choose-current-when-nil (. parsed :include-hidden) session.include-hidden)
               next-ignored (choose-current-when-nil (. parsed :include-ignored) session.include-ignored)
               next-deps (choose-current-when-nil (. parsed :include-deps) session.include-deps)
@@ -171,15 +225,22 @@
               apply-source-set! (. project-source :apply-source-set!)
               prev-effective-text (or session.prompt-last-applied-text "")
               text-changed? (~= effective-text prev-effective-text)
-              changed (or (~= next-hidden session.effective-include-hidden)
-                          (~= next-ignored session.effective-include-ignored)
-                          (~= next-deps session.effective-include-deps)
-                          (~= next-binary session.effective-include-binary)
-                          (~= next-hex session.effective-include-hex)
-                          (~= next-files session.effective-include-files)
-                          (~= next-prefilter session.prefilter-mode)
-                          (~= next-lazy session.lazy-mode)
-                          (~= next-expansion session.expansion-mode))]
+              source-changed? (source-flags-changed? session parsed)
+              render-changed? (render-flags-changed? session parsed)
+              changed (or source-changed? render-changed?)]
+          (when (and (. parsed :history) merge-history-into-session!)
+            (merge-history-into-session! session))
+          (when (and (= (type (. parsed :save-tag)) "string")
+                     (~= (vim.trim (. parsed :save-tag)) "")
+                     save-current-prompt-tag!)
+            (save-current-prompt-tag! session (. parsed :save-tag) effective-text))
+          (when (and (= (type (. parsed :saved-tag)) "string")
+                     (~= (vim.trim (. parsed :saved-tag)) "")
+                     restore-saved-prompt-tag!)
+            (restore-saved-prompt-tag! session (. parsed :saved-tag)))
+          (when (and (. parsed :saved-browser)
+                     open-saved-browser!)
+            (open-saved-browser! session))
           (set session.effective-include-hidden next-hidden)
           (set session.effective-include-ignored next-ignored)
           (set session.effective-include-deps next-deps)
@@ -216,39 +277,26 @@
             (invalidate-filter-cache! session))
           (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
             (pcall vim.api.nvim_buf_set_var session.meta.buf.buffer "meta_manual_edit_active" false))
-          (when (and session.project-mode changed)
+          (when (and session.project-mode source-changed?)
             (if schedule-source-set-rebuild!
                 (schedule-source-set-rebuild! session 0)
                 (when apply-source-set!
                   (apply-source-set! session))))
-          (session.meta.set-query-lines effective-lines))
-        (let [[ok err] [(pcall session.meta.on-update 0)]]
-          (if ok
-              (do
-                (session.meta.refresh_statusline)
-                (update-info-window session)
-                (when (and context-window context-window.update!)
-                  (context-window.update! session))
-                (when refresh-change-signs!
-                  (refresh-change-signs! session))
-                (when capture-sign-baseline!
-                  (capture-sign-baseline! session)))
-              (when (string.find (tostring err) "E565")
-                ;; Textlock race: retry right after current input cycle.
-                (vim.defer_fn
-                  (fn []
-                    (when (and session.meta
-                               (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-                      (pcall session.meta.on-update 0)
-                      (pcall session.meta.refresh_statusline)
-                      (pcall update-info-window session)
-                      (when (and context-window context-window.update!)
-                        (pcall context-window.update! session))
-                      (when refresh-change-signs!
-                        (pcall refresh-change-signs! session))
-                      (when capture-sign-baseline!
-                        (pcall capture-sign-baseline! session))))
-                  1))))))))
+          (session.meta.set-query-lines effective-lines)
+          (if (and session.project-mode source-changed? (not text-changed?))
+              (refresh-session-ui!
+                session
+                update-info-window
+                context-window
+                refresh-change-signs!
+                capture-sign-baseline!)
+              (run-meta-update!
+                session
+                update-info-window
+                context-window
+                refresh-change-signs!
+                capture-sign-baseline!))))))
+      )
 
 (fn M.on-prompt-changed!
   [deps prompt-buf force event-tick]
