@@ -6,6 +6,7 @@ local case_order = {}
 local file_totals = nil
 local output_path = nil
 local file_finished = false
+local case_timings = nil
 local pack = table.pack or function(...)
   return { n = select('#', ...), ... }
 end
@@ -104,6 +105,10 @@ local function emit_lines(lines)
   end
 end
 
+local function print_case_timing(name, ms)
+  return string.format('[mini-runner] CASE DONE  %s | %.1fms', name, ms)
+end
+
 function M.enabled()
   return enabled
 end
@@ -136,11 +141,15 @@ function M.record(kind, label, ms)
 end
 
 function M.start_case()
+  local name = case_name()
+  io.stdout:write(string.format('\n[mini-runner] CASE START %s\n', name))
+  io.stdout:flush()
   if not enabled then
+    current_case = { name = name, wall0 = hr_ms() }
     return
   end
   current_case = {
-    name = case_name(),
+    name = name,
     wall0 = hr_ms(),
     cpu0 = cpu_ms(),
     spans = {},
@@ -151,10 +160,19 @@ function M.start_case()
 end
 
 function M.finish_case()
-  if not (enabled and current_case) then
+  if not current_case then
     return
   end
   current_case.wall = hr_ms() - current_case.wall0
+  local name = current_case.name
+  local wall = current_case.wall
+  case_timings[#case_timings + 1] = { name = name, ms = wall }
+  io.stdout:write('\n' .. print_case_timing(name, wall) .. '\n')
+  io.stdout:flush()
+  if not enabled then
+    current_case = nil
+    return
+  end
   current_case.cpu = math.max(0, cpu_ms() - current_case.cpu0)
   current_case.wall0 = nil
   current_case.cpu0 = nil
@@ -169,10 +187,20 @@ function M.finish_case()
 end
 
 function M.finish_file()
-  if not enabled or file_finished then
+  if file_finished then
     return
   end
   file_finished = true
+  if type(case_timings) == 'table' and #case_timings > 0 then
+    io.stdout:write('\n[mini-runner] CASE TIMINGS SUMMARY\n')
+    for i, item in ipairs(case_timings) do
+      io.stdout:write(string.format('[mini-runner]   %02d. %s | %.1fms\n', i, item.name, item.ms))
+    end
+    io.stdout:flush()
+  end
+  if not enabled then
+    return
+  end
   table.sort(case_order, function(a, b) return a.wall > b.wall end)
   local lines = {
     string.format(
@@ -241,6 +269,7 @@ function M.setup()
   enabled = truthy((vim.env.TEST_PROFILE or ''):lower())
   output_path = vim.env.TEST_PROFILE_PATH or ''
   file_finished = false
+  case_timings = {}
   case_order = {}
   file_totals = {
     wall = 0,

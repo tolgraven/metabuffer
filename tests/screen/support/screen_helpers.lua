@@ -5,90 +5,17 @@ M.child = MiniTest.new_child_neovim()
 M.eq = MiniTest.expect.equality
 
 local debug_dump_path = "/tmp/metabuffer-mini-integration.log"
-local profile_file = vim.env.TEST_PROFILE_PATH or ''
 local debug_dump_enabled = vim.env.TEST_DEBUG_DUMP == '1'
 
-local function hr_ms()
-  return vim.loop.hrtime() / 1e6
-end
-
-local function cpu_ms()
-  local uv = vim.uv or vim.loop
-  local usage = uv.getrusage and uv.getrusage() or nil
-  if not usage then
-    return 0
-  end
-  return (usage.utime.sec * 1000) + (usage.utime.usec / 1000)
-    + (usage.stime.sec * 1000) + (usage.stime.usec / 1000)
-end
-
-local function profile_enabled()
-  return vim.env.TEST_PROFILE == '1' and profile_file ~= ''
-end
-
-local function append_profile(lines)
-  if not profile_enabled() then
-    return
-  end
-  vim.fn.writefile(lines, profile_file, 'a')
-end
-
-local function reset_profile_case()
-  M._profile_case = {
-    name = M.case_name(),
-    wall0 = hr_ms(),
-    cpu0 = cpu_ms(),
-    wait = 0,
-    sleep = 0,
-    child = 0,
-  }
-end
-
-local function finish_profile_case()
-  local case = M._profile_case
-  if not case then
-    return
-  end
-  local wall = hr_ms() - case.wall0
-  local cpu = math.max(0, cpu_ms() - case.cpu0)
-  local blocked = math.max(0, wall - cpu)
-  local lines = {
-    string.format(
-      '[mini-profile] CASE | %s | wall=%.1fms cpu=%.1fms blocked=%.1fms wait=%.1fms sleep=%.1fms child=%.1fms',
-      case.name,
-      wall,
-      cpu,
-      blocked,
-      case.wait,
-      case.sleep,
-      case.child
-    ),
-  }
-  append_profile(lines)
-  M._profile_totals = M._profile_totals or { wall = 0, cpu = 0, wait = 0, sleep = 0, child = 0, count = 0 }
-  M._profile_totals.wall = M._profile_totals.wall + wall
-  M._profile_totals.cpu = M._profile_totals.cpu + cpu
-  M._profile_totals.wait = M._profile_totals.wait + case.wait
-  M._profile_totals.sleep = M._profile_totals.sleep + case.sleep
-  M._profile_totals.child = M._profile_totals.child + case.child
-  M._profile_totals.count = M._profile_totals.count + 1
-  M._profile_case = nil
-end
-
 function M.wait_for(pred, timeout_ms)
-  local started = hr_ms()
   local ok = profiler.measure('wait', profiler.caller_label(2, 'wait_for'), function()
     return vim.wait(timeout_ms or 3000, pred, 20)
   end)
-  if M._profile_case then
-    M._profile_case.wait = M._profile_case.wait + (hr_ms() - started)
-  end
   M.eq(ok, true)
 end
 
 function M.child_setup()
   local root = vim.fn.getcwd()
-  local started = hr_ms()
   local worker_idx = tonumber(vim.env.TEST_WORKER_INDEX or '') or 1
   local startup_jitter = (worker_idx % 8) * 35
 
@@ -113,9 +40,6 @@ function M.child_setup()
     end
     error(last_err)
   end)
-  if M._profile_case then
-    M._profile_case.child = M._profile_case.child + (hr_ms() - started)
-  end
   M.child.o.hidden = true
   M.child.o.swapfile = false
   M.child.cmd("cd " .. root)
@@ -148,72 +72,16 @@ end
 function M.case_hooks()
   return {
     pre_case = function()
-      if M._timings == nil then
-        M._timings = {}
-      end
-      profiler.start_case()
-      reset_profile_case()
       M.child_setup()
     end,
     post_once = function()
-      if not profiler.enabled() and type(M._timings) == 'table' and #M._timings > 0 then
-        io.stdout:write('\n[mini-runner] CASE TIMINGS SUMMARY\n')
-        for i, item in ipairs(M._timings) do
-          io.stdout:write(string.format('[mini-runner]   %02d. %s | %.1fms\n', i, item.name, item.ms))
-        end
-        io.stdout:flush()
-      end
-      M._timings = nil
       M.stop_child_once()
-      profiler.finish_file()
-      if profile_enabled() and M._profile_totals then
-        local t = M._profile_totals
-        append_profile({
-          string.format(
-            '[mini-profile] FILE SUMMARY | cases=%d wall=%.1fms cpu=%.1fms blocked=%.1fms wait=%.1fms sleep=%.1fms child=%.1fms',
-            t.count,
-            t.wall,
-            t.cpu,
-            math.max(0, t.wall - t.cpu),
-            t.wait,
-            t.sleep,
-            t.child
-          ),
-        })
-      end
-      M._profile_case = nil
-      M._profile_totals = nil
     end,
   }
 end
 
 function M.timed_case(fn)
-  return function(...)
-    local args = { ... }
-    local t0 = vim.loop.hrtime() / 1e6
-    local name = M.case_name()
-    io.stdout:write(string.format('\n[mini-runner] CASE START %s\n', name))
-    io.stdout:flush()
-
-    local ok, res = xpcall(function()
-      return fn(unpack(args))
-    end, debug.traceback)
-
-    local dt = (vim.loop.hrtime() / 1e6) - t0
-    if type(M._timings) ~= 'table' then
-      M._timings = {}
-    end
-    table.insert(M._timings, { name = name, ms = dt })
-    io.stdout:write(string.format('\n[mini-runner] CASE DONE  %s | %.1fms\n', name, dt))
-    io.stdout:flush()
-    profiler.finish_case()
-    finish_profile_case()
-
-    if not ok then
-      error(res)
-    end
-    return res
-  end
+  return fn
 end
 
 function M.open_meta_with_lines(lines)
@@ -807,9 +675,6 @@ function M.type_prompt_human(text, per_key_ms)
     end
   end
   profiler.record('sleep', profiler.caller_label(2, 'type_prompt_human'), slept)
-  if M._profile_case then
-    M._profile_case.sleep = M._profile_case.sleep + slept
-  end
   M.dump_state("type_human " .. text)
 end
 
@@ -824,9 +689,6 @@ function M.type_prompt_tokens(tokens, per_key_ms)
     end
   end
   profiler.record('sleep', profiler.caller_label(2, 'type_prompt_tokens'), slept)
-  if M._profile_case then
-    M._profile_case.sleep = M._profile_case.sleep + slept
-  end
   M.dump_state("type_tokens " .. table.concat(tokens, " "))
 end
 
