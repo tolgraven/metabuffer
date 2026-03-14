@@ -45,6 +45,7 @@
         active-by-source (. deps :active-by-source)
         active-by-prompt (. deps :active-by-prompt)
         animation-mod (. deps :animation-mod)
+        prompt-window-mod (. deps :prompt-window-mod)
         preview-window (. deps :preview-window)
         update-info-window (. deps :update-info-window)
         session-view (. deps :session-view)
@@ -63,6 +64,25 @@
                (animation-mod.enabled? session :prompt))
           (animation-mod.duration-ms session :prompt (or (. deps :ui-animation-prompt-ms) 140))
           0))
+    (fn prompt-float-config
+      [height]
+      (let [host-win (or session.origin-win
+                         (and session.meta session.meta.win session.meta.win.window)
+                         prompt-win)
+            host-width (if (and host-win (vim.api.nvim_win_is_valid host-win))
+                           (vim.api.nvim_win_get_width host-win)
+                           vim.o.columns)
+            host-height (if (and host-win (vim.api.nvim_win_is_valid host-win))
+                            (vim.api.nvim_win_get_height host-win)
+                            (- vim.o.lines 2))]
+        {:relative "win"
+         :win host-win
+         :anchor "SW"
+         :row host-height
+         :col 0
+         :width host-width
+         :height (math.max 1 height)
+         :style "minimal"}))
     (fn schedule-layout-refresh!
       []
       (when (and session.project-mode update-info-window)
@@ -91,14 +111,13 @@
                (animation-mod.enabled? session :prompt)
                (not session.prompt-animated?))
       (set session.prompt-animated? true)
-      (set session.prompt-animating? true)
-      (when (= session.saved-laststatus nil)
-        (set session.saved-laststatus vim.o.laststatus))
-      (set vim.o.laststatus 0))
+      (set session.prompt-animating? true))
     (when (and preview-window preview-window.ensure-window!)
       (preview-window.ensure-window! session))
     (when (and prompt-win (vim.api.nvim_win_is_valid prompt-win))
-      (pcall vim.api.nvim_win_set_height prompt-win 1))
+      (if session.prompt-floating?
+          (pcall vim.api.nvim_win_set_config prompt-win (prompt-float-config 1))
+          (pcall vim.api.nvim_win_set_height prompt-win 1)))
     (when (and session.animate-enter?
                animation-mod
                prompt-win
@@ -110,22 +129,44 @@
           (when (and session.prompt-animating?
                      prompt-win
                      (vim.api.nvim_win_is_valid prompt-win))
-            (animation-mod.animate-win-height-stepwise!
-              session
-              "prompt-enter"
-              prompt-win
-              1
-              (math.max 1 (or session.prompt-target-height 1))
-              (prompt-enter-duration-ms)
-              {:tick! (fn [_ _] (restore-main-view!))
-               :done! (fn [_]
-                        (set session.prompt-animating? false)
-                        (when (~= session.saved-laststatus nil)
-                          (set vim.o.laststatus session.saved-laststatus)
-                          (set session.saved-laststatus nil))
-                        (when (and preview-window preview-window.update!)
-                          (pcall preview-window.update! session))
-                        (restore-main-view!))})))))
+            (let [done! (fn [_]
+                          (set session.prompt-animating? false)
+                          (when (and session.prompt-floating?
+                                     prompt-window-mod
+                                     prompt-window-mod.handoff-to-split!)
+                            (let [split (prompt-window-mod.handoff-to-split!
+                                          vim
+                                          session.prompt-window
+                                          {:origin-win session.origin-win
+                                           :window-local-layout session.window-local-layout
+                                           :height (math.max 1 (or session.prompt-target-height 1))})]
+                              (set session.prompt-window split)
+                              (set session.prompt-win split.window)
+                              (set session.prompt-floating? false)))
+                          (when (and preview-window preview-window.update!)
+                            (pcall preview-window.update! session))
+                          (restore-main-view!))]
+              (if session.prompt-floating?
+                  (animation-mod.animate-float!
+                    session
+                    "prompt-enter"
+                    prompt-win
+                    (prompt-float-config 1)
+                    (prompt-float-config (math.max 1 (or session.prompt-target-height 1)))
+                    0
+                    0
+                    (prompt-enter-duration-ms)
+                    {:tick! (fn [_ _] (restore-main-view!))
+                     :done! done!})
+                  (animation-mod.animate-win-height-stepwise!
+                    session
+                    "prompt-enter"
+                    prompt-win
+                    1
+                    (math.max 1 (or session.prompt-target-height 1))
+                    (prompt-enter-duration-ms)
+                    {:tick! (fn [_ _] (restore-main-view!))
+                     :done! done!}))))))))
     (schedule-layout-refresh!)
     (vim.defer_fn
       (fn []
@@ -299,13 +340,11 @@
                                         [""])
                       prompt-animates? (and ui-animations-enabled
                                             (not (= false ui-animation-prompt-enabled)))
-                      saved-laststatus (when prompt-animates? vim.o.laststatus)
-                      _ (when prompt-animates?
-                          (set vim.o.laststatus 0))
                       prompt-win (prompt-window-mod.new
                                    vim
                                    {:height (router-util-mod.prompt-height)
                                     :start-height (if prompt-animates? 1 (router-util-mod.prompt-height))
+                                    :floating? prompt-animates?
                                     :window-local-layout settings.window-local-layout
                                     :origin-win origin-win})
                       prompt-buf prompt-win.buffer
@@ -314,10 +353,11 @@
                                :origin-buf origin-buf
                                :source-view source-view
                                :initial-source-line (math.max 1 (or (. source-view :lnum) (+ (or condition.selected-index 0) 1)))
+                               :prompt-window prompt-win
                                :prompt-win prompt-win.window
                                :prompt-target-height (router-util-mod.prompt-height)
                                :prompt-buf prompt-buf
-                               :saved-laststatus saved-laststatus
+                               :prompt-floating? prompt-win.floating?
                                :window-local-layout settings.window-local-layout
                                :prompt-keymaps settings.prompt-keymaps
                                :main-keymaps settings.main-keymaps

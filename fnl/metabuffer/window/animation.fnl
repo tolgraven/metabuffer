@@ -171,7 +171,8 @@
                           (done! stop)))})))))
 
 (fn animate-float!
-  [session key win from-cfg to-cfg from-blend to-blend duration-ms]
+  [session key win from-cfg to-cfg from-blend to-blend duration-ms opts]
+  (let [opts (or opts {})]
   (run! session key
         {:duration-ms duration-ms
          :steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
@@ -196,10 +197,14 @@
                             (set (. cfg :win) host))
                         blend (math.max 0 (math.min 100 (math.floor (+ 0.5 (lerp from-blend to-blend t)))))]
                     (pcall vim.api.nvim_win_set_config win cfg)
-                    (pcall vim.api.nvim_set_option_value "winblend" blend {:win win})))
+                    (pcall vim.api.nvim_set_option_value "winblend" blend {:win win})
+                    (when-let [tick! (. opts :tick!)]
+                      (tick! cfg t))))
          :done! (fn []
                   (pcall vim.api.nvim_win_set_config win to-cfg)
-                  (pcall vim.api.nvim_set_option_value "winblend" to-blend {:win win}))}))
+                  (pcall vim.api.nvim_set_option_value "winblend" to-blend {:win win})
+                  (when-let [done! (. opts :done!)]
+                    (done! to-cfg))))}))
 
 (fn animate-view!
   [session key win from-view to-view duration-ms]
