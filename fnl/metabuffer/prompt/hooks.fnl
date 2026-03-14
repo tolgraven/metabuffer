@@ -10,6 +10,16 @@
          : on-prompt-changed : update-info-window : maybe-sync-from-main!
          : schedule-scroll-sync! : maybe-restore-hidden-ui!
          : maybe-refresh-preview-statusline! : sign-mod} opts]
+    (let [animation-enabled? (. animation-mod :enabled?)
+          animation-duration-ms (. animation-mod :duration-ms)]
+    (fn prompt-animation-delay-ms
+      [session]
+      (if (and animation-mod
+               animation-enabled?
+               (animation-enabled? session :prompt))
+          (animation-duration-ms session :prompt 140)
+          0))
+
     (fn disable-cmp
   [session]
       (mark-prompt-buffer! session.prompt-buf)
@@ -176,10 +186,11 @@
             (set session.loading-anim-pending false)
             (when (and (session-prompt-valid? session)
                        (session-busy? session)
-                       (animation-mod.enabled? session :loading))
+                       animation-enabled?
+                       (animation-enabled? session :loading))
               (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
               (refresh-prompt-highlights! session)))
-          (animation-mod.duration-ms session :loading 90))))
+          (animation-duration-ms session :loading 90))))
 
     (fn prompt-content-display-rows
       [session width]
@@ -602,8 +613,9 @@
            :callback (fn [_]
                        (schedule-when-valid session
                          (fn []
-                           (pcall refresh-prompt-highlights! session)
-                           (pcall update-info-window session))))})
+                           (when-not session.prompt-animating?
+                             (pcall refresh-prompt-highlights! session)
+                             (pcall update-info-window session)))))} )
       ;; Keep selection/status/info synced when user scrolls or moves in the
       ;; main meta window with regular motions/mouse while prompt is open.
         (vim.api.nvim_create_autocmd ["CursorMoved" "CursorMovedI"]
@@ -672,14 +684,15 @@
         (refresh-prompt-highlights! session)
         ;; Prompt/footer layout can change one tick later after split/floating
         ;; windows settle; rerender so wrapped footer lines are visible at open.
-        (vim.schedule
+        (vim.defer_fn
           (fn []
             (when (and session.prompt-buf
                        (= (. active-by-prompt session.prompt-buf) session))
-              (pcall refresh-prompt-highlights! session))))
+              (pcall refresh-prompt-highlights! session)))
+          (prompt-animation-delay-ms session))
         (apply-keymaps router session)
         (apply-emacs-insert-fallbacks router session)))
 
-    {:register! register!}))
+    {:register! register!})))
 
 M

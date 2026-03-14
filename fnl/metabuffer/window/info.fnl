@@ -125,35 +125,33 @@
         animation_mod (. deps :animation-mod)
         animate_enter? (. deps :animate-enter?)
         info_fade_ms (. deps :info-fade-ms)]
-    (do
+  (var info_window_config nil)
+  (set info_window_config
+    (fn [session width height]
+      (let [host-win (if (and session
+                              session.meta
+                              session.meta.win
+                              (vim.api.nvim_win_is_valid session.meta.win.window))
+                         session.meta.win.window
+                         session.prompt-win)]
+        (if session.window-local-layout
+            {:relative "win"
+             :win host-win
+             :anchor "NE"
+             :row 0
+             :col (vim.api.nvim_win_get_width host-win)
+             :width width
+             :height height}
+            {:relative "editor"
+             :anchor "NE"
+             :row 1
+             :col vim.o.columns
+             :width width
+             :height height}))))
 
-  (local info_window_config
-    (fn
-    [session width height]
-    (let [host-win (if (and session
-                            session.meta
-                            session.meta.win
-                            (vim.api.nvim_win_is_valid session.meta.win.window))
-                       session.meta.win.window
-                       session.prompt-win)]
-    (if session.window-local-layout
-        {:relative "win"
-         :win host-win
-         :anchor "NE"
-         :row 0
-         :col (vim.api.nvim_win_get_width host-win)
-         :width width
-         :height height}
-        {:relative "editor"
-         :anchor "NE"
-         :row 1
-         :col vim.o.columns
-         :width width
-         :height height}))))
-
-  (local ensure_info_window!
-    (fn
-    [session]
+  (var ensure_info_window nil)
+  (set ensure_info_window
+    (fn [session]
     (when-not (and session.info-win (vim.api.nvim_win_is_valid session.info-win))
       (let [buf (vim.api.nvim_create_buf false true)
             width info_min_width
@@ -205,7 +203,7 @@
                   (animation_mod.duration-ms session :info (or info_fade_ms 220)))))
             (if (and animation_mod (animation_mod.enabled? session :prompt))
                 (animation_mod.duration-ms session :prompt 140)
-                0))))))))
+                0)))))))
 
   (fn settle-info-window!
     [session]
@@ -440,7 +438,7 @@
   (fn update-project!
     [session refresh-lines]
     (update_preview session)
-    (ensure_info_window! session)
+    (ensure_info_window session)
     (settle-info-window! session)
     (debug_log (.. "info enter refresh=" (tostring refresh-lines)
                    " selected=" (tostring session.meta.selected_index)

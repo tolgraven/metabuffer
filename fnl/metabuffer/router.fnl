@@ -112,7 +112,9 @@
            :read-file-lines-cached (fn [path]
                                      (router_util_mod.read-file-lines-cached M path))
            :update-preview (fn [session]
-                             (preview-window.maybe-update-for-selection! session))})]
+                             (when (and (= (type preview-window) "table")
+                                        preview-window.maybe-update-for-selection!)
+                               (preview-window.maybe-update-for-selection! session)))})]
     (if (= (type candidate) "function")
         {:update! candidate
          :close-window! (fn [_] nil)}
@@ -639,7 +641,8 @@
           (maybe-delete-buf! session.meta.buf.buffer))
         (when (and info-window info-window.close-window!)
           (pcall info-window.close-window! session))
-        (when (and preview-window preview-window.close-window!)
+        (when (and (= (type preview-window) "table")
+                   preview-window.close-window!)
           (pcall preview-window.close-window! session))
         (when (and context-window context-window.close-window!)
           (pcall context-window.close-window! session))

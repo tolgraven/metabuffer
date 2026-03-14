@@ -170,88 +170,86 @@ M.new = function(opts)
   local animation_mod = deps["animation-mod"]
   local animate_enter_3f = deps["animate-enter?"]
   local info_fade_ms = deps["info-fade-ms"]
-  do
-    local info_window_config
-    local function _23_(session, width, height)
-      local host_win
-      if (session and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
-        host_win = session.meta.win.window
-      else
-        host_win = session["prompt-win"]
-      end
-      if session["window-local-layout"] then
-        return {relative = "win", win = host_win, anchor = "NE", row = 0, col = vim.api.nvim_win_get_width(host_win), width = width, height = height}
-      else
-        return {relative = "editor", anchor = "NE", row = 1, col = vim.o.columns, width = width, height = height}
-      end
+  local info_window_config = nil
+  local function _23_(session, width, height)
+    local host_win
+    if (session and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
+      host_win = session.meta.win.window
+    else
+      host_win = session["prompt-win"]
     end
-    info_window_config = _23_
-    local ensure_info_window_21
-    local function _26_(session)
-      if not (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
-        local buf = vim.api.nvim_create_buf(false, true)
-        local width = info_min_width
-        local height = info_height(session)
-        local target = info_window_config(session, width, height)
-        local animate_info_3f = (animation_mod and animate_enter_3f and animate_enter_3f(session) and animation_mod["enabled?"](session, "info") and not session["info-animated?"])
-        local cfg
-        if animate_info_3f then
-          local start = vim.deepcopy(target)
-          start["col"] = (target.col + 8)
-          cfg = start
-        else
-          cfg = target
-        end
-        local win = floating_window_mod.new(vim, buf, cfg)
-        session["info-buf"] = buf
-        session["info-win"] = win.window
-        do
-          local bo = vim.bo[buf]
-          bo["buftype"] = "nofile"
-          bo["bufhidden"] = "wipe"
-          bo["swapfile"] = false
-          bo["modifiable"] = false
-          bo["filetype"] = "metabuffer"
-        end
-        do
-          local wo = vim.wo[win.window]
-          wo["statusline"] = ""
-          wo["winbar"] = ""
-          wo["number"] = false
-          wo["relativenumber"] = false
-          wo["wrap"] = false
-          wo["linebreak"] = false
-          wo["signcolumn"] = "no"
-          wo["foldcolumn"] = "0"
-          wo["spell"] = false
-        end
-        if animate_info_3f then
-          session["info-animated?"] = true
-          pcall(vim.api.nvim_set_option_value, "winblend", 85, {win = session["info-win"]})
-          local function _28_()
-            if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
-              return animation_mod["animate-float!"](session, "info-enter", session["info-win"], cfg, target, 85, (vim.g.meta_float_winblend or 13), animation_mod["duration-ms"](session, "info", (info_fade_ms or 220)))
-            else
-              return nil
-            end
+    if session["window-local-layout"] then
+      return {relative = "win", win = host_win, anchor = "NE", row = 0, col = vim.api.nvim_win_get_width(host_win), width = width, height = height}
+    else
+      return {relative = "editor", anchor = "NE", row = 1, col = vim.o.columns, width = width, height = height}
+    end
+  end
+  info_window_config = _23_
+  local ensure_info_window = nil
+  local function _26_(session)
+    if not (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
+      local buf = vim.api.nvim_create_buf(false, true)
+      local width = info_min_width
+      local height = info_height(session)
+      local target = info_window_config(session, width, height)
+      local animate_info_3f = (animation_mod and animate_enter_3f and animate_enter_3f(session) and animation_mod["enabled?"](session, "info") and not session["info-animated?"])
+      local cfg
+      if animate_info_3f then
+        local start = vim.deepcopy(target)
+        start["col"] = (target.col + 8)
+        cfg = start
+      else
+        cfg = target
+      end
+      local win = floating_window_mod.new(vim, buf, cfg)
+      session["info-buf"] = buf
+      session["info-win"] = win.window
+      do
+        local bo = vim.bo[buf]
+        bo["buftype"] = "nofile"
+        bo["bufhidden"] = "wipe"
+        bo["swapfile"] = false
+        bo["modifiable"] = false
+        bo["filetype"] = "metabuffer"
+      end
+      do
+        local wo = vim.wo[win.window]
+        wo["statusline"] = ""
+        wo["winbar"] = ""
+        wo["number"] = false
+        wo["relativenumber"] = false
+        wo["wrap"] = false
+        wo["linebreak"] = false
+        wo["signcolumn"] = "no"
+        wo["foldcolumn"] = "0"
+        wo["spell"] = false
+      end
+      if animate_info_3f then
+        session["info-animated?"] = true
+        pcall(vim.api.nvim_set_option_value, "winblend", 85, {win = session["info-win"]})
+        local function _28_()
+          if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
+            return animation_mod["animate-float!"](session, "info-enter", session["info-win"], cfg, target, 85, (vim.g.meta_float_winblend or 13), animation_mod["duration-ms"](session, "info", (info_fade_ms or 220)))
+          else
+            return nil
           end
-          local function _30_()
-            if (animation_mod and animation_mod["enabled?"](session, "prompt")) then
-              return animation_mod["duration-ms"](session, "prompt", 140)
-            else
-              return 0
-            end
-          end
-          return vim.defer_fn(_28_, _30_())
-        else
-          return nil
         end
+        local function _30_()
+          if (animation_mod and animation_mod["enabled?"](session, "prompt")) then
+            return animation_mod["duration-ms"](session, "prompt", 140)
+          else
+            return 0
+          end
+        end
+        return vim.defer_fn(_28_, _30_())
       else
         return nil
       end
+    else
+      return nil
     end
-    ensure_info_window_21 = _26_
   end
+  ensure_info_window = _26_
   local function settle_info_window_21(session)
     if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
       local width = vim.api.nvim_win_get_width(session["info-win"])
@@ -586,7 +584,7 @@ M.new = function(opts)
   end
   local function update_project_21(session, refresh_lines)
     update_preview(session)
-    __fnl_global__ensure_5finfo_5fwindow_21(session)
+    ensure_info_window(session)
     settle_info_window_21(session)
     debug_log(("info enter refresh=" .. tostring(refresh_lines) .. " selected=" .. tostring(session.meta.selected_index) .. " info-win=" .. tostring(session["info-win"]) .. " info-buf=" .. tostring(session["info-buf"])))
     if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then

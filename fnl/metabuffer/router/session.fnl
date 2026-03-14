@@ -45,6 +45,7 @@
         active-by-source (. deps :active-by-source)
         active-by-prompt (. deps :active-by-prompt)
         animation-mod (. deps :animation-mod)
+        preview-window (. deps :preview-window)
         update-info-window (. deps :update-info-window)
         session-view (. deps :session-view)
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
@@ -56,6 +57,12 @@
                  session.meta.win
                  (vim.api.nvim_win_is_valid session.meta.win.window))
         (session-view.restore-meta-view! session.meta session.source-view)))
+    (fn prompt-enter-duration-ms
+      []
+      (if (and animation-mod
+               (animation-mod.enabled? session :prompt))
+          (animation-mod.duration-ms session :prompt (or (. deps :ui-animation-prompt-ms) 140))
+          0))
     (fn schedule-layout-refresh!
       []
       (when (and session.project-mode update-info-window)
@@ -84,17 +91,43 @@
                (animation-mod.enabled? session :prompt)
                (not session.prompt-animated?))
       (set session.prompt-animated? true)
-      (animation-mod.animate-win-height!
-        session
-        "prompt-enter"
-        prompt-win
-        1
-        (math.max 1 (or session.prompt-target-height 1))
-        (animation-mod.duration-ms session :prompt (or (. deps :ui-animation-prompt-ms) 140))
-        {:tick! (fn [_ _] (restore-main-view!))
-         :done! (fn [_] (restore-main-view!))}))
+      (set session.prompt-animating? true)
+      (when (= session.saved-laststatus nil)
+        (set session.saved-laststatus vim.o.laststatus))
+      (set vim.o.laststatus 0))
+    (when (and preview-window preview-window.ensure-window!)
+      (preview-window.ensure-window! session))
+    (when (and prompt-win (vim.api.nvim_win_is_valid prompt-win))
+      (pcall vim.api.nvim_win_set_height prompt-win 1))
+    (when (and session.animate-enter?
+               animation-mod
+               prompt-win
+               (vim.api.nvim_win_is_valid prompt-win)
+               (animation-mod.enabled? session :prompt)
+               session.prompt-animating?)
+      (vim.schedule
+        (fn []
+          (when (and session.prompt-animating?
+                     prompt-win
+                     (vim.api.nvim_win_is_valid prompt-win))
+            (animation-mod.animate-win-height-stepwise!
+              session
+              "prompt-enter"
+              prompt-win
+              1
+              (math.max 1 (or session.prompt-target-height 1))
+              (prompt-enter-duration-ms)
+              {:tick! (fn [_ _] (restore-main-view!))
+               :done! (fn [_]
+                        (set session.prompt-animating? false)
+                        (when (~= session.saved-laststatus nil)
+                          (set vim.o.laststatus session.saved-laststatus)
+                          (set session.saved-laststatus nil))
+                        (when (and preview-window preview-window.update!)
+                          (pcall preview-window.update! session))
+                        (restore-main-view!))})))))
     (schedule-layout-refresh!)
-    (vim.schedule
+    (vim.defer_fn
       (fn []
         (when (and prompt-win (vim.api.nvim_win_is_valid prompt-win))
           (let [row (math.max 1 (# initial-lines))
@@ -103,7 +136,8 @@
             (pcall vim.api.nvim_win_set_cursor prompt-win [row col]))
           (when-not vim.g.meta_test_no_startinsert
             (vim.api.nvim_set_current_win prompt-win)
-            (vim.cmd "startinsert")))))))
+            (vim.cmd "startinsert"))))
+      (prompt-enter-duration-ms))))
 
 (fn finish-session-startup!
   [deps curr session initial-query-active]
