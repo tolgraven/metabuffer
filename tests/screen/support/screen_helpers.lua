@@ -282,6 +282,19 @@ function M.session_context_lines()
   ]])
 end
 
+function M.session_result_lines()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta and s.meta.buf and vim.api.nvim_buf_is_valid(s.meta.buf.buffer)) then
+        return {}
+      end
+      return vim.api.nvim_buf_get_lines(s.meta.buf.buffer, 0, -1, false)
+    end)()
+  ]])
+end
+
 function M.session_matcher_name()
   return M.child.lua_get([[
     (function()
@@ -497,7 +510,7 @@ function M.type_prompt(keys)
 end
 
 function M.type_prompt_human(text, per_key_ms)
-  local delay = per_key_ms or 100
+  local delay = per_key_ms or 25
   for i = 1, #text do
     M.child.type_keys(0, string.sub(text, i, i))
     if delay > 0 then
@@ -508,7 +521,7 @@ function M.type_prompt_human(text, per_key_ms)
 end
 
 function M.type_prompt_tokens(tokens, per_key_ms)
-  local delay = per_key_ms or 100
+  local delay = per_key_ms or 25
   for _, key in ipairs(tokens) do
     M.child.type_keys(0, key)
     if delay > 0 then

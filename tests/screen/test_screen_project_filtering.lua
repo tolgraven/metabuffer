@@ -5,7 +5,7 @@ local T = MiniTest.new_set({ hooks = H.case_hooks() })
 T['project mode immediate typing survives lazy stream churn'] = H.timed_case(function()
   H.open_project_meta_from_file('README.md')
 
-  H.type_prompt_human('meta', 100)
+  H.type_prompt_human('meta', 25)
   H.wait_for(function() return H.session_query_text() == 'meta' end, 6000)
   local meta_hits = H.session_hit_count()
 
@@ -27,7 +27,7 @@ T['project mode clear query broadens and keeps source pool'] = H.timed_case(func
   H.wait_for(function() return H.session_source_path_count() > 1 end, 6000)
   local all_sources = H.session_source_path_count()
 
-  H.type_prompt_human('metam', 100)
+  H.type_prompt_human('metam', 25)
   H.wait_for(function() return H.session_query_text() == 'metam' end, 6000)
   H.wait_for(function() return H.session_hit_count() < all_hits end, 6000)
 

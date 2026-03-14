@@ -22,6 +22,53 @@ cpu_count() {
   echo 4
 }
 
+default_jobs() {
+  local cpu_n="$1"
+  local file_n="$2"
+  local oversubscribe="${TEST_JOBS_MULTIPLIER:-1}"
+  local extra_jobs="${TEST_JOBS_EXTRA:-2}"
+  local default_max_jobs=$((cpu_n * 2))
+  local max_jobs="${TEST_MAX_JOBS:-$default_max_jobs}"
+  local jobs
+
+  if [[ "$oversubscribe" =~ ^[0-9]+$ ]]; then
+    :
+  else
+    oversubscribe=2
+  fi
+  if (( oversubscribe < 1 )); then
+    oversubscribe=1
+  fi
+  if [[ "$extra_jobs" =~ ^[0-9]+$ ]]; then
+    :
+  else
+    extra_jobs=2
+  fi
+  if (( extra_jobs < 0 )); then
+    extra_jobs=0
+  fi
+  if [[ "$max_jobs" =~ ^[0-9]+$ ]]; then
+    :
+  else
+    max_jobs="$file_n"
+  fi
+  if (( max_jobs < 1 )); then
+    max_jobs=1
+  fi
+
+  jobs=$(((cpu_n * oversubscribe) + extra_jobs))
+  if (( jobs < 1 )); then
+    jobs=1
+  fi
+  if (( jobs > max_jobs )); then
+    jobs="$max_jobs"
+  fi
+  if (( jobs > file_n )); then
+    jobs="$file_n"
+  fi
+  echo "$jobs"
+}
+
 TEST_FILES=()
 while IFS= read -r file; do
   TEST_FILES+=("$file")
@@ -81,13 +128,7 @@ if [[ ${#TEST_FILES[@]} -eq 0 ]]; then
 fi
 
 CPU_N=$(cpu_count)
-DEFAULT_JOBS=$CPU_N
-if (( DEFAULT_JOBS < 1 )); then
-  DEFAULT_JOBS=1
-fi
-if (( DEFAULT_JOBS > ${#TEST_FILES[@]} )); then
-  DEFAULT_JOBS=${#TEST_FILES[@]}
-fi
+DEFAULT_JOBS=$(default_jobs "$CPU_N" "${#TEST_FILES[@]}")
 
 JOBS=${TEST_JOBS:-$DEFAULT_JOBS}
 if [[ "$JOBS" =~ ^[0-9]+$ ]]; then

@@ -8,7 +8,7 @@ T['project hit buffer and info window stay in sync while typing and deleting'] =
   H.open_project_meta_in_dir(root, 'main.txt')
 
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
-  H.type_prompt_human('meta', 100)
+  H.type_prompt_human('meta', 25)
   H.wait_for(function() return H.session_query_text() == 'meta' end, 6000)
 
   H.type_prompt('<C-n>')
