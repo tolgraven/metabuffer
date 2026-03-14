@@ -97,7 +97,7 @@
 - Never stop work unecessarily. User should never have to simply type "go", unless you make an optional (somewhat unlikely to be wanted) suggestion. Generally stop when there are multiple paths to take and user needs to choose. But if both can be implemented without issue and seem reasonable based on spec, simply implement them without asking.
 - Features in `features` should always result in feature branches in git. Commit each step when doing that, without asking. Don't push unless asked. Other work can be done straight on mainline, and then you should defer committing until told.
 - Try to avoid commands that need escalated permissions and hence user input (to confirm), since these disrupt work. Always see if there is an in-sandbox alternative.
-- Since you lack full access to `~/.local/state/nvim` you need to always use `/tmp` and set appropriate exports for such things when trying to test using a full neovim config/setup.
+- Since you lack full access to `~/.local/state/nvim`, always route ad hoc Neovim state through `/tmp` to avoid `shada`/state permission errors. For manual/headless runs, set `XDG_STATE_HOME=/tmp`, `XDG_DATA_HOME=/tmp`, `XDG_CACHE_HOME=/tmp`, and if needed `NVIM_APPNAME` to a tmp-specific value instead of touching the real local state dirs.
 - Remember `fennel-ls` should be run directly after any file edit.
 
 ## Symbol Index
