@@ -8,6 +8,9 @@ This repo now has two parallelized suites:
 
 - Full run (screen + unit, parallel workers):
   - `./scripts/test-mini.sh`
+- Full run with profiling:
+  - `./scripts/test-mini.sh --profile`
+  - runner prints the persistent `/tmp/...` profile directory and each worker profile file path
 - Override worker count:
   - `TEST_JOBS=4 ./scripts/test-mini.sh`
 - Override default oversubscription:
@@ -15,7 +18,7 @@ This repo now has two parallelized suites:
   - `TEST_JOBS_EXTRA=4 ./scripts/test-mini.sh`
   - `TEST_MAX_JOBS=16 ./scripts/test-mini.sh`
 - Rerun a single file:
-  - `TEST_ONLY='tests/unit/test_query_unit.lua' ./scripts/test-mini.sh`
+  - `./scripts/test-mini.sh tests/unit/test_query_unit.lua`
 - Rerun only previously failing files:
   - `TEST_FAILED_ONLY=1 ./scripts/test-mini.sh`
 
@@ -26,6 +29,13 @@ Runner behavior:
   - default jobs = `min(test_files, TEST_MAX_JOBS or (cpu_count * 2), cpu_count * (TEST_JOBS_MULTIPLIER or 1) + (TEST_JOBS_EXTRA or 2))`
 - Isolates each worker via `NVIM_APPNAME`.
 - Prints file start/end, case names from MiniTest, and total elapsed ms.
+- Optional profiling (`--profile`) adds per-file and per-case breakdowns for:
+  - wall time
+  - CPU time
+  - blocked time (`wall - CPU`)
+  - explicit `wait_for()` time
+  - simulated typing sleep time
+  - child Neovim startup time
 - Returns non-zero if any file has failing cases.
 
 ## Screen Tests

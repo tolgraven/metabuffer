@@ -95,7 +95,20 @@ if [[ "${TEST_FAILED_ONLY:-0}" == "1" ]]; then
   fi
 fi
 
-FILTERS=("$@")
+FILTERS=()
+PROFILE_MODE=0
+POSITIONAL=()
+for arg in "$@"; do
+  if [[ "$arg" == "--profile" ]]; then
+    PROFILE_MODE=1
+  else
+    POSITIONAL+=("$arg")
+  fi
+done
+if (( ${#POSITIONAL[@]} > 0 )); then
+  FILTERS=("${POSITIONAL[@]}")
+fi
+
 if [[ -n "${TEST_ONLY:-}" ]]; then
   echo "[mini-runner] note: TEST_ONLY is deprecated; pass selectors as script args instead"
   IFS=',' read -r -a LEGACY_FILTERS <<< "${TEST_ONLY}"
@@ -145,6 +158,11 @@ if (( JOBS > ${#TEST_FILES[@]} )); then
 fi
 
 TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/metabuffer-mini.XXXXXX")
+PROFILE_DIR=""
+if (( PROFILE_MODE == 1 )); then
+  PROFILE_DIR="${TEST_PROFILE_DIR:-/tmp/metabuffer-profile-$$-$(date +%s)}"
+  mkdir -p "$PROFILE_DIR"
+fi
 trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
 TOTAL_START_MS=$(python3 - <<'PY'
@@ -154,6 +172,10 @@ PY
 )
 
 echo "[mini-runner] running ${#TEST_FILES[@]} files with ${JOBS} parallel worker(s)"
+if (( PROFILE_MODE == 1 )); then
+  echo "[mini-runner] profiling enabled"
+  echo "[mini-runner] profile dir: $PROFILE_DIR"
+fi
 
 for i in "${!TEST_FILES[@]}"; do
   idx=$((i + 1))
@@ -169,16 +191,23 @@ run_worker() {
   base=$(basename "$file")
   local log="$tmp_dir/$idx.log"
   local status="$tmp_dir/$idx.status"
+  local profile="$PROFILE_DIR/$idx-$(basename "$file" .lua).profile.log"
   local appname="metabuffer-mini-${idx}-$$"
   local xdg_root="$tmp_dir/xdg-$idx"
 
   local file_start_s
   file_start_s=$(date +%s)
   mkdir -p "$xdg_root/data" "$xdg_root/state" "$xdg_root/cache" "$xdg_root/config"
+  if (( PROFILE_MODE == 1 )); then
+    : > "$profile"
+  fi
 
   {
     echo "[worker $idx] FILE START $file"
-    TEST_FILE="$file" NVIM_APPNAME="$appname" \
+    if (( PROFILE_MODE == 1 )); then
+      echo "[worker $idx] PROFILE FILE $profile"
+    fi
+    TEST_FILE="$file" TEST_PROFILE="$PROFILE_MODE" TEST_PROFILE_PATH="$profile" NVIM_APPNAME="$appname" \
       TMPDIR="/tmp" \
       XDG_DATA_HOME="$xdg_root/data" \
       XDG_STATE_HOME="$xdg_root/state" \
@@ -195,6 +224,10 @@ run_worker() {
   file_end_s=$(date +%s)
   local file_dt=$((file_end_s - file_start_s))
 
+  if (( PROFILE_MODE == 1 )) && [[ -s "$profile" ]]; then
+    sed -u "s/^/[w${idx}:${base}] /" "$profile" | tee -a "$log"
+  fi
+
   echo "[worker $idx] FILE END $file | rc=$rc | ${file_dt}s" | sed -u "s/^/[w${idx}:${base}] /" | tee -a "$log"
   echo "$rc" > "$status"
   return 0
@@ -202,6 +235,8 @@ run_worker() {
 
 export -f run_worker
 export ROOT_DIR
+export PROFILE_MODE
+export PROFILE_DIR
 
 xargs -P "$JOBS" -n3 bash -c 'run_worker "$1" "$2" "$3"' _ < <(
   awk -F '\t' '{print $1" "$2" '"$TMP_DIR"'"}' "$TMP_DIR/indexed.tsv"
