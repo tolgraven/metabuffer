@@ -167,6 +167,8 @@
               next-prefilter (choose-current-when-nil (. parsed :prefilter) session.prefilter-mode)
               next-lazy (choose-current-when-nil (. parsed :lazy) session.lazy-mode)
               next-expansion (choose-current-when-nil (. parsed :expansion) session.expansion-mode)
+              schedule-source-set-rebuild! (. project-source :schedule-source-set-rebuild!)
+              apply-source-set! (. project-source :apply-source-set!)
               prev-effective-text (or session.prompt-last-applied-text "")
               text-changed? (~= effective-text prev-effective-text)
               changed (or (~= next-hidden session.effective-include-hidden)
@@ -214,10 +216,11 @@
             (invalidate-filter-cache! session))
           (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
             (pcall vim.api.nvim_buf_set_var session.meta.buf.buffer "meta_manual_edit_active" false))
-          (when (and session.project-mode
-                     changed
-                     project-source.schedule-source-set-rebuild!)
-            (project-source.schedule-source-set-rebuild! session 0))
+          (when (and session.project-mode changed)
+            (if schedule-source-set-rebuild!
+                (schedule-source-set-rebuild! session 0)
+                (when apply-source-set!
+                  (apply-source-set! session))))
           (session.meta.set-query-lines effective-lines))
         (let [[ok err] [(pcall session.meta.on-update 0)]]
           (if ok

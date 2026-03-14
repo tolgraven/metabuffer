@@ -145,6 +145,8 @@ M["apply-prompt-lines!"] = function(deps, session)
       local next_prefilter = choose_current_when_nil(parsed.prefilter, session["prefilter-mode"])
       local next_lazy = choose_current_when_nil(parsed.lazy, session["lazy-mode"])
       local next_expansion = choose_current_when_nil(parsed.expansion, session["expansion-mode"])
+      local schedule_source_set_rebuild_21 = project_source["schedule-source-set-rebuild!"]
+      local apply_source_set_21 = project_source["apply-source-set!"]
       local prev_effective_text = (session["prompt-last-applied-text"] or "")
       local text_changed_3f = (effective_text ~= prev_effective_text)
       local changed = ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_binary ~= session["effective-include-binary"]) or (next_hex ~= session["effective-include-hex"]) or (next_files ~= session["effective-include-files"]) or (next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]) or (next_expansion ~= session["expansion-mode"]))
@@ -192,8 +194,15 @@ M["apply-prompt-lines!"] = function(deps, session)
         pcall(vim.api.nvim_buf_set_var, session.meta.buf.buffer, "meta_manual_edit_active", false)
       else
       end
-      if (session["project-mode"] and changed and project_source["schedule-source-set-rebuild!"]) then
-        project_source["schedule-source-set-rebuild!"](session, 0)
+      if (session["project-mode"] and changed) then
+        if schedule_source_set_rebuild_21 then
+          schedule_source_set_rebuild_21(session, 0)
+        else
+          if apply_source_set_21 then
+            apply_source_set_21(session)
+          else
+          end
+        end
       else
       end
       session.meta["set-query-lines"](effective_lines)
@@ -217,7 +226,7 @@ M["apply-prompt-lines!"] = function(deps, session)
       end
     else
       if string.find(tostring(err), "E565") then
-        local function _20_()
+        local function _22_()
           if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
             pcall(session.meta["on-update"], 0)
             pcall(session.meta.refresh_statusline)
@@ -239,7 +248,7 @@ M["apply-prompt-lines!"] = function(deps, session)
             return nil
           end
         end
-        return vim.defer_fn(_20_, 1)
+        return vim.defer_fn(_22_, 1)
       else
         return nil
       end

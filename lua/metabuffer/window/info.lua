@@ -3,15 +3,7 @@ local M = {}
 local lineno_mod = require("metabuffer.window.lineno")
 local source_mod = require("metabuffer.source")
 local path_hl = require("metabuffer.path_highlight")
-local function ext_from_path(path)
-  local file = vim.fn.fnamemodify((path or ""), ":t")
-  local dot = string.match(file, ".*()%.")
-  if (dot and (dot > 0) and (dot < #file)) then
-    return string.sub(file, (dot + 1))
-  else
-    return ""
-  end
-end
+local util = require("metabuffer.util")
 local function ext_start_in_file(file)
   local txt = (file or "")
   local n = #txt
@@ -26,41 +18,6 @@ local function ext_start_in_file(file)
     return dot
   else
     return 0
-  end
-end
-local function devicon_for_path(path, fallback_hl)
-  local file = vim.fn.fnamemodify((path or ""), ":t")
-  local ext = ext_from_path(path)
-  local ok_web,web = pcall(require, "nvim-web-devicons")
-  if (ok_web and web) then
-    local ok_i,icon,icon_hl = pcall(web.get_icon, file, ext, {default = true})
-    local file_hl = fallback_hl
-    local _4_
-    if (ok_i and (type(icon) == "string") and (icon ~= "")) then
-      _4_ = icon
-    else
-      _4_ = ""
-    end
-    local _6_
-    if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
-      _6_ = icon_hl
-    else
-      _6_ = fallback_hl
-    end
-    return {icon = _4_, ["icon-hl"] = _6_, ["file-hl"] = file_hl}
-  else
-    if (1 == vim.fn.exists("*WebDevIconsGetFileTypeSymbol")) then
-      local icon = vim.fn.WebDevIconsGetFileTypeSymbol(file)
-      local _8_
-      if ((type(icon) == "string") and (icon ~= "")) then
-        _8_ = icon
-      else
-        _8_ = ""
-      end
-      return {icon = _8_, ["icon-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
-    else
-      return {icon = "", ["icon-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
-    end
   end
 end
 local function icon_field(icon)
@@ -144,14 +101,14 @@ local function fit_path_into_width(path, path_width)
         return {cdir, file}
       else
         if (#file > budget) then
-          local function _21_()
+          local function _12_()
             if (budget > 1) then
               return ("\226\128\166" .. string.sub(file, ((#file - budget) + 2)))
             else
               return string.sub(file, ((#file - budget) + 1))
             end
           end
-          return {"", _21_()}
+          return {"", _12_()}
         else
           local dir_budget = math.max(0, (budget - #file))
           local short_dir
@@ -266,10 +223,10 @@ M.new = function(opts)
   local function fit_info_width_21(session, lines)
     if (session["info-win"] and vim.api.nvim_win_is_valid(session["info-win"])) then
       local widths
-      local function _36_(line)
+      local function _27_(line)
         return vim.fn.strdisplaywidth((line or ""))
       end
-      widths = vim.tbl_map(_36_, (lines or {}))
+      widths = vim.tbl_map(_27_, (lines or {}))
       local max_len = numeric_max(widths, 0)
       local needed = max_len
       local host_width
@@ -312,10 +269,10 @@ M.new = function(opts)
     else
       if (session and meta and meta.win and vim.api.nvim_win_is_valid(meta.win.window)) then
         local view
-        local function _42_()
+        local function _33_()
           return vim.fn.winsaveview()
         end
-        view = vim.api.nvim_win_call(meta.win.window, _42_)
+        view = vim.api.nvim_win_call(meta.win.window, _33_)
         local top = math.max(1, math.min(total, (view.topline or 1)))
         local height = math.max(1, vim.api.nvim_win_get_height(meta.win.window))
         local stop0 = math.min(total, (top + height + -1))
@@ -428,7 +385,7 @@ M.new = function(opts)
           suffix_prefix = ""
         end
         local suffix_hls = (info_view["suffix-highlights"] or {})
-        local icon_info = devicon_for_path(icon_path, file_hl)
+        local icon_info = util["devicon-info"](icon_path, file_hl)
         local icon = (icon_info.icon or "")
         local iconf = icon_field(icon)
         local icon_prefix
@@ -444,9 +401,9 @@ M.new = function(opts)
         else
           icon_width = 0
         end
-        local _let_58_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
-        local dir = _let_58_[1]
-        local file0 = _let_58_[2]
+        local _let_49_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
+        local dir = _let_49_[1]
+        local file0 = _let_49_[2]
         local this_file_hl = (icon_info["file-hl"] or file_hl)
         local row = #lines
         local line = (sign_prefix .. lnum_cell0 .. icon_prefix .. dir .. file0 .. suffix_prefix .. suffix0)
@@ -589,9 +546,9 @@ M.new = function(opts)
     if (session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
       local meta = session.meta
       local selected1 = (meta.selected_index + 1)
-      local _let_76_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-      local wanted_start = _let_76_[1]
-      local wanted_stop = _let_76_[2]
+      local _let_67_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
+      local wanted_start = _let_67_[1]
+      local wanted_stop = _let_67_[2]
       local start_index = (session["info-start-index"] or 1)
       local stop_index = (session["info-stop-index"] or 0)
       local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
@@ -611,7 +568,7 @@ M.new = function(opts)
     end
     return update_preview(session)
   end
-  local function _80_(session, refresh_lines)
+  local function _71_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -624,6 +581,6 @@ M.new = function(opts)
       return update_regular_21(session)
     end
   end
-  return {["close-window!"] = close_info_window_21, ["update!"] = _80_}
+  return {["close-window!"] = close_info_window_21, ["update!"] = _71_}
 end
 return M

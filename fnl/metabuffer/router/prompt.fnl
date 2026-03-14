@@ -25,6 +25,30 @@
                            (step (+ idx 1))))))]
       (step 1))))
 
+(fn option-prefix
+  []
+  (let [p (. vim.g "meta#prefix")]
+    (if (and (= (type p) "string") (~= p ""))
+        p
+        "#")))
+
+(fn incomplete-directive-token?
+  [lines]
+  (let [last-line (or (. (or lines []) (# (or lines []))) "")
+        last-char (if (> (# last-line) 0)
+                      (string.sub last-line (# last-line) (# last-line))
+                      "")
+        line-ends-with-space? (= last-char " ")
+        trimmed-right (string.gsub last-line "%s+$" "")
+        prefix (option-prefix)
+        token (or (string.match trimmed-right "%S+$") "")
+        prefix-len (# prefix)]
+    (and (~= token "")
+         (not line-ends-with-space?)
+         (not (= (string.sub token 1 1) "\\"))
+         (>= (# token) prefix-len)
+         (= (string.sub token 1 prefix-len) prefix))))
+
 (fn M.now-ms
   []
   (/ (vim.loop.hrtime) 1000000))
@@ -56,8 +80,12 @@
                       (if (< n (or (. size-thresholds 3) 50000))
                           (or (. size-extra 3) 6)
                           (or (. size-extra 4) 10))))
-        extra (if (and session session.project-mode (not session.lazy-stream-done)) 2 0)]
-    (+ base short-extra scale extra)))
+        extra (if (and session session.project-mode (not session.lazy-stream-done)) 2 0)
+        directive-extra (if (incomplete-directive-token? (prompt-lines session))
+                            (math.max 0 (- (or settings.prompt-incomplete-directive-ms 1000)
+                                           (+ base short-extra scale extra)))
+                            0)]
+    (+ base short-extra scale extra directive-extra)))
 
 (fn M.prompt-has-active-query?
   [query-mod prompt-lines session]

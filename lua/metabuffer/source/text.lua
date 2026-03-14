@@ -1,61 +1,7 @@
 -- [nfnl] fnl/metabuffer/source/text.fnl
 local path_hl = require("metabuffer.path_highlight")
+local util = require("metabuffer.util")
 local M = {}
-local function ext_from_path(path)
-  local file = vim.fn.fnamemodify((path or ""), ":t")
-  local dot = string.match(file, ".*()%.")
-  if (dot and (dot > 0) and (dot < #file)) then
-    return string.sub(file, (dot + 1))
-  else
-    return ""
-  end
-end
-local function devicon_for_path(path, fallback_hl)
-  local file = vim.fn.fnamemodify((path or ""), ":t")
-  local ext = ext_from_path(path)
-  local ok_web,web = pcall(require, "nvim-web-devicons")
-  if (ok_web and web) then
-    local ok_i,icon,icon_hl = pcall(web.get_icon, file, ext, {default = true})
-    local file_hl
-    if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
-      file_hl = icon_hl
-    else
-      file_hl = fallback_hl
-    end
-    local _3_
-    if (ok_i and (type(icon) == "string") and (icon ~= "")) then
-      _3_ = icon
-    else
-      _3_ = ""
-    end
-    local _5_
-    if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
-      _5_ = icon_hl
-    else
-      _5_ = fallback_hl
-    end
-    local _7_
-    if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
-      _7_ = icon_hl
-    else
-      _7_ = fallback_hl
-    end
-    return {icon = _3_, ["icon-hl"] = _5_, ["ext-hl"] = _7_, ["file-hl"] = fallback_hl}
-  else
-    if (1 == vim.fn.exists("*WebDevIconsGetFileTypeSymbol")) then
-      local icon = vim.fn.WebDevIconsGetFileTypeSymbol(file)
-      local _9_
-      if ((type(icon) == "string") and (icon ~= "")) then
-        _9_ = icon
-      else
-        _9_ = ""
-      end
-      return {icon = _9_, ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
-    else
-      return {icon = "", ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
-    end
-  end
-end
 local function icon_field(icon)
   if ((type(icon) == "string") and (icon ~= "")) then
     local text = (icon .. " ")
@@ -93,7 +39,7 @@ local function ext_range(file, file_start)
 end
 M["path-prefix"] = function(ref)
   local parts = split_source_path(ref.path)
-  local icon_info = devicon_for_path((ref.path or ""), "Normal")
+  local icon_info = util["devicon-info"]((ref.path or ""), "Normal")
   local iconf = icon_field((icon_info.icon or ""))
   local icon_prefix = iconf.text
   local dir = (parts.dir or "")

@@ -56,6 +56,7 @@
         meta-window-mod (. deps :meta-window-mod)
         history-store (. deps :history-store)
         sign-mod (. deps :sign-mod)
+        read-file-lines-cached (. deps :read-file-lines-cached)
         settings (. deps :settings)
         next-instance-id! (. deps :next-instance-id!)
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
@@ -175,6 +176,7 @@
                                :initial-query-active (query-mod.query-lines-has-active? (. parsed-query :lines))
                                :startup-initializing true
                                :project-mode (or project-mode false)
+                               :read-file-lines-cached read-file-lines-cached
                                :include-hidden start-hidden
                                :include-ignored start-ignored
                                :include-deps start-deps
@@ -215,6 +217,7 @@
                                :instance-id (next-instance-id!)
                                :meta curr}]
                   (let [initial-query-active session.initial-query-active]
+                    (set curr.session session)
                     (if session.project-mode
                         (project-source.apply-minimal-source-set! session)
                         (project-source.apply-source-set! session))

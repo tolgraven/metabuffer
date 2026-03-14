@@ -3,14 +3,7 @@
 (local lineno-mod (require :metabuffer.window.lineno))
 (local source-mod (require :metabuffer.source))
 (local path-hl (require :metabuffer.path_highlight))
-
-(fn ext-from-path
-  [path]
-  (let [file (vim.fn.fnamemodify (or path "") ":t")
-        dot (string.match file ".*()%.")]
-    (if (and dot (> dot 0) (< dot (# file)))
-        (string.sub file (+ dot 1))
-        "")))
+(local util (require :metabuffer.util))
 
 (fn ext-start-in-file
   [file]
@@ -23,24 +16,6 @@
     (if (and (> dot 1) (< dot n))
         dot
         0)))
-
-(fn devicon-for-path
-  [path fallback-hl]
-  (let [file (vim.fn.fnamemodify (or path "") ":t")
-        ext (ext-from-path path)
-        [ok-web web] [(pcall require :nvim-web-devicons)]]
-    (if (and ok-web web)
-        (let [[ok-i icon icon-hl] [(pcall web.get_icon file ext {:default true})]
-              file-hl fallback-hl]
-          {:icon (if (and ok-i (= (type icon) "string") (~= icon "")) icon "")
-           :icon-hl (if (and ok-i (= (type icon-hl) "string") (~= icon-hl "")) icon-hl fallback-hl)
-           :file-hl file-hl})
-        (if (= 1 (vim.fn.exists "*WebDevIconsGetFileTypeSymbol"))
-            (let [icon (vim.fn.WebDevIconsGetFileTypeSymbol file)]
-              {:icon (if (and (= (type icon) "string") (~= icon "")) icon "")
-               :icon-hl fallback-hl
-               :file-hl fallback-hl})
-            {:icon "" :icon-hl fallback-hl :file-hl fallback-hl}))))
 
 (fn icon-field
   [icon]
@@ -318,7 +293,7 @@
                                       (or (. info-view :suffix-prefix) "  ")
                                       "")
                     suffix-hls (or (. info-view :suffix-highlights) [])
-                    icon-info (devicon-for-path icon-path file-hl)
+                    icon-info (util.devicon-info icon-path file-hl)
                     icon (or (. icon-info :icon) "")
                     iconf (icon-field icon)
                     icon-prefix (if show-icon? (. iconf :text) "")

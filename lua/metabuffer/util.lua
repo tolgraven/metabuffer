@@ -44,6 +44,49 @@ M["build-group-names"] = function(prefix, count)
   end
   return groups
 end
+M["ext-from-path"] = function(path)
+  local file = vim.fn.fnamemodify((path or ""), ":t")
+  local dot = string.match(file, ".*()%.")
+  if (dot and (dot > 0) and (dot < #file)) then
+    return string.sub(file, (dot + 1))
+  else
+    return ""
+  end
+end
+M["devicon-info"] = function(path, fallback_hl)
+  local file = vim.fn.fnamemodify((path or ""), ":t")
+  local ext = M["ext-from-path"](path)
+  local ok_web,web = pcall(require, "nvim-web-devicons")
+  if (ok_web and web) then
+    local ok_i,icon,icon_hl = pcall(web.get_icon, file, ext, {default = true})
+    local next_hl
+    if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
+      next_hl = icon_hl
+    else
+      next_hl = fallback_hl
+    end
+    local _3_
+    if (ok_i and (type(icon) == "string") and (icon ~= "")) then
+      _3_ = icon
+    else
+      _3_ = ""
+    end
+    return {icon = _3_, ["icon-hl"] = next_hl, ["ext-hl"] = next_hl, ["file-hl"] = fallback_hl}
+  else
+    if (1 == vim.fn.exists("*WebDevIconsGetFileTypeSymbol")) then
+      local icon = vim.fn.WebDevIconsGetFileTypeSymbol(file)
+      local _5_
+      if ((type(icon) == "string") and (icon ~= "")) then
+        _5_ = icon
+      else
+        _5_ = ""
+      end
+      return {icon = _5_, ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
+    else
+      return {icon = "", ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
+    end
+  end
+end
 M["buf-lines"] = function(buf)
   return vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 end

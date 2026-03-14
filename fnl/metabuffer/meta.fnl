@@ -7,6 +7,7 @@
 (local regex_matcher (require :metabuffer.matcher.regex))
 (local meta_buffer_mod (require :metabuffer.buffer.metabuffer))
 (local meta_window_mod (require :metabuffer.window.metawindow))
+(local expand_mod (require :metabuffer.context.expand))
 (local util (require :metabuffer.util))
 
 (local M {})
@@ -474,7 +475,17 @@
                             ignorecase
                             self.include-files
                             (> (# queries) 0))
-            _ (set self.buf.indices file-filtered)
+            expanded (expand_mod.expanded-indices
+                       self.session
+                       file-filtered
+                       refs
+                       {:mode (or (and self.session self.session.expansion-mode) "none")
+                        :read-file-lines-cached (or (and self.session self.session.read-file-lines-cached)
+                                                    (fn [path _opts]
+                                                      (vim.fn.readfile path)))
+                        :around-lines (or vim.g.meta_context_around_lines 3)
+                        :max-blocks (or vim.g.meta_context_max_blocks 24)})
+            _ (set self.buf.indices expanded)
             hits-changed (if (= prev-hits self.buf.indices)
                              false
                              (if (~= (# prev-hits) (# self.buf.indices))

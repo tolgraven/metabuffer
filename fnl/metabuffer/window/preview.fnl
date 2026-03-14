@@ -25,6 +25,12 @@
   (statusline-mod.render-path path {:default-text "Preview"
                                     :file-group "MetaStatuslinePathFile"}))
 
+(fn apply-ft-buffer-vars!
+  [buf ft]
+  (when (and buf (vim.api.nvim_buf_is_valid buf) (= ft "fennel"))
+    (pcall vim.api.nvim_buf_set_var buf "fennel_lua_version" "5.1")
+    (pcall vim.api.nvim_buf_set_var buf "fennel_use_luajit" (if jit 1 0))))
+
 (fn M.new
   [opts]
   "Create preview window manager for selected source refs."
@@ -242,8 +248,10 @@
       (let [next-ft (if (and (= (type ft) "string") (~= ft ""))
                         ft
                         "text")]
-        (when (~= (. bo :filetype) next-ft)
-          (set (. bo :filetype) next-ft)))))
+        (apply-ft-buffer-vars! session.preview-buf next-ft)
+        (pcall vim.api.nvim_set_option_value "syntax" "" {:buf session.preview-buf})
+        (set (. bo :filetype) next-ft)
+        (pcall vim.api.nvim_set_option_value "syntax" next-ft {:buf session.preview-buf}))))
 
 	  (fn update-preview-window!
 	    [session]

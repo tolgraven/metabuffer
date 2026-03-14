@@ -27,6 +27,21 @@ local function filetype_for_ref(ref)
     end
   end
 end
+local function apply_ft_buffer_vars_21(buf, ft)
+  if (buf and vim.api.nvim_buf_is_valid(buf) and (ft == "fennel")) then
+    pcall(vim.api.nvim_buf_set_var, buf, "fennel_lua_version", "5.1")
+    local function _5_()
+      if jit then
+        return 1
+      else
+        return 0
+      end
+    end
+    return pcall(vim.api.nvim_buf_set_var, buf, "fennel_use_luajit", _5_())
+  else
+    return nil
+  end
+end
 local function lines_for_ref(session, ref, read_file_lines_cached)
   local val_111_auto = buf_for_ref(ref)
   if val_111_auto then
@@ -45,19 +60,48 @@ local function lines_for_ref(session, ref, read_file_lines_cached)
     end
   end
 end
-local function ensure_ts_buf(ref)
+local function ensure_ts_buf(session, ref, read_file_lines_cached)
   local val_111_auto = buf_for_ref(ref)
   if val_111_auto then
     local buf = val_111_auto
     return buf
   else
     if (ref and ref.path and (1 == vim.fn.filereadable(ref.path))) then
-      local buf = vim.fn.bufadd(ref.path)
-      pcall(vim.fn.bufload, buf)
-      if vim.api.nvim_buf_is_valid(buf) then
-        return buf
+      local cache = ((session and session["ts-expand-bufs"]) or {})
+      local _
+      if session then
+        session["ts-expand-bufs"] = cache
+        _ = nil
       else
-        return nil
+        _ = nil
+      end
+      local cached = cache[ref.path]
+      if (cached and vim.api.nvim_buf_is_valid(cached)) then
+        return cached
+      else
+        local buf = vim.api.nvim_create_buf(false, true)
+        local ft = filetype_for_ref(ref)
+        local lines = lines_for_ref(session, ref, read_file_lines_cached)
+        do
+          local bo = vim.bo[buf]
+          bo["bufhidden"] = "hide"
+          bo["buftype"] = "nofile"
+          bo["swapfile"] = false
+          bo["modifiable"] = true
+          if (ft ~= "") then
+            bo["filetype"] = ft
+          else
+            bo["filetype"] = "text"
+          end
+        end
+        apply_ft_buffer_vars_21(buf, ft)
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+        do
+          local bo = vim.bo[buf]
+          bo["modifiable"] = false
+        end
+        cache[ref.path] = buf
+        return buf
       end
     else
       return nil
@@ -67,20 +111,26 @@ end
 local function node_type_matches_3f(mode, node_type)
   local t = string.lower((node_type or ""))
   if (mode == "fn") then
-    return (not not string.find(t, "function", 1, true) or not not string.find(t, "method", 1, true) or not not string.find(t, "func", 1, true))
+    return ((t == "fn_form") or (t == "lambda_form") or (t == "macro_form") or not not string.find(t, "function", 1, true) or not not string.find(t, "method", 1, true) or not not string.find(t, "func", 1, true) or not not string.find(t, "lambda", 1, true))
   elseif (mode == "class") then
     return (not not string.find(t, "class", 1, true) or not not string.find(t, "interface", 1, true) or not not string.find(t, "struct", 1, true) or not not string.find(t, "impl", 1, true) or not not string.find(t, "module", 1, true))
   elseif (mode == "scope") then
-    return (node_type_matches_3f("fn", t) or node_type_matches_3f("class", t) or not not string.find(t, "block", 1, true) or (t == "chunk") or (t == "program") or (t == "source_file"))
+    return (node_type_matches_3f("fn", t) or node_type_matches_3f("class", t) or (t == "let_form") or (t == "when_form") or (t == "each_form") or (t == "for_form") or (t == "while_form") or (t == "accumulate_form") or (t == "do_form") or not not string.find(t, "block", 1, true) or (t == "chunk") or (t == "program") or (t == "source_file"))
   else
     return false
   end
 end
-local function ts_range_for_mode(ref, mode)
-  local val_111_auto = ensure_ts_buf(ref)
+local function ts_range_for_mode(session, ref, mode, read_file_lines_cached)
+  local val_111_auto = ensure_ts_buf(session, ref, read_file_lines_cached)
   if val_111_auto then
     local buf = val_111_auto
-    local parser = vim.treesitter.get_parser(buf)
+    local lang = filetype_for_ref(ref)
+    local parser
+    if ((lang or "") ~= "") then
+      parser = vim.treesitter.get_parser(buf, lang)
+    else
+      parser = vim.treesitter.get_parser(buf)
+    end
     local trees = (parser and parser.parse(parser))
     local tree = (trees and trees[1])
     local root = (tree and tree.root(tree))
@@ -164,9 +214,9 @@ local function expansion_range(session, ref, mode, read_file_lines_cached, aroun
   elseif (norm == "usage") then
     return nil
   elseif (norm == "env") then
-    return (ts_range_for_mode(ref, "scope") or fallback_range(ref, "around", total, around))
+    return ts_range_for_mode(session, ref, "scope", read_file_lines_cached)
   elseif ((norm == "fn") or (norm == "class") or (norm == "scope")) then
-    return (ts_range_for_mode(ref, norm) or fallback_range(ref, "around", total, around))
+    return ts_range_for_mode(session, ref, norm, read_file_lines_cached)
   else
     return fallback_range(ref, norm, total, around)
   end
@@ -263,5 +313,130 @@ M["context-blocks"] = function(session, refs, opts)
     end
   end
   return blocks
+end
+local function index_refs_by_path(refs)
+  local by_path = {}
+  for idx, ref in ipairs((refs or {})) do
+    if (ref and ((ref.kind or "") ~= "file-entry") and (type(ref.path) == "string") and (ref.path ~= "") and ref.lnum) then
+      if not by_path[ref.path] then
+        by_path[ref.path] = {}
+      else
+      end
+      table.insert(by_path[ref.path], {idx = idx, lnum = ref.lnum, line = (ref.line or ""), ref = ref})
+    else
+    end
+  end
+  return by_path
+end
+local function append_range_indices_21(out, seen, items, start_lnum, end_lnum)
+  for _, item in ipairs((items or {})) do
+    if ((item.lnum >= start_lnum) and (item.lnum <= end_lnum) and not seen[item.idx]) then
+      seen[item.idx] = true
+      table.insert(out, item.idx)
+    else
+    end
+  end
+  return nil
+end
+local function append_usage_indices_21(session, out, seen, refs, read_file_lines_cached)
+  local needle = identifier_at_ref(session, refs[1], read_file_lines_cached)
+  if (needle ~= "") then
+    for _, ref in ipairs(((session and session.meta and session.meta.buf and session.meta.buf["source-refs"]) or refs)) do
+      if (ref and ref.idx and ref.lnum and ((ref.kind or "") ~= "file-entry") and exact_word_find_3f((ref.line or ""), needle) and not seen[ref.idx]) then
+        seen[ref.idx] = true
+        table.insert(out, ref.idx)
+      else
+      end
+    end
+    return nil
+  else
+    return nil
+  end
+end
+local function mode_range(session, ref, mode, read_file_lines_cached, around)
+  local lines = lines_for_ref(session, ref, read_file_lines_cached)
+  local total = #lines
+  local norm = normalized_mode(mode)
+  if (norm == "none") then
+    return nil
+  elseif (norm == "usage") then
+    return nil
+  elseif (norm == "env") then
+    return ts_range_for_mode(session, ref, "scope", read_file_lines_cached)
+  elseif ((norm == "fn") or (norm == "class") or (norm == "scope")) then
+    return ts_range_for_mode(session, ref, norm, read_file_lines_cached)
+  else
+    return fallback_range(ref, norm, total, around)
+  end
+end
+M["expanded-indices"] = function(session, indices, refs, opts)
+  local mode = normalized_mode(opts.mode)
+  local read_file_lines_cached = opts["read-file-lines-cached"]
+  local around = (opts["around-lines"] or 3)
+  local max_blocks = math.max(1, (opts["max-blocks"] or 24))
+  local refs_with_idx
+  do
+    local out0 = {}
+    for idx, ref in ipairs((refs or {})) do
+      local next
+      if ref then
+        next = vim.tbl_extend("force", ref, {idx = idx})
+      else
+        next = {idx = idx}
+      end
+      table.insert(out0, next)
+    end
+    refs_with_idx = out0
+  end
+  local by_path = index_refs_by_path(refs_with_idx)
+  local out = {}
+  local seen = {}
+  if (mode == "none") then
+    vim.deepcopy((indices or {}))
+  elseif (mode == "usage") then
+    local hit_refs = {}
+    for _, idx in ipairs((indices or {})) do
+      local ref = refs_with_idx[idx]
+      if (ref and ((ref.kind or "") ~= "file-entry")) then
+        table.insert(hit_refs, ref)
+      else
+      end
+    end
+    append_usage_indices_21(session, out, seen, hit_refs, read_file_lines_cached)
+  else
+    for _, idx in ipairs((indices or {})) do
+      if (#out < (max_blocks * 400)) then
+        local ref = refs_with_idx[idx]
+        local path = (ref and ref.path)
+        local items = by_path[path]
+        if (ref and items and ((ref.kind or "") ~= "file-entry")) then
+          local val_111_auto = mode_range(session, ref, mode, read_file_lines_cached, around)
+          if val_111_auto then
+            local rng = val_111_auto
+            append_range_indices_21(out, seen, items, rng.start, rng["end"])
+          else
+            if not seen[idx] then
+              seen[idx] = true
+              table.insert(out, idx)
+            else
+            end
+          end
+        else
+        end
+      else
+      end
+    end
+  end
+  if (#out == 0) then
+    for _, idx in ipairs((indices or {})) do
+      if not seen[idx] then
+        seen[idx] = true
+        table.insert(out, idx)
+      else
+      end
+    end
+  else
+  end
+  return out
 end
 return M

@@ -1,36 +1,7 @@
 (local path-hl (require :metabuffer.path_highlight))
+(local util (require :metabuffer.util))
 
 (local M {})
-
-(fn ext-from-path
-  [path]
-  (let [file (vim.fn.fnamemodify (or path "") ":t")
-        dot (string.match file ".*()%.")]
-    (if (and dot (> dot 0) (< dot (# file)))
-        (string.sub file (+ dot 1))
-        "")))
-
-(fn devicon-for-path
-  [path fallback-hl]
-  (let [file (vim.fn.fnamemodify (or path "") ":t")
-        ext (ext-from-path path)
-        [ok-web web] [(pcall require :nvim-web-devicons)]]
-    (if (and ok-web web)
-        (let [[ok-i icon icon-hl] [(pcall web.get_icon file ext {:default true})]
-              file-hl (if (and ok-i (= (type icon-hl) "string") (~= icon-hl ""))
-                          icon-hl
-                          fallback-hl)]
-          {:icon (if (and ok-i (= (type icon) "string") (~= icon "")) icon "")
-           :icon-hl (if (and ok-i (= (type icon-hl) "string") (~= icon-hl "")) icon-hl fallback-hl)
-           :ext-hl (if (and ok-i (= (type icon-hl) "string") (~= icon-hl "")) icon-hl fallback-hl)
-           :file-hl fallback-hl})
-        (if (= 1 (vim.fn.exists "*WebDevIconsGetFileTypeSymbol"))
-            (let [icon (vim.fn.WebDevIconsGetFileTypeSymbol file)]
-              {:icon (if (and (= (type icon) "string") (~= icon "")) icon "")
-               :icon-hl fallback-hl
-               :ext-hl fallback-hl
-               :file-hl fallback-hl})
-            {:icon "" :icon-hl fallback-hl :ext-hl fallback-hl :file-hl fallback-hl}))))
 
 (fn icon-field
   [icon]
@@ -60,7 +31,7 @@
 (fn M.path-prefix
   [ref]
   (let [parts (split-source-path ref.path)
-        icon-info (devicon-for-path (or ref.path "") "Normal")
+        icon-info (util.devicon-info (or ref.path "") "Normal")
         iconf (icon-field (or (. icon-info :icon) ""))
         icon-prefix (. iconf :text)
         dir (or parts.dir "")

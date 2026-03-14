@@ -65,6 +65,41 @@
       (table.insert groups (.. prefix i)))
     groups))
 
+(fn M.ext-from-path
+  [path]
+  "Public API: M.ext-from-path."
+  (let [file (vim.fn.fnamemodify (or path "") ":t")
+        dot (string.match file ".*()%.")]
+    (if (and dot (> dot 0) (< dot (# file)))
+        (string.sub file (+ dot 1))
+        "")))
+
+(fn M.devicon-info
+  [path fallback-hl]
+  "Public API: M.devicon-info."
+  (let [file (vim.fn.fnamemodify (or path "") ":t")
+        ext (M.ext-from-path path)
+        [ok-web web] [(pcall require :nvim-web-devicons)]]
+    (if (and ok-web web)
+        (let [[ok-i icon icon-hl] [(pcall web.get_icon file ext {:default true})]
+              next-hl (if (and ok-i (= (type icon-hl) "string") (~= icon-hl ""))
+                          icon-hl
+                          fallback-hl)]
+          {:icon (if (and ok-i (= (type icon) "string") (~= icon "")) icon "")
+           :icon-hl next-hl
+           :ext-hl next-hl
+           :file-hl fallback-hl})
+        (if (= 1 (vim.fn.exists "*WebDevIconsGetFileTypeSymbol"))
+            (let [icon (vim.fn.WebDevIconsGetFileTypeSymbol file)]
+              {:icon (if (and (= (type icon) "string") (~= icon "")) icon "")
+               :icon-hl fallback-hl
+               :ext-hl fallback-hl
+               :file-hl fallback-hl})
+            {:icon ""
+             :icon-hl fallback-hl
+             :ext-hl fallback-hl
+             :file-hl fallback-hl}))))
+
 (fn M.buf-lines
   [buf]
   "Public API: M.buf-lines."

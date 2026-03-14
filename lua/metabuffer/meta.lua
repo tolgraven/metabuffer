@@ -7,6 +7,7 @@ local fuzzy_matcher = require("metabuffer.matcher.fuzzy")
 local regex_matcher = require("metabuffer.matcher.regex")
 local meta_buffer_mod = require("metabuffer.buffer.metabuffer")
 local meta_window_mod = require("metabuffer.window.metawindow")
+local expand_mod = require("metabuffer.context.expand")
 local util = require("metabuffer.util")
 local M = {}
 local function line_of_index(buf, idx)
@@ -551,8 +552,17 @@ M.new = function(nvim, condition)
       end
       local refs = (self.buf["source-refs"] or {})
       local file_filtered = apply_file_entry_filter(self.buf.indices, refs, self["file-query-lines"], queries, ignorecase, self["include-files"], (#queries > 0))
+      local expanded
+      local or_67_ = (self.session and self.session["read-file-lines-cached"])
+      if not or_67_ then
+        local function _68_(path, _opts)
+          return vim.fn.readfile(path)
+        end
+        or_67_ = _68_
+      end
+      expanded = expand_mod["expanded-indices"](self.session, file_filtered, refs, {mode = ((self.session and self.session["expansion-mode"]) or "none"), ["read-file-lines-cached"] = or_67_, ["around-lines"] = (vim.g.meta_context_around_lines or 3), ["max-blocks"] = (vim.g.meta_context_max_blocks or 24)})
       local _
-      self.buf.indices = file_filtered
+      self.buf.indices = expanded
       _ = nil
       local hits_changed
       if (prev_hits == self.buf.indices) then

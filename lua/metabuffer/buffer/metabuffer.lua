@@ -2,52 +2,9 @@
 local base = require("metabuffer.buffer.base")
 local ui = require("metabuffer.buffer.ui")
 local source_mod = require("metabuffer.source")
+local util = require("metabuffer.util")
 local M = {}
 M["default-opts"] = {bufhidden = "hide", buftype = "nofile", buflisted = false}
-local function ext_from_path(path)
-  local file = vim.fn.fnamemodify((path or ""), ":t")
-  local dot = string.match(file, ".*()%.")
-  if (dot and (dot > 0) and (dot < #file)) then
-    return string.sub(file, (dot + 1))
-  else
-    return ""
-  end
-end
-local function devicon_for_path(path, fallback_hl)
-  local file = vim.fn.fnamemodify((path or ""), ":t")
-  local ext = ext_from_path(path)
-  local ok_web,web = pcall(require, "nvim-web-devicons")
-  if (ok_web and web) then
-    local ok_i,icon,icon_hl = pcall(web.get_icon, file, ext, {default = true})
-    local file_hl = fallback_hl
-    local _2_
-    if (ok_i and (type(icon) == "string") and (icon ~= "")) then
-      _2_ = icon
-    else
-      _2_ = ""
-    end
-    local _4_
-    if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
-      _4_ = icon_hl
-    else
-      _4_ = fallback_hl
-    end
-    return {icon = _2_, ["icon-hl"] = _4_, ["file-hl"] = file_hl}
-  else
-    if (1 == vim.fn.exists("*WebDevIconsGetFileTypeSymbol")) then
-      local icon = vim.fn.WebDevIconsGetFileTypeSymbol(file)
-      local _6_
-      if ((type(icon) == "string") and (icon ~= "")) then
-        _6_ = icon
-      else
-        _6_ = ""
-      end
-      return {icon = _6_, ["icon-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
-    else
-      return {icon = "", ["icon-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
-    end
-  end
-end
 local function icon_field(icon)
   if ((type(icon) == "string") and (icon ~= "")) then
     local text = (icon .. " ")
@@ -120,6 +77,210 @@ local function bvar(buf, name, default)
     return default
   end
 end
+local function session_has_pending_work(self)
+  local session = self.model.session
+  return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["lazy-refresh-pending"] or session["lazy-refresh-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["project-bootstrapped"])))
+end
+local function should_defer_empty_frame(self, frame)
+  return ((#(frame.lines or {}) == 0) and (#(self["last-rendered-lines"] or {}) > 0) and session_has_pending_work(self))
+end
+local function save_window_views(self)
+  local views = {}
+  for _, win in ipairs(vim.fn.win_findbuf(self.buffer)) do
+    if vim.api.nvim_win_is_valid(win) then
+      local function _7_()
+        return vim.fn.winsaveview()
+      end
+      views[win] = vim.api.nvim_win_call(win, _7_)
+    else
+    end
+  end
+  return views
+end
+local function restore_window_views(views)
+  for win, view in pairs(views) do
+    if vim.api.nvim_win_is_valid(win) then
+      local function _9_()
+        return pcall(vim.fn.winrestview, view)
+      end
+      vim.api.nvim_win_call(win, _9_)
+    else
+    end
+  end
+  return nil
+end
+local function rendered_line(self, idx)
+  local line = self.content[idx]
+  if (self["show-source-prefix"] and self["source-refs"] and self["source-refs"][idx]) then
+    local ref = self["source-refs"][idx]
+    local pfx = source_prefix(ref)
+    local _11_
+    if ((pfx.text or "") == "") then
+      _11_ = normalize_render_line(line)
+    else
+      if ((line or "") == "") then
+        _11_ = normalize_render_line(pfx.text)
+      else
+        _11_ = normalize_render_line((pfx.text .. "  " .. line))
+      end
+    end
+    return {text = _11_, range = {["lnum-end"] = pfx["lnum-end"], ["icon-start"] = pfx["icon-start"], ["icon-end"] = pfx["icon-end"], ["icon-hl"] = pfx["icon-hl"], ["dir-ranges"] = (pfx["dir-ranges"] or {}), ["file-start"] = pfx["file-start"], ["file-end"] = pfx["file-end"], ["file-hl"] = pfx["file-hl"], ["ext-start"] = pfx["ext-start"], ["ext-end"] = pfx["ext-end"], ["ext-hl"] = pfx["ext-hl"]}}
+  else
+    return {text = normalize_render_line(line)}
+  end
+end
+local function normalize_frame_lines(lines)
+  local out = vim.deepcopy((lines or {}))
+  for i = 1, #out do
+    local line0 = out[i]
+    local line1 = tostring((line0 or ""))
+    local line2 = string.gsub(line1, "[\r\n\v\f]", "")
+    out[i] = line2
+  end
+  return out
+end
+local function build_render_frame(self)
+  local lines = {}
+  local ranges = {}
+  for _, idx in ipairs(self.indices) do
+    local entry = rendered_line(self, idx)
+    local row = (#lines + 1)
+    table.insert(lines, entry.text)
+    if entry.range then
+      table.insert(ranges, vim.tbl_extend("force", entry.range, {row = row}))
+    else
+    end
+  end
+  return {lines = normalize_frame_lines(lines), ranges = ranges}
+end
+local function set_render_buffer_lines(self, lines)
+  do
+    local bo = vim.bo[self.buffer]
+    bo["modifiable"] = true
+  end
+  set_bvar_21(self.buffer, "meta_internal_render", true)
+  local manual_edit_active_3f = bvar(self.buffer, "meta_manual_edit_active", false)
+  local undo_levels
+  if manual_edit_active_3f then
+    undo_levels = nil
+  else
+    undo_levels = vim.api.nvim_get_option_value("undolevels", {buf = self.buffer})
+  end
+  if undo_levels then
+    pcall(vim.api.nvim_set_option_value, "undolevels", -1, {buf = self.buffer})
+  else
+  end
+  vim.api.nvim_buf_set_lines(self.buffer, 0, -1, false, (lines or {}))
+  if not manual_edit_active_3f then
+    pcall(vim.api.nvim_set_option_value, "modified", false, {buf = self.buffer})
+  else
+  end
+  if undo_levels then
+    return pcall(vim.api.nvim_set_option_value, "undolevels", undo_levels, {buf = self.buffer})
+  else
+    return nil
+  end
+end
+local function clear_render_namespaces(self)
+  vim.api.nvim_buf_clear_namespace(self.buffer, self["source-hl-ns"], 0, -1)
+  vim.api.nvim_buf_clear_namespace(self.buffer, self["source-sep-ns"], 0, -1)
+  return vim.api.nvim_buf_clear_namespace(self.buffer, self["source-alt-ns"], 0, -1)
+end
+local function apply_frame_highlights(self, ranges)
+  if self["show-source-prefix"] then
+    for _, r in ipairs((ranges or {})) do
+      local row0 = (r.row - 1)
+      if ((r["lnum-end"] or 0) > 0) then
+        vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], "MetaSourceLineNr", row0, 0, r["lnum-end"])
+      else
+      end
+      if ((r["icon-end"] - r["icon-start"]) > 0) then
+        vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], (r["icon-hl"] or "MetaSourceFile"), row0, r["icon-start"], r["icon-end"])
+      else
+      end
+      for _0, dr in ipairs((r["dir-ranges"] or {})) do
+        vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], dr.hl, row0, dr.start, dr["end"])
+      end
+      if ((r["file-end"] - r["file-start"]) > 0) then
+        vim.api.nvim_buf_set_extmark(self.buffer, self["source-hl-ns"], row0, r["file-start"], {end_row = row0, end_col = r["file-end"], hl_group = (r["file-hl"] or "Normal"), hl_mode = "combine", priority = 220})
+      else
+      end
+      if (((r["ext-end"] or 0) - (r["ext-start"] or 0)) > 0) then
+        vim.api.nvim_buf_set_extmark(self.buffer, self["source-hl-ns"], row0, r["ext-start"], {end_row = row0, end_col = r["ext-end"], hl_group = (r["ext-hl"] or r["file-hl"] or "Normal"), hl_mode = "combine", priority = 230})
+      else
+      end
+    end
+    return nil
+  else
+    return nil
+  end
+end
+local function apply_frame_separators(self)
+  if (self["show-source-separators"] and self["source-refs"]) then
+    local n = #self.indices
+    local alt = false
+    local prev_path = nil
+    for i = 1, n do
+      local idx = self.indices[i]
+      local ref = (idx and self["source-refs"][idx])
+      local path = ((ref and ref.path) or "")
+      if (prev_path == nil) then
+        prev_path = path
+      else
+      end
+      if (path ~= prev_path) then
+        alt = not alt
+        prev_path = path
+      else
+      end
+      if alt then
+        vim.api.nvim_buf_set_extmark(self.buffer, self["source-alt-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceAltBg", hl_eol = true, hl_mode = "combine", priority = 1})
+      else
+      end
+    end
+    for i = 1, (n - 1) do
+      local cur_idx = self.indices[i]
+      local next_idx = self.indices[(i + 1)]
+      local cur_ref = (cur_idx and self["source-refs"][cur_idx])
+      local next_ref = (next_idx and self["source-refs"][next_idx])
+      local cur_path = (cur_ref and cur_ref.path)
+      local next_path = (next_ref and next_ref.path)
+      if (((cur_path or "") ~= (next_path or "")) and ((cur_ref and cur_ref.kind) ~= "file-entry") and ((next_ref and next_ref.kind) ~= "file-entry")) then
+        vim.api.nvim_buf_set_extmark(self.buffer, self["source-sep-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceBoundary", hl_eol = true, hl_mode = "combine", priority = 120})
+      else
+      end
+    end
+    return nil
+  else
+    return nil
+  end
+end
+local function finalize_render(self, views)
+  self["apply-source-syntax-regions"]()
+  do
+    local bo = vim.bo[self.buffer]
+    if self["keep-modifiable"] then
+      bo["modifiable"] = true
+    else
+      bo["modifiable"] = false
+    end
+  end
+  set_bvar_21(self.buffer, "meta_internal_render", false)
+  restore_window_views(views)
+  return self.indexbuf.update()
+end
+local function stage_render_frame(self, frame)
+  self["pending-render-frame"] = vim.deepcopy(frame)
+  return false
+end
+local function commit_render_frame(self, frame)
+  set_render_buffer_lines(self, frame.lines)
+  self["last-rendered-lines"] = vim.deepcopy(frame.lines)
+  self["pending-render-frame"] = nil
+  clear_render_namespaces(self)
+  apply_frame_highlights(self, frame.ranges)
+  return true
+end
 M.new = function(nvim, model)
   local self = base.new(nvim, {model = model, name = "meta", ["default-opts"] = M["default-opts"]})
   self["syntax-type"] = "buffer"
@@ -131,6 +292,8 @@ M.new = function(nvim, model)
   self["source-alt-ns"] = vim.api.nvim_create_namespace("metabuffer_source_alt")
   self["source-syntax-groups"] = {}
   self["keep-modifiable"] = false
+  self["last-rendered-lines"] = {}
+  self["pending-render-frame"] = nil
   self["model-valid?"] = function()
     return (self.model and vim.api.nvim_buf_is_valid(self.model))
   end
@@ -155,13 +318,13 @@ M.new = function(nvim, model)
   end
   self["clear-source-syntax"] = function()
     if (self["source-syntax-groups"] and (#self["source-syntax-groups"] > 0)) then
-      local function _19_()
+      local function _34_()
         for _, g in ipairs(self["source-syntax-groups"]) do
           vim.cmd(("silent! syntax clear " .. g))
         end
         return nil
       end
-      vim.api.nvim_buf_call(self.buffer, _19_)
+      vim.api.nvim_buf_call(self.buffer, _34_)
     else
     end
     self["source-syntax-groups"] = {}
@@ -175,7 +338,7 @@ M.new = function(nvim, model)
       local included = {}
       local groups = {}
       self["clear-source-syntax"]()
-      local function _21_()
+      local function _36_()
         local reset_base_syntax_3f = false
         local block_id = 0
         local function add_block(start, stop, ft)
@@ -234,7 +397,7 @@ M.new = function(nvim, model)
         end
         return vim.cmd("silent! syntax sync fromstart")
       end
-      vim.api.nvim_buf_call(self.buffer, _21_)
+      vim.api.nvim_buf_call(self.buffer, _36_)
       self["source-syntax-groups"] = groups
       return nil
     end
@@ -282,158 +445,20 @@ M.new = function(nvim, model)
     return self.render()
   end
   self.render = function()
-    local win_views = {}
-    local out = {}
-    local ranges = {}
-    for _, win in ipairs(vim.fn.win_findbuf(self.buffer)) do
-      if vim.api.nvim_win_is_valid(win) then
-        local function _36_()
-          return vim.fn.winsaveview()
-        end
-        win_views[win] = vim.api.nvim_win_call(win, _36_)
-      else
-      end
-    end
-    do
-      local bo = vim.bo[self.buffer]
-      bo["modifiable"] = true
-    end
-    set_bvar_21(self.buffer, "meta_internal_render", true)
-    for _, idx in ipairs(self.indices) do
-      local line = self.content[idx]
-      if (self["show-source-prefix"] and self["source-refs"] and self["source-refs"][idx]) then
-        local ref = self["source-refs"][idx]
-        local pfx = source_prefix(ref)
-        local row = (#out + 1)
-        local function _39_()
-          if ((pfx.text or "") == "") then
-            return normalize_render_line(line)
-          else
-            if ((line or "") == "") then
-              return normalize_render_line(pfx.text)
-            else
-              return normalize_render_line((pfx.text .. "  " .. line))
-            end
-          end
-        end
-        table.insert(out, _39_())
-        table.insert(ranges, {row = row, ["lnum-end"] = pfx["lnum-end"], ["icon-start"] = pfx["icon-start"], ["icon-end"] = pfx["icon-end"], ["icon-hl"] = pfx["icon-hl"], ["dir-ranges"] = (pfx["dir-ranges"] or {}), ["file-start"] = pfx["file-start"], ["file-end"] = pfx["file-end"], ["file-hl"] = pfx["file-hl"], ["ext-start"] = pfx["ext-start"], ["ext-end"] = pfx["ext-end"], ["ext-hl"] = pfx["ext-hl"]})
-      else
-        table.insert(out, normalize_render_line(line))
-      end
-    end
-    for i = 1, #out do
-      local line0 = out[i]
-      local line1 = tostring((line0 or ""))
-      local line2 = string.gsub(line1, "[\r\n\v\f]", "")
-      out[i] = line2
-    end
-    do
-      local manual_edit_active_3f = bvar(self.buffer, "meta_manual_edit_active", false)
-      local undo_levels
-      if manual_edit_active_3f then
-        undo_levels = nil
-      else
-        undo_levels = vim.api.nvim_get_option_value("undolevels", {buf = self.buffer})
-      end
-      if undo_levels then
-        pcall(vim.api.nvim_set_option_value, "undolevels", -1, {buf = self.buffer})
-      else
-      end
-      vim.api.nvim_buf_set_lines(self.buffer, 0, -1, false, out)
-      if not manual_edit_active_3f then
-        pcall(vim.api.nvim_set_option_value, "modified", false, {buf = self.buffer})
-      else
-      end
-      if undo_levels then
-        pcall(vim.api.nvim_set_option_value, "undolevels", undo_levels, {buf = self.buffer})
-      else
-      end
-    end
-    vim.api.nvim_buf_clear_namespace(self.buffer, self["source-hl-ns"], 0, -1)
-    vim.api.nvim_buf_clear_namespace(self.buffer, self["source-sep-ns"], 0, -1)
-    vim.api.nvim_buf_clear_namespace(self.buffer, self["source-alt-ns"], 0, -1)
-    if self["show-source-prefix"] then
-      for _, r in ipairs(ranges) do
-        local row0 = (r.row - 1)
-        if ((r["lnum-end"] or 0) > 0) then
-          vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], "MetaSourceLineNr", row0, 0, r["lnum-end"])
-        else
-        end
-        if ((r["icon-end"] - r["icon-start"]) > 0) then
-          vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], (r["icon-hl"] or "MetaSourceFile"), row0, r["icon-start"], r["icon-end"])
-        else
-        end
-        for _0, dr in ipairs((r["dir-ranges"] or {})) do
-          vim.api.nvim_buf_add_highlight(self.buffer, self["source-hl-ns"], dr.hl, row0, dr.start, dr["end"])
-        end
-        if ((r["file-end"] - r["file-start"]) > 0) then
-          vim.api.nvim_buf_set_extmark(self.buffer, self["source-hl-ns"], row0, r["file-start"], {end_row = row0, end_col = r["file-end"], hl_group = (r["file-hl"] or "Normal"), hl_mode = "combine", priority = 220})
-        else
-        end
-        if (((r["ext-end"] or 0) - (r["ext-start"] or 0)) > 0) then
-          vim.api.nvim_buf_set_extmark(self.buffer, self["source-hl-ns"], row0, r["ext-start"], {end_row = row0, end_col = r["ext-end"], hl_group = (r["ext-hl"] or r["file-hl"] or "Normal"), hl_mode = "combine", priority = 230})
-        else
-        end
-      end
+    local views = save_window_views(self)
+    local frame = build_render_frame(self)
+    local committed_3f
+    if should_defer_empty_frame(self, frame) then
+      committed_3f = stage_render_frame(self, frame)
     else
+      committed_3f = commit_render_frame(self, frame)
     end
-    if (self["show-source-separators"] and self["source-refs"]) then
-      local n = #self.indices
-      local alt = false
-      local prev_path = nil
-      for i = 1, n do
-        local idx = self.indices[i]
-        local ref = (idx and self["source-refs"][idx])
-        local path = ((ref and ref.path) or "")
-        if (prev_path == nil) then
-          prev_path = path
-        else
-        end
-        if (path ~= prev_path) then
-          alt = not alt
-          prev_path = path
-        else
-        end
-        if alt then
-          vim.api.nvim_buf_set_extmark(self.buffer, self["source-alt-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceAltBg", hl_eol = true, hl_mode = "combine", priority = 1})
-        else
-        end
-      end
-      for i = 1, (n - 1) do
-        local cur_idx = self.indices[i]
-        local next_idx = self.indices[(i + 1)]
-        local cur_ref = (cur_idx and self["source-refs"][cur_idx])
-        local next_ref = (next_idx and self["source-refs"][next_idx])
-        local cur_path = (cur_ref and cur_ref.path)
-        local next_path = (next_ref and next_ref.path)
-        if (((cur_path or "") ~= (next_path or "")) and ((cur_ref and cur_ref.kind) ~= "file-entry") and ((next_ref and next_ref.kind) ~= "file-entry")) then
-          vim.api.nvim_buf_set_extmark(self.buffer, self["source-sep-ns"], (i - 1), 0, {end_row = i, end_col = 0, hl_group = "MetaSourceBoundary", hl_eol = true, hl_mode = "combine", priority = 120})
-        else
-        end
-      end
+    if committed_3f then
+      apply_frame_separators(self)
+      return finalize_render(self, views)
     else
+      return nil
     end
-    self["apply-source-syntax-regions"]()
-    do
-      local bo = vim.bo[self.buffer]
-      if self["keep-modifiable"] then
-        bo["modifiable"] = true
-      else
-        bo["modifiable"] = false
-      end
-    end
-    set_bvar_21(self.buffer, "meta_internal_render", false)
-    for win, view in pairs(win_views) do
-      if vim.api.nvim_win_is_valid(win) then
-        local function _56_()
-          return pcall(vim.fn.winrestview, view)
-        end
-        vim.api.nvim_win_call(win, _56_)
-      else
-      end
-    end
-    return self.indexbuf.update()
   end
   self["push-visible-lines"] = function(visible)
     if self["model-valid?"]() then
