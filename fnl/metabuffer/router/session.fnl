@@ -39,30 +39,81 @@
            :sign-mod sign-mod})]
     (hooks.register! router-api session)))
 
+(fn activate-session-ui!
+  [deps session initial-lines]
+  (let [router-util-mod (. deps :router-util-mod)
+        active-by-source (. deps :active-by-source)
+        active-by-prompt (. deps :active-by-prompt)
+        sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
+        prompt-buf session.prompt-buf
+        prompt-win session.prompt-win]
+    (sync-prompt-buffer-name! session)
+    (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
+    (router-util-mod.mark-prompt-buffer! prompt-buf)
+    (register-prompt-hooks! deps session)
+    (set (. active-by-source session.source-buf) session)
+    (set (. active-by-prompt prompt-buf) session)
+    (vim.api.nvim_set_current_win prompt-win)
+    (let [row (math.max 1 (# initial-lines))
+          line (or (. initial-lines row) "")
+          col (# line)]
+      (pcall vim.api.nvim_win_set_cursor prompt-win [row col]))
+    (vim.cmd "startinsert")))
+
+(fn finish-session-startup!
+  [deps curr session initial-query-active]
+  (let [project-source (. deps :project-source)
+        meta-window-mod (. deps :meta-window-mod)
+        sign-mod (. deps :sign-mod)
+        session-view (. deps :session-view)
+        apply-prompt-lines (. deps :apply-prompt-lines)
+        update-info-window (. deps :update-info-window)
+        context-window (. deps :context-window)
+        instances (. deps :instances)]
+    (if session.project-mode
+        (project-source.apply-minimal-source-set! session)
+        (project-source.apply-source-set! session))
+    (set curr.status-win (meta-window-mod.new vim session.prompt-win))
+    (curr.win.set-statusline "")
+    (curr.on-init)
+    (when sign-mod
+      (pcall sign-mod.capture-baseline! session))
+    (when session.project-mode
+      (session-view.restore-meta-view! curr session.source-view))
+    (when-not (and session.project-mode (not initial-query-active))
+      (apply-prompt-lines session))
+    (vim.schedule
+      (fn []
+        (set session.startup-initializing false)
+        (when (and session.project-mode (not session.project-bootstrapped))
+          (project-source.schedule-project-bootstrap! session 0))))
+    (when (and session.project-mode (not initial-query-active))
+      (vim.schedule
+        (fn []
+          (when (= (. (. deps :active-by-prompt) session.prompt-buf) session)
+            (pcall curr.refresh_statusline)
+            (pcall update-info-window session)
+            (when (and context-window context-window.update!)
+              (pcall context-window.update! session))))))
+    (when (and context-window context-window.update!)
+      (vim.schedule (fn [] (pcall context-window.update! session))))
+    (set (. instances session.instance-id) session)))
+
 (fn M.start!
   [deps query mode _meta project-mode]
   (let [history-api (. deps :history-api)
         query-mod (. deps :query-mod)
         remove-session! (. deps :remove-session!)
         active-by-source (. deps :active-by-source)
-        active-by-prompt (. deps :active-by-prompt)
-        instances (. deps :instances)
         session-view (. deps :session-view)
         meta-mod (. deps :meta-mod)
         base-buffer (. deps :base-buffer)
         router-util-mod (. deps :router-util-mod)
         prompt-window-mod (. deps :prompt-window-mod)
-        project-source (. deps :project-source)
-        meta-window-mod (. deps :meta-window-mod)
         history-store (. deps :history-store)
-        sign-mod (. deps :sign-mod)
         read-file-lines-cached (. deps :read-file-lines-cached)
         settings (. deps :settings)
         next-instance-id! (. deps :next-instance-id!)
-        sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
-        apply-prompt-lines (. deps :apply-prompt-lines)
-        update-info-window (. deps :update-info-window)
-        context-window (. deps :context-window)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)]
     (pcall vim.cmd "silent! nohlsearch")
     (let [start-query (or query "")
@@ -218,54 +269,12 @@
                                :meta curr}]
                   (let [initial-query-active session.initial-query-active]
                     (set curr.session session)
-                    (if session.project-mode
-                        (project-source.apply-minimal-source-set! session)
-                        (project-source.apply-source-set! session))
-                    (set curr.status-win (meta-window-mod.new vim prompt-win.window))
-                    ;; Statusline info should live in prompt window, not result split.
-                    (curr.win.set-statusline "")
-                    ;; Initialize/render after prompt split exists so we avoid an extra
-                    ;; post-split view correction pass that can visually "flash" scroll.
-                    (curr.on-init)
-                    (when sign-mod
-                      (pcall sign-mod.capture-baseline! session))
-                    (sync-prompt-buffer-name! session)
-                    ;; Ensure initial selection/view is anchored before attaching prompt
-                    ;; hooks that may sync from main-window cursor events.
-                    (when session.project-mode
-                      (session-view.restore-meta-view! curr session.source-view))
-                    (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
-                    (router-util-mod.mark-prompt-buffer! prompt-buf)
-                    (register-prompt-hooks! deps session)
-                    (set (. active-by-source source-buf) session)
-                    (set (. active-by-prompt prompt-buf) session)
-                    (when-not (and session.project-mode (not initial-query-active))
-                      (apply-prompt-lines session))
-                    (vim.api.nvim_set_current_win prompt-win.window)
-                    (let [row (math.max 1 (# initial-lines))
-                          line (or (. initial-lines row) "")
-                          col (# line)]
-                      (pcall vim.api.nvim_win_set_cursor prompt-win.window [row col]))
-                    (vim.cmd "startinsert")
-                    (vim.schedule
-                      (fn []
-                        (set session.startup-initializing false)
-                        (when (and session.project-mode (not session.project-bootstrapped))
-                          ;; Start project lazy/eager expansion as soon as UI is ready,
-                          ;; independent of prompt input.
-                          (project-source.schedule-project-bootstrap! session 0))))
-                    (when (and session.project-mode (not initial-query-active))
-                      ;; Keep startup critical path lean; refresh auxiliary UI right after.
-                      (vim.schedule
-                        (fn []
-                          (when (= (. active-by-prompt session.prompt-buf) session)
-                            (pcall curr.refresh_statusline)
-                            (pcall update-info-window session)
-                            (when (and context-window context-window.update!)
-                              (pcall context-window.update! session))))))
-                    (when (and context-window context-window.update!)
-                      (vim.schedule (fn [] (pcall context-window.update! session))))
-                    (set (. instances session.instance-id) session)
+                    (activate-session-ui! deps session initial-lines)
+                    (finish-session-startup!
+                      deps
+                      curr
+                      session
+                      initial-query-active)
                     curr)))))))))
 
 M
