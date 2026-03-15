@@ -75,51 +75,58 @@
         session-view (. mods :session-view)
         animation-mod (. mods :animation)
         session (. active-by-prompt prompt-buf)]
-    (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
-      (let [runner (fn []
-                     (vim.api.nvim_win_call session.meta.win.window
-                       (fn []
-                         (let [line-count (vim.api.nvim_buf_line_count session.meta.buf.buffer)
-                               win-height (math.max 1 (vim.api.nvim_win_get_height session.meta.win.window))
-                               half-step (math.max 1 (math.floor (/ win-height 2)))
-                               page-step (math.max 1 (- win-height 2))
-                               step (if (or (= action "line-down") (= action "line-up"))
-                                        1
-                                        (or (= action "half-down") (= action "half-up"))
-                                        half-step
-                                        page-step)
-                               dir (if (or (= action "line-down") (= action "half-down") (= action "page-down")) 1 -1)
-                               max-top (math.max 1 (+ (- line-count win-height) 1))
-                               view (vim.fn.winsaveview)
-                               old-top (. view :topline)
-                               old-lnum (. view :lnum)
-                               old-col (or (. view :col) 0)
-                               row-off (math.max 0 (- old-lnum old-top))
-                               new-top (math.max 1 (math.min (+ old-top (* dir step)) max-top))
-                               new-lnum (math.max 1 (math.min (+ new-top row-off) line-count))
-                               target {:topline new-top :lnum new-lnum :col old-col :leftcol (or (. view :leftcol) 0)}]
-                           (if (and animation-mod
-                                    (animation-mod.enabled? session :scroll)
-                                    (> (animation-mod.duration-ms session :scroll 140) 0)
-                                    (not (= step 1)))
-                               (animation-mod.animate-view!
-                                 session
-                                 "smooth-scroll"
-                                 session.meta.win.window
-                                 view
-                                 target
-                                 (animation-mod.duration-ms session :scroll 140))
-                               (vim.fn.winrestview target)))))
-                     (session-view.sync-selected-from-main-cursor! session)
-                     (pcall session.meta.refresh_statusline)
-                     (when update-preview-window
-                       (pcall update-preview-window session))
-                     (pcall update-info-window session false)
-                     (when (and context-window context-window.update!)
-                       (pcall context-window.update! session)))
-            mode (. (vim.api.nvim_get_mode) :mode)]
-        (if (and (= (type mode) "string") (vim.startswith mode "i"))
-            (vim.schedule runner)
+	    (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
+	      (let [runner (fn []
+	                     (let [target-row
+	                           (vim.api.nvim_win_call
+	                             session.meta.win.window
+	                             (fn []
+	                               (let [line-count (vim.api.nvim_buf_line_count session.meta.buf.buffer)
+	                                     win-height (math.max 1 (vim.api.nvim_win_get_height session.meta.win.window))
+	                                     half-step (math.max 1 (math.floor (/ win-height 2)))
+	                                     page-step (math.max 1 (- win-height 2))
+	                                     step (if (or (= action "line-down") (= action "line-up"))
+	                                              1
+	                                              (or (= action "half-down") (= action "half-up"))
+	                                              half-step
+	                                              page-step)
+	                                     dir (if (or (= action "line-down") (= action "half-down") (= action "page-down")) 1 -1)
+	                                     max-top (math.max 1 (+ (- line-count win-height) 1))
+	                                     view (vim.fn.winsaveview)
+	                                     old-top (. view :topline)
+	                                     old-lnum (. view :lnum)
+	                                     old-col (or (. view :col) 0)
+	                                     row-off (math.max 0 (- old-lnum old-top))
+	                                     new-top (math.max 1 (math.min (+ old-top (* dir step)) max-top))
+	                                     new-lnum (math.max 1 (math.min (+ new-top row-off) line-count))
+	                                     target {:topline new-top :lnum new-lnum :col old-col :leftcol (or (. view :leftcol) 0)}]
+	                                 (if (and animation-mod
+	                                          (animation-mod.enabled? session :scroll)
+	                                          (> (animation-mod.duration-ms session :scroll 140) 0)
+	                                          (not (= step 1)))
+	                                     (animation-mod.animate-view!
+	                                       session
+	                                       "smooth-scroll"
+	                                       session.meta.win.window
+	                                       view
+	                                       target
+	                                       (animation-mod.duration-ms session :scroll 140))
+	                                     (vim.fn.winrestview target))
+	                                 new-lnum)))]
+	                       ;; Keep selection-dependent UI in sync with the target row
+	                       ;; even when the scroll uses animation frames.
+	                       (set session.meta.selected_index
+	                            (math.max 0 (math.min (- target-row 1)
+	                                                  (math.max 0 (- (# session.meta.buf.indices) 1)))))
+	                       (pcall session.meta.refresh_statusline)
+	                       (when update-preview-window
+	                         (pcall update-preview-window session))
+	                       (pcall update-info-window session false)
+	                       (when (and context-window context-window.update!)
+	                         (pcall context-window.update! session))))
+	            mode (. (vim.api.nvim_get_mode) :mode)]
+	        (if (and (= (type mode) "string") (vim.startswith mode "i"))
+	            (vim.schedule runner)
             (runner))))))
 
 (fn M.maybe-sync-from-main!

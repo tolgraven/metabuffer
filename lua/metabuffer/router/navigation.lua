@@ -102,6 +102,7 @@ M["scroll-main!"] = function(deps, prompt_buf, action)
   if (session and vim.api.nvim_win_is_valid(session.meta.win.window)) then
     local runner
     local function _14_()
+      local target_row
       local function _15_()
         local line_count = vim.api.nvim_buf_line_count(session.meta.buf.buffer)
         local win_height = math.max(1, vim.api.nvim_win_get_height(session.meta.win.window))
@@ -131,13 +132,14 @@ M["scroll-main!"] = function(deps, prompt_buf, action)
         local new_lnum = math.max(1, math.min((new_top + row_off), line_count))
         local target = {topline = new_top, lnum = new_lnum, col = old_col, leftcol = (view.leftcol or 0)}
         if (animation_mod and animation_mod["enabled?"](session, "scroll") and (animation_mod["duration-ms"](session, "scroll", 140) > 0) and not (step == 1)) then
-          return animation_mod["animate-view!"](session, "smooth-scroll", session.meta.win.window, view, target, animation_mod["duration-ms"](session, "scroll", 140))
+          animation_mod["animate-view!"](session, "smooth-scroll", session.meta.win.window, view, target, animation_mod["duration-ms"](session, "scroll", 140))
         else
-          return vim.fn.winrestview(target)
+          vim.fn.winrestview(target)
         end
+        return new_lnum
       end
-      vim.api.nvim_win_call(session.meta.win.window, _15_)
-      session_view["sync-selected-from-main-cursor!"](session)
+      target_row = vim.api.nvim_win_call(session.meta.win.window, _15_)
+      session.meta.selected_index = math.max(0, math.min((target_row - 1), math.max(0, (#session.meta.buf.indices - 1))))
       pcall(session.meta.refresh_statusline)
       if update_preview_window then
         pcall(update_preview_window, session)

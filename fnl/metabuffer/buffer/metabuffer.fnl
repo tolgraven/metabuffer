@@ -93,11 +93,29 @@
     (and parsed
          (query-mod.query-lines-has-active? (or (. parsed :lines) [])))))
 
+(fn any-non-empty-line?
+  [lines]
+  (let [active false]
+    (var out active)
+    (each [_ line (ipairs (or lines []))]
+      (when (and (not out) (~= (vim.trim (or line "")) ""))
+        (set out true)))
+    out))
+
+(fn session_has_active_filter
+  [self]
+  (let [session self.model.session
+        parsed (and session session.last-parsed-query)]
+    (and session
+         parsed
+         (or (query-mod.query-lines-has-active? (or (. parsed :lines) []))
+             (any-non-empty-line? (or (. parsed :file-lines) []))))))
+
 (fn should_defer_empty_frame
   [self frame]
   (and (= (# (or frame.lines [])) 0)
        (> (# (or self.last-rendered-lines [])) 0)
-       (not (session_has_active_query self))
+       (not (session_has_active_filter self))
        (session_has_pending_work self)))
 
 (fn save_window_views
