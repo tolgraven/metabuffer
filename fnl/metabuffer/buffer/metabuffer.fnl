@@ -419,39 +419,47 @@
             (when prev-ft
               (add-block start syntax-stop prev-ft)))))))
 
-      (fn self.schedule-source-syntax-fill
-  [syntax-start syntax-stop total-lines]
+      (fn self.run-source-syntax-fill-step
+  [total-lines]
     (let [session self.model.session
           chunk (math.max 1 (or (and session session.project-source-syntax-chunk-lines) 240))
-          token (+ 1 (or self.source-syntax-fill-token 0))]
-      (set self.source-syntax-fill-token token)
-      (set self.source-syntax-fill-pending true)
-      (var next-after (+ syntax-stop 1))
-      (var next-before (- syntax-start 1))
-      (fn run-batch
-        []
-        (when (and (= token self.source-syntax-fill-token)
-                   self.source-syntax-fill-pending
-                   (vim.api.nvim_buf_is_valid self.buffer))
-          (var budget chunk)
-          (when (and (<= next-after total-lines) (> budget 0))
-            (let [stop (math.min total-lines (+ next-after budget -1))]
-              (self.add-source-syntax-range next-after stop)
-              (set budget (- budget (+ (- stop next-after) 1)))
-              (set next-after (+ stop 1))))
-          (when (and (>= next-before 1) (> budget 0))
-            (let [start (math.max 1 (+ next-before (- budget) 1))]
-              (self.add-source-syntax-range start next-before)
-              (set next-before (- start 1))))
-          (if (or (<= next-after total-lines) (>= next-before 1))
-              (vim.defer_fn run-batch 17)
-              (do
-                (set self.source-syntax-fill-pending false)
-                (vim.api.nvim_buf_call self.buffer
-                  (fn []
-                    ;; Re-sync once after the background fill completes.
-                    (vim.cmd "silent! syntax sync fromstart"))))))))
-      (vim.defer_fn run-batch 17)))
+          token self.source-syntax-fill-token]
+      (when (and self.source-syntax-fill-pending
+                 (vim.api.nvim_buf_is_valid self.buffer)
+                 (= token self.source-syntax-fill-token))
+        (var budget chunk)
+        (when (and (<= self.source-syntax-next-after total-lines) (> budget 0))
+          (let [stop (math.min total-lines (+ self.source-syntax-next-after budget -1))]
+            (self.add-source-syntax-range self.source-syntax-next-after stop)
+            (set budget (- budget (+ (- stop self.source-syntax-next-after) 1)))
+            (set self.source-syntax-next-after (+ stop 1))))
+        (when (and (>= self.source-syntax-next-before 1) (> budget 0))
+          (let [start (math.max 1 (+ self.source-syntax-next-before (- budget) 1))]
+            (self.add-source-syntax-range start self.source-syntax-next-before)
+            (set self.source-syntax-next-before (- start 1))))
+        (if (or (<= self.source-syntax-next-after total-lines)
+                (>= self.source-syntax-next-before 1))
+            (vim.defer_fn
+              (fn []
+                (self.run-source-syntax-fill-step total-lines))
+              17)
+            (do
+              (set self.source-syntax-fill-pending false)
+              (vim.api.nvim_buf_call self.buffer
+                (fn []
+                  ;; Re-sync once after the background fill completes.
+                  (vim.cmd "silent! syntax sync fromstart"))))))))
+
+      (fn self.schedule-source-syntax-fill
+  [syntax-start syntax-stop total-lines]
+    (set self.source-syntax-fill-token (+ 1 (or self.source-syntax-fill-token 0)))
+    (set self.source-syntax-fill-pending true)
+    (set self.source-syntax-next-after (+ syntax-stop 1))
+    (set self.source-syntax-next-before (- syntax-start 1))
+    (vim.defer_fn
+      (fn []
+        (self.run-source-syntax-fill-step total-lines))
+      17))
 
       (fn self.apply-source-syntax-regions
   []
@@ -479,22 +487,22 @@
           (let [incremental-fill? (and session
                                        session.project-mode
                                        (not self.visible-source-syntax-only)
-                                       (> n chunk))]
-            (var syntax-start (if (or self.visible-source-syntax-only incremental-fill?)
-                                  visible-start
-                                  1))
-            (var syntax-stop (if (or self.visible-source-syntax-only incremental-fill?)
-                                 visible-stop
-                                 n))
-          (self.clear-source-syntax)
-          (self.add-source-syntax-range syntax-start syntax-stop)
-          (when (not (or self.visible-source-syntax-only incremental-fill?))
-            (vim.api.nvim_buf_call self.buffer
-              (fn []
-                ;; Re-sync immediately only when we already applied the complete range.
-                (vim.cmd "silent! syntax sync fromstart"))))
-          (when incremental-fill?
-            (self.schedule-source-syntax-fill syntax-start syntax-stop n)))))
+                                       (> n chunk))
+                syntax-start (if (or self.visible-source-syntax-only incremental-fill?)
+                                 visible-start
+                                 1)
+                syntax-stop (if (or self.visible-source-syntax-only incremental-fill?)
+                                visible-stop
+                                n)]
+            (self.clear-source-syntax)
+            (self.add-source-syntax-range syntax-start syntax-stop)
+            (when (not (or self.visible-source-syntax-only incremental-fill?))
+              (vim.api.nvim_buf_call self.buffer
+                (fn []
+                  ;; Re-sync immediately only when we already applied the complete range.
+                  (vim.cmd "silent! syntax sync fromstart"))))
+            (when incremental-fill?
+              (self.schedule-source-syntax-fill syntax-start syntax-stop n))))))
 
       (fn self.syntax
   []
