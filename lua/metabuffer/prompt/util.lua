@@ -1,8 +1,6 @@
 -- [nfnl] fnl/metabuffer/prompt/util.fnl
 local M = {}
-local str = require("io.gitlab.andreyorst.cljlib.string")
-local str_replace = str.replace
-M.ESCAPE_ECHO = {["\\"] = "\\\\", ["\""] = "\\\""}
+M.ESCAPE_ECHO = {[{"\\"}] = "\\\\", [{"\""}] = "\\\""}
 M.get_encoding = function()
   return (vim.o.encoding or "utf-8")
 end
@@ -51,7 +49,7 @@ M.getchar = function(...)
   end
 end
 M.build_echon_expr = function(text, hl)
-  local safe = str_replace(str_replace((text or ""), "\\\\", "\\\\\\\\"), "\"", "\\\\\"")
+  local safe = string.gsub(string.gsub((text or ""), "\\\\", "\\\\\\\\"), "\"", "\\\\\"")
   return string.format("echohl %s|echon \"%s\"", (hl or "None"), safe)
 end
 M.build_keyword_pattern_set = function(_)

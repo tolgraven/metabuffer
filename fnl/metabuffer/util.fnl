@@ -2,30 +2,21 @@
                  : if-let
                  : when-some
                  : if-some
-                 : when-not
-                 : def
-                 : defn}
+                 : when-not}
   :io.gitlab.andreyorst.cljlib.core)
-(local str (require :io.gitlab.andreyorst.cljlib.string))
-(local str-join (. str :join))
-(local str-lower-case (. str :lower-case))
-(local str-substring (. str :substring))
-(local str-match (. str :match))
+(local M {})
 
-(def join-pattern "\\|")
-(def ext-pattern ".*()%.")
-
-(defn split-input
+(fn M.split-input
   [text]
   "Public API: M.split-input."
   (vim.split (or text "") "%s+" {:trimempty true}))
 
-(defn convert2regex-pattern
+(fn M.convert2regex-pattern
   [text]
   "Public API: M.convert2regex-pattern."
-  (str-join join-pattern (split-input text)))
+  (table.concat (M.split-input text) "\\|"))
 
-(defn assign-content
+(fn M.assign-content
   [buf lines]
   "Public API: M.assign-content."
   (let [view (vim.fn.winsaveview)]
@@ -36,37 +27,37 @@
       (set (. bo :modifiable) false))
     (vim.fn.winrestview view)))
 
-(defn escape-vim-pattern
+(fn M.escape-vim-pattern
   [text]
   "Public API: M.escape-vim-pattern."
   (vim.fn.escape (or text "") "\\^$~.*[]"))
 
-(defn query-is-lower
+(fn M.query-is-lower
   [query]
   "Public API: M.query-is-lower."
-  (= (str-lower-case query) (or query "")))
+  (= (string.lower (or query "")) (or query "")))
 
-(defn buf-valid?
+(fn M.buf-valid?
   [buf]
   "Public API: M.buf-valid?."
   (and buf (vim.api.nvim_buf_is_valid buf)))
 
-(defn win-valid?
+(fn M.win-valid?
   [win]
   "Public API: M.win-valid?."
   (and win (vim.api.nvim_win_is_valid win)))
 
-(defn deepcopy
+(fn M.deepcopy
   [x]
   "Public API: M.deepcopy."
   (vim.deepcopy x))
 
-(defn clamp
+(fn M.clamp
   [n lo hi]
   "Public API: M.clamp."
   (math.max lo (math.min hi n)))
 
-(defn build-group-names
+(fn M.build-group-names
   [prefix count]
   "Public API: M.build-group-names."
   (let [groups []]
@@ -74,20 +65,20 @@
       (table.insert groups (.. prefix i)))
     groups))
 
-(defn ext-from-path
+(fn M.ext-from-path
   [path]
   "Public API: M.ext-from-path."
   (let [file (vim.fn.fnamemodify (or path "") ":t")
-        dot (str-match file ext-pattern)]
+        dot (string.match file ".*()%.")]
     (if (and dot (> dot 0) (< dot (# file)))
-        (str-substring file (+ dot 1))
+        (string.sub file (+ dot 1))
         "")))
 
-(defn devicon-info
+(fn M.devicon-info
   [path fallback-hl]
   "Public API: M.devicon-info."
   (let [file (vim.fn.fnamemodify (or path "") ":t")
-        ext (ext-from-path path)
+        ext (M.ext-from-path path)
         [ok-web web] [(pcall require :nvim-web-devicons)]]
     (if (and ok-web web)
         (let [[ok-i icon icon-hl] [(pcall web.get_icon file ext {:default true})]
@@ -109,33 +100,19 @@
              :ext-hl fallback-hl
              :file-hl fallback-hl}))))
 
-(defn buf-lines
+(fn M.buf-lines
   [buf]
   "Public API: M.buf-lines."
   (vim.api.nvim_buf_get_lines buf 0 -1 false))
 
-(defn cursor
+(fn M.cursor
   []
   "Public API: M.cursor."
   (vim.api.nvim_win_get_cursor 0))
 
-(defn set-cursor
+(fn M.set-cursor
   [row col]
   "Public API: M.set-cursor."
   (vim.api.nvim_win_set_cursor 0 [row (or col 0)]))
 
-{:split-input split-input
- :convert2regex-pattern convert2regex-pattern
- :assign-content assign-content
- :escape-vim-pattern escape-vim-pattern
- :query-is-lower query-is-lower
- :buf-valid? buf-valid?
- :win-valid? win-valid?
- :deepcopy deepcopy
- :clamp clamp
- :build-group-names build-group-names
- :ext-from-path ext-from-path
- :devicon-info devicon-info
- :buf-lines buf-lines
- :cursor cursor
- :set-cursor set-cursor}
+M
