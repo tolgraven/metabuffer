@@ -517,10 +517,13 @@ M.new = function(nvim, model)
       end
       self["clear-source-syntax"]()
       self["add-source-syntax-range"](syntax_start, syntax_stop)
-      local function _57_()
-        return vim.cmd("silent! syntax sync fromstart")
+      if not (self["visible-source-syntax-only"] or incremental_fill_3f) then
+        local function _57_()
+          return vim.cmd("silent! syntax sync fromstart")
+        end
+        vim.api.nvim_buf_call(self.buffer, _57_)
+      else
       end
-      vim.api.nvim_buf_call(self.buffer, _57_)
       if incremental_fill_3f then
         self["schedule-source-syntax-fill"](syntax_start, syntax_stop, n)
       else

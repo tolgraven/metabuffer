@@ -9,6 +9,9 @@
 
 (set M.default-opts {:buflisted false :bufhidden "hide" :buftype "nofile"})
 
+;;
+;; This should really be two synced-up buffers:
+;; hits, and metadata (some of which goes in info window).
 (fn icon-field
   [icon]
   (if (and (= (type icon) "string") (~= icon ""))
@@ -485,10 +488,11 @@
                                  n))
           (self.clear-source-syntax)
           (self.add-source-syntax-range syntax-start syntax-stop)
-          (vim.api.nvim_buf_call self.buffer
-            (fn []
-              ;; Re-sync so contained syntax in mixed blocks updates reliably.
-              (vim.cmd "silent! syntax sync fromstart")))
+          (when (not (or self.visible-source-syntax-only incremental-fill?))
+            (vim.api.nvim_buf_call self.buffer
+              (fn []
+                ;; Re-sync immediately only when we already applied the complete range.
+                (vim.cmd "silent! syntax sync fromstart"))))
           (when incremental-fill?
             (self.schedule-source-syntax-fill syntax-start syntax-stop n)))))
 
