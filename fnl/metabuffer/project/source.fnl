@@ -231,23 +231,31 @@
               (when (and session.meta
                          session.meta.buf
                          (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-                (let [[ok err] [(pcall session.meta.on-update 0)]]
-                  (if ok
-                      (do
-                        (pcall session.meta.refresh_statusline)
-                        (pcall update-info-window session))
-                      (when (and err (string.find (tostring err) "E565"))
-                        (vim.defer_fn
-                          (fn []
-                            (when (and session
-                                       (session-active? session)
-                                       session.meta
-                                       session.meta.buf
-                                       (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-                              (pcall session.meta.on-update 0)
-                              (pcall session.meta.refresh_statusline)
-                              (pcall update-info-window session)))
-                          1))))))
+                (if (and (not session.lazy-stream-done)
+                         (not (prompt-has-active-query? session)))
+                    (do
+                      ;; During empty-query startup streaming, visible results stay stable.
+                      ;; Avoid re-running the full filter/render path on every batch and
+                      ;; update only progress/status UI until the stream completes.
+                      (pcall session.meta.refresh_statusline)
+                      (pcall update-info-window session))
+                    (let [[ok err] [(pcall session.meta.on-update 0)]]
+                      (if ok
+                          (do
+                            (pcall session.meta.refresh_statusline)
+                            (pcall update-info-window session))
+                          (when (and err (string.find (tostring err) "E565"))
+                            (vim.defer_fn
+                              (fn []
+                                (when (and session
+                                           (session-active? session)
+                                           session.meta
+                                           session.meta.buf
+                                           (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+                                  (pcall session.meta.on-update 0)
+                                  (pcall session.meta.refresh_statusline)
+                                  (pcall update-info-window session)))
+                              1)))))))
             (when (and session (session-active? session) session.lazy-refresh-dirty)
               (schedule-lazy-refresh! session)))
           (math.max

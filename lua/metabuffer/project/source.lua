@@ -275,23 +275,28 @@ M.new = function(opts)
           if (session and session_active_3f(session) and session["lazy-refresh-dirty"]) then
             session["lazy-refresh-dirty"] = false
             if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
-              local ok,err = pcall(session.meta["on-update"], 0)
-              if ok then
+              if (not session["lazy-stream-done"] and not prompt_has_active_query_3f(session)) then
                 pcall(session.meta.refresh_statusline)
                 pcall(update_info_window, session)
               else
-                if (err and string.find(tostring(err), "E565")) then
-                  local function _31_()
-                    if (session and session_active_3f(session) and session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
-                      pcall(session.meta["on-update"], 0)
-                      pcall(session.meta.refresh_statusline)
-                      return pcall(update_info_window, session)
-                    else
-                      return nil
-                    end
-                  end
-                  vim.defer_fn(_31_, 1)
+                local ok,err = pcall(session.meta["on-update"], 0)
+                if ok then
+                  pcall(session.meta.refresh_statusline)
+                  pcall(update_info_window, session)
                 else
+                  if (err and string.find(tostring(err), "E565")) then
+                    local function _31_()
+                      if (session and session_active_3f(session) and session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
+                        pcall(session.meta["on-update"], 0)
+                        pcall(session.meta.refresh_statusline)
+                        return pcall(update_info_window, session)
+                      else
+                        return nil
+                      end
+                    end
+                    vim.defer_fn(_31_, 1)
+                  else
+                  end
                 end
               end
             else
@@ -400,29 +405,29 @@ M.new = function(opts)
       local meta = session.meta
       for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)) do
         table.insert(content, "")
-        local _50_
+        local _51_
         do
           local rel = vim.fn.fnamemodify(path, ":.")
           if ((type(rel) == "string") and (rel ~= "")) then
-            _50_ = rel
+            _51_ = rel
           else
-            _50_ = path
+            _51_ = path
           end
         end
-        table.insert(refs, {path = path, lnum = 1, line = _50_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
+        table.insert(refs, {path = path, lnum = 1, line = _51_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
       end
       do local _ = {content = content, refs = refs} end
     else
     end
     local total_lines = 0
     local push_line_21
-    local function _53_(path, lnum, line)
+    local function _54_(path, lnum, line)
       table.insert(content, line)
       table.insert(refs, {path = path, lnum = lnum, line = line})
       total_lines = (total_lines + 1)
       return nil
     end
-    push_line_21 = _53_
+    push_line_21 = _54_
     for i, line in ipairs((session["single-content"] or {})) do
       push_line_21((current_path or "[Current Buffer]"), i, line)
     end
@@ -611,7 +616,7 @@ M.new = function(opts)
       session["source-set-rebuild-token"] = (1 + (session["source-set-rebuild-token"] or 0))
       local token = session["source-set-rebuild-token"]
       session["source-set-rebuild-pending"] = true
-      local function _76_()
+      local function _77_()
         if (session and (token == session["source-set-rebuild-token"])) then
           session["source-set-rebuild-pending"] = false
         else
@@ -627,7 +632,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_76_, math.max(0, (wait_ms or 0)))
+      return vim.defer_fn(_77_, math.max(0, (wait_ms or 0)))
     else
       return nil
     end
@@ -654,7 +659,7 @@ M.new = function(opts)
       session["project-bootstrap-token"] = (1 + (session["project-bootstrap-token"] or 0))
       local token = session["project-bootstrap-token"]
       session["project-bootstrap-pending"] = true
-      local function _82_()
+      local function _83_()
         if (session and (token == session["project-bootstrap-token"])) then
           session["project-bootstrap-pending"] = false
         else
@@ -687,7 +692,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_82_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
+      return vim.defer_fn(_83_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
     else
       return nil
     end
