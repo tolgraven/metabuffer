@@ -266,7 +266,45 @@
     (set session.info-buf nil)
     (set session.info-post-fade-refresh? nil)
     (set session.info-render-suspended? nil)
+    (set session.info-highlight-fill-pending? nil)
+    (set session.info-highlight-fill-token nil)
     (set session.info-fixed-width nil))
+
+  (fn apply-info-highlights!
+    [session ns highlights]
+    (each [_ h (ipairs (or highlights []))]
+      (vim.api.nvim_buf_add_highlight session.info-buf ns (. h 2) (. h 1) (. h 3) (. h 4))))
+
+  (fn schedule-info-highlight-fill!
+    [session ns highlights visible-rows]
+    (let [pending []
+          batch-size (math.max 24 (* (math.max 1 visible-rows) 2))]
+      (each [_ h (ipairs (or highlights []))]
+        (when (>= (. h 1) visible-rows)
+          (table.insert pending h)))
+      (if (= (# pending) 0)
+          (set session.info-highlight-fill-pending? false)
+          (let [token (+ 1 (or session.info-highlight-fill-token 0))]
+            (set session.info-highlight-fill-token token)
+            (set session.info-highlight-fill-pending? true)
+            (var next-index 1)
+            (fn run-batch
+              []
+              (when (and session
+                         session.info-highlight-fill-pending?
+                         (= token session.info-highlight-fill-token)
+                         session.info-buf
+                         (vim.api.nvim_buf_is_valid session.info-buf))
+                (let [stop (math.min (# pending) (+ next-index batch-size -1))]
+                  (for [i next-index stop]
+                    (let [h (. pending i)]
+                      (vim.api.nvim_buf_add_highlight session.info-buf ns (. h 2) (. h 1) (. h 3) (. h 4))))
+                  (if (< stop (# pending))
+                      (do
+                        (set next-index (+ stop 1))
+                        (vim.defer_fn run-batch 17))
+                      (set session.info-highlight-fill-pending? false)))))
+            (vim.defer_fn run-batch 17)))))
 
   (fn fit-info-width!
     [session lines]
@@ -451,10 +489,13 @@
                     (vim.tbl_map str raw-lines)
                     [(str raw-lines)])
           highlights (or (. built :highlights) [])
-          ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
+          ns (vim.api.nvim_create_namespace "MetaInfoWindow")
+          visible-rows (math.max 1 (math.min (# lines) (info_height session)))]
       (debug_log (join-str " " ["info render"
                                 (.. "hits=" (# idxs))
                                 (.. "lines=" (# lines))]))
+      (set session.info-highlight-fill-token (+ 1 (or session.info-highlight-fill-token 0)))
+      (set session.info-highlight-fill-pending? false)
       (let [bo (. vim.bo session.info-buf)]
         (set (. bo :modifiable) true))
       (fit-info-width! session lines)
@@ -462,8 +503,9 @@
         (when-not ok-set
           (debug_log (.. "info set_lines failed: " (tostring err-set)))))
       (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
-      (each [_ h (ipairs highlights)]
-        (vim.api.nvim_buf_add_highlight session.info-buf ns (. h 2) (. h 1) (. h 3) (. h 4)))
+      (apply-info-highlights! session ns
+                              (vim.tbl_filter (fn [h] (< (. h 1) visible-rows)) highlights))
+      (schedule-info-highlight-fill! session ns highlights visible-rows)
       (let [bo (. vim.bo session.info-buf)]
         (set (. bo :modifiable) false))))
 
@@ -595,6 +637,8 @@
       (let [ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
         (let [bo (vim.bo session.info-buf)]
           (set bo.modifiable true))
+        (set session.info-highlight-fill-token (+ 1 (or session.info-highlight-fill-token 0)))
+        (set session.info-highlight-fill-pending? false)
         (set session.info-showing-project-loading? true)
         (set session.info-render-sig nil)
         (fit-info-width! session lines)
