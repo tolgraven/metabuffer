@@ -6,6 +6,11 @@
                  : cond}
   :io.gitlab.andreyorst.cljlib.core)
 (local M {})
+(local str (require :io.gitlab.andreyorst.cljlib.string))
+(local str-join (. str :join))
+(local str-match (. str :match))
+(local str-starts-with? (. str :starts-with?))
+(local str-substring (. str :substring))
 
 (fn M.truthy?
   [v]
@@ -23,8 +28,8 @@
 (fn parse-option-token
   [tok]
   (let [prefix (option-prefix)
-        expansion-mode (or (string.match tok "^#exp:(.+)$")
-                           (string.match tok (.. "^" (vim.pesc prefix) "exp:(.+)$")))
+        expansion-mode (or (str-match tok "^#exp:(.+)$")
+                           (str-match tok (.. "^" (vim.pesc prefix) "exp:(.+)$")))
         hidden-on (or (= tok "#hidden") (= tok "+hidden") (= tok "#+hidden") (= tok (.. prefix "hidden")))
         hidden-off (or (= tok "#nohidden") (= tok "-hidden") (= tok "#-hidden") (= tok (.. prefix "nohidden")))
         ignored-on (or (= tok "#ignored") (= tok "+ignored") (= tok "#+ignored") (= tok (.. prefix "ignored")))
@@ -42,9 +47,9 @@
         files-off (or (= tok "#nofile") (= tok "-file") (= tok "#-file") (= tok (.. prefix "nofile")))
         files-on (or (= tok "#file") (= tok "+file") (= tok "#+file") (= tok (.. prefix "file")))
         history-merge? (= tok "#history")
-        save-tag (or (string.match tok "^#save:(.+)$")
-                     (string.match tok (.. "^" (vim.pesc prefix) "save:(.+)$")))
-        saved-tag (string.match tok "^##(.+)$")
+        save-tag (or (str-match tok "^#save:(.+)$")
+                     (str-match tok (.. "^" (vim.pesc prefix) "save:(.+)$")))
+        saved-tag (str-match tok "^##(.+)$")
         saved-browser? (= tok "##")]
     (cond
       hidden-on [:hidden true]
@@ -75,8 +80,8 @@
         prefix (option-prefix)
         escaped-prefix (.. "\\" prefix)]
     (if (and (> (# t) (# escaped-prefix))
-             (vim.startswith t escaped-prefix))
-      (string.sub t 2)
+             (str-starts-with? t escaped-prefix))
+      (str-substring t 2)
       nil)))
 
 (fn prefix-directive-token?
@@ -84,7 +89,7 @@
   (let [t (or tok "")
         prefix (option-prefix)]
     (and (~= t prefix)
-         (vim.startswith t prefix))))
+         (str-starts-with? t prefix))))
 
 (fn assoc-option
   [acc k v]
@@ -97,11 +102,11 @@
   (let [t (or tok "")
         n (# t)]
     (if (>= n 2)
-      (let [lead (string.sub t 1 1)
-            tail (string.sub t n n)]
+      (let [lead (str-substring t 1 1)
+            tail (str-substring t n n)]
         (if (or (and (= lead "\"") (= tail "\""))
                 (and (= lead "'") (= tail "'")))
-          (string.sub t 2 (- n 1))
+          (str-substring t 2 (- n 1))
           t))
       t)))
 
@@ -110,7 +115,7 @@
   (let [t (or tok "")]
     (if (= t "./")
       :await
-      (string.match t "^%./(.+)$"))))
+      (str-match t "^%./(.+)$"))))
 
 (fn parse-parts
   [parts idx state]
@@ -155,7 +160,7 @@
       (let [parts (vim.split trimmed "%s+" {:trimempty true})
             state (parse-parts parts 1 (assoc-option acc :keep []))
             next (vim.deepcopy state)]
-        (table.insert (. next :lines) (table.concat (. state :keep) " "))
+        (table.insert (. next :lines) (str-join " " (. state :keep)))
         (set (. next :keep) nil)
         (set (. next :file-await-token) false)
         next))))
@@ -200,7 +205,7 @@
   (if (and (= (type query) "string") (~= query ""))
     (let [lines (vim.split query "\n" {:plain true})
           parsed (M.parse-query-lines lines)]
-      {:query (table.concat (. parsed :lines) "\n")
+      {:query (str-join "\n" (. parsed :lines))
        :lines (or (. parsed :lines) [])
        :include-hidden (. parsed :hidden)
        :include-ignored (. parsed :ignored)

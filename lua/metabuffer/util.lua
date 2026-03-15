@@ -1,12 +1,18 @@
 -- [nfnl] fnl/metabuffer/util.fnl
-local M = {}
-M["split-input"] = function(text)
+local str = require("io.gitlab.andreyorst.cljlib.string")
+local str_join = str.join
+local str_lower_case = str["lower-case"]
+local str_substring = str.substring
+local str_match = str.match
+local join_pattern = "\\|"
+local ext_pattern = ".*()%."
+local split_input = function(text)
   return vim.split((text or ""), "%s+", {trimempty = true})
 end
-M["convert2regex-pattern"] = function(text)
-  return table.concat(M["split-input"](text), "\\|")
+local convert2regex_pattern = function(text)
+  return str_join(join_pattern, split_input(text))
 end
-M["assign-content"] = function(buf, lines)
+local assign_content = function(buf, lines)
   local view = vim.fn.winsaveview()
   do
     local bo = vim.bo[buf]
@@ -19,43 +25,43 @@ M["assign-content"] = function(buf, lines)
   end
   return vim.fn.winrestview(view)
 end
-M["escape-vim-pattern"] = function(text)
+local escape_vim_pattern = function(text)
   return vim.fn.escape((text or ""), "\\^$~.*[]")
 end
-M["query-is-lower"] = function(query)
-  return (string.lower((query or "")) == (query or ""))
+local query_is_lower = function(query)
+  return (str_lower_case(query) == (query or ""))
 end
-M["buf-valid?"] = function(buf)
+local buf_valid_3f = function(buf)
   return (buf and vim.api.nvim_buf_is_valid(buf))
 end
-M["win-valid?"] = function(win)
+local win_valid_3f = function(win)
   return (win and vim.api.nvim_win_is_valid(win))
 end
-M.deepcopy = function(x)
+local deepcopy = function(x)
   return vim.deepcopy(x)
 end
-M.clamp = function(n, lo, hi)
+local clamp = function(n, lo, hi)
   return math.max(lo, math.min(hi, n))
 end
-M["build-group-names"] = function(prefix, count)
+local build_group_names = function(prefix, count)
   local groups = {}
   for i = 1, count do
     table.insert(groups, (prefix .. i))
   end
   return groups
 end
-M["ext-from-path"] = function(path)
+local ext_from_path = function(path)
   local file = vim.fn.fnamemodify((path or ""), ":t")
-  local dot = string.match(file, ".*()%.")
+  local dot = str_match(file, ext_pattern)
   if (dot and (dot > 0) and (dot < #file)) then
-    return string.sub(file, (dot + 1))
+    return str_substring(file, (dot + 1))
   else
     return ""
   end
 end
-M["devicon-info"] = function(path, fallback_hl)
+local devicon_info = function(path, fallback_hl)
   local file = vim.fn.fnamemodify((path or ""), ":t")
-  local ext = M["ext-from-path"](path)
+  local ext = ext_from_path(path)
   local ok_web,web = pcall(require, "nvim-web-devicons")
   if (ok_web and web) then
     local ok_i,icon,icon_hl = pcall(web.get_icon, file, ext, {default = true})
@@ -87,13 +93,13 @@ M["devicon-info"] = function(path, fallback_hl)
     end
   end
 end
-M["buf-lines"] = function(buf)
+local buf_lines = function(buf)
   return vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 end
-M.cursor = function()
+local cursor = function()
   return vim.api.nvim_win_get_cursor(0)
 end
-M["set-cursor"] = function(row, col)
+local set_cursor = function(row, col)
   return vim.api.nvim_win_set_cursor(0, {row, (col or 0)})
 end
-return M
+return {["split-input"] = split_input, ["convert2regex-pattern"] = convert2regex_pattern, ["assign-content"] = assign_content, ["escape-vim-pattern"] = escape_vim_pattern, ["query-is-lower"] = query_is_lower, ["buf-valid?"] = buf_valid_3f, ["win-valid?"] = win_valid_3f, deepcopy = deepcopy, clamp = clamp, ["build-group-names"] = build_group_names, ["ext-from-path"] = ext_from_path, ["devicon-info"] = devicon_info, ["buf-lines"] = buf_lines, cursor = cursor, ["set-cursor"] = set_cursor}

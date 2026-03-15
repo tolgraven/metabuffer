@@ -12,6 +12,12 @@ T['convert2regex-pattern joins by alternation'] = function()
   eq(util['convert2regex-pattern']('alpha beta gamma'), 'alpha\\|beta\\|gamma')
 end
 
+T['ext-from-path keeps last segment extension semantics'] = function()
+  eq(util['ext-from-path']('lua/metabuffer/util.lua'), 'lua')
+  eq(util['ext-from-path']('.gitignore'), 'gitignore')
+  eq(util['ext-from-path']('README'), '')
+end
+
 T['escape-vim-pattern escapes special chars'] = function()
   eq(util['escape-vim-pattern']('a.b[c]$'), 'a\\.b\\[c\\]\\$')
 end

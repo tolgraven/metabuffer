@@ -181,11 +181,14 @@ This repository follows the `nfnl` plugin pattern:
 - generated runtime output: `lua/` and `plugin/`
 - nfnl config: `.nfnl.fnl`
 
-Cljlib integration for Clojure-style macros:
+Cljlib integration for Clojure-style helpers:
 
 - macro entrypoint vendored at `fnl/io/gitlab/andreyorst/cljlib/core/init.fnlm`
+- runtime string helpers vendored at `fnl/io/gitlab/andreyorst/cljlib/string.fnl`
 - project modules import selected cljlib macros (for example `when-let` / `if-let`) via:
   `(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)`
+- string-heavy helpers use the local `io.gitlab.andreyorst.cljlib.string` namespace for
+  `join`, `lower-case`, `replace`, `starts-with?`, `substring`, and `match`
 
 Key entrypoints:
 

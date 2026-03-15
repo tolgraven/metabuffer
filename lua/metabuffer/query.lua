@@ -1,5 +1,10 @@
 -- [nfnl] fnl/metabuffer/query.fnl
 local M = {}
+local str = require("io.gitlab.andreyorst.cljlib.string")
+local str_join = str.join
+local str_match = str.match
+local str_starts_with_3f = str["starts-with?"]
+local str_substring = str.substring
 M["truthy?"] = function(v)
   return ((v == true) or (v == 1) or (v == "1") or (v == "true"))
 end
@@ -18,7 +23,7 @@ local function option_prefix()
 end
 local function parse_option_token(tok)
   local prefix = option_prefix()
-  local expansion_mode = (string.match(tok, "^#exp:(.+)$") or string.match(tok, ("^" .. vim.pesc(prefix) .. "exp:(.+)$")))
+  local expansion_mode = (str_match(tok, "^#exp:(.+)$") or str_match(tok, ("^" .. vim.pesc(prefix) .. "exp:(.+)$")))
   local hidden_on = ((tok == "#hidden") or (tok == "+hidden") or (tok == "#+hidden") or (tok == (prefix .. "hidden")))
   local hidden_off = ((tok == "#nohidden") or (tok == "-hidden") or (tok == "#-hidden") or (tok == (prefix .. "nohidden")))
   local ignored_on = ((tok == "#ignored") or (tok == "+ignored") or (tok == "#+ignored") or (tok == (prefix .. "ignored")))
@@ -36,8 +41,8 @@ local function parse_option_token(tok)
   local files_off = ((tok == "#nofile") or (tok == "-file") or (tok == "#-file") or (tok == (prefix .. "nofile")))
   local files_on = ((tok == "#file") or (tok == "+file") or (tok == "#+file") or (tok == (prefix .. "file")))
   local history_merge_3f = (tok == "#history")
-  local save_tag = (string.match(tok, "^#save:(.+)$") or string.match(tok, ("^" .. vim.pesc(prefix) .. "save:(.+)$")))
-  local saved_tag = string.match(tok, "^##(.+)$")
+  local save_tag = (str_match(tok, "^#save:(.+)$") or str_match(tok, ("^" .. vim.pesc(prefix) .. "save:(.+)$")))
+  local saved_tag = str_match(tok, "^##(.+)$")
   local saved_browser_3f = (tok == "##")
   if hidden_on then
     return {"hidden", true}
@@ -89,8 +94,8 @@ local function escaped_prefix_token(tok)
   local t = (tok or "")
   local prefix = option_prefix()
   local escaped_prefix = ("\\" .. prefix)
-  if ((#t > #escaped_prefix) and vim.startswith(t, escaped_prefix)) then
-    return string.sub(t, 2)
+  if ((#t > #escaped_prefix) and str_starts_with_3f(t, escaped_prefix)) then
+    return str_substring(t, 2)
   else
     return nil
   end
@@ -98,7 +103,7 @@ end
 local function prefix_directive_token_3f(tok)
   local t = (tok or "")
   local prefix = option_prefix()
-  return ((t ~= prefix) and vim.startswith(t, prefix))
+  return ((t ~= prefix) and str_starts_with_3f(t, prefix))
 end
 local function assoc_option(acc, k, v)
   local next = vim.deepcopy(acc)
@@ -109,10 +114,10 @@ local function unquote_token(tok)
   local t = (tok or "")
   local n = #t
   if (n >= 2) then
-    local lead = string.sub(t, 1, 1)
-    local tail = string.sub(t, n, n)
+    local lead = str_substring(t, 1, 1)
+    local tail = str_substring(t, n, n)
     if (((lead == "\"") and (tail == "\"")) or ((lead == "'") and (tail == "'"))) then
-      return string.sub(t, 2, (n - 1))
+      return str_substring(t, 2, (n - 1))
     else
       return t
     end
@@ -125,7 +130,7 @@ local function file_query_shortcut_token(tok)
   if (t == "./") then
     return "await"
   else
-    return string.match(t, "^%./(.+)$")
+    return str_match(t, "^%./(.+)$")
   end
 end
 local function parse_parts(parts, idx, state)
@@ -192,7 +197,7 @@ local function parse_line(acc, line)
     local parts = vim.split(trimmed, "%s+", {trimempty = true})
     local state = parse_parts(parts, 1, assoc_option(acc, "keep", {}))
     local next = vim.deepcopy(state)
-    table.insert(next.lines, table.concat(state.keep, " "))
+    table.insert(next.lines, str_join(" ", state.keep))
     next["keep"] = nil
     next["file-await-token"] = false
     return next
@@ -220,7 +225,7 @@ M["parse-query-text"] = function(query)
   if ((type(query) == "string") and (query ~= "")) then
     local lines = vim.split(query, "\n", {plain = true})
     local parsed = M["parse-query-lines"](lines)
-    return {query = table.concat(parsed.lines, "\n"), lines = (parsed.lines or {}), ["include-hidden"] = parsed.hidden, ["include-ignored"] = parsed.ignored, ["include-deps"] = parsed.deps, ["include-binary"] = parsed.binary, ["include-hex"] = parsed.hex, ["include-files"] = parsed.files, prefilter = parsed.prefilter, lazy = parsed.lazy, expansion = parsed.expansion, ["file-lines"] = (parsed["file-lines"] or {}), history = parsed.history, ["save-tag"] = parsed["save-tag"], ["saved-tag"] = parsed["saved-tag"], ["saved-browser"] = parsed["saved-browser"]}
+    return {query = str_join("\n", parsed.lines), lines = (parsed.lines or {}), ["include-hidden"] = parsed.hidden, ["include-ignored"] = parsed.ignored, ["include-deps"] = parsed.deps, ["include-binary"] = parsed.binary, ["include-hex"] = parsed.hex, ["include-files"] = parsed.files, prefilter = parsed.prefilter, lazy = parsed.lazy, expansion = parsed.expansion, ["file-lines"] = (parsed["file-lines"] or {}), history = parsed.history, ["save-tag"] = parsed["save-tag"], ["saved-tag"] = parsed["saved-tag"], ["saved-browser"] = parsed["saved-browser"]}
   else
     local _18_
     if ((type(query) == "string") and (query ~= "")) then

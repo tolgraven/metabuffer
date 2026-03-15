@@ -1,2 +1,3 @@
 lua/**/*.lua linguist-generated
+lua/io/gitlab/andreyorst/cljlib/**/*.lua linguist-vendored
 lua/metabuffer/nfnl/**/*.lua linguist-vendored

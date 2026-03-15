@@ -1,5 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
+(local str (require :io.gitlab.andreyorst.cljlib.string))
+(local str-replace (. str :replace))
 
 (set M.ESCAPE_ECHO {
   ["\\"] "\\\\"
@@ -54,7 +56,8 @@
 (fn M.build_echon_expr
   [text hl]
   "Public API: M.build_echon_expr."
-  (let [safe (string.gsub (string.gsub (or text "") "\\\\" "\\\\\\\\") "\"" "\\\\\"")]
+  (let [escaped-slashes (str-replace (or text "") "\\\\" "\\\\\\\\")
+        safe (str-replace escaped-slashes "\"" "\\\\\"")]
     (string.format "echohl %s|echon \"%s\"" (or hl "None") safe)))
 
 (fn M.build_keyword_pattern_set
