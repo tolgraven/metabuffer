@@ -746,6 +746,8 @@ M.new = function(opts)
       local bo = vim.bo(session["info-buf"])
       bo.modifiable = true
     end
+    session["info-showing-project-loading?"] = true
+    session["info-render-sig"] = nil
     fit_info_width_21(session, lines)
     vim.api.nvim_buf_set_lines(session["info-buf"], 0, -1, false, lines)
     vim.api.nvim_buf_clear_namespace(session["info-buf"], ns, 0, -1)
@@ -790,6 +792,7 @@ M.new = function(opts)
       end
       if (not session["info-render-suspended?"] and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
         local meta = session.meta
+        local force_refresh_3f = not not session["info-showing-project-loading?"]
         local selected1 = (meta.selected_index + 1)
         local _let_99_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
         local wanted_start = _let_99_[1]
@@ -798,11 +801,12 @@ M.new = function(opts)
         local stop_index = (session["info-stop-index"] or 0)
         local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
         local range_changed = ((wanted_start ~= start_index) or (wanted_stop ~= stop_index))
-        if (refresh_lines or out_of_range or range_changed) then
+        if (force_refresh_3f or refresh_lines or out_of_range or range_changed) then
           local idxs = (meta.buf.indices or {})
           local sig = join_str("|", {idxs, #idxs, wanted_start, wanted_stop, info_max_width_now(session), info_height(session), vim.o.columns})
-          if (out_of_range or range_changed or (session["info-render-sig"] ~= sig)) then
+          if (force_refresh_3f or out_of_range or range_changed or (session["info-render-sig"] ~= sig)) then
             session["info-render-sig"] = sig
+            session["info-showing-project-loading?"] = false
             render_info_lines_21(session, meta, wanted_start, wanted_stop)
           else
           end

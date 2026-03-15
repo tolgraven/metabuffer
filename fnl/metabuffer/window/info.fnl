@@ -595,6 +595,8 @@
       (let [ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
         (let [bo (vim.bo session.info-buf)]
           (set bo.modifiable true))
+        (set session.info-showing-project-loading? true)
+        (set session.info-render-sig nil)
         (fit-info-width! session lines)
         (vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)
         (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
@@ -646,6 +648,7 @@
                        session.info-buf
                        (vim.api.nvim_buf_is_valid session.info-buf))
               (let [meta session.meta
+                    force-refresh? (not (not session.info-showing-project-loading?))
                     selected1 (+ meta.selected_index 1)
                     [wanted-start wanted-stop] (info-visible-range
                                                  session
@@ -657,7 +660,7 @@
                     out-of-range (or (< selected1 start-index) (> selected1 stop-index))
                     range-changed (or (~= wanted-start start-index)
                                       (~= wanted-stop stop-index))]
-                (when (or refresh-lines out-of-range range-changed)
+                (when (or force-refresh? refresh-lines out-of-range range-changed)
                   (let [idxs (or meta.buf.indices [])
                         sig (join-str
                               "|"
@@ -668,10 +671,12 @@
                                (info-max-width-now session)
                                (info_height session)
                                vim.o.columns])]
-                    (when (or out-of-range
+                    (when (or force-refresh?
+                              out-of-range
                               range-changed
                               (~= session.info-render-sig sig))
                       (set session.info-render-sig sig)
+                      (set session.info-showing-project-loading? false)
                       (render-info-lines! session meta wanted-start wanted-stop))))
                 (sync-info-cursor! session meta))))))
 
