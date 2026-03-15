@@ -281,7 +281,12 @@
     (when (and (vim.api.nvim_win_is_valid session.origin-win)
                (vim.api.nvim_buf_is_valid session.origin-buf))
       (pcall vim.api.nvim_set_current_win session.origin-win)
-      (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
+      (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf)
+      (when session.source-view
+        (vim.api.nvim_win_call
+          session.origin-win
+          (fn []
+            (pcall vim.fn.winrestview session.source-view)))))
     (base-buffer.switch-buf curr.buf.model)
     (session-view.wipe-temp-buffers curr)
     (remove-session! deps session)

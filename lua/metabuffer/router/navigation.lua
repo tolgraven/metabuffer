@@ -5,8 +5,10 @@ local function can_refresh_source_syntax_3f(session)
   return (session and session["project-mode"] and buf and buf["show-source-separators"] and (buf["syntax-type"] == "buffer"))
 end
 local function schedule_source_syntax_refresh_21(deps, session)
-  local active_by_prompt = deps["active-by-prompt"]
-  local source_syntax_refresh_debounce_ms = deps["source-syntax-refresh-debounce-ms"]
+  local router = deps.router
+  local timing = deps.timing
+  local active_by_prompt = router["active-by-prompt"]
+  local source_syntax_refresh_debounce_ms = timing["source-syntax-refresh-debounce-ms"]
   if can_refresh_source_syntax_3f(session) then
     session["syntax-refresh-dirty"] = true
     if not session["syntax-refresh-pending"] then
@@ -37,10 +39,13 @@ local function schedule_source_syntax_refresh_21(deps, session)
   end
 end
 M["move-selection!"] = function(deps, prompt_buf, delta)
-  local active_by_prompt = deps["active-by-prompt"]
-  local update_preview_window = deps["update-preview-window"]
-  local update_info_window = deps["update-info-window"]
-  local context_window = deps["context-window"]
+  local router = deps.router
+  local refresh = deps.refresh
+  local windows = deps.windows
+  local active_by_prompt = router["active-by-prompt"]
+  local update_preview_window = refresh["preview!"]
+  local update_info_window = refresh["info!"]
+  local context_window = windows.context
   local session = active_by_prompt[prompt_buf]
   if session then
     local runner
@@ -83,12 +88,16 @@ M["move-selection!"] = function(deps, prompt_buf, delta)
   end
 end
 M["scroll-main!"] = function(deps, prompt_buf, action)
-  local active_by_prompt = deps["active-by-prompt"]
-  local update_preview_window = deps["update-preview-window"]
-  local update_info_window = deps["update-info-window"]
-  local context_window = deps["context-window"]
-  local session_view = deps["session-view"]
-  local animation_mod = deps["animation-mod"]
+  local router = deps.router
+  local refresh = deps.refresh
+  local windows = deps.windows
+  local mods = deps.mods
+  local active_by_prompt = router["active-by-prompt"]
+  local update_preview_window = refresh["preview!"]
+  local update_info_window = refresh["info!"]
+  local context_window = windows.context
+  local session_view = mods["session-view"]
+  local animation_mod = mods.animation
   local session = active_by_prompt[prompt_buf]
   if (session and vim.api.nvim_win_is_valid(session.meta.win.window)) then
     local runner
@@ -153,11 +162,15 @@ M["scroll-main!"] = function(deps, prompt_buf, action)
   end
 end
 M["maybe-sync-from-main!"] = function(deps, session, force_refresh)
-  local active_by_prompt = deps["active-by-prompt"]
-  local update_preview_window = deps["update-preview-window"]
-  local update_info_window = deps["update-info-window"]
-  local context_window = deps["context-window"]
-  local session_view = deps["session-view"]
+  local router = deps.router
+  local refresh = deps.refresh
+  local windows = deps.windows
+  local mods = deps.mods
+  local active_by_prompt = router["active-by-prompt"]
+  local update_preview_window = refresh["preview!"]
+  local update_info_window = refresh["info!"]
+  local context_window = windows.context
+  local session_view = mods["session-view"]
   local function _23_(s)
     return schedule_source_syntax_refresh_21(deps, s)
   end
@@ -171,8 +184,10 @@ M["maybe-sync-from-main!"] = function(deps, session, force_refresh)
   return session_view["maybe-sync-from-main!"](session, force_refresh, {["active-by-prompt"] = active_by_prompt, ["schedule-source-syntax-refresh!"] = _23_, ["update-preview-window!"] = update_preview_window, ["update-info-window"] = update_info_window, ["update-context-window!"] = _24_})
 end
 M["schedule-scroll-sync!"] = function(deps, session)
-  local scroll_sync_debounce_ms = deps["scroll-sync-debounce-ms"]
-  local session_view = deps["session-view"]
+  local timing = deps.timing
+  local mods = deps.mods
+  local scroll_sync_debounce_ms = timing["scroll-sync-debounce-ms"]
+  local session_view = mods["session-view"]
   local function _26_(s, force_refresh)
     return M["maybe-sync-from-main!"](deps, s, force_refresh)
   end

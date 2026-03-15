@@ -5,10 +5,8 @@ local line_meta_key = nil
 local line_meta_cache_hit_3f = nil
 local normalized_line_numbers = nil
 local missing_line_numbers = nil
-local parse_line_blame_stdout = nil
 local clear_pending_line_meta = nil
-local store_line_meta = nil
-local start_line_meta_job = nil
+local parse_range_blame_stdout = nil
 M["file-first-line"] = function(session, read_file_lines_cached, path)
   local cache = (session["info-file-head-cache"] or {})
   local mtime = vim.fn.getftime(path)
@@ -164,7 +162,7 @@ local function file_meta_line(meta)
   local age_width = 4
   local age_fragment
   if (git_age ~= "") then
-    age_fragment = (" \240\159\149\147" .. string.rep(" ", math.max(0, (age_width - #git_age))) .. git_age)
+    age_fragment = ("  " .. string.rep(" ", math.max(0, (age_width - #git_age))) .. git_age)
   else
     age_fragment = string.rep(" ", (2 + age_width))
   end
@@ -376,79 +374,85 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
     return missing
   end
   missing_line_numbers = _51_
-  local function _53_(stdout)
-    return {author = (string.match(("\n" .. (stdout or "")), "\nauthor ([^\n]+)") or ""), ["author-time"] = (tonumber((string.match(("\n" .. (stdout or "")), "\nauthor%-time (%d+)") or "")) or 0)}
-  end
-  parse_line_blame_stdout = _53_
-  local function _54_(session0, key)
+  local function _53_(session0, key)
     local pending = (session0["info-line-meta-pending"] or {})
     pending[key] = nil
     session0["info-line-meta-pending"] = pending
     return nil
   end
-  clear_pending_line_meta = _54_
-  local function _55_(session0, path0, lnum, mtime, stdout)
-    local cache = (session0["info-line-meta-cache"] or {})
-    local meta = line_meta_from_blame(session0, path0, lnum, mtime, parse_line_blame_stdout(stdout))
-    cache[line_meta_key(path0, lnum)] = meta
-    session0["info-line-meta-cache"] = cache
-    return nil
-  end
-  store_line_meta = _55_
-  local function _56_(session0, path0, rel, lnum, mtime, remaining, on_ready0)
-    local pending = (session0["info-line-meta-pending"] or {})
-    local key = (line_meta_key(path0, lnum) .. ":" .. mtime)
-    if pending[key] then
-      return false
-    else
-      local _57_
-      do
-        pending[key] = true
-        session0["info-line-meta-pending"] = pending
-        remaining["count"] = (remaining.count + 1)
-        local function _58_(obj)
-          local function _59_()
-            clear_pending_line_meta(session0, key)
-            if ((obj.code == 0) and (1 == vim.fn.filereadable(path0))) then
-              store_line_meta(session0, path0, lnum, mtime, obj.stdout)
-            else
-            end
-            remaining["count"] = (remaining.count - 1)
-            if ((remaining.count == 0) and on_ready0) then
-              return on_ready0()
-            else
-              return nil
-            end
-          end
-          return vim.schedule(_59_)
-        end
-        _57_ = vim.system({"git", "-C", vim.fn.getcwd(), "blame", "--line-porcelain", "-L", (tostring(lnum) .. "," .. tostring(lnum)), "--", rel}, {}, _58_)
+  clear_pending_line_meta = _53_
+  local function _54_(stdout)
+    local rows = {}
+    local state = {author = "", ["author-time"] = 0}
+    for _, line in ipairs(vim.split((stdout or ""), "\n", {plain = true})) do
+      if vim.startswith(line, "author ") then
+        state["author"] = string.sub(line, 8)
+      else
       end
-      if _57_ then
-        return true
+      if vim.startswith(line, "author-time ") then
+        state["author-time"] = (tonumber(string.sub(line, 13)) or 0)
+      else
+      end
+      if vim.startswith(line, "\t") then
+        table.insert(rows, {author = state.author, ["author-time"] = state["author-time"]})
+        state["author"] = ""
+        state["author-time"] = 0
+      else
+      end
+    end
+    return rows
+  end
+  parse_range_blame_stdout = _54_
+  M["ensure-line-meta-range-async!"] = function(session0, path0, lnums, on_ready0)
+    local vals = normalized_line_numbers(lnums)
+    if (session0 and (1 == vim.fn.filereadable(path0)) and (#vals > 0)) then
+      local cache = (session0["info-line-meta-cache"] or {})
+      local mtime = vim.fn.getftime(path0)
+      local rel = vim.fn.fnamemodify(path0, ":.")
+      local missing = missing_line_numbers(cache, path0, vals, mtime)
+      if (#missing > 0) then
+        local start_lnum = missing[1]
+        local stop_lnum = missing[#missing]
+        local key = (path0 .. ":" .. tostring(start_lnum) .. ":" .. tostring(stop_lnum) .. ":" .. tostring(mtime))
+        local pending = (session0["info-line-meta-pending"] or {})
+        if not pending[key] then
+          pending[key] = true
+          session0["info-line-meta-pending"] = pending
+          local function _58_(obj)
+            local function _59_()
+              clear_pending_line_meta(session0, key)
+              if ((obj.code == 0) and (1 == vim.fn.filereadable(path0))) then
+                local rows = parse_range_blame_stdout(obj.stdout)
+                local cache1 = (session0["info-line-meta-cache"] or {})
+                for i = 1, math.min(#missing, #rows) do
+                  local lnum = missing[i]
+                  local blame = rows[i]
+                  local meta = line_meta_from_blame(session0, path0, lnum, mtime, blame)
+                  cache1[line_meta_key(path0, lnum)] = meta
+                end
+                session0["info-line-meta-cache"] = cache1
+              else
+              end
+              if on_ready0 then
+                return on_ready0()
+              else
+                return nil
+              end
+            end
+            return vim.schedule(_59_)
+          end
+          return vim.system({"git", "-C", vim.fn.getcwd(), "blame", "--line-porcelain", "-L", (tostring(start_lnum) .. "," .. tostring(stop_lnum)), "--", rel}, {}, _58_)
+        else
+          return nil
+        end
       else
         return nil
       end
+    else
+      return nil
     end
   end
-  start_line_meta_job = _56_
-  return nil
-end
-M["ensure-line-meta-range-async!"] = function(session, path, lnums, on_ready)
-  local vals = normalized_line_numbers(lnums)
-  if (session and (1 == vim.fn.filereadable(path)) and (#vals > 0)) then
-    local cache = (session["info-line-meta-cache"] or {})
-    local mtime = vim.fn.getftime(path)
-    local rel = vim.fn.fnamemodify(path, ":.")
-    local missing = missing_line_numbers(cache, path, vals, mtime)
-    local remaining = {count = 0}
-    for _, lnum in ipairs(missing) do
-      start_line_meta_job(session, path, rel, lnum, mtime, remaining, on_ready)
-    end
-    return nil
-  else
-    return nil
-  end
+  return M["ensure-line-meta-range-async!"]
 end
 local function age_hl_group(age_token)
   local unit = (string.match((age_token or ""), "^%d+([a-z]+)$") or "")
@@ -507,20 +511,14 @@ M["aligned-meta-suffix"] = function(suffix, path_width)
   else
     author_end = (author_start + #right)
   end
-  local clock_start1 = string.find(left, "\240\159\149\147", 1, true)
-  local age_token
-  if clock_start1 then
-    age_token = (string.match(left, "\240\159\149\147%s*([%d]+[a-z]+)$") or "")
-  else
-    age_token = ""
-  end
+  local age_token = (string.match(left, "([%d]+[a-z]+)$") or "")
   local age_start
-  if (clock_start1 and (age_token ~= "")) then
-    local age_pos = string.find(left, age_token, clock_start1, true)
+  if (age_token ~= "") then
+    local age_pos = string.find(left, age_token, 1, true)
     if age_pos then
       age_start = (age_pos - 1)
     else
-      age_start = ((clock_start1 - 1) + #"\240\159\149\147")
+      age_start = -1
     end
   else
     age_start = -1

@@ -120,7 +120,7 @@
         git-age (or (. meta :age) "")
         age-width 4
         age-fragment (if (~= git-age "")
-                         (.. " 🕓"
+                         (.. "  "
                              (string.rep " " (math.max 0 (- age-width (# git-age))))
                              git-age)
                          (string.rep " " (+ 2 age-width)))
@@ -388,13 +388,10 @@
                  (.. left (string.rep " " pad) right))
         author-start (if (= right "") -1 (+ (# left) pad))
         author-end (if (= right "") -1 (+ author-start (# right)))
-        clock-start1 (string.find left "🕓" 1 true)
-        age-token (if clock-start1
-                      (or (string.match left "🕓%s*([%d]+[a-z]+)$") "")
-                      "")
-        age-start (if (and clock-start1 (~= age-token ""))
-                      (let [age-pos (string.find left age-token clock-start1 true)]
-                        (if age-pos (- age-pos 1) (+ (- clock-start1 1) (# "🕓"))))
+        age-token (or (string.match left "([%d]+[a-z]+)$") "")
+        age-start (if (~= age-token "")
+                      (let [age-pos (string.find left age-token 1 true)]
+                        (if age-pos (- age-pos 1) -1))
                       -1)
         age-end (if (>= age-start 0) (+ age-start (# age-token)) -1)
         suffix-highlights []]

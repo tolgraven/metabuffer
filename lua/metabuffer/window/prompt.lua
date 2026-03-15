@@ -104,10 +104,26 @@ M["handoff-to-split!"] = function(nvim, prompt_win, opts)
   local height = math.max(1, (cfg.height or 1))
   local old_win = prompt_win.window
   local buf = prompt_win.buffer
+  local saved_view
+  local and_9_ = origin_win and vim.api.nvim_win_is_valid(origin_win)
+  if and_9_ then
+    local function _10_()
+      return vim.fn.winsaveview()
+    end
+    and_9_ = vim.api.nvim_win_call(origin_win, _10_)
+  end
+  saved_view = and_9_
   local split_win = open_split_win_21(origin_win, local_layout_3f, height)
   pcall(vim.api.nvim_win_set_buf, split_win, buf)
   pcall(vim.api.nvim_win_set_height, split_win, height)
   prompt_window_opts_21(split_win)
+  if (origin_win and saved_view and vim.api.nvim_win_is_valid(origin_win)) then
+    local function _11_()
+      return pcall(vim.fn.winrestview, saved_view)
+    end
+    vim.api.nvim_win_call(origin_win, _11_)
+  else
+  end
   if (old_win and vim.api.nvim_win_is_valid(old_win)) then
     pcall(vim.api.nvim_win_close, old_win, true)
   else

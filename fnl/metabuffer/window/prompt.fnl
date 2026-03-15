@@ -95,10 +95,20 @@
         height (math.max 1 (or cfg.height 1))
         old-win (. prompt-win :window)
         buf (. prompt-win :buffer)
+        saved-view (and origin-win
+                        (vim.api.nvim_win_is_valid origin-win)
+                        (vim.api.nvim_win_call origin-win (fn [] (vim.fn.winsaveview))))
         split-win (open-split-win! origin-win local-layout? height)]
     (pcall vim.api.nvim_win_set_buf split-win buf)
     (pcall vim.api.nvim_win_set_height split-win height)
     (prompt-window-opts! split-win)
+    (when (and origin-win
+               saved-view
+               (vim.api.nvim_win_is_valid origin-win))
+      (vim.api.nvim_win_call
+        origin-win
+        (fn []
+          (pcall vim.fn.winrestview saved-view))))
     (when (and old-win (vim.api.nvim_win_is_valid old-win))
       (pcall vim.api.nvim_win_close old-win true))
     (let [self (base.new nvim split-win [] {})]

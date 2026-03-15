@@ -20,16 +20,10 @@ end
 local function schedule_update_21(prompt_scheduler_ctx, session, delay)
   return router_prompt_mod["schedule-prompt-update!"](prompt_scheduler_ctx, session, delay)
 end
-local function recent_identical_forced_refresh_3f(settings, session, txt, now)
-  return ((txt == (session["prompt-last-applied-text"] or "")) and (math.max(0, (settings["prompt-forced-coalesce-ms"] or 0)) > 0) and ((now - (session["prompt-last-apply-ms"] or 0)) < math.max(0, (settings["prompt-forced-coalesce-ms"] or 0))))
-end
-local function force_blocked_by_active_input_3f(settings, session, now)
-  return ((now - (session["prompt-last-change-ms"] or 0)) < math.max(math.max(0, (settings["prompt-update-idle-ms"] or 0)), math.max(0, (settings["prompt-forced-coalesce-ms"] or 0))))
-end
 local function force_within_idle_window_3f(settings, session, now)
   return ((math.max(0, (settings["prompt-update-idle-ms"] or 0)) > 0) and ((now - (session["prompt-last-change-ms"] or 0)) < math.max(0, (settings["prompt-update-idle-ms"] or 0))))
 end
-local function queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, txt, now, delay)
+local function queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, now, delay)
   if not (force and session["prompt-update-pending"]) then
     if (force and force_within_idle_window_3f(settings, session, now)) then
       return schedule_update_21(prompt_scheduler_ctx, session, math.max(delay, settings["prompt-update-idle-ms"]))
@@ -39,28 +33,6 @@ local function queue_update_after_edit_21(settings, prompt_scheduler_ctx, sessio
   else
     return nil
   end
-end
-local function apply_fresh_prompt_event_21(query_mod, project_source, settings, prompt_scheduler_ctx, session, force, txt, now, delay)
-  session["prompt-last-event-text"] = txt
-  session["last-prompt-text"] = txt
-  session["prompt-update-dirty"] = true
-  session["prompt-last-change-ms"] = now
-  if not force then
-    session["prompt-force-block-until"] = (now + math.max(0, delay))
-  else
-  end
-  session["prompt-change-seq"] = (1 + (session["prompt-change-seq"] or 0))
-  if (session["project-mode"] and not session["project-bootstrapped"] and prompt_has_active_query_3f(query_mod, session)) then
-    project_source["schedule-project-bootstrap!"](session, settings["project-bootstrap-delay-ms"])
-  else
-  end
-  return queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, txt, now, delay)
-end
-local function apply_duplicate_text_event_21(prompt_scheduler_ctx, session, now, delay)
-  session["prompt-last-change-ms"] = now
-  session["prompt-force-block-until"] = (now + math.max(0, delay))
-  session["prompt-update-dirty"] = true
-  return schedule_update_21(prompt_scheduler_ctx, session, delay)
 end
 local function invalidate_filter_cache_21(session)
   if (session and session.meta) then
@@ -109,7 +81,7 @@ local function refresh_session_ui_21(session, update_preview_window, update_info
   end
 end
 local function retry_textlock_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
-  local function _11_()
+  local function _9_()
     if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
       pcall(session.meta["on-update"], 0)
       return pcall(refresh_session_ui_21, session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
@@ -117,7 +89,7 @@ local function retry_textlock_update_21(session, update_preview_window, update_i
       return nil
     end
   end
-  return vim.defer_fn(_11_, 1)
+  return vim.defer_fn(_9_, 1)
 end
 local function run_meta_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
   local ok,err = pcall(session.meta["on-update"], 0)
@@ -151,18 +123,22 @@ local function consume_visible_controls_lines(query_mod, raw_lines)
   return out
 end
 M["apply-prompt-lines!"] = function(deps, session)
-  local query_mod = deps["query-mod"]
-  local project_source = deps["project-source"]
-  local update_preview_window = deps["update-preview-window"]
-  local update_info_window = deps["update-info-window"]
-  local context_window = deps["context-window"]
-  local refresh_change_signs_21 = deps["refresh-change-signs!"]
-  local capture_sign_baseline_21 = deps["capture-sign-baseline!"]
-  local settings = deps.settings
-  local merge_history_into_session_21 = deps["merge-history-into-session!"]
-  local save_current_prompt_tag_21 = deps["save-current-prompt-tag!"]
-  local restore_saved_prompt_tag_21 = deps["restore-saved-prompt-tag!"]
-  local open_saved_browser_21 = deps["open-saved-browser!"]
+  local mods = deps.mods
+  local project = deps.project
+  local refresh = deps.refresh
+  local windows = deps.windows
+  local history = deps.history
+  local query_mod = mods.query
+  local project_source = project.source
+  local update_preview_window = refresh["preview!"]
+  local update_info_window = refresh["info!"]
+  local context_window = windows.context
+  local refresh_change_signs_21 = refresh["change-signs!"]
+  local capture_sign_baseline_21 = refresh["capture-sign-baseline!"]
+  local merge_history_into_session_21 = history["merge-into-session!"]
+  local save_current_prompt_tag_21 = history["save-current-prompt-tag!"]
+  local restore_saved_prompt_tag_21 = history["restore-saved-prompt-tag!"]
+  local open_saved_browser_21 = history["open-saved-browser!"]
   if (session and not session.closing and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and not session["_rewriting-visible-controls"]) then
     local raw_lines = vim.api.nvim_buf_get_lines(session["prompt-buf"], 0, -1, false)
     local parsed = query_mod["parse-query-lines"](raw_lines)
@@ -268,11 +244,15 @@ M["apply-prompt-lines!"] = function(deps, session)
   end
 end
 M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
-  local active_by_prompt = deps["active-by-prompt"]
-  local query_mod = deps["query-mod"]
-  local project_source = deps["project-source"]
-  local settings = deps.settings
-  local prompt_scheduler_ctx = deps["prompt-scheduler-ctx"]
+  local router = deps.router
+  local mods = deps.mods
+  local project = deps.project
+  local state = deps.state
+  local active_by_prompt = router["active-by-prompt"]
+  local query_mod = mods.query
+  local project_source = project.source
+  local settings = router
+  local prompt_scheduler_ctx = state["prompt-scheduler-ctx"]
   local session = active_by_prompt[prompt_buf]
   if (session and not session.closing) then
     local lines = router_util_mod["prompt-lines"](session)
@@ -307,7 +287,7 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
       router_prompt_mod["cancel-prompt-update!"](session)
       return M["apply-prompt-lines!"](deps, session)
     else
-      return queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, "", now, delay)
+      return queue_update_after_edit_21(settings, prompt_scheduler_ctx, session, force, now, delay)
     end
   else
     return nil

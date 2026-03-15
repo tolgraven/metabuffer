@@ -52,6 +52,14 @@ end
 
 function M.stop_child_once()
   if M.child.is_running() then
+    pcall(function()
+      M.child.lua([[
+        pcall(vim.cmd, 'stopinsert')
+        vim.schedule(function()
+          pcall(vim.cmd, 'silent! qa!')
+        end)
+      ]])
+    end)
     M.child.stop()
   end
 end
@@ -502,7 +510,7 @@ function M.session_statusline()
 end
 
 function M.session_info_snapshot()
-  return M.child.lua_get([[
+  local encoded = M.child.lua_get([[
     (function()
       local router = require('metabuffer.router')
       local s = router['active-by-source'][_G.__meta_source_buf]
@@ -514,9 +522,11 @@ function M.session_info_snapshot()
       local row = vim.api.nvim_win_get_cursor(info_win)[1]
       local line = vim.api.nvim_buf_get_lines(info_buf, row - 1, row, false)[1] or ''
       local count = vim.api.nvim_buf_line_count(info_buf)
-      return { row = row, line = line, count = count }
+      return vim.json.encode({ row = row, line = line, count = count })
     end)()
   ]])
+  if encoded == nil or encoded == vim.NIL then return nil end
+  return vim.json.decode(encoded)
 end
 
 function M.session_selected_ref()

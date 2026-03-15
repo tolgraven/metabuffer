@@ -47,7 +47,7 @@ M["persist-prompt-height!"] = function(session)
   end
 end
 M["info-height"] = function(session)
-  if (session and session["project-mode"] and (session["startup-initializing"] or session["prompt-animating?"]) and session["source-view"]) then
+  if (session and (session["startup-initializing"] or session["prompt-animating?"] or session["animate-enter?"]) and session["source-view"]) then
     local host_height = (session["source-view"]._meta_win_height or (session["origin-win"] and vim.api.nvim_win_is_valid(session["origin-win"]) and vim.api.nvim_win_get_height(session["origin-win"])) or (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_win_get_height(session.meta.win.window)) or 0)
     local prompt_height = math.max(1, (session["prompt-target-height"] or M["prompt-height"]()))
     return math.max(7, (host_height - prompt_height))

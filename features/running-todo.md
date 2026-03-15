@@ -39,4 +39,7 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 29 [] preview window should anchor one line higher so gets 8 lines by default.
 - 30 [] we should properly document all required and optional dependencies, and document what having those entails.
 - 31 [] is there any way to speed up the full screen tests in general? they're now taking 8s or so. can we run more tests in parallell instead?
-
+- 32 [] airline continously overwrites statusline, which was not the case earlier. timing change thing?
+- 33 [] there is a white line dividing prompt window and preview window. it should be removed.
+- 34 [] in project mode, there is a jump once loader inevitably runs into a file longer than 999 lines (which most file we start from will be), so we should pin lineno col to width 3 from start, but then dynamically allow the full 4 _if they are in view_
+- 35 [] when exiting regular `:Meta` mode with `<Esc>`, the viewport jumps. Should stay still.
