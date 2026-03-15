@@ -400,6 +400,7 @@ M.new = function(nvim, condition)
       end
       self.buf["apply-syntax"](_48_())
     end
+    self.buf["visible-source-syntax-only"] = not not cond["project-mode"]
     clear_all_highlights()
     self.buf.render()
     do

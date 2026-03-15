@@ -710,6 +710,53 @@ M.new = function(opts)
   local function startup_layout_pending_3f(session)
     return (session and session["project-mode"] and (session["startup-initializing"] or session["prompt-animating?"]))
   end
+  local function project_loading_pending_3f(session)
+    return (session and session["project-mode"] and (startup_layout_pending_3f(session) or session["project-bootstrap-pending"] or not session["project-bootstrapped"] or session["lazy-refresh-pending"] or session["lazy-refresh-dirty"] or not session["lazy-stream-done"]))
+  end
+  local function render_project_loading_21(session)
+    local hits = #(session.meta.buf.indices or {})
+    local total_lines = #(session.meta.buf.content or {})
+    local streamed = math.max(0, ((session["lazy-stream-next"] or 1) - 1))
+    local total_files = (session["lazy-stream-total"] or 0)
+    local stage
+    if (session["project-bootstrap-pending"] or not session["project-bootstrapped"]) then
+      stage = "bootstrapping project"
+    else
+      if session["prompt-animating?"] then
+        stage = "opening layout"
+      else
+        if session["lazy-stream-done"] then
+          stage = "finalizing results"
+        else
+          stage = "streaming project sources"
+        end
+      end
+    end
+    local progress
+    if (total_files > 0) then
+      progress = (streamed .. "/" .. total_files .. " files")
+    else
+      progress = "scanning files"
+    end
+    local lines = {("Project Mode  " .. stage), "", ("Progress  " .. progress), ("Hits      " .. hits), ("Lines     " .. total_lines)}
+    session["info-start-index"] = 1
+    session["info-stop-index"] = #lines
+    local ns = vim.api.nvim_create_namespace("MetaInfoWindow")
+    do
+      local bo = vim.bo(session["info-buf"])
+      bo.modifiable = true
+    end
+    fit_info_width_21(session, lines)
+    vim.api.nvim_buf_set_lines(session["info-buf"], 0, -1, false, lines)
+    vim.api.nvim_buf_clear_namespace(session["info-buf"], ns, 0, -1)
+    vim.api.nvim_buf_add_highlight(session["info-buf"], ns, "Title", 0, 0, -1)
+    vim.api.nvim_buf_add_highlight(session["info-buf"], ns, "Comment", 2, 0, 8)
+    vim.api.nvim_buf_add_highlight(session["info-buf"], ns, "Comment", 3, 0, 8)
+    vim.api.nvim_buf_add_highlight(session["info-buf"], ns, "Comment", 4, 0, 8)
+    local bo = vim.bo(session["info-buf"])
+    bo.modifiable = false
+    return nil
+  end
   local function update_project_startup_21(session)
     ensure_info_window(session)
     if (session["info-post-fade-refresh?"] and session["info-render-suspended?"] and not session["prompt-animating?"]) then
@@ -719,13 +766,13 @@ M.new = function(opts)
     end
     settle_info_window_21(session)
     if (not session["info-render-suspended?"] and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
-      return render_current_range_21(session, session.meta)
+      return render_project_loading_21(session)
     else
       return nil
     end
   end
   local function update_project_21(session, refresh_lines)
-    if startup_layout_pending_3f(session) then
+    if project_loading_pending_3f(session) then
       return update_project_startup_21(session)
     else
       ensure_info_window(session)
@@ -744,9 +791,9 @@ M.new = function(opts)
       if (not session["info-render-suspended?"] and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
         local meta = session.meta
         local selected1 = (meta.selected_index + 1)
-        local _let_95_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-        local wanted_start = _let_95_[1]
-        local wanted_stop = _let_95_[2]
+        local _let_99_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
+        local wanted_start = _let_99_[1]
+        local wanted_stop = _let_99_[2]
         local start_index = (session["info-start-index"] or 1)
         local stop_index = (session["info-stop-index"] or 0)
         local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
@@ -768,7 +815,7 @@ M.new = function(opts)
     end
   end
   local update_21
-  local function _100_(session, refresh_lines)
+  local function _104_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -781,7 +828,7 @@ M.new = function(opts)
       return update_regular_21(session)
     end
   end
-  update_21 = _100_
+  update_21 = _104_
   return {["close-window!"] = close_info_window_21, ["update!"] = update_21}
 end
 return M

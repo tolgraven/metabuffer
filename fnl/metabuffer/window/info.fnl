@@ -537,7 +537,7 @@
                     (when (= range-key session.info-line-meta-range-key)
                       (rerender!)))))))))))
 
-    (fn update-regular!
+  (fn update-regular!
       [session]
         (ensure_info_window session)
         (when (and session.info-post-fade-refresh?
@@ -558,6 +558,53 @@
          session.project-mode
          (or session.startup-initializing session.prompt-animating?)))
 
+  (fn project-loading-pending?
+    [session]
+    (and session
+         session.project-mode
+         (or (startup-layout-pending? session)
+             session.project-bootstrap-pending
+             (not session.project-bootstrapped)
+             session.lazy-refresh-pending
+             session.lazy-refresh-dirty
+             (not session.lazy-stream-done))))
+
+  (fn render-project-loading!
+    [session]
+    (let [hits (# (or (. session.meta.buf :indices) []))
+          total-lines (# (or (. session.meta.buf :content) []))
+          streamed (math.max 0 (- (or session.lazy-stream-next 1) 1))
+          total-files (or session.lazy-stream-total 0)
+          stage (if (or session.project-bootstrap-pending (not session.project-bootstrapped))
+                    "bootstrapping project"
+                    (if session.prompt-animating?
+                        "opening layout"
+                        (if session.lazy-stream-done
+                            "finalizing results"
+                            "streaming project sources")))
+          progress (if (> total-files 0)
+                       (.. streamed "/" total-files " files")
+                       "scanning files")
+          lines [(.. "Project Mode  " stage)
+                 ""
+                 (.. "Progress  " progress)
+                 (.. "Hits      " hits)
+                 (.. "Lines     " total-lines)]]
+      (set session.info-start-index 1)
+      (set session.info-stop-index (# lines))
+      (let [ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
+        (let [bo (vim.bo session.info-buf)]
+          (set bo.modifiable true))
+        (fit-info-width! session lines)
+        (vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)
+        (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
+        (vim.api.nvim_buf_add_highlight session.info-buf ns "Title" 0 0 -1)
+        (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 2 0 8)
+        (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 3 0 8)
+        (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 4 0 8)
+        (let [bo (vim.bo session.info-buf)]
+          (set bo.modifiable false)))))
+
   (fn update-project-startup!
     [session]
     (ensure_info_window session)
@@ -570,11 +617,11 @@
     (when (and (not session.info-render-suspended?)
                session.info-buf
                (vim.api.nvim_buf_is_valid session.info-buf))
-      (render-current-range! session session.meta)))
+      (render-project-loading! session)))
 
   (fn update-project!
     [session refresh-lines]
-      (if (startup-layout-pending? session)
+      (if (project-loading-pending? session)
           (update-project-startup! session)
           (do
             (ensure_info_window session)

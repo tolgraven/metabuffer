@@ -332,6 +332,7 @@
                                (metabuffer-display-name self.buf.model)))
         (let [init-syntax (or (. vim.g "meta#syntax_on_init") "buffer")]
           (self.buf.apply-syntax (if (= init-syntax "meta") "meta" "buffer")))
+        (set self.buf.visible-source-syntax-only (not (not cond.project-mode)))
     (clear-all-highlights)
     (self.buf.render)
     (let [line-count (vim.api.nvim_buf_line_count self.buf.buffer)

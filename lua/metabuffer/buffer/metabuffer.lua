@@ -303,154 +303,261 @@ local function commit_render_frame(self, frame)
   return true
 end
 M.new = function(nvim, model)
-  local self = base.new(nvim, {model = model, name = "meta", ["default-opts"] = M["default-opts"]})
-  self["syntax-type"] = "buffer"
-  self.indexbuf = ui.new(nvim, self, "indexes")
-  self["show-source-prefix"] = false
-  self["show-source-separators"] = false
-  self["source-hl-ns"] = vim.api.nvim_create_namespace("metabuffer_source")
-  self["source-sep-ns"] = vim.api.nvim_create_namespace("metabuffer_source_separator")
-  self["source-alt-ns"] = vim.api.nvim_create_namespace("metabuffer_source_alt")
-  self["source-syntax-groups"] = {}
-  self["keep-modifiable"] = false
-  self["last-rendered-lines"] = {}
-  self["pending-render-frame"] = nil
-  self["model-valid?"] = function()
-    return (self.model and vim.api.nvim_buf_is_valid(self.model))
-  end
-  self["ref-filetype"] = function(ref)
-    local kind = (ref and ref.kind)
-    local path = (ref and ref.path)
-    local ft
-    if ((type(path) == "string") and (path ~= "")) then
-      ft = (vim.filetype.match({filename = vim.fn.fnamemodify(path, ":t")}) or vim.filetype.match({filename = path}))
-    else
-      ft = nil
-    end
-    if (kind == "file-entry") then
-      return "text"
-    else
-      if ((type(ft) == "string") and (ft ~= "")) then
-        return ft
-      else
-        return "text"
-      end
-    end
-  end
-  self["clear-source-syntax"] = function()
-    if (self["source-syntax-groups"] and (#self["source-syntax-groups"] > 0)) then
-      local function _36_()
-        for _, g in ipairs(self["source-syntax-groups"]) do
-          vim.cmd(("silent! syntax clear " .. g))
-        end
-        return nil
-      end
-      vim.api.nvim_buf_call(self.buffer, _36_)
-    else
-    end
+  do
+    local self = base.new(nvim, {model = model, name = "meta", ["default-opts"] = M["default-opts"]})
+    self["syntax-type"] = "buffer"
+    self.indexbuf = ui.new(nvim, self, "indexes")
+    self["show-source-prefix"] = false
+    self["show-source-separators"] = false
+    self["visible-source-syntax-only"] = false
+    self["source-hl-ns"] = vim.api.nvim_create_namespace("metabuffer_source")
+    self["source-sep-ns"] = vim.api.nvim_create_namespace("metabuffer_source_separator")
+    self["source-alt-ns"] = vim.api.nvim_create_namespace("metabuffer_source_alt")
     self["source-syntax-groups"] = {}
-    return nil
-  end
-  self["apply-source-syntax-regions"] = function()
-    if not (self["show-source-separators"] and (self["syntax-type"] == "buffer") and self["source-refs"] and (#self.indices > 0)) then
-      return self["clear-source-syntax"]()
-    else
-      local n = #self.indices
-      local included = {}
-      local groups = {}
-      self["clear-source-syntax"]()
-      local function _38_()
-        local reset_base_syntax_3f = false
-        local block_id = 0
-        local function add_block(start, stop, ft)
-          if (ft and (ft ~= "") and (start <= stop)) then
-            block_id = (block_id + 1)
-            local cluster = ("MetaSrcFt_" .. sanitize_syntax_id(ft))
-            local group = string.format("MetaSrcBlock_%d", block_id)
-            local synfiles = syntax_files_for_ft(ft)
-            local has_syntax = (#synfiles > 0)
-            if has_syntax then
-              if not reset_base_syntax_3f then
-                vim.cmd("silent! syntax clear")
-                pcall(vim.api.nvim_buf_del_var, self.buffer, "current_syntax")
-                reset_base_syntax_3f = true
-              else
-              end
-              if not included[cluster] then
-                apply_ft_buffer_vars_21(self.buffer, ft)
-                for _, synfile in ipairs(synfiles) do
+    self["source-syntax-included"] = {}
+    self["source-syntax-base-reset?"] = false
+    self["source-syntax-next-group-id"] = 0
+    self["source-syntax-fill-token"] = 0
+    self["source-syntax-fill-pending"] = false
+    self["keep-modifiable"] = false
+    self["last-rendered-lines"] = {}
+    self["pending-render-frame"] = nil
+    self["model-valid?"] = function()
+      return (self.model and vim.api.nvim_buf_is_valid(self.model))
+    end
+    self["ref-filetype"] = function(ref)
+      local kind = (ref and ref.kind)
+      local path = (ref and ref.path)
+      local ft
+      if ((type(path) == "string") and (path ~= "")) then
+        ft = (vim.filetype.match({filename = vim.fn.fnamemodify(path, ":t")}) or vim.filetype.match({filename = path}))
+      else
+        ft = nil
+      end
+      if (kind == "file-entry") then
+        return "text"
+      else
+        if ((type(ft) == "string") and (ft ~= "")) then
+          return ft
+        else
+          return "text"
+        end
+      end
+    end
+    self["clear-source-syntax"] = function()
+      self["source-syntax-fill-token"] = (1 + (self["source-syntax-fill-token"] or 0))
+      self["source-syntax-fill-pending"] = false
+      if (self["source-syntax-groups"] and (#self["source-syntax-groups"] > 0)) then
+        local function _36_()
+          for _, g in ipairs(self["source-syntax-groups"]) do
+            vim.cmd(("silent! syntax clear " .. g))
+          end
+          return nil
+        end
+        vim.api.nvim_buf_call(self.buffer, _36_)
+      else
+      end
+      self["source-syntax-groups"] = {}
+      self["source-syntax-included"] = {}
+      self["source-syntax-base-reset?"] = false
+      self["source-syntax-next-group-id"] = 0
+      return nil
+    end
+    self["add-source-syntax-range"] = function(syntax_start, syntax_stop)
+      if (self["source-refs"] and (#self.indices > 0) and (syntax_start <= syntax_stop)) then
+        local included = self["source-syntax-included"]
+        local groups = self["source-syntax-groups"]
+        local function _38_()
+          local function add_block(start, stop, ft)
+            if (ft and (ft ~= "") and (start <= stop)) then
+              local synfiles = syntax_files_for_ft(ft)
+              local has_syntax = (#synfiles > 0)
+              if has_syntax then
+                if not self["source-syntax-base-reset?"] then
+                  vim.cmd("silent! syntax clear")
                   pcall(vim.api.nvim_buf_del_var, self.buffer, "current_syntax")
-                  vim.cmd(("silent! syntax include @" .. cluster .. " " .. vim.fn.fnameescape(synfile)))
+                  self["source-syntax-base-reset?"] = true
+                else
                 end
-                included[cluster] = true
+                local cluster = ("MetaSrcFt_" .. sanitize_syntax_id(ft))
+                if not included[cluster] then
+                  apply_ft_buffer_vars_21(self.buffer, ft)
+                  for _, synfile in ipairs(synfiles) do
+                    pcall(vim.api.nvim_buf_del_var, self.buffer, "current_syntax")
+                    vim.cmd(("silent! syntax include @" .. cluster .. " " .. vim.fn.fnameescape(synfile)))
+                  end
+                  included[cluster] = true
+                else
+                end
+                self["source-syntax-next-group-id"] = (self["source-syntax-next-group-id"] + 1)
+                local group = string.format("MetaSrcBlock_%d", self["source-syntax-next-group-id"])
+                vim.cmd(string.format("silent! syntax match %s /\\%%>%dl\\%%<%dl.*/ contains=@%s transparent", group, (start - 1), (stop + 1), cluster))
+                return table.insert(groups, group)
               else
+                return nil
               end
-              vim.cmd(string.format("silent! syntax match %s /\\%%>%dl\\%%<%dl.*/ contains=@%s transparent", group, (start - 1), (stop + 1), cluster))
-              return table.insert(groups, group)
             else
               return nil
+            end
+          end
+          local start = syntax_start
+          local prev_ft = nil
+          local prev_src_idx = nil
+          for i = syntax_start, syntax_stop do
+            local idx = self.indices[i]
+            local ref = (idx and self["source-refs"][idx])
+            local ft = self["ref-filetype"](ref)
+            if not prev_ft then
+              prev_ft = ft
+            else
+            end
+            if ((ft ~= prev_ft) or (prev_src_idx and (idx ~= (prev_src_idx + 1)))) then
+              add_block(start, (i - 1), prev_ft)
+              start = i
+              prev_ft = ft
+            else
+            end
+            prev_src_idx = idx
+          end
+          if prev_ft then
+            return add_block(start, syntax_stop, prev_ft)
+          else
+            return nil
+          end
+        end
+        return vim.api.nvim_buf_call(self.buffer, _38_)
+      else
+        return nil
+      end
+    end
+    self["schedule-source-syntax-fill"] = function(syntax_start, syntax_stop, total_lines)
+      do
+        local session = self.model.session
+        local chunk = math.max(1, ((session and session["project-source-syntax-chunk-lines"]) or 240))
+        local token = (1 + (self["source-syntax-fill-token"] or 0))
+        self["source-syntax-fill-token"] = token
+        self["source-syntax-fill-pending"] = true
+        local next_after = (syntax_stop + 1)
+        local next_before = (syntax_start - 1)
+        local function run_batch()
+          if ((token == self["source-syntax-fill-token"]) and self["source-syntax-fill-pending"] and vim.api.nvim_buf_is_valid(self.buffer)) then
+            local budget = chunk
+            if ((next_after <= total_lines) and (budget > 0)) then
+              local stop = math.min(total_lines, (next_after + budget + -1))
+              self["add-source-syntax-range"](next_after, stop)
+              budget = (budget - ((stop - next_after) + 1))
+              next_after = (stop + 1)
+            else
+            end
+            if ((next_before >= 1) and (budget > 0)) then
+              local start = math.max(1, (next_before + ( - budget) + 1))
+              self["add-source-syntax-range"](start, next_before)
+              next_before = (start - 1)
+            else
+            end
+            if ((next_after <= total_lines) or (next_before >= 1)) then
+              return vim.defer_fn(run_batch, 17)
+            else
+              self["source-syntax-fill-pending"] = false
+              local function _49_()
+                return vim.cmd("silent! syntax sync fromstart")
+              end
+              return vim.api.nvim_buf_call(self.buffer, _49_)
             end
           else
             return nil
           end
         end
-        local start = 1
-        local prev_ft = nil
-        local prev_src_idx = nil
-        for i = 1, n do
-          local idx = self.indices[i]
-          local ref = (idx and self["source-refs"][idx])
-          local ft = self["ref-filetype"](ref)
-          if not prev_ft then
-            prev_ft = ft
+      end
+      return vim.defer_fn(__fnl_global__run_2dbatch, 17)
+    end
+  end
+  self["apply-source-syntax-regions"] = function()
+    if not (self["show-source-separators"] and (self["syntax-type"] == "buffer") and self["source-refs"] and (#self.indices > 0)) then
+      self["clear-source-syntax"]()
+    else
+      local n = #self.indices
+      local session = self.model.session
+      local chunk = math.max(1, ((session and session["project-source-syntax-chunk-lines"]) or 240))
+      local visible_start = 1
+      local visible_stop = n
+      do
+        local wins = vim.fn.win_findbuf(self.buffer)
+        local win = nil
+        for _, candidate in ipairs(wins) do
+          if (not win and vim.api.nvim_win_is_valid(candidate)) then
+            win = candidate
           else
           end
-          if ((ft ~= prev_ft) or (prev_src_idx and (idx ~= (prev_src_idx + 1)))) then
-            add_block(start, (i - 1), prev_ft)
-            start = i
-            prev_ft = ft
-          else
-          end
-          prev_src_idx = idx
         end
-        if prev_ft then
-          add_block(start, n, prev_ft)
+        if win then
+          local view
+          local function _53_()
+            return vim.fn.winsaveview()
+          end
+          view = vim.api.nvim_win_call(win, _53_)
+          local height = math.max(1, vim.api.nvim_win_get_height(win))
+          visible_start = math.max(1, math.min((view.topline or 1), n))
+          visible_stop = math.max(visible_start, math.min((visible_start + height + -1), n))
         else
         end
+      end
+      local incremental_fill_3f = (session and session["project-mode"] and not self["visible-source-syntax-only"] and (n > chunk))
+      local syntax_start
+      if (self["visible-source-syntax-only"] or incremental_fill_3f) then
+        syntax_start = visible_start
+      else
+        syntax_start = 1
+      end
+      local syntax_stop
+      if (self["visible-source-syntax-only"] or incremental_fill_3f) then
+        syntax_stop = visible_stop
+      else
+        syntax_stop = n
+      end
+      self["clear-source-syntax"]()
+      self["add-source-syntax-range"](syntax_start, syntax_stop)
+      local function _57_()
         return vim.cmd("silent! syntax sync fromstart")
       end
-      vim.api.nvim_buf_call(self.buffer, _38_)
-      self["source-syntax-groups"] = groups
-      return nil
+      vim.api.nvim_buf_call(self.buffer, _57_)
+      if incremental_fill_3f then
+        self["schedule-source-syntax-fill"](syntax_start, syntax_stop, n)
+      else
+      end
     end
-  end
-  self.syntax = function()
-    if ((self["syntax-type"] == "buffer") and self["model-valid?"]()) then
-      return vim.bo[self.model].syntax
-    else
-      return "metabuffer"
+    self.syntax = function()
+      if ((self["syntax-type"] == "buffer") and self["model-valid?"]()) then
+        return vim.bo[self.model].syntax
+      else
+        return "metabuffer"
+      end
     end
-  end
-  self["apply-syntax"] = function(syntax_type)
-    if syntax_type then
-      self["syntax-type"] = syntax_type
-    else
-    end
-    local bo = vim.bo[self.buffer]
-    if (self["syntax-type"] == "buffer") then
-      if self["model-valid?"]() then
-        local ft = vim.bo[self.model].filetype
-        local syn = vim.bo[self.model].syntax
-        if (ft and (ft ~= "")) then
-          apply_ft_buffer_vars_21(self.buffer, ft)
-          bo["filetype"] = ft
+    self["apply-syntax"] = function(syntax_type)
+      if syntax_type then
+        self["syntax-type"] = syntax_type
+      else
+      end
+      local bo = vim.bo[self.buffer]
+      if (self["syntax-type"] == "buffer") then
+        if self["model-valid?"]() then
+          local ft = vim.bo[self.model].filetype
+          local syn = vim.bo[self.model].syntax
+          if (ft and (ft ~= "")) then
+            apply_ft_buffer_vars_21(self.buffer, ft)
+            bo["filetype"] = ft
+          else
+          end
+          if (syn and (syn ~= "")) then
+            bo["syntax"] = syn
+            return nil
+          else
+            bo["syntax"] = ""
+            return nil
+          end
         else
-        end
-        if (syn and (syn ~= "")) then
-          bo["syntax"] = syn
-          return nil
-        else
-          bo["syntax"] = ""
+          bo["filetype"] = "metabuffer"
+          bo["syntax"] = "metabuffer"
           return nil
         end
       else
@@ -458,50 +565,47 @@ M.new = function(nvim, model)
         bo["syntax"] = "metabuffer"
         return nil
       end
-    else
-      bo["filetype"] = "metabuffer"
-      bo["syntax"] = "metabuffer"
-      return nil
     end
-  end
-  self.update = function()
-    return self.render()
-  end
-  self.render = function()
-    local views = save_window_views(self)
-    local frame = build_render_frame(self)
-    local committed_3f
-    if should_defer_empty_frame(self, frame) then
-      committed_3f = stage_render_frame(self, frame)
-    else
-      committed_3f = commit_render_frame(self, frame)
+    self.update = function()
+      return self.render()
     end
-    if committed_3f then
-      apply_frame_separators(self)
-      return finalize_render(self, views)
-    else
-      return nil
-    end
-  end
-  self["push-visible-lines"] = function(visible)
-    if self["model-valid?"]() then
-      local n = math.min(#visible, #self.indices)
-      for i = 1, n do
-        local src = self.indices[i]
-        local old = vim.api.nvim_buf_get_lines(self.model, (src - 1), src, false)
-        local old_line = old[1]
-        local new_line = visible[i]
-        if (old_line ~= new_line) then
-          vim.api.nvim_buf_set_lines(self.model, (src - 1), src, false, {new_line})
-          self.content[src] = new_line
-        else
-        end
+    self.render = function()
+      local views = save_window_views(self)
+      local frame = build_render_frame(self)
+      local committed_3f
+      if should_defer_empty_frame(self, frame) then
+        committed_3f = stage_render_frame(self, frame)
+      else
+        committed_3f = commit_render_frame(self, frame)
       end
-      return nil
-    else
-      return nil
+      if committed_3f then
+        apply_frame_separators(self)
+        return finalize_render(self, views)
+      else
+        return nil
+      end
     end
+    self["push-visible-lines"] = function(visible)
+      if self["model-valid?"]() then
+        local n = math.min(#visible, #self.indices)
+        for i = 1, n do
+          local src = self.indices[i]
+          local old = vim.api.nvim_buf_get_lines(self.model, (src - 1), src, false)
+          local old_line = old[1]
+          local new_line = visible[i]
+          if (old_line ~= new_line) then
+            vim.api.nvim_buf_set_lines(self.model, (src - 1), src, false, {new_line})
+            self.content[src] = new_line
+          else
+          end
+        end
+        return nil
+      else
+        return nil
+      end
+    end
+    return self
   end
-  return self
+  return self["apply-source-syntax-regions"]
 end
 return M

@@ -434,7 +434,10 @@
     [session estimated-lines]
     (and (lazy-streaming-allowed? session)
          (truthy? session.lazy-mode)
-         (or (<= settings.project-lazy-min-estimated-lines 0)
+         (or (and session.project-mode
+                  (not session.project-bootstrapped)
+                  (not (prompt-has-active-query? session)))
+             (<= settings.project-lazy-min-estimated-lines 0)
              (>= estimated-lines settings.project-lazy-min-estimated-lines))))
 
   (fn start-project-stream!
@@ -453,10 +456,13 @@
                  (not session.lazy-stream-done))
         (let [paths session.lazy-stream-paths
               total (# paths)
-              chunk (math.max 1 settings.project-lazy-chunk-size)]
+              chunk (math.max 1 settings.project-lazy-chunk-size)
+              frame-budget (math.max 1 (or settings.project-lazy-frame-budget-ms 6))
+              batch-start (now-ms)]
           (var consumed 0)
           (var touched false)
           (while (and (< consumed chunk)
+                      (< (- (now-ms) batch-start) frame-budget)
                       (<= session.lazy-stream-next total)
                       (< (# session.meta.buf.content) settings.project-max-total-lines))
             (let [path (. paths session.lazy-stream-next)
@@ -475,12 +481,19 @@
           (when (or (> session.lazy-stream-next total)
                     (>= (# session.meta.buf.content) settings.project-max-total-lines))
             (set session.lazy-stream-done true))
+          (when (and session.lazy-stream-done
+                     session.meta
+                     session.meta.buf
+                     (not session.prompt-animating?)
+                     (not session.startup-initializing))
+            (set session.meta.buf.visible-source-syntax-only false)
+            (pcall session.meta.buf.apply-source-syntax-regions))
           (when touched
             (schedule-lazy-refresh! session))
           (when (and (not session.lazy-stream-done)
                      (= stream-id session.lazy-stream-id)
                      (session-active? session))
-            (vim.defer_fn run-batch 0)))))
+            (vim.defer_fn run-batch 17)))))
       (vim.defer_fn run-batch 0)))
 
   (fn apply-source-set!
@@ -506,7 +519,13 @@
                                                   session.effective-include-files)]
                 (set meta.buf.content pool.content)
                 (set meta.buf.source-refs pool.refs)
-                (set session.lazy-stream-done true))))
+                (set session.lazy-stream-done true)
+                (when (and session.meta
+                           session.meta.buf
+                           (not session.prompt-animating?)
+                           (not session.startup-initializing))
+                  (set session.meta.buf.visible-source-syntax-only false)
+                  (pcall session.meta.buf.apply-source-syntax-regions)))))
         (do
           (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
           (set session.lazy-stream-done true)

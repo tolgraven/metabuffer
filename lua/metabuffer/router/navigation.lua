@@ -2,7 +2,7 @@
 local M = {}
 local function can_refresh_source_syntax_3f(session)
   local buf = (session and session.meta and session.meta.buf)
-  return (session and session["project-mode"] and buf and buf["show-source-separators"] and (buf["syntax-type"] == "buffer"))
+  return (session and session["project-mode"] and buf and buf["show-source-separators"] and buf["visible-source-syntax-only"] and (buf["syntax-type"] == "buffer"))
 end
 local function schedule_source_syntax_refresh_21(deps, session)
   local router = deps.router

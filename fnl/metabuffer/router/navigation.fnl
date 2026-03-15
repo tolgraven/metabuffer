@@ -9,6 +9,7 @@
          session.project-mode
          buf
          buf.show-source-separators
+         buf.visible-source-syntax-only
          (= buf.syntax-type "buffer"))))
 
 (fn schedule-source-syntax-refresh!

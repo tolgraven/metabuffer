@@ -97,13 +97,15 @@
     :prompt_size_scale_extra [0 2 6 10]
     :project_lazy_enabled true
     :project_lazy_disable_headless true
-    :project_lazy_min_estimated_lines 10000
-    :project_lazy_chunk_size 8
-    :project_lazy_refresh_debounce_ms 80
-    :project_lazy_refresh_min_ms 20
+    :project_lazy_min_estimated_lines 5000
+    :project_lazy_chunk_size 4
+    :project_lazy_frame_budget_ms 6
+    :project_lazy_refresh_debounce_ms 32
+    :project_lazy_refresh_min_ms 8
     :project_lazy_prefilter_enabled true
+    :project_source_syntax_chunk_lines 240
     :project_bootstrap_delay_ms 120
-    :project_bootstrap_idle_delay_ms 700
+    :project_bootstrap_idle_delay_ms 140
     :prompt_forced_coalesce_ms 700
     :preview_source_switch_debounce_ms 60
     :source_syntax_refresh_debounce_ms 80
@@ -268,9 +270,11 @@
       :project_lazy_disable_headless (opt-value opts :project_lazy_disable_headless :meta_project_lazy_disable_headless (. defaults :project_lazy_disable_headless))
       :project_lazy_min_estimated_lines (opt-value opts :project_lazy_min_estimated_lines :meta_project_lazy_min_estimated_lines (. defaults :project_lazy_min_estimated_lines))
       :project_lazy_chunk_size (opt-value opts :project_lazy_chunk_size :meta_project_lazy_chunk_size (. defaults :project_lazy_chunk_size))
+      :project_lazy_frame_budget_ms (opt-value opts :project_lazy_frame_budget_ms :meta_project_lazy_frame_budget_ms (. defaults :project_lazy_frame_budget_ms))
       :project_lazy_refresh_debounce_ms (opt-value opts :project_lazy_refresh_debounce_ms :meta_project_lazy_refresh_debounce_ms (. defaults :project_lazy_refresh_debounce_ms))
       :project_lazy_refresh_min_ms (opt-value opts :project_lazy_refresh_min_ms :meta_project_lazy_refresh_min_ms (. defaults :project_lazy_refresh_min_ms))
       :project_lazy_prefilter_enabled (opt-value opts :project_lazy_prefilter_enabled :meta_project_lazy_prefilter_enabled (. defaults :project_lazy_prefilter_enabled))
+      :project_source_syntax_chunk_lines (opt-value opts :project_source_syntax_chunk_lines :meta_project_source_syntax_chunk_lines (. defaults :project_source_syntax_chunk_lines))
       :project_bootstrap_delay_ms (opt-value opts :project_bootstrap_delay_ms :meta_project_bootstrap_delay_ms (. defaults :project_bootstrap_delay_ms))
       :project_bootstrap_idle_delay_ms (opt-value opts :project_bootstrap_idle_delay_ms :meta_project_bootstrap_idle_delay_ms (. defaults :project_bootstrap_idle_delay_ms))
       :prompt_forced_coalesce_ms (opt-value opts :prompt_forced_coalesce_ms :meta_prompt_forced_coalesce_ms (. defaults :prompt_forced_coalesce_ms))
@@ -360,6 +364,7 @@
     (set router.project-lazy-disable-headless (. options :project_lazy_disable_headless))
     (set router.project-lazy-min-estimated-lines (. options :project_lazy_min_estimated_lines))
     (set router.project-lazy-chunk-size (. options :project_lazy_chunk_size))
+    (set router.project-lazy-frame-budget-ms (. options :project_lazy_frame_budget_ms))
     (set router.project-lazy-refresh-debounce-ms (. options :project_lazy_refresh_debounce_ms))
     (set router.project-lazy-refresh-min-ms (. options :project_lazy_refresh_min_ms))
     (set router.project-lazy-prefilter-enabled (. options :project_lazy_prefilter_enabled))

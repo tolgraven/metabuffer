@@ -177,8 +177,7 @@
                   (restore-main-view!)))
               (when-not vim.g.meta_test_no_startinsert
                 (pcall vim.api.nvim_set_current_win session.prompt-win)))
-            (let [tick! (fn [_ _] (restore-main-view!))
-                  target-height (math.max 1 (or session.prompt-target-height 1))
+            (let [target-height (math.max 1 (or session.prompt-target-height 1))
                   duration (prompt-enter-duration-ms)]
                (if session.prompt-floating?
                    (animation-mod.animate-float!
@@ -190,8 +189,7 @@
                      0
                      0
                      duration
-                     {:tick! tick!
-                      :done! done!})
+                     {:done! done!})
                    (animation-mod.animate-win-height-stepwise!
                      session
                      "prompt-enter"
@@ -199,8 +197,7 @@
                      1
                      target-height
                      duration
-                     {:tick! tick!
-                      :done! done!})))))))
+                     {:done! done!})))))))
     (schedule-layout-refresh!)
     (vim.defer_fn
       (fn []
@@ -272,10 +269,14 @@
       (fn []
         (set session.startup-initializing false)
         (vim.defer_fn
-          (fn [] (set session.animate-enter? false))
+          (fn []
+            (set session.animate-enter? false)
+            (when (and session.meta session.meta.buf session.lazy-stream-done)
+              (set session.meta.buf.visible-source-syntax-only false)
+              (pcall session.meta.buf.apply-source-syntax-regions)))
           (or session.startup-ui-delay-ms 320))
         (when (and session.project-mode (not session.project-bootstrapped))
-          (project-source.schedule-project-bootstrap! session 0))))
+          (project-source.schedule-project-bootstrap! session 17))))
     (when (or (and session.project-mode (not initial-query-active))
               (and context-window context-window.update!))
       (schedule-aux-ui-refresh!))
@@ -469,6 +470,7 @@
                                :prefilter-mode start-prefilter
                                :lazy-mode start-lazy
                                :expansion-mode start-expansion
+                               :project-source-syntax-chunk-lines settings.project-source-syntax-chunk-lines
                                :last-parsed-query {:lines (if (and query (~= query ""))
                                                               (vim.split query "\n" {:plain true})
                                                               [""])

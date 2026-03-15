@@ -506,7 +506,7 @@ M.new = function(opts)
     end
   end
   local function lazy_preferred_3f(session, estimated_lines)
-    return (lazy_streaming_allowed_3f(session) and truthy_3f(session["lazy-mode"]) and ((settings["project-lazy-min-estimated-lines"] <= 0) or (estimated_lines >= settings["project-lazy-min-estimated-lines"])))
+    return (lazy_streaming_allowed_3f(session) and truthy_3f(session["lazy-mode"]) and ((session["project-mode"] and not session["project-bootstrapped"] and not prompt_has_active_query_3f(session)) or (settings["project-lazy-min-estimated-lines"] <= 0) or (estimated_lines >= settings["project-lazy-min-estimated-lines"])))
   end
   local function start_project_stream_21(session, prefilter, init)
     session["lazy-stream-id"] = (1 + (session["lazy-stream-id"] or 0))
@@ -521,9 +521,11 @@ M.new = function(opts)
         local paths = session["lazy-stream-paths"]
         local total = #paths
         local chunk = math.max(1, settings["project-lazy-chunk-size"])
+        local frame_budget = math.max(1, (settings["project-lazy-frame-budget-ms"] or 6))
+        local batch_start = now_ms()
         local consumed = 0
         local touched = false
-        while ((consumed < chunk) and (session["lazy-stream-next"] <= total) and (#session.meta.buf.content < settings["project-max-total-lines"])) do
+        while ((consumed < chunk) and ((now_ms() - batch_start) < frame_budget) and (session["lazy-stream-next"] <= total) and (#session.meta.buf.content < settings["project-max-total-lines"])) do
           local path = paths[session["lazy-stream-next"]]
           local lines = (path and read_file_lines_cached(path, {["include-binary"] = session["effective-include-binary"], ["hex-view"] = session["effective-include-hex"]}))
           local before = #session.meta.buf.content
@@ -542,12 +544,17 @@ M.new = function(opts)
           session["lazy-stream-done"] = true
         else
         end
+        if (session["lazy-stream-done"] and session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
+          session.meta.buf["visible-source-syntax-only"] = false
+          pcall(session.meta.buf["apply-source-syntax-regions"])
+        else
+        end
         if touched then
           schedule_lazy_refresh_21(session)
         else
         end
         if (not session["lazy-stream-done"] and (stream_id == session["lazy-stream-id"]) and session_active_3f(session)) then
-          return vim.defer_fn(run_batch, 0)
+          return vim.defer_fn(run_batch, 17)
         else
           return nil
         end
@@ -575,6 +582,11 @@ M.new = function(opts)
         meta.buf.content = pool.content
         meta.buf["source-refs"] = pool.refs
         session["lazy-stream-done"] = true
+        if (session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
+          session.meta.buf["visible-source-syntax-only"] = false
+          pcall(session.meta.buf["apply-source-syntax-regions"])
+        else
+        end
       end
     else
       session["lazy-stream-id"] = (1 + (session["lazy-stream-id"] or 0))
@@ -599,7 +611,7 @@ M.new = function(opts)
       session["source-set-rebuild-token"] = (1 + (session["source-set-rebuild-token"] or 0))
       local token = session["source-set-rebuild-token"]
       session["source-set-rebuild-pending"] = true
-      local function _74_()
+      local function _76_()
         if (session and (token == session["source-set-rebuild-token"])) then
           session["source-set-rebuild-pending"] = false
         else
@@ -615,7 +627,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_74_, math.max(0, (wait_ms or 0)))
+      return vim.defer_fn(_76_, math.max(0, (wait_ms or 0)))
     else
       return nil
     end
@@ -642,7 +654,7 @@ M.new = function(opts)
       session["project-bootstrap-token"] = (1 + (session["project-bootstrap-token"] or 0))
       local token = session["project-bootstrap-token"]
       session["project-bootstrap-pending"] = true
-      local function _80_()
+      local function _82_()
         if (session and (token == session["project-bootstrap-token"])) then
           session["project-bootstrap-pending"] = false
         else
@@ -675,7 +687,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_80_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
+      return vim.defer_fn(_82_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
     else
       return nil
     end

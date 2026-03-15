@@ -316,10 +316,16 @@
     (set self.indexbuf (ui.new nvim self "indexes"))
     (set self.show-source-prefix false)
     (set self.show-source-separators false)
+    (set self.visible-source-syntax-only false)
     (set self.source-hl-ns (vim.api.nvim_create_namespace "metabuffer_source"))
     (set self.source-sep-ns (vim.api.nvim_create_namespace "metabuffer_source_separator"))
     (set self.source-alt-ns (vim.api.nvim_create_namespace "metabuffer_source_alt"))
     (set self.source-syntax-groups [])
+    (set self.source-syntax-included {})
+    (set self.source-syntax-base-reset? false)
+    (set self.source-syntax-next-group-id 0)
+    (set self.source-syntax-fill-token 0)
+    (set self.source-syntax-fill-pending false)
     (set self.keep-modifiable false)
     (set self.last-rendered-lines [])
     (set self.pending-render-frame nil)
@@ -342,12 +348,107 @@
 
       (fn self.clear-source-syntax
   []
+    (set self.source-syntax-fill-token (+ 1 (or self.source-syntax-fill-token 0)))
+    (set self.source-syntax-fill-pending false)
     (when (and self.source-syntax-groups (> (# self.source-syntax-groups) 0))
       (vim.api.nvim_buf_call self.buffer
         (fn []
           (each [_ g (ipairs self.source-syntax-groups)]
             (vim.cmd (.. "silent! syntax clear " g))))))
-    (set self.source-syntax-groups []))
+    (set self.source-syntax-groups [])
+    (set self.source-syntax-included {})
+    (set self.source-syntax-base-reset? false)
+    (set self.source-syntax-next-group-id 0))
+
+      (fn self.add-source-syntax-range
+  [syntax-start syntax-stop]
+    (when (and self.source-refs
+               (> (# self.indices) 0)
+               (<= syntax-start syntax-stop))
+      (let [included self.source-syntax-included
+            groups self.source-syntax-groups]
+        (vim.api.nvim_buf_call self.buffer
+          (fn []
+            (fn add-block
+  [start stop ft]
+              (when (and ft (~= ft "") (<= start stop))
+                (let [synfiles (syntax-files-for-ft ft)
+                      has-syntax (> (# synfiles) 0)]
+                  (when has-syntax
+                    (when-not self.source-syntax-base-reset?
+                      ;; Reset inherited/base syntax once before the first included source block.
+                      (vim.cmd "silent! syntax clear")
+                      (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
+                      (set self.source-syntax-base-reset? true))
+                    (let [cluster (.. "MetaSrcFt_" (sanitize-syntax-id ft))]
+                      (when-not (. included cluster)
+                        ;; Most syntax files early-return when b:current_syntax is set.
+                        (apply-ft-buffer-vars! self.buffer ft)
+                        (each [_ synfile (ipairs synfiles)]
+                          (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
+                          (vim.cmd (.. "silent! syntax include @" cluster " " (vim.fn.fnameescape synfile))))
+                        (set (. included cluster) true))
+                      (set self.source-syntax-next-group-id (+ self.source-syntax-next-group-id 1))
+                      (let [group (string.format "MetaSrcBlock_%d" self.source-syntax-next-group-id)]
+                        (vim.cmd
+                          (string.format
+                            "silent! syntax match %s /\\%%>%dl\\%%<%dl.*/ contains=@%s transparent"
+                            group
+                            (- start 1)
+                            (+ stop 1)
+                            cluster))
+                        (table.insert groups group)))))))
+            (var start syntax-start)
+            (var prev-ft nil)
+            (var prev-src-idx nil)
+            (for [i syntax-start syntax-stop]
+              (let [idx (. self.indices i)
+                    ref (and idx (. self.source-refs idx))
+                    ft (self.ref-filetype ref)]
+                (when-not prev-ft
+                  (set prev-ft ft))
+                (when (or (~= ft prev-ft)
+                          (and prev-src-idx (~= idx (+ prev-src-idx 1))))
+                  (add-block start (- i 1) prev-ft)
+                  (set start i)
+                  (set prev-ft ft))
+                (set prev-src-idx idx)))
+            (when prev-ft
+              (add-block start syntax-stop prev-ft)))))))
+
+      (fn self.schedule-source-syntax-fill
+  [syntax-start syntax-stop total-lines]
+    (let [session self.model.session
+          chunk (math.max 1 (or (and session session.project-source-syntax-chunk-lines) 240))
+          token (+ 1 (or self.source-syntax-fill-token 0))]
+      (set self.source-syntax-fill-token token)
+      (set self.source-syntax-fill-pending true)
+      (var next-after (+ syntax-stop 1))
+      (var next-before (- syntax-start 1))
+      (fn run-batch
+        []
+        (when (and (= token self.source-syntax-fill-token)
+                   self.source-syntax-fill-pending
+                   (vim.api.nvim_buf_is_valid self.buffer))
+          (var budget chunk)
+          (when (and (<= next-after total-lines) (> budget 0))
+            (let [stop (math.min total-lines (+ next-after budget -1))]
+              (self.add-source-syntax-range next-after stop)
+              (set budget (- budget (+ (- stop next-after) 1)))
+              (set next-after (+ stop 1))))
+          (when (and (>= next-before 1) (> budget 0))
+            (let [start (math.max 1 (+ next-before (- budget) 1))]
+              (self.add-source-syntax-range start next-before)
+              (set next-before (- start 1))))
+          (if (or (<= next-after total-lines) (>= next-before 1))
+              (vim.defer_fn run-batch 17)
+              (do
+                (set self.source-syntax-fill-pending false)
+                (vim.api.nvim_buf_call self.buffer
+                  (fn []
+                    ;; Re-sync once after the background fill completes.
+                    (vim.cmd "silent! syntax sync fromstart"))))))))
+      (vim.defer_fn run-batch 17)))
 
       (fn self.apply-source-syntax-regions
   []
@@ -357,68 +458,39 @@
                   (> (# self.indices) 0)))
         (self.clear-source-syntax)
         (let [n (# self.indices)
-              included {}
-              groups []]
+              session self.model.session
+              chunk (math.max 1 (or (and session session.project-source-syntax-chunk-lines) 240))]
+          (var visible-start 1)
+          (var visible-stop n)
+          (let [wins (vim.fn.win_findbuf self.buffer)]
+            (var win nil)
+            (each [_ candidate (ipairs wins)]
+              (when (and (not win) (vim.api.nvim_win_is_valid candidate))
+                (set win candidate)))
+            (when win
+              (let [view (vim.api.nvim_win_call win (fn [] (vim.fn.winsaveview)))
+                    height (math.max 1 (vim.api.nvim_win_get_height win))]
+                (set visible-start (math.max 1 (math.min (or (. view :topline) 1) n)))
+                (set visible-stop (math.max visible-start
+                                            (math.min (+ visible-start height -1) n))))))
+          (let [incremental-fill? (and session
+                                       session.project-mode
+                                       (not self.visible-source-syntax-only)
+                                       (> n chunk))]
+            (var syntax-start (if (or self.visible-source-syntax-only incremental-fill?)
+                                  visible-start
+                                  1))
+            (var syntax-stop (if (or self.visible-source-syntax-only incremental-fill?)
+                                 visible-stop
+                                 n))
           (self.clear-source-syntax)
+          (self.add-source-syntax-range syntax-start syntax-stop)
           (vim.api.nvim_buf_call self.buffer
             (fn []
-              (var reset-base-syntax? false)
-              (var block-id 0)
-              (fn add-block
-  [start stop ft]
-                (when (and ft (~= ft "") (<= start stop))
-                  (set block-id (+ block-id 1))
-                  (let [cluster (.. "MetaSrcFt_" (sanitize-syntax-id ft))
-                          ;; Keep group names stable across updates/reloads to avoid
-                          ;; unbounded syntax-group creation (E849).
-                          group (string.format "MetaSrcBlock_%d" block-id)
-                          synfiles (syntax-files-for-ft ft)
-                          has-syntax (> (# synfiles) 0)]
-                    (when has-syntax
-                      (when-not reset-base-syntax?
-                        ;; Reset inherited/base syntax only when we know we can apply at
-                        ;; least one source syntax cluster; this keeps source-file
-                        ;; highlighting accurate while avoiding stale cross-file syntax.
-                        (vim.cmd "silent! syntax clear")
-                        (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
-                        (set reset-base-syntax? true))
-                      (when-not (. included cluster)
-                        ;; Most syntax files early-return when b:current_syntax
-                        ;; is set; clear it before each include so mixed
-                        ;; filetype blocks can all load.
-                        (apply-ft-buffer-vars! self.buffer ft)
-                        (each [_ synfile (ipairs synfiles)]
-                          (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
-                          (vim.cmd (.. "silent! syntax include @" cluster " " (vim.fn.fnameescape synfile))))
-                        (set (. included cluster) true))
-                      (vim.cmd
-                        (string.format
-                          "silent! syntax match %s /\\%%>%dl\\%%<%dl.*/ contains=@%s transparent"
-                          group
-                          (- start 1)
-                          (+ stop 1)
-                          cluster))
-                      (table.insert groups group)))))
-              (var start 1)
-              (var prev-ft nil)
-              (var prev-src-idx nil)
-              (for [i 1 n]
-                (let [idx (. self.indices i)
-                      ref (and idx (. self.source-refs idx))
-                      ft (self.ref-filetype ref)]
-                  (when-not prev-ft
-                    (set prev-ft ft))
-                  (when (or (~= ft prev-ft)
-                            (and prev-src-idx (~= idx (+ prev-src-idx 1))))
-                    (add-block start (- i 1) prev-ft)
-                    (set start i)
-                    (set prev-ft ft))
-                  (set prev-src-idx idx)))
-              (when prev-ft
-                (add-block start n prev-ft))
               ;; Re-sync so contained syntax in mixed blocks updates reliably.
               (vim.cmd "silent! syntax sync fromstart")))
-          (set self.source-syntax-groups groups))))
+          (when incremental-fill?
+            (self.schedule-source-syntax-fill syntax-start syntax-stop n)))))
 
       (fn self.syntax
   []
