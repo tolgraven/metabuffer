@@ -81,7 +81,7 @@
   (session.meta.refresh_statusline)
   (when update-preview-window
     (update-preview-window session))
-  (update-info-window session)
+  (update-info-window session true)
   (when (and context-window context-window.update!)
     (context-window.update! session))
   (when refresh-change-signs!
@@ -255,6 +255,7 @@
           (if (and session.project-mode source-changed? (not text-changed?))
               (refresh-session-ui!
                 session
+                update-preview-window
                 update-info-window
                 context-window
                 refresh-change-signs!
@@ -297,8 +298,7 @@
         (when-not force
           (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0))))
         (when (and session.project-mode
-                   (not session.project-bootstrapped)
-                   (prompt-has-active-query? query-mod session))
+                   (not session.project-bootstrapped))
           (project-source.schedule-project-bootstrap! session settings.project-bootstrap-delay-ms))
         (if pure-flag-edit?
             (do

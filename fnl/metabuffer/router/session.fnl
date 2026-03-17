@@ -80,7 +80,7 @@
       (when (and session.meta
                  session.meta.win
                  (vim.api.nvim_win_is_valid session.meta.win.window))
-        (session-view.restore-meta-view! session.meta session.source-view)))
+        (session-view.restore-meta-view! session.meta session.source-view session update-info-window)))
     (fn prompt-enter-duration-ms
       []
       (if (and animation-mod
@@ -171,6 +171,7 @@
                     (pcall session.meta.refresh_statusline))))
               (when (and preview-window preview-window.update!)
                 (pcall preview-window.update! session))
+              (pcall update-info-window session)
               (restore-main-view!)
               (vim.schedule
                 (fn []
@@ -232,7 +233,7 @@
             (pcall curr.refresh_statusline)
             (when update-preview-window
               (pcall update-preview-window session))
-            (pcall update-info-window session)
+            (pcall update-info-window session true)
             (when (and context-window context-window.update!)
               (pcall context-window.update! session))))))
     (fn schedule-single-file-info-phases!
@@ -255,19 +256,27 @@
     (when sign-mod
       (pcall sign-mod.capture-baseline! session))
     (when session.project-mode
-      (session-view.restore-meta-view! curr session.source-view))
+      (session-view.restore-meta-view! curr session.source-view session update-info-window))
     (when-not (and session.project-mode (not initial-query-active))
       (apply-prompt-lines session))
     (when-not session.project-mode
-      (session-view.restore-meta-view! curr session.source-view))
-    (when-not session.project-mode
-      (when update-preview-window
-        (pcall update-preview-window session))
-      (pcall update-info-window session true))
+      (session-view.restore-meta-view! curr session.source-view session update-info-window))
+    (when update-preview-window
+      (pcall update-preview-window session))
+    (pcall update-info-window session true)
+    (when session.project-mode
+      (vim.defer_fn
+        (fn []
+          (pcall update-info-window session true)
+          ; (when (= (. active-by-prompt session.prompt-buf) session)
+            ; (pcall update-info-window session true))
+          )
+        (or session.startup-ui-delay-ms 350)))
     (schedule-single-file-info-phases!)
     (vim.schedule
       (fn []
         (set session.startup-initializing false)
+        (pcall update-info-window session)
         (vim.defer_fn
           (fn []
             (set session.animate-enter? false)
@@ -372,7 +381,10 @@
                     source-view (vim.fn.winsaveview)
                     _ (set (. source-view :_meta_win_height) (vim.api.nvim_win_get_height origin-win))
                     condition (session-view.setup-state query mode source-view)
+                    _ (when (and project-mode (= mode "start"))
+                        (set condition.selected-index 0))
                     curr (meta-mod.new vim condition)]
+
                 (set curr.project-mode (or project-mode false))
                 (router-util-mod.ensure-source-refs! curr)
                 (set curr.buf.keep-modifiable true)
@@ -441,7 +453,9 @@
                                :prompt-last-event-text (table.concat initial-lines "\n")
                                :initial-query-active (query-mod.query-lines-has-active? (. parsed-query :lines))
                                :startup-initializing true
+                               :prompt-animating? false
                                :animate-enter? (not (not (. ui-animation :enabled)))
+
                                :startup-ui-delay-ms (startup-ui-delay-ms
                                                       (not (not (. ui-animation :enabled)))
                                                       animation-settings)
@@ -492,7 +506,8 @@
                   (when (vim.api.nvim_win_is_valid origin-win)
                     (pcall vim.api.nvim_win_set_buf origin-win curr.buf.buffer))
                   (when-not project-mode
-                    (session-view.restore-meta-view! curr source-view))
+                    (session-view.restore-meta-view! curr source-view session nil))
+
                   (let [initial-query-active session.initial-query-active]
                     (set curr.session session)
                     (activate-session-ui! deps session initial-lines)

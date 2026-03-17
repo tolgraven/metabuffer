@@ -19,10 +19,13 @@
     },
     "diagnostics": {
       "globals": [
-        "vim"
+        "vim",
+        "jit",
+        "MiniTest"
       ],
       "disable": [
-        "duplicate-set-field"
+        "duplicate-set-field",
+        "undefined-global"
       ]
     },
     "telemetry": {

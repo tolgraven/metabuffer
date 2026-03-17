@@ -65,7 +65,7 @@ local function refresh_session_ui_21(session, update_preview_window, update_info
     update_preview_window(session)
   else
   end
-  update_info_window(session)
+  update_info_window(session, true)
   if (context_window and context_window["update!"]) then
     context_window["update!"](session)
   else
@@ -235,7 +235,7 @@ M["apply-prompt-lines!"] = function(deps, session)
     end
     session.meta["set-query-lines"](effective_lines)
     if (session["project-mode"] and source_changed_3f and not text_changed_3f) then
-      return refresh_session_ui_21(session, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+      return refresh_session_ui_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
     else
       return run_meta_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
     end
@@ -275,7 +275,7 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
       session["prompt-change-seq"] = (1 + (session["prompt-change-seq"] or 0))
     else
     end
-    if (session["project-mode"] and not session["project-bootstrapped"] and prompt_has_active_query_3f(query_mod, session)) then
+    if (session["project-mode"] and not session["project-bootstrapped"]) then
       project_source["schedule-project-bootstrap!"](session, settings["project-bootstrap-delay-ms"])
     else
     end

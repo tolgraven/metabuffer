@@ -495,7 +495,12 @@
                      (not session.prompt-animating?)
                      (not session.startup-initializing))
             (set session.meta.buf.visible-source-syntax-only false)
-            (pcall session.meta.buf.apply-source-syntax-regions))
+            (pcall session.meta.buf.apply-source-syntax-regions)
+            ;; Always force one final UI refresh when streaming settles so the
+            ;; info pane leaves its loading/empty state even if the last batch
+            ;; did not append any new visible lines.
+            (pcall session.meta.refresh_statusline)
+            (pcall update-info-window session true))
           (when touched
             (schedule-lazy-refresh! session))
           (when (and (not session.lazy-stream-done)
@@ -632,7 +637,7 @@
                 ;; Keep selection/view stable even when no prompt filter is applied.
                 (when-not has-query
                   (pcall session.meta.buf.render)
-                  (restore-meta-view! session.meta session.source-view)
+                  (restore-meta-view! session.meta session.source-view session update-info-window)
                   (pcall session.meta.refresh_statusline)
                   (pcall update-info-window session)))))
           (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms))))))

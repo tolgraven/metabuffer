@@ -94,15 +94,16 @@
             (if (string.find txt "week") (.. (tostring (or n 1)) "w") nil)
             (if (string.find txt "month") (.. (tostring (or n 1)) "mo") nil)
             (if (string.find txt "year") (.. (tostring (or n 1)) "y") nil)
-            (if (or (= txt "just now") (= txt "now")) "0m" nil)
             ""))))
 
 (fn compact-relative-age-from-epoch
   [epoch]
   (if (and epoch (> epoch 0))
       (let [delta (math.max 0 (- (os.time) epoch))]
-        (if (< delta 3600)
-            (.. (tostring (math.max 0 (math.floor (/ delta 60)))) "m")
+        (if (< delta 60)
+            ""
+            (< delta 3600)
+            (.. (tostring (math.floor (/ delta 60))) "m")
             (< delta 86400)
             (.. (tostring (math.floor (/ delta 3600))) "h")
             (< delta (* 86400 7))
@@ -118,15 +119,14 @@
   [meta]
   (let [mtime-text (or (. meta :mtime-text) "000000")
         git-age (or (. meta :age) "")
-        age-width 4
+        age-width 3
         age-fragment (if (~= git-age "")
-                         (.. "  "
-                             (string.rep " " (math.max 0 (- age-width (# git-age))))
+                         (.. (string.rep " " (math.max 0 (- age-width (# git-age))))
                              git-age)
-                         (string.rep " " (+ 2 age-width)))
+                         (string.rep " " age-width))
         git-author (let [a (vim.trim (or (. meta :author) ""))]
                      (if (= a "") "?" a))]
-    (.. mtime-text age-fragment "\t" git-author)))
+    (.. mtime-text " " age-fragment "\t" git-author)))
 
 (fn M.file-meta-data
   [session path]
@@ -388,12 +388,14 @@
                  (.. left (string.rep " " pad) right))
         author-start (if (= right "") -1 (+ (# left) pad))
         author-end (if (= right "") -1 (+ author-start (# right)))
-        age-token (or (string.match left "([%d]+[a-z]+)$") "")
+        age-token (or (string.match left "(%d+[a-z]+)$") "")
+        age-num-part (or (string.match age-token "^(%d+)") "")
         age-start (if (~= age-token "")
-                      (let [age-pos (string.find left age-token 1 true)]
-                        (if age-pos (- age-pos 1) -1))
+                      (let [age-pos (string.find left (.. " " age-token) 1 true)]
+                        (if age-pos age-pos -1))
                       -1)
-        age-end (if (>= age-start 0) (+ age-start (# age-token)) -1)
+        age-end (if (>= age-start 0) (+ age-start (# age-num-part)) -1)
+
         suffix-highlights []]
     (when (>= age-start 0)
       (table.insert suffix-highlights {:hl (age-hl-group age-token)

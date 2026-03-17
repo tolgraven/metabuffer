@@ -32,14 +32,18 @@
         ctx)))
 
 (fn M.restore-meta-view!
-  [meta source-view]
-  "Restore cursor and viewport in the results window from stored source view."
+  [meta source-view session update-info-window]
+  "Restore cursor and viewport in the results window."
   (when (and meta (vim.api.nvim_win_is_valid meta.win.window))
     (let [line-count (vim.api.nvim_buf_line_count meta.buf.buffer)
           line (math.max 1 (math.min (meta.selected_line) line-count))
           src-view (or source-view {})
-          src-lnum (or (. src-view :lnum) line)
-          src-topline (or (. src-view :topline) src-lnum)
+          ;; Only use source-view for topline/scroll-offset if we are not in project-mode
+          ;; or if the source-view specifically came from a meta-resume.
+          use-src-scroll? (and (not (and session session.project-mode))
+                               (not= (. src-view :topline) nil))
+          src-lnum (if use-src-scroll? (or (. src-view :lnum) line) line)
+          src-topline (if use-src-scroll? (or (. src-view :topline) src-lnum) line)
           offset (math.max 0 (- src-lnum src-topline))
           topline (math.max 1 (math.min (- line offset) line-count))]
       (vim.api.nvim_win_call meta.win.window
@@ -47,11 +51,13 @@
           (let [view (vim.fn.winsaveview)]
             (set (. view :lnum) line)
             (set (. view :topline) topline)
-            (when (~= (. src-view :leftcol) nil)
+            (when (and use-src-scroll? (~= (. src-view :leftcol) nil))
               (set (. view :leftcol) (. src-view :leftcol)))
-            (when (~= (. src-view :col) nil)
+            (when (and use-src-scroll? (~= (. src-view :col) nil))
               (set (. view :col) (. src-view :col)))
-            (vim.fn.winrestview view)))))))
+            (vim.fn.winrestview view)
+            (when (and update-info-window session)
+              (vim.defer_fn (fn [] (pcall update-info-window session true)) 50))))))))
 
 (fn M.sync-selected-from-main-cursor!
   [session]
@@ -78,7 +84,8 @@
          : update-context-window!}
         (or opts {})]
     (when (and session
-               (not session.startup-initializing)
+               (or (not session.startup-initializing)
+                   session.project-mode)
                (vim.api.nvim_win_is_valid session.meta.win.window)
                (vim.api.nvim_buf_is_valid session.prompt-buf)
                (= (. active-by-prompt session.prompt-buf) session))
@@ -90,7 +97,7 @@
           (pcall session.meta.refresh_statusline)
           (when update-preview-window!
             (pcall update-preview-window! session))
-          (pcall update-info-window session false)
+          (pcall update-info-window session true)
           (when update-context-window!
             (pcall update-context-window! session)))))))
 

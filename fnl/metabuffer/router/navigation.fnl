@@ -36,13 +36,27 @@
               (schedule-source-syntax-refresh! deps session))))
         (or source-syntax-refresh-debounce-ms 80))))))
 
+(fn refresh-windows!
+  [deps session force-refresh]
+  (let [{: refresh : windows} deps
+        update-preview-window (. refresh :preview!)
+        update-info-window (. refresh :info!)
+        context-window (. windows :context)]
+    (when session
+      (when force-refresh
+        (schedule-source-syntax-refresh! deps session))
+      (pcall session.meta.refresh_statusline)
+      (when update-preview-window
+        (pcall update-preview-window session))
+      (when update-info-window
+        (pcall update-info-window session true))
+      (when (and context-window context-window.update!)
+        (pcall context-window.update! session)))))
+
 (fn M.move-selection!
   [deps prompt-buf delta]
   (let [{: router : refresh : windows} deps
         active-by-prompt (. router :active-by-prompt)
-        update-preview-window (. refresh :preview!)
-        update-info-window (. refresh :info!)
-        context-window (. windows :context)
         session (. active-by-prompt prompt-buf)]
     (when session
       (let [runner (fn []
@@ -53,13 +67,8 @@
                               (math.max 0 (math.min (+ meta.selected_index delta) (- max 1))))
                          (let [row (+ meta.selected_index 1)]
                            (when (vim.api.nvim_win_is_valid meta.win.window)
-                             (pcall vim.api.nvim_win_set_cursor meta.win.window [row 0])))
-                         (pcall meta.refresh_statusline)
-                         (when update-preview-window
-                           (pcall update-preview-window session))
-                         (pcall update-info-window session false)
-                         (when (and context-window context-window.update!)
-                           (pcall context-window.update! session)))))
+                             (pcall vim.api.nvim_win_set_cursor meta.win.window [row 0]))))
+                       (refresh-windows! deps session false)))
             mode (. (vim.api.nvim_get_mode) :mode)]
         (if (and (= (type mode) "string") (vim.startswith mode "i"))
             (vim.schedule runner)
@@ -69,10 +78,6 @@
   [deps prompt-buf action]
   (let [{: router : refresh : windows : mods} deps
         active-by-prompt (. router :active-by-prompt)
-        update-preview-window (. refresh :preview!)
-        update-info-window (. refresh :info!)
-        context-window (. windows :context)
-        session-view (. mods :session-view)
         animation-mod (. mods :animation)
         session (. active-by-prompt prompt-buf)]
 	    (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
@@ -98,7 +103,9 @@
 	                                     old-col (or (. view :col) 0)
 	                                     row-off (math.max 0 (- old-lnum old-top))
 	                                     new-top (math.max 1 (math.min (+ old-top (* dir step)) max-top))
-	                                     new-lnum (math.max 1 (math.min (+ new-top row-off) line-count))
+	                                     new-lnum (if (= 1 new-top)
+                                                    1
+                                                    (math.max 1 (math.min (+ new-top row-off) line-count)))
 	                                     target {:topline new-top :lnum new-lnum :col old-col :leftcol (or (. view :leftcol) 0)}]
 	                                 (if (and animation-mod
 	                                          (animation-mod.enabled? session :scroll)
@@ -115,15 +122,15 @@
 	                                 new-lnum)))]
 	                       ;; Keep selection-dependent UI in sync with the target row
 	                       ;; even when the scroll uses animation frames.
-	                       (set session.meta.selected_index
-	                            (math.max 0 (math.min (- target-row 1)
-	                                                  (math.max 0 (- (# session.meta.buf.indices) 1)))))
-	                       (pcall session.meta.refresh_statusline)
-	                       (when update-preview-window
-	                         (pcall update-preview-window session))
-	                       (pcall update-info-window session false)
-	                       (when (and context-window context-window.update!)
-	                         (pcall context-window.update! session))))
+                         (if (not= (. (vim.fn.winsaveview) :topline) target-row)
+                             (M.move-selection! deps prompt-buf target-row))
+                         ;; Do a full move-selection! call here, which triggers the rest of the updates. Not good design though...
+	                       ; (set session.meta.selected_index
+	                       ;      (math.max 0 (math.min (- target-row 1)
+	                       ;                            (math.max 0 (- (# session.meta.buf.indices) 1)))))
+                         ;
+                        ;(refresh-windows! deps session false)
+                        ))
 	            mode (. (vim.api.nvim_get_mode) :mode)]
 	        (if (and (= (type mode) "string") (vim.startswith mode "i"))
 	            (vim.schedule runner)

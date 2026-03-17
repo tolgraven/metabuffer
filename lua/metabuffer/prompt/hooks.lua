@@ -916,33 +916,54 @@ M.new = function(opts)
       end
     end
     vim.api.nvim_create_autocmd("BufEnter", {group = aug, buffer = session.meta.buf.buffer, callback = _147_})
-    apply_main_keymaps(router, session)
     local function _152_(_)
+      local function _153_()
+        if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
+          local win = session.meta.win.window
+          if not vim.api.nvim_win_is_valid(win) then
+            return router.cancel(session["prompt-buf"])
+          else
+            local buf = vim.api.nvim_win_get_buf(win)
+            if (buf ~= session.meta.buf.buffer) then
+              return router.cancel(session["prompt-buf"])
+            else
+              return nil
+            end
+          end
+        else
+          return nil
+        end
+      end
+      return vim.schedule(_153_)
+    end
+    vim.api.nvim_create_autocmd("BufLeave", {group = aug, buffer = session.meta.buf.buffer, callback = _152_})
+    apply_main_keymaps(router, session)
+    local function _157_(_)
       return schedule_scroll_sync_21(session)
     end
-    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _152_})
-    local function _153_(_)
+    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _157_})
+    local function _158_(_)
       return router["write-results"](session["prompt-buf"])
     end
-    vim.api.nvim_create_autocmd("BufWriteCmd", {group = aug, buffer = session.meta.buf.buffer, callback = _153_})
-    local function _154_(_)
-      local function _155_()
+    vim.api.nvim_create_autocmd("BufWriteCmd", {group = aug, buffer = session.meta.buf.buffer, callback = _158_})
+    local function _159_(_)
+      local function _160_()
         return router["results-buffer-wiped"](session.meta.buf.buffer)
       end
-      return vim.schedule(_155_)
+      return vim.schedule(_160_)
     end
-    vim.api.nvim_create_autocmd("BufWipeout", {group = aug, buffer = session.meta.buf.buffer, callback = _154_})
+    vim.api.nvim_create_autocmd("BufWipeout", {group = aug, buffer = session.meta.buf.buffer, callback = _159_})
     disable_cmp(session)
     mark_prompt_buffer_21(session["prompt-buf"])
     refresh_prompt_highlights_21(session)
-    local function _156_()
+    local function _161_()
       if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
         return pcall(refresh_prompt_highlights_21, session)
       else
         return nil
       end
     end
-    vim.defer_fn(_156_, prompt_animation_delay_ms(session))
+    vim.defer_fn(_161_, prompt_animation_delay_ms(session))
     apply_keymaps(router, session)
     return apply_emacs_insert_fallbacks(router, session)
   end

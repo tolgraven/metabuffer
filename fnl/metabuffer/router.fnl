@@ -111,7 +111,7 @@
            :info-fade-ms M.ui-animation-info-ms
            :read-file-lines-cached (fn [path]
                                      (router_util_mod.read-file-lines-cached M path))})]
-    (if (= (type candidate) "function")
+    (if false ;(= (type candidate) "function")
         {:update! candidate
          :close-window! (fn [_] nil)}
         candidate)))
@@ -485,6 +485,7 @@
           :prompt-hooks prompt_hooks_mod
           :animation animation_mod}
    :windows {:preview preview-window
+             :info info-window
              :context context-window}
    :ui {:loading-indicator M.ui-loading-indicator
         :animation {:enabled M.ui-animations-enabled

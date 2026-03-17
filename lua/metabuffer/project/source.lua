@@ -552,6 +552,8 @@ M.new = function(opts)
         if (session["lazy-stream-done"] and session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
           session.meta.buf["visible-source-syntax-only"] = false
           pcall(session.meta.buf["apply-source-syntax-regions"])
+          pcall(session.meta.refresh_statusline)
+          pcall(update_info_window, session, true)
         else
         end
         if touched then
@@ -682,7 +684,7 @@ M.new = function(opts)
           end
           if not has_query then
             pcall(session.meta.buf.render)
-            restore_meta_view_21(session.meta, session["source-view"])
+            restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
             pcall(session.meta.refresh_statusline)
             return pcall(update_info_window, session)
           else

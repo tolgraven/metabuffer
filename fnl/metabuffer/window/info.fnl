@@ -3,6 +3,7 @@
 (local lineno-mod (require :metabuffer.window.lineno))
 (local source-mod (require :metabuffer.source))
 (local path-hl (require :metabuffer.path_highlight))
+(local query-mod (require :metabuffer.query))
 (local util (require :metabuffer.util))
 (local base-window-mod (require :metabuffer.window.base))
 (local file-info (require :metabuffer.source.file_info))
@@ -173,6 +174,7 @@
         animation_mod (. deps :animation-mod)
         animate_enter? (. deps :animate-enter?)
         info_fade_ms (. deps :info-fade-ms)]
+  (var update! nil)
   (var info_window_config nil)
   (set info_window_config
     (fn [session width height]
@@ -180,7 +182,7 @@
         (if session.window-local-layout
             {:relative "win"
              :win host-win
-             :anchor "NE"
+             :anchor "NW"
              :row 0
              :col (vim.api.nvim_win_get_width host-win)
              :width width
@@ -191,7 +193,6 @@
              :col vim.o.columns
              :width width
              :height height}))))
-
   (var ensure_info_window nil)
   (set ensure_info_window
     (fn [session]
@@ -247,7 +248,12 @@
                     target
                     100
                     (or vim.g.meta_float_winblend 13)
-                    (animation_mod.duration-ms session :info (or info_fade_ms 220)))))
+                    (animation_mod.duration-ms session :info (or info_fade_ms 220))
+                    {:done! (fn [_]
+                              (when (valid-info-win? session)
+                                (set session.info-post-fade-refresh? nil)
+                                (set session.info-render-suspended? false)
+                                (update! session true)))})))
               17))))))
 
   (fn settle-info-window!
@@ -604,36 +610,44 @@
                       (rerender!)))))))))))
 
   (fn update-regular!
-      [session]
-        (ensure_info_window session)
-        (when (and session.info-post-fade-refresh?
-                   session.info-render-suspended?
-                   (not session.prompt-animating?))
-          (set session.info-post-fade-refresh? nil)
-          (set session.info-render-suspended? false))
-        (settle-info-window! session)
-        (when (and (not session.info-render-suspended?)
-                   session.info-buf
-                   (vim.api.nvim_buf_is_valid session.info-buf))
-          (let [[start-index stop-index] (render-current-range! session session.meta)]
-            (schedule-regular-line-meta-refresh! session session.meta start-index stop-index))))
+    [session]
+    (ensure_info_window session)
+    (when (and session.info-render-suspended?
+               (not session.prompt-animating?)
+               (not session.startup-initializing))
+      (set session.info-post-fade-refresh? nil)
+      (set session.info-render-suspended? false))
+    (settle-info-window! session)
 
+    (when (and (not session.info-render-suspended?)
+               session.info-buf
+               (vim.api.nvim_buf_is_valid session.info-buf))
+      (let [[start-index stop-index] (render-current-range! session session.meta)]
+        (schedule-regular-line-meta-refresh! session session.meta start-index stop-index))))
   (fn startup-layout-pending?
     [session]
-    (and session
-         session.project-mode
-         (or session.startup-initializing session.prompt-animating?)))
+    (let [initializing (or session.startup-initializing false)
+          animating (or session.prompt-animating? false)
+          pending (and session session.project-mode (or initializing animating))]
+      pending))
 
   (fn project-loading-pending?
-    [session]
-    (and session
-         session.project-mode
-         (or (startup-layout-pending? session)
-             session.project-bootstrap-pending
-             (not session.project-bootstrapped)
-             session.lazy-refresh-pending
-             session.lazy-refresh-dirty
-             (not session.lazy-stream-done))))
+    [session has-query]
+    (let [startup (startup-layout-pending? session)
+          bootstrap-pending (or session.project-bootstrap-pending false)
+          bootstrapped (or session.project-bootstrapped false)
+          refresh-pending (or session.lazy-refresh-pending false)
+          refresh-dirty (or session.lazy-refresh-dirty false)
+          stream-done (or session.lazy-stream-done false)
+          pending (and session
+                       session.project-mode
+                       (or startup
+                           bootstrap-pending
+                           (not bootstrapped)
+                           refresh-pending
+                           refresh-dirty
+                           (not stream-done)))]
+      (and pending (not has-query))))
 
   (fn render-project-loading!
     [session]
@@ -641,11 +655,13 @@
           total-lines (# (or (. session.meta.buf :content) []))
           streamed (math.max 0 (- (or session.lazy-stream-next 1) 1))
           total-files (or session.lazy-stream-total 0)
-          stage (if (or session.project-bootstrap-pending (not session.project-bootstrapped))
+          bootstrapped (or session.project-bootstrapped false)
+          stream-done (or session.lazy-stream-done false)
+          stage (if (or session.project-bootstrap-pending (not bootstrapped))
                     "bootstrapping project"
                     (if session.prompt-animating?
                         "opening layout"
-                        (if session.lazy-stream-done
+                        (if stream-done
                             "finalizing results"
                             "streaming project sources")))
           progress (if (> total-files 0)
@@ -655,32 +671,32 @@
                  ""
                  (.. "Progress  " progress)
                  (.. "Hits      " hits)
-                 (.. "Lines     " total-lines)]]
+                 (.. "Lines     " total-lines)]
+          ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
       (set session.info-start-index 1)
       (set session.info-stop-index (# lines))
-      (let [ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
-        (let [bo (vim.bo session.info-buf)]
-          (set bo.modifiable true))
-        (set session.info-highlight-fill-token (+ 1 (or session.info-highlight-fill-token 0)))
-        (set session.info-highlight-fill-pending? false)
-        (set session.info-showing-project-loading? true)
-        (set session.info-render-sig nil)
-        (fit-info-width! session lines)
-        (vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)
-        (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
-        (vim.api.nvim_buf_add_highlight session.info-buf ns "Title" 0 0 -1)
-        (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 2 0 8)
-        (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 3 0 8)
-        (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 4 0 8)
-        (let [bo (vim.bo session.info-buf)]
-          (set bo.modifiable false)))))
+      (let [bo (. vim.bo session.info-buf)]
+        (set bo.modifiable true))
+      (set session.info-highlight-fill-token (+ 1 (or session.info-highlight-fill-token 0)))
+      (set session.info-highlight-fill-pending? false)
+      (set session.info-showing-project-loading? true)
+      (set session.info-render-sig nil)
+      (fit-info-width! session lines)
+      (vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)
+      (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
+      (vim.api.nvim_buf_add_highlight session.info-buf ns "Title" 0 0 -1)
+      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 2 0 8)
+      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 3 0 8)
+      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 4 0 8)
+      (let [bo (. vim.bo session.info-buf)]
+        (set bo.modifiable false))))
 
   (fn update-project-startup!
     [session]
     (ensure_info_window session)
-    (when (and session.info-post-fade-refresh?
-               session.info-render-suspended?
-               (not session.prompt-animating?))
+    (when (and session.info-render-suspended?
+               (not session.prompt-animating?)
+               (not session.startup-initializing))
       (set session.info-post-fade-refresh? nil)
       (set session.info-render-suspended? false))
     (settle-info-window! session)
@@ -691,13 +707,15 @@
 
   (fn update-project!
     [session refresh-lines]
-      (if (project-loading-pending? session)
-          (update-project-startup! session)
-          (do
-            (ensure_info_window session)
-            (when (and session.info-post-fade-refresh?
-                       session.info-render-suspended?
-                       (not session.prompt-animating?))
+      (let [query-lines (or session.meta.query-lines [])
+            has-query (query-mod.query-lines-has-active? query-lines)]
+        (if (project-loading-pending? session has-query)
+            (update-project-startup! session)
+            (do
+              (ensure_info_window session)
+            (when (and session.info-render-suspended?
+                       (not session.prompt-animating?)
+                       (not session.startup-initializing))
               (set session.info-post-fade-refresh? nil)
               (set session.info-render-suspended? false))
             (settle-info-window! session)
@@ -709,6 +727,7 @@
                  (.. "selected=" session.meta.selected_index)
                  (.. "info-win=" session.info-win)
                  (.. "info-buf=" session.info-buf)]))
+
             (when (valid-info-win? session)
               (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
               (pcall vim.api.nvim_set_option_value "winbar" "" {:win session.info-win}))
@@ -749,14 +768,17 @@
                       (set session.info-render-sig sig)
                       (set session.info-showing-project-loading? false)
                       (render-info-lines! session meta wanted-start wanted-stop))))
-                (sync-info-cursor! session meta))))))
+                      (sync-info-cursor! session meta)))))))
 
-  (let [update! (fn [session refresh-lines]
-                  (let [refresh-lines (if (= refresh-lines nil) true refresh-lines)]
-                    (if session.project-mode
-                        (update-project! session refresh-lines)
-                        (update-regular! session))))]
-    {:close-window! close-info-window!
-     :update! update!})))
+  (set update! (fn [session refresh-lines]
+  (let [refresh-lines (if (= refresh-lines nil) true refresh-lines)]
+  (if session.project-mode
+  (do (update-regular! session)
+      (update-project! session refresh-lines))
+  (update-regular! session)))))
 
-M
+  {:close-window! close-info-window!
+  :update! update!}))
+
+  M
+

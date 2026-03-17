@@ -126,21 +126,16 @@ local function compact_relative_age(age)
         or_12_ = nil
       end
     end
-    if not or_12_ then
-      if ((txt == "just now") or (txt == "now")) then
-        or_12_ = "0m"
-      else
-        or_12_ = nil
-      end
-    end
     return (or_12_ or "")
   end
 end
 local function compact_relative_age_from_epoch(epoch)
   if (epoch and (epoch > 0)) then
     local delta = math.max(0, (os.time() - epoch))
-    if (delta < 3600) then
-      return (tostring(math.max(0, math.floor((delta / 60)))) .. "m")
+    if (delta < 60) then
+      return ""
+    elseif (delta < 3600) then
+      return (tostring(math.floor((delta / 60))) .. "m")
     elseif (delta < 86400) then
       return (tostring(math.floor((delta / 3600))) .. "h")
     elseif (delta < (86400 * 7)) then
@@ -159,12 +154,12 @@ end
 local function file_meta_line(meta)
   local mtime_text = (meta["mtime-text"] or "000000")
   local git_age = (meta.age or "")
-  local age_width = 4
+  local age_width = 3
   local age_fragment
   if (git_age ~= "") then
-    age_fragment = ("  " .. string.rep(" ", math.max(0, (age_width - #git_age))) .. git_age)
+    age_fragment = (string.rep(" ", math.max(0, (age_width - #git_age))) .. git_age)
   else
-    age_fragment = string.rep(" ", (2 + age_width))
+    age_fragment = string.rep(" ", age_width)
   end
   local git_author
   do
@@ -175,7 +170,7 @@ local function file_meta_line(meta)
       git_author = a
     end
   end
-  return (mtime_text .. age_fragment .. "\t" .. git_author)
+  return (mtime_text .. " " .. age_fragment .. "\t" .. git_author)
 end
 M["file-meta-data"] = function(session, path)
   local cache = (session["info-file-meta-cache"] or {})
@@ -232,8 +227,8 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
       if not pending[key] then
         pending[key] = true
         session["info-file-status-pending"] = pending
-        local function _28_(obj)
-          local function _29_()
+        local function _27_(obj)
+          local function _28_()
             do
               local pending1 = (session["info-file-status-pending"] or {})
               pending1[key] = nil
@@ -280,9 +275,9 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
               return nil
             end
           end
-          return vim.schedule(_29_)
+          return vim.schedule(_28_)
         end
-        vim.system({"git", "-C", vim.fn.getcwd(), "status", "--porcelain", "--", vim.fn.fnamemodify(path, ":.")}, {}, _28_)
+        vim.system({"git", "-C", vim.fn.getcwd(), "status", "--porcelain", "--", vim.fn.fnamemodify(path, ":.")}, {}, _27_)
       else
       end
     end
@@ -308,13 +303,13 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
         end
       end
       local meta
-      local _41_
+      local _40_
       if (author_time > 0) then
-        _41_ = vim.fn.strftime("%y%m%d", author_time)
+        _40_ = vim.fn.strftime("%y%m%d", author_time)
       else
-        _41_ = "000000"
+        _40_ = "000000"
       end
-      meta = {mtime = mtime, lnum = lnum, ["mtime-text"] = _41_, status = git_file_status(path0), age = compact_relative_age_from_epoch(author_time), author = author}
+      meta = {mtime = mtime, lnum = lnum, ["mtime-text"] = _40_, status = git_file_status(path0), age = compact_relative_age_from_epoch(author_time), author = author}
       local text = file_meta_line(meta)
       cache[key] = vim.tbl_extend("force", meta, {text = text})
       session0["info-line-meta-cache"] = cache
@@ -333,26 +328,26 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
       end
     end
     local meta
-    local _45_
+    local _44_
     if (author_time > 0) then
-      _45_ = vim.fn.strftime("%y%m%d", author_time)
+      _44_ = vim.fn.strftime("%y%m%d", author_time)
     else
-      _45_ = "000000"
+      _44_ = "000000"
     end
-    meta = {mtime = mtime, lnum = lnum, ["mtime-text"] = _45_, status = (cached_file_status(session0, path0) or "clean"), age = compact_relative_age_from_epoch(author_time), author = author}
+    meta = {mtime = mtime, lnum = lnum, ["mtime-text"] = _44_, status = (cached_file_status(session0, path0) or "clean"), age = compact_relative_age_from_epoch(author_time), author = author}
     local text = file_meta_line(meta)
     return vim.tbl_extend("force", meta, {text = text})
   end
-  local function _47_(path0, lnum)
+  local function _46_(path0, lnum)
     return (path0 .. ":" .. tostring(lnum))
   end
-  line_meta_key = _47_
-  local function _48_(cache, path0, lnum, mtime)
+  line_meta_key = _46_
+  local function _47_(cache, path0, lnum, mtime)
     local found = cache[line_meta_key(path0, lnum)]
     return ((type(found) == "table") and (found.mtime == mtime) and (found.lnum == lnum))
   end
-  line_meta_cache_hit_3f = _48_
-  local function _49_(lnums)
+  line_meta_cache_hit_3f = _47_
+  local function _48_(lnums)
     local vals = {}
     for _, lnum in ipairs((lnums or {})) do
       if ((type(lnum) == "number") and (lnum > 0)) then
@@ -362,8 +357,8 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
     end
     return vals
   end
-  normalized_line_numbers = _49_
-  local function _51_(cache, path0, lnums, mtime)
+  normalized_line_numbers = _48_
+  local function _50_(cache, path0, lnums, mtime)
     local missing = {}
     for _, lnum in ipairs(lnums) do
       if not line_meta_cache_hit_3f(cache, path0, lnum, mtime) then
@@ -373,15 +368,15 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
     end
     return missing
   end
-  missing_line_numbers = _51_
-  local function _53_(session0, key)
+  missing_line_numbers = _50_
+  local function _52_(session0, key)
     local pending = (session0["info-line-meta-pending"] or {})
     pending[key] = nil
     session0["info-line-meta-pending"] = pending
     return nil
   end
-  clear_pending_line_meta = _53_
-  local function _54_(stdout)
+  clear_pending_line_meta = _52_
+  local function _53_(stdout)
     local rows = {}
     local state = {author = "", ["author-time"] = 0}
     for _, line in ipairs(vim.split((stdout or ""), "\n", {plain = true})) do
@@ -402,7 +397,7 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
     end
     return rows
   end
-  parse_range_blame_stdout = _54_
+  parse_range_blame_stdout = _53_
   M["ensure-line-meta-range-async!"] = function(session0, path0, lnums, on_ready0)
     local vals = normalized_line_numbers(lnums)
     if (session0 and (1 == vim.fn.filereadable(path0)) and (#vals > 0)) then
@@ -418,8 +413,8 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
         if not pending[key] then
           pending[key] = true
           session0["info-line-meta-pending"] = pending
-          local function _58_(obj)
-            local function _59_()
+          local function _57_(obj)
+            local function _58_()
               clear_pending_line_meta(session0, key)
               if ((obj.code == 0) and (1 == vim.fn.filereadable(path0))) then
                 local rows = parse_range_blame_stdout(obj.stdout)
@@ -439,9 +434,9 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
                 return nil
               end
             end
-            return vim.schedule(_59_)
+            return vim.schedule(_58_)
           end
-          return vim.system({"git", "-C", vim.fn.getcwd(), "blame", "--line-porcelain", "-L", (tostring(start_lnum) .. "," .. tostring(stop_lnum)), "--", rel}, {}, _58_)
+          return vim.system({"git", "-C", vim.fn.getcwd(), "blame", "--line-porcelain", "-L", (tostring(start_lnum) .. "," .. tostring(stop_lnum)), "--", rel}, {}, _57_)
         else
           return nil
         end
@@ -511,12 +506,13 @@ M["aligned-meta-suffix"] = function(suffix, path_width)
   else
     author_end = (author_start + #right)
   end
-  local age_token = (string.match(left, "([%d]+[a-z]+)$") or "")
+  local age_token = (string.match(left, "(%d+[a-z]+)$") or "")
+  local age_num_part = (string.match(age_token, "^(%d+)") or "")
   local age_start
   if (age_token ~= "") then
-    local age_pos = string.find(left, age_token, 1, true)
+    local age_pos = string.find(left, (" " .. age_token), 1, true)
     if age_pos then
-      age_start = (age_pos - 1)
+      age_start = age_pos
     else
       age_start = -1
     end
@@ -525,7 +521,7 @@ M["aligned-meta-suffix"] = function(suffix, path_width)
   end
   local age_end
   if (age_start >= 0) then
-    age_end = (age_start + #age_token)
+    age_end = (age_start + #age_num_part)
   else
     age_end = -1
   end

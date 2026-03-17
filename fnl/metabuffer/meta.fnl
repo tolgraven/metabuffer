@@ -518,7 +518,7 @@
           (when (and m (~= m matcher))
             (m.remove-highlight m)))
         (let [highlight-max-hits
-              (or vim.g.meta_highlight_max_hits 20000)]
+              (or vim.g.meta_highlight_max_hits 40000)]
         (if (or (= (# queries) 0) (>= (# self.buf.indices) highlight-max-hits))
             (matcher.remove-highlight matcher)
             (matcher.highlight matcher effective-query ignorecase self.win.window))))))

@@ -18,8 +18,9 @@ if ! command -v nvim >/dev/null 2>&1; then
 fi
 
 mkdir -p lua plugin
+tmp_dir="${TMPDIR:-"/tmp"}"
 
-compile_script="$(mktemp /tmp/metabuffer-compile.XXXXXX.lua)"
+compile_script="$(mktemp $tmp_dir/metabuffer-compile.lua.XXXXXX)"
 cat >"$compile_script" <<'EOF'
 local verbose = (os.getenv("META_COMPILE_VERBOSE") == "1")
 
@@ -95,7 +96,7 @@ run_nvim_compile() {
       --cmd "set runtimepath^=." \
       -l "$compile_script"
   else
-    compile_log="$(mktemp /tmp/metabuffer-compile.XXXXXX.log)"
+    compile_log="$(mktemp $tmp_dir/metabuffer-compile.log.XXXXXX)"
     if ! META_COMPILE_VERBOSE=0 \
       NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" \
       nvim --headless -u NONE -n \
@@ -122,7 +123,7 @@ run_luals_check() {
       --logpath=.cache/luals/log \
       --metapath=.cache/luals/meta
   else
-    luals_log="$(mktemp /tmp/metabuffer-luals.XXXXXX.log)"
+    luals_log="$(mktemp $tmp_dir/metabuffer-luals.log.XXXXXX)"
     if ! lua-language-server \
       --check="$check_dir" \
       --checklevel=Error \
@@ -139,6 +140,9 @@ run_luals_check() {
   fi
 }
 
+# if command -v deps >/dev/null 2>&1; then
+#   eval "$(deps --path)" # ensured deps are pulled (from deps.fnl)
+# fi
 run_nvim_compile
 
 if command -v lua-language-server >/dev/null 2>&1; then

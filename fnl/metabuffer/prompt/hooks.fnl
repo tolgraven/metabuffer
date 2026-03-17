@@ -662,6 +662,23 @@
                              (when (and session.prompt-buf
                                         (= (. active-by-prompt session.prompt-buf) session))
                                (pcall maybe-restore-hidden-ui! session))))))})
+        (vim.api.nvim_create_autocmd "BufLeave"
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       ;; When leaving the results buffer, check if the window it
+                       ;; was in is now showing something else. If so, close Meta.
+                       (vim.schedule
+                         (fn []
+                           (when (and session.prompt-buf
+                                      (vim.api.nvim_buf_is_valid session.prompt-buf)
+                                      (= (. active-by-prompt session.prompt-buf) session))
+                             (let [win session.meta.win.window]
+                               (if (not (vim.api.nvim_win_is_valid win))
+                                   (router.cancel session.prompt-buf)
+                                   (let [buf (vim.api.nvim_win_get_buf win)]
+                                     (when (not= buf session.meta.buf.buffer)
+                                       (router.cancel session.prompt-buf)))))))))})
         (apply-main-keymaps router session)
         (vim.api.nvim_create_autocmd "WinScrolled"
           {:group aug
