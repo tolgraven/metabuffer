@@ -52,19 +52,25 @@
               :model (or model target)
               :saved-opts {}
               :terminated false}]
+    (fn self.store-opt
+      [name _origin]
+      (when (= (. self.saved-opts name) nil)
+        (set (. self.saved-opts name) (get-local-opt name _origin))))
+
     (fn self.store-opts
       [names _origin]
       (each [_ name (ipairs (or names []))]
-        (set (. self.saved-opts name) (get-local-opt name _origin))))
+        (self.store-opt name _origin)))
 
     (fn self.apply-opts
       [tbl]
       (each [k v (pairs (or tbl {}))]
+        (self.store-opt k self.model)
         (set-local-opt k v self.target)))
 
     (fn self.push-opt
       [name value]
-      (set (. self.saved-opts name) (get-local-opt name self.target))
+      (self.store-opt name self.model)
       (set-local-opt name value self.target))
 
     (fn self.pop-opt

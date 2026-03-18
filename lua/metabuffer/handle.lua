@@ -68,20 +68,29 @@ local function set_local_opt(name, value, target)
 end
 M.new = function(nvim, target, model, opts_from_model, opts)
   local self = {nvim = nvim, target = target, model = (model or target), ["saved-opts"] = {}, terminated = false}
+  self["store-opt"] = function(name, _origin)
+    if (self["saved-opts"][name] == nil) then
+      self["saved-opts"][name] = get_local_opt(name, _origin)
+      return nil
+    else
+      return nil
+    end
+  end
   self["store-opts"] = function(names, _origin)
     for _, name in ipairs((names or {})) do
-      self["saved-opts"][name] = get_local_opt(name, _origin)
+      self["store-opt"](name, _origin)
     end
     return nil
   end
   self["apply-opts"] = function(tbl)
     for k, v in pairs((tbl or {})) do
+      self["store-opt"](k, self.model)
       set_local_opt(k, v, self.target)
     end
     return nil
   end
   self["push-opt"] = function(name, value)
-    self["saved-opts"][name] = get_local_opt(name, self.target)
+    self["store-opt"](name, self.model)
     return set_local_opt(name, value, self.target)
   end
   self["pop-opt"] = function(name)

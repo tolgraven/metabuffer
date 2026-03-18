@@ -13,9 +13,7 @@ M.new = function(nvim, win, opts_to_stash, opts)
   self.window = win
   self["set-statusline"] = function(text)
     if vim.api.nvim_win_is_valid(self.window) then
-      local wo = vim.wo[self.window]
-      wo["statusline"] = text
-      return nil
+      return self["push-opt"]("statusline", text)
     else
       return nil
     end
