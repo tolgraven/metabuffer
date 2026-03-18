@@ -79,16 +79,21 @@ local function refresh_windows_21(deps, session, force_refresh)
     return nil
   end
 end
-local function sync_selection_state_21(deps, session, row)
+local function set_selected_index_21(session, row)
   local meta = session.meta
   local max = #meta.buf.indices
   if (max <= 0) then
     meta.selected_index = 0
+    return nil
   else
     local target_row = math.max(1, math.min(row, max))
     local next_index = (target_row - 1)
     meta.selected_index = next_index
+    return nil
   end
+end
+local function sync_selection_state_21(deps, session, row)
+  set_selected_index_21(session, row)
   return refresh_windows_21(deps, session, false)
 end
 local function sync_selection_to_row_21(deps, session, row)
@@ -194,7 +199,8 @@ M["scroll-main!"] = function(deps, prompt_buf, action)
       local target_row = _let_29_.row
       local animated_3f = _let_29_.animated
       if animated_3f then
-        sync_selection_state_21(deps, session, target_row)
+        set_selected_index_21(session, target_row)
+        pcall(session.meta.refresh_statusline)
         local function _30_()
           if (session and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
             return M["maybe-sync-from-main!"](deps, session, true)

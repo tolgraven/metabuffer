@@ -62,16 +62,20 @@
               (when (and context-window context-window.update!)
                 (pcall context-window.update! session)))))))))
 
-(fn sync-selection-state!
-  [deps session row]
+(fn set-selected-index!
+  [session row]
   (let [meta session.meta
         max (# meta.buf.indices)]
     (if (<= max 0)
         (set meta.selected_index 0)
         (let [target-row (math.max 1 (math.min row max))
               next-index (- target-row 1)]
-          (set meta.selected_index next-index)))
-    (refresh-windows! deps session false)))
+          (set meta.selected_index next-index)))))
+
+(fn sync-selection-state!
+  [deps session row]
+  (set-selected-index! session row)
+  (refresh-windows! deps session false))
 
 (fn sync-selection-to-row!
   [deps session row]
@@ -160,7 +164,8 @@
                          ;; before an in-flight view animation has moved there.
                          (if animated?
                              (do
-                               (sync-selection-state! deps session target-row)
+                               (set-selected-index! session target-row)
+                               (pcall session.meta.refresh_statusline)
                                (vim.defer_fn
                                  (fn []
                                    (when (and session

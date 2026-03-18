@@ -13,6 +13,9 @@
   [x]
   (tostring x))
 
+(local info-content-ns (vim.api.nvim_create_namespace "MetaInfoWindow"))
+(local info-selection-ns (vim.api.nvim_create_namespace "MetaInfoSelection"))
+
 (fn join-str
   [sep xs]
   (let [out []]
@@ -282,6 +285,21 @@
     (each [_ h (ipairs (or highlights []))]
       (vim.api.nvim_buf_add_highlight session.info-buf ns (. h 2) (. h 1) (. h 3) (. h 4))))
 
+  (fn sync-info-selection-highlight!
+    [session meta]
+    (when (and (valid-info-win? session)
+               session.info-buf
+               (vim.api.nvim_buf_is_valid session.info-buf))
+        (let [info-lines (vim.api.nvim_buf_line_count session.info-buf)
+            start-index (or session.info-start-index 1)
+            selected1 (+ meta.selected_index 1)
+            row0 (if (> info-lines 0)
+                     (math.max 0 (math.min (- selected1 start-index) (- info-lines 1)))
+                     nil)]
+        (vim.api.nvim_buf_clear_namespace session.info-buf info-selection-ns 0 -1)
+        (when (and row0 (>= row0 0) (< row0 info-lines))
+          (vim.api.nvim_buf_add_highlight session.info-buf info-selection-ns "Visual" row0 0 -1)))))
+
   (fn build-info-row
     [session ref src-idx target-width lnum-digit-width read_file_lines_cached lightweight?]
     (let [line-hl "LineNr"
@@ -518,7 +536,7 @@
                     (vim.tbl_map str raw-lines)
                     [(str raw-lines)])
           highlights (or (. built :highlights) [])
-          ns (vim.api.nvim_create_namespace "MetaInfoWindow")
+          ns info-content-ns
           deferred-rows (or (. built :deferred-rows) [])
           lnum-digit-width (or (. built :lnum-digit-width) 1)]
       (debug_log (join-str " " ["info render"
@@ -538,26 +556,16 @@
       (let [bo (. vim.bo session.info-buf)]
         (set (. bo :modifiable) false))))
 
-    (fn sync-info-cursor!
+  (fn sync-info-selection!
       [session meta]
-      (when (valid-info-win? session)
-        (let [info-lines (vim.api.nvim_buf_line_count session.info-buf)
-              start-index (or session.info-start-index 1)
-              selected1 (+ meta.selected_index 1)
-              row (if (> info-lines 0)
-                      (math.max 1 (math.min (+ (- selected1 start-index) 1) info-lines))
-                      1)]
-          (when (> info-lines 0)
-            (let [[ok-cur err-cur] [(pcall vim.api.nvim_win_set_cursor session.info-win [row 0])]]
-              (when-not ok-cur
-                (debug_log (join-str ": " ["info set_cursor failed" err-cur]))))))))
+      (sync-info-selection-highlight! session meta))
 
   (fn render-current-range!
     [session meta]
     (let [total (# (or meta.buf.indices []))
           [start-index stop-index] (info-visible-range session meta total info_max_lines)]
       (render-info-lines! session meta start-index stop-index)
-      (sync-info-cursor! session meta)
+      (sync-info-selection! session meta)
       [start-index stop-index]))
 
   (fn schedule-regular-line-meta-refresh!
@@ -671,7 +679,7 @@
                  (.. "Progress  " progress)
                  (.. "Hits      " hits)
                  (.. "Lines     " total-lines)]
-          ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
+          ns info-content-ns]
       (set session.info-start-index 1)
       (set session.info-stop-index (# lines))
       (let [bo (. vim.bo session.info-buf)]
@@ -767,7 +775,7 @@
                       (set session.info-render-sig sig)
                       (set session.info-showing-project-loading? false)
                       (render-info-lines! session meta wanted-start wanted-stop))))
-                      (sync-info-cursor! session meta)))))))
+                      (sync-info-selection! session meta)))))))
 
   (set update! (fn [session refresh-lines]
   (let [refresh-lines (if (= refresh-lines nil) true refresh-lines)]

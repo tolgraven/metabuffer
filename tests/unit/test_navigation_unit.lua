@@ -90,10 +90,26 @@ T['animated scroll-main does not jump the real cursor before the animation runs'
 
   local status_calls = 0
   local animate_calls = 0
+  local preview_calls = 0
+  local info_calls = 0
+  local context_calls = 0
   local deps = {
     router = { ['active-by-prompt'] = {} },
-    refresh = {},
-    windows = {},
+    refresh = {
+      ['preview!'] = function()
+        preview_calls = preview_calls + 1
+      end,
+      ['info!'] = function()
+        info_calls = info_calls + 1
+      end,
+    },
+    windows = {
+      context = {
+        ['update!'] = function()
+          context_calls = context_calls + 1
+        end,
+      },
+    },
     mods = {
       animation = {
         ['enabled?'] = function()
@@ -143,6 +159,9 @@ T['animated scroll-main does not jump the real cursor before the animation runs'
   eq(view.topline, 10)
   eq(cursor[1], 10)
   eq(session.meta['selected_index'], 14)
+  eq(preview_calls, 0)
+  eq(info_calls, 0)
+  eq(context_calls, 0)
 
   vim.api.nvim_set_current_win(meta_win)
   vim.cmd('only')
