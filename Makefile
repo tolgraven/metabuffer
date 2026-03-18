@@ -6,7 +6,8 @@ XDG_CACHE_HOME := /tmp
 NVIM_APPNAME := metabuffer-make
 NVIM_ENV = XDG_STATE_HOME="$(XDG_STATE_HOME)" XDG_DATA_HOME="$(XDG_DATA_HOME)" XDG_CACHE_HOME="$(XDG_CACHE_HOME)" NVIM_APPNAME="$(NVIM_APPNAME)"
 PRIMARY_GOAL := $(firstword $(MAKECMDGOALS))
-FILE_ARGS ?= $(filter-out $(PRIMARY_GOAL),$(MAKECMDGOALS))
+RAW_ARGS ?= $(filter-out $(PRIMARY_GOAL),$(MAKECMDGOALS))
+FILE_ARGS ?= $(filter-out --,$(RAW_ARGS))
 FNL_CHECK_ARGS = $(if $(strip $(filter %.fnl,$(FILE_ARGS))),$(filter %.fnl,$(FILE_ARGS)),$$(find fnl -name "*.fnl"))
 LUA_CHECK_ARGS = $(if $(strip $(filter %.lua,$(FILE_ARGS))),$(filter %.lua,$(FILE_ARGS)),.)
 
