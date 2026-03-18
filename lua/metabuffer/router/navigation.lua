@@ -194,7 +194,15 @@ M["scroll-main!"] = function(deps, prompt_buf, action)
       local target_row = _let_29_.row
       local animated_3f = _let_29_.animated
       if animated_3f then
-        return sync_selection_state_21(deps, session, target_row)
+        sync_selection_state_21(deps, session, target_row)
+        local function _30_()
+          if (session and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
+            return M["maybe-sync-from-main!"](deps, session, true)
+          else
+            return nil
+          end
+        end
+        return vim.defer_fn(_30_, (24 + animation_mod["duration-ms"](session, "scroll", 140)))
       else
         return sync_selection_to_row_21(deps, session, target_row)
       end
@@ -220,26 +228,26 @@ M["maybe-sync-from-main!"] = function(deps, session, force_refresh)
   local update_info_window = refresh["info!"]
   local context_window = windows.context
   local session_view = mods["session-view"]
-  local function _33_(s)
+  local function _35_(s)
     return schedule_source_syntax_refresh_21(deps, s)
   end
-  local function _34_(s)
+  local function _36_(s)
     if (context_window and context_window["update!"]) then
       return context_window["update!"](s)
     else
       return nil
     end
   end
-  return session_view["maybe-sync-from-main!"](session, force_refresh, {["active-by-prompt"] = active_by_prompt, ["schedule-source-syntax-refresh!"] = _33_, ["update-preview-window!"] = update_preview_window, ["update-info-window"] = update_info_window, ["update-context-window!"] = _34_})
+  return session_view["maybe-sync-from-main!"](session, force_refresh, {["active-by-prompt"] = active_by_prompt, ["schedule-source-syntax-refresh!"] = _35_, ["update-preview-window!"] = update_preview_window, ["update-info-window"] = update_info_window, ["update-context-window!"] = _36_})
 end
 M["schedule-scroll-sync!"] = function(deps, session)
   local timing = deps.timing
   local mods = deps.mods
   local scroll_sync_debounce_ms = timing["scroll-sync-debounce-ms"]
   local session_view = mods["session-view"]
-  local function _36_(s, force_refresh)
+  local function _38_(s, force_refresh)
     return M["maybe-sync-from-main!"](deps, s, force_refresh)
   end
-  return session_view["schedule-scroll-sync!"](session, {["scroll-sync-debounce-ms"] = scroll_sync_debounce_ms, ["maybe-sync-from-main!"] = _36_})
+  return session_view["schedule-scroll-sync!"](session, {["scroll-sync-debounce-ms"] = scroll_sync_debounce_ms, ["maybe-sync-from-main!"] = _38_})
 end
 return M

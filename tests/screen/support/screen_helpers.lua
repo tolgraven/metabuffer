@@ -581,6 +581,43 @@ function M.session_main_view()
   return vim.json.decode(encoded)
 end
 
+function M.session_main_cursor()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta and s.meta.win) then
+        return nil
+      end
+      local win = s.meta.win.window
+      if not (win and vim.api.nvim_win_is_valid(win)) then
+        return nil
+      end
+      local cur = vim.api.nvim_win_get_cursor(win)
+      return { cur[1] or 0, cur[2] or 0 }
+    end)()
+  ]])
+end
+
+function M.session_main_statusline()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta and s.meta.win) then
+        return ''
+      end
+      local win = s.meta.win.window
+      if not (win and vim.api.nvim_win_is_valid(win)) then
+        return ''
+      end
+      local ok, val = pcall(vim.api.nvim_get_option_value, 'statusline', { win = win })
+      if not ok then return '' end
+      return val or ''
+    end)()
+  ]])
+end
+
 function M.set_session_main_view(topline, lnum, height)
   M.child.lua(string.format([[
     (function()

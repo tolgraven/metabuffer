@@ -115,6 +115,9 @@ Key helper coverage:
 ### `tests/screen/project/test_screen_project_info_sync.lua`
 - Hit-buffer and info-window sync/alignment while typing/deleting.
 
+### `tests/screen/project/test_screen_project_scroll_sync.lua`
+- Animated project scrolling keeps results cursor, selection, and info window aligned.
+
 ### `tests/screen/project/test_screen_project_deps_toggle.lua`
 - Deterministic deps toggle transitions (`#deps`, `#-deps`).
 
@@ -122,6 +125,9 @@ Key helper coverage:
 - `:Meta <query>` immediate application.
 - Prompt height persistence across invocations.
 - Accept + `MetaResume` restores query/modes.
+
+### `tests/screen/persistence/test_screen_persistence_statusline_prompt_only.lua`
+- Prompt statusline stays visible while the main results window stays blank.
 
 ### `tests/screen/persistence/test_screen_persistence_history_commands_*.lua`
 - `:Meta !!` and `:Meta !$` history expansion.

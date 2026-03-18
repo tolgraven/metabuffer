@@ -662,6 +662,14 @@
                              (when (and session.prompt-buf
                                         (= (. active-by-prompt session.prompt-buf) session))
                                (pcall maybe-restore-hidden-ui! session))))))})
+        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       (schedule-when-valid session
+                         (fn []
+                           (when (and session.meta session.meta.win session.meta.win.set-statusline)
+                             (pcall session.meta.win.set-statusline " ")))))} )
         (vim.api.nvim_create_autocmd "BufLeave"
           {:group aug
            :buffer session.meta.buf.buffer

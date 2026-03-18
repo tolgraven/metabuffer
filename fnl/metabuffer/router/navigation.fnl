@@ -159,7 +159,15 @@
                          ;; but don't force the real cursor to the destination
                          ;; before an in-flight view animation has moved there.
                          (if animated?
-                             (sync-selection-state! deps session target-row)
+                             (do
+                               (sync-selection-state! deps session target-row)
+                               (vim.defer_fn
+                                 (fn []
+                                   (when (and session
+                                              session.prompt-buf
+                                              (= (. active-by-prompt session.prompt-buf) session))
+                                     (M.maybe-sync-from-main! deps session true)))
+                                 (+ 24 (animation-mod.duration-ms session :scroll 140))))
                              (sync-selection-to-row! deps session target-row))))
 	            mode (. (vim.api.nvim_get_mode) :mode)]
 	        (if (and (= (type mode) "string") (vim.startswith mode "i"))
