@@ -4,6 +4,13 @@
 (local lineno-mod (require :metabuffer.window.lineno))
 (local statusline-mod (require :metabuffer.window.statusline))
 (local base-window-mod (require :metabuffer.window.base))
+(local disable-airline-statusline! (. base-window-mod :disable-airline-statusline!))
+(local metabuffer-winhighlight (. base-window-mod :metabuffer-winhighlight))
+
+(fn preview-winhighlight
+  []
+  (.. (metabuffer-winhighlight)
+      ",StatusLine:MetaPreviewStatusline,StatusLineNC:MetaPreviewStatusline"))
 
 (fn trim-or-pad-lines
   [lines target]
@@ -24,7 +31,10 @@
 (fn preview-statusline-text-for-path
   [path]
   (statusline-mod.render-path path {:default-text "Preview"
-                                    :file-group "MetaStatuslinePathFile"}))
+                                    :base-group "MetaPreviewStatusline"
+                                    :seg-prefix "MetaPreviewStatuslinePathSeg"
+                                    :sep-group "MetaPreviewStatuslinePathSep"
+                                    :file-group "MetaPreviewStatuslinePathFile"}))
 
 (fn apply-ft-buffer-vars!
   [buf ft]
@@ -127,7 +137,7 @@
   (local apply-preview-window-opts!
     (fn [session win]
       (when (and win (vim.api.nvim_win_is_valid win))
-        (base-window-mod.disable-airline-statusline! win)
+        (disable-airline-statusline! win)
         (let [win-opts {:number false
                         :relativenumber false
                         :wrap false
@@ -140,7 +150,7 @@
                         :cursorline true
                         ;; Match regular window palette in preview.
                         :winblend 0
-                        :winhighlight "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal,StatusLine:Normal,StatusLineNC:Normal"
+                        :winhighlight (preview-winhighlight)
                         :statusline (if session.preview-float?
                                         ""
                                         (or session.preview-statusline-text ""))}]

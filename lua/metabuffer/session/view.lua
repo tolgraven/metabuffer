@@ -131,7 +131,7 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
         pcall(update_preview_window_21, session)
       else
       end
-      pcall(update_info_window, session, true)
+      pcall(update_info_window, session, false)
       if update_context_window_21 then
         return pcall(update_context_window_21, session)
       else

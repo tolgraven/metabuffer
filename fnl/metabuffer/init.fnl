@@ -21,54 +21,52 @@
             b (% n 0x100)]
         (+ (* 0.2126 r) (* 0.7152 g) (* 0.0722 b)))))
 
-(fn effective-fg
+(fn hl-rendered-fg
   [hl]
-  (or (. hl :fg)
-      (and (. hl :reverse) (. hl :bg))))
+  (if (and hl (. hl :reverse))
+      (or (. hl :bg) (. hl :fg))
+      (. hl :fg)))
 
-(fn effective-ctermfg
+(fn hl-rendered-bg
   [hl]
-  (or (. hl :ctermfg)
-      (and (or (. hl :reverse)
-               (and (. hl :cterm) (. (. hl :cterm) :reverse)))
-           (. hl :ctermbg))))
+  (if (and hl (. hl :reverse))
+      (or (. hl :fg) (. hl :bg))
+      (. hl :bg)))
+
+(var meta-statusline-bg nil)
+(var meta-preview-statusline-bg nil)
+(var refresh-augroup nil)
+(var last-setup-opts nil)
 
 (fn statusline-color-from
   [group]
   (let [opts {:reverse false :cterm {:reverse false}}
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
+        [ok-sl sl] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]
         [ok-normal normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
     (when (and ok (= (type hl) "table"))
-      (let [fg (effective-fg hl)
-            cfg (effective-ctermfg hl)]
+      (let [fg (. hl :fg)
+            cfg (. hl :ctermfg)]
       (if fg
-          (set (. opts :bg) fg)
-          (when (and ok-normal (= (type normal) "table") (. normal :bg))
-            (set (. opts :bg) (. normal :bg))))
+          (set (. opts :fg) fg)
+          (when (and ok-sl (= (type sl) "table"))
+            (set (. opts :fg) (hl-rendered-fg sl))))
       (if cfg
-          (set (. opts :ctermbg) cfg)
-          (when (and ok-normal (= (type normal) "table") (. normal :ctermbg))
-            (set (. opts :ctermbg) (. normal :ctermbg))))
+          (set (. opts :ctermfg) cfg)
+          (when (and ok-sl (= (type sl) "table"))
+            (set (. opts :ctermfg) (. sl :ctermfg))))
       (when (. hl :bold)
         (set (. opts :bold) (. hl :bold)))))
-    (let [bl (rgb-luma (. opts :bg))]
-      (if (and bl (> bl 128))
-          (set (. opts :fg) 0x000000)
-          (set (. opts :fg) 0xFFFFFF)))
-    (if (and (. opts :ctermbg) (> (. opts :ctermbg) 7))
-        (set (. opts :ctermfg) 0)
-        (set (. opts :ctermfg) 15))
-    opts))
-
-(fn undercurl-from
-  [group]
-  (let [opts {:default true :undercurl true}
-        [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
-    (when (and ok (= (type hl) "table"))
-      (when (. hl :sp)
-        (set (. opts :sp) (. hl :sp)))
-      (when (and (not (. opts :sp)) (. hl :fg))
-        (set (. opts :sp) (. hl :fg))))
+    (set (. opts :bg) (meta-statusline-bg))
+    (set (. opts :ctermbg) (or (and ok-sl (= (type sl) "table") (. sl :ctermbg))
+                               (and ok-normal (= (type normal) "table") (. normal :ctermbg))
+                               0))
+    (when-not (. opts :fg)
+      (set (. opts :fg) (or (and ok-sl (= (type sl) "table") (hl-rendered-fg sl))
+                            0xFFFFFF)))
+    (when-not (. opts :ctermfg)
+      (set (. opts :ctermfg) (or (and ok-sl (= (type sl) "table") (. sl :ctermfg))
+                                 15)))
     opts))
 
 (fn hit-hl
@@ -104,10 +102,10 @@
   (let [opts {:default true}
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
     (when (and ok (= (type hl) "table"))
-      (when (. hl :fg)
-        (set (. opts :fg) (. hl :fg)))
-      (when (. hl :bg)
-        (set (. opts :bg) (. hl :bg)))
+      (when (hl-rendered-fg hl)
+        (set (. opts :fg) (hl-rendered-fg hl)))
+      (when (hl-rendered-bg hl)
+        (set (. opts :bg) (hl-rendered-bg hl)))
       (when (. hl :ctermfg)
         (set (. opts :ctermfg) (. hl :ctermfg)))
       (when (. hl :ctermbg)
@@ -119,29 +117,10 @@
   (let [opts {:default true}
         [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
     (when (and ok (= (type hl) "table"))
-      (when (. hl :fg)
-        (set (. opts :fg) (. hl :fg)))
+      (when (hl-rendered-fg hl)
+        (set (. opts :fg) (hl-rendered-fg hl)))
       (when (. hl :ctermfg)
         (set (. opts :ctermfg) (. hl :ctermfg))))
-    opts))
-
-(fn statusline-path-hl-from
-  [group]
-  (let [opts {:default true}
-        [ok-hl hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
-        [ok-sl sl] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]]
-    (set (. opts :fg) (or (and ok-hl (= (type hl) "table") (effective-fg hl))
-                          (and ok-sl (= (type sl) "table") (effective-fg sl))
-                          0xFFFFFF))
-    (set (. opts :bg) (or (and ok-sl (= (type sl) "table") (. sl :bg))
-                          (and ok-hl (= (type hl) "table") (. hl :bg))
-                          0x000000))
-    (set (. opts :ctermfg) (or (and ok-hl (= (type hl) "table") (effective-ctermfg hl))
-                               (and ok-sl (= (type sl) "table") (effective-ctermfg sl))
-                               15))
-    (set (. opts :ctermbg) (or (and ok-sl (= (type sl) "table") (. sl :ctermbg))
-                               (and ok-hl (= (type hl) "table") (. hl :ctermbg))
-                               0))
     opts))
 
 (fn statusline-fg-hl-from
@@ -150,16 +129,15 @@
         [ok-hl hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
         [ok-sl sl] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]
         [ok-normal normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
-    (set (. opts :fg) (or (and ok-hl (= (type hl) "table") (effective-fg hl))
-                          (and ok-sl (= (type sl) "table") (effective-fg sl))
+    (set (. opts :fg) (or (and ok-hl (= (type hl) "table") (hl-rendered-fg hl))
+                          (and ok-sl (= (type sl) "table") (hl-rendered-fg sl))
                           0xFFFFFF))
-    (when (and ok-normal (= (type normal) "table"))
-      (when (. normal :bg)
-        (set (. opts :bg) (. normal :bg)))
-      (when (. normal :ctermbg)
-        (set (. opts :ctermbg) (. normal :ctermbg))))
-    (set (. opts :ctermfg) (or (and ok-hl (= (type hl) "table") (effective-ctermfg hl))
-                               (and ok-sl (= (type sl) "table") (effective-ctermfg sl))
+    (set (. opts :bg) (meta-statusline-bg))
+    (set (. opts :ctermbg) (or (and ok-sl (= (type sl) "table") (. sl :ctermbg))
+                               (and ok-normal (= (type normal) "table") (. normal :ctermbg))
+                               0))
+    (set (. opts :ctermfg) (or (and ok-hl (= (type hl) "table") (. hl :ctermfg))
+                               (and ok-sl (= (type sl) "table") (. sl :ctermfg))
                                15))
     opts))
 
@@ -168,16 +146,50 @@
   (let [opts {:reverse false :cterm {:reverse false}}
         [ok-sl sl] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]
         [ok-normal normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
-    (set (. opts :fg) (or (and ok-sl (= (type sl) "table") (effective-fg sl))
-                          (and ok-normal (= (type normal) "table") (effective-fg normal))
+    (set (. opts :fg) (or (and ok-sl (= (type sl) "table") (hl-rendered-fg sl))
+                          (and ok-normal (= (type normal) "table") (hl-rendered-fg normal))
                           0xFFFFFF))
-    (when (and ok-normal (= (type normal) "table"))
-      (when (. normal :bg)
-        (set (. opts :bg) (. normal :bg)))
-      (when (. normal :ctermbg)
-        (set (. opts :ctermbg) (. normal :ctermbg))))
-    (set (. opts :ctermfg) (or (and ok-sl (= (type sl) "table") (effective-ctermfg sl))
-                               (and ok-normal (= (type normal) "table") (effective-ctermfg normal))
+    (set (. opts :bg) (meta-statusline-bg))
+    (set (. opts :ctermbg) (or (and ok-sl (= (type sl) "table") (. sl :ctermbg))
+                               (and ok-normal (= (type normal) "table") (. normal :ctermbg))
+                               0))
+    (set (. opts :ctermfg) (or (and ok-sl (= (type sl) "table") (. sl :ctermfg))
+                               (and ok-normal (= (type normal) "table") (. normal :ctermfg))
+                               15))
+    opts))
+
+(fn statusline-fg-hl-with-bg
+  [group bg-fn]
+  (let [opts {:default true :reverse false :cterm {:reverse false}}
+        [ok-hl hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
+        [ok-sl sl] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]
+        [ok-normal normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
+    (set (. opts :fg) (or (and ok-hl (= (type hl) "table") (hl-rendered-fg hl))
+                          (and ok-sl (= (type sl) "table") (hl-rendered-fg sl))
+                          0xFFFFFF))
+    (set (. opts :bg) (bg-fn))
+    (set (. opts :ctermbg) (or (and ok-sl (= (type sl) "table") (. sl :ctermbg))
+                               (and ok-normal (= (type normal) "table") (. normal :ctermbg))
+                               0))
+    (set (. opts :ctermfg) (or (and ok-hl (= (type hl) "table") (. hl :ctermfg))
+                               (and ok-sl (= (type sl) "table") (. sl :ctermfg))
+                               15))
+    opts))
+
+(fn statusline-sep-hl-with-bg
+  [bg-fn]
+  (let [opts {:default true :reverse false :cterm {:reverse false}}
+        [ok-sl sl] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]
+        [ok-normal normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
+    (set (. opts :fg) (or (and ok-sl (= (type sl) "table") (hl-rendered-fg sl))
+                          (and ok-normal (= (type normal) "table") (hl-rendered-fg normal))
+                          0xFFFFFF))
+    (set (. opts :bg) (bg-fn))
+    (set (. opts :ctermbg) (or (and ok-sl (= (type sl) "table") (. sl :ctermbg))
+                               (and ok-normal (= (type normal) "table") (. normal :ctermbg))
+                               0))
+    (set (. opts :ctermfg) (or (and ok-sl (= (type sl) "table") (. sl :ctermfg))
+                               (and ok-normal (= (type normal) "table") (. normal :ctermfg))
                                15))
     opts))
 
@@ -223,7 +235,15 @@
   [group]
   (let [[ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
     (when (and ok (= (type hl) "table"))
-      (. hl :bg))))
+      (hl-rendered-bg hl))))
+
+(fn darker-bg
+  [a b]
+  (let [la (rgb-luma a)
+        lb (rgb-luma b)]
+    (if (and la lb)
+        (if (<= la lb) a b)
+        (or a b))))
 
 (fn alt-bg-from
   [group]
@@ -237,6 +257,83 @@
         bg (darken-rgb base-bg 0.15)]
     (when bg
       (set (. opts :bg) bg))
+    opts))
+
+(set meta-statusline-bg
+  (fn []
+    (or (brighten-rgb (darker-bg (hl-bg "StatusLine")
+                                 (or (hl-bg "Normal")
+                                     (hl-bg "NormalNC")))
+                      0.08)
+        (hl-bg "StatusLine")
+        (hl-bg "StatusLineNC")
+        (hl-bg "Normal")
+        0x2a2a2a)))
+
+(fn meta-statusline-middle-hl
+  []
+  (let [opts (plain-hl-from "StatusLine")]
+    (set (. opts :default) true)
+    (set (. opts :bg) (meta-statusline-bg))
+    opts))
+
+(fn meta-preview-statusline-hl
+  []
+  (let [opts (plain-hl-from "StatusLine")
+        base-bg (meta-preview-statusline-bg)]
+    (set (. opts :default) true)
+    (set (. opts :bg) base-bg)
+    opts))
+
+(set meta-preview-statusline-bg
+  (fn []
+    (meta-statusline-bg)))
+
+(fn cterm-bg
+  [group]
+  (let [[ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
+    (when (and ok (= (type hl) "table"))
+      (. hl :ctermbg))))
+
+(fn meta-window-cursorline-hl
+  []
+  (let [opts (plain-hl-from "CursorLine")
+        bg (or (. opts :bg)
+               (hl-bg "CursorLine")
+               (hl-bg "Normal")
+               0x1e1e1e)
+        [ok-cl cl] [(pcall vim.api.nvim_get_hl 0 {:name "CursorLine" :link false})]
+        ctermbg (or (and ok-cl (= (type cl) "table") (. cl :ctermbg))
+                    (cterm-bg "Normal")
+                    0)]
+    (set (. opts :default) true)
+    (set (. opts :bg) bg)
+    (set (. opts :ctermbg) ctermbg)
+    (set (. opts :underline) false)
+    (set (. opts :undercurl) false)
+    (set (. opts :underdotted) false)
+    (set (. opts :underdashed) false)
+    (set (. opts :underdouble) false)
+    (set (. opts :bold) false)
+    (set (. opts :italic) false)
+    (set (. opts :nocombine) true)
+    (set (. opts :cterm) {})
+    opts))
+
+(fn meta-window-separator-hl
+  []
+  (let [bg (or (hl-bg "Normal")
+               (hl-bg "NormalNC")
+               0x1e1e1e)
+        fg (or (darken-rgb bg 0.18) bg)
+        opts {:default true
+              :fg fg
+              :bg bg}
+        ctermbg (or (cterm-bg "Normal")
+                    (cterm-bg "NormalNC")
+                    0)]
+    (set (. opts :ctermbg) ctermbg)
+    (set (. opts :ctermfg) ctermbg)
     opts))
 
 (fn prompt-text-hl
@@ -292,14 +389,15 @@
   (let [hi vim.api.nvim_set_hl]
     (hi 0 "MetaStatuslineModeInsert" (statusline-color-from "ErrorMsg"))
     (hi 0 "MetaStatuslineModeReplace" (statusline-color-from "Todo"))
-    (let [normal-mode-hl (plain-hl-from "StatusLine")]
+    (let [normal-mode-hl (meta-statusline-middle-hl)]
       (set (. normal-mode-hl :bold) true)
       (set (. normal-mode-hl :cterm) {:bold true})
       (hi 0 "MetaStatuslineModeNormal" normal-mode-hl))
     (hi 0 "MetaStatuslineQuery" (statusline-color-from "Normal"))
-    (hi 0 "MetaStatuslineFile" (statusline-color-from "Comment"))
+    (hi 0 "MetaStatuslineFile" (statusline-fg-hl-from "Comment"))
     ;; Fill area around %= should blend with the host statusline theme.
-    (hi 0 "MetaStatuslineMiddle" (plain-hl-from "StatusLine"))
+    (hi 0 "MetaStatuslineMiddle" (meta-statusline-middle-hl))
+    (hi 0 "MetaPreviewStatusline" (meta-preview-statusline-hl))
     (hi 0 "MetaStatuslineMatcherAll" (statusline-color-from "Statement"))
     (hi 0 "MetaStatuslineMatcherFuzzy" (statusline-color-from "Number"))
     (hi 0 "MetaStatuslineMatcherRegex" (statusline-color-from "Special"))
@@ -336,6 +434,8 @@
     (hi 0 "MetaSourceLineNr" {:default true :link "LineNr"})
     (hi 0 "MetaSourceDir" {:default true :link "Directory"})
     (hi 0 "MetaSourceBoundary" (thin-underline-from "Error"))
+    (hi 0 "MetaWindowCursorLine" (meta-window-cursorline-hl))
+    (hi 0 "MetaWindowSeparator" (meta-window-separator-hl))
     ;; Intentionally not :default so theme/background recalculations always apply.
     (hi 0 "MetaSourceAltBg" (alt-bg-from "Normal"))
     (each [i src (ipairs PATH_SEG_GROUPS)]
@@ -345,6 +445,11 @@
       (hi 0 (.. "MetaStatuslinePathSeg" (tostring i)) (statusline-fg-hl-from src)))
     (hi 0 "MetaStatuslinePathSep" (statusline-sep-hl))
     (hi 0 "MetaStatuslinePathFile" (statusline-fg-hl-from "Comment"))
+    (each [i src (ipairs PATH_SEG_GROUPS)]
+      (hi 0 (.. "MetaPreviewStatuslinePathSeg" (tostring i))
+          (statusline-fg-hl-with-bg src meta-preview-statusline-bg)))
+    (hi 0 "MetaPreviewStatuslinePathSep" (statusline-sep-hl-with-bg meta-preview-statusline-bg))
+    (hi 0 "MetaPreviewStatuslinePathFile" (statusline-fg-hl-with-bg "Comment" meta-preview-statusline-bg))
     (hi 0 "MetaFileSignDirty" {:default true :link "WarningMsg"})
     (hi 0 "MetaFileSignUntracked" {:default true :link "DiagnosticError"})
     (hi 0 "MetaFileSignClean" {:default true :link "LineNr"})
@@ -352,7 +457,7 @@
     (hi 0 "MetaBufSignModified" {:default true :link "Statement"})
     (hi 0 "MetaBufSignRemoved" {:default true :link "DiagnosticError"})
     (hi 0 "MetaFileAge" {:default true :link "Comment"})
-    (hi 0 "MetaFileAgeMinute" {:default true :link "DiagnosticOk"})
+    (hi 0 "MetaFileAgeMinute" {:default true :link "DiagnosticHint"})
     (hi 0 "MetaFileAgeHour" {:default true :link "DiagnosticHint"})
     (hi 0 "MetaFileAgeDay" {:default true :link "DiagnosticInfo"})
     (hi 0 "MetaFileAgeWeek" {:default true :link "DiagnosticWarn"})
@@ -364,6 +469,22 @@
     (if (= 1 (vim.fn.hlexists "NetrwPlain"))
         (hi 0 "MetaSourceFile" {:default true :link "NetrwPlain"})
         (hi 0 "MetaSourceFile" {:default true :link "Normal"}))))
+
+(fn ensure-highlight-refresh-autocmd!
+  []
+  (when refresh-augroup
+    (pcall vim.api.nvim_del_augroup_by_id refresh-augroup))
+  (set refresh-augroup
+       (vim.api.nvim_create_augroup "MetabufferHighlights" {:clear true}))
+  (vim.api.nvim_create_autocmd
+    ["ColorScheme" "OptionSet"]
+    {:group refresh-augroup
+     :pattern ["*" "background"]
+     :callback (fn [event]
+                 (when (or (= event.event "ColorScheme")
+                           (= event.match "background"))
+                   (ensure-defaults-and-highlights! last-setup-opts)
+                   (pcall vim.cmd "redrawstatus")))}))
 
 (fn ensure-command
   [name callback opts]
@@ -424,8 +545,10 @@
 (fn M.setup
   [opts]
   "Public API: M.setup."
+  (set last-setup-opts opts)
   (router.configure opts)
   (ensure-defaults-and-highlights! opts)
+  (ensure-highlight-refresh-autocmd! )
   (ensure-command "Meta"
     (fn [args] (router.entry_start args.args args.bang))
     {:nargs "?" :bang true})
@@ -459,6 +582,6 @@
 
   true)
 
-(set M.defaults config.defaults)
+(set M.defaults (. config :defaults))
 
 M

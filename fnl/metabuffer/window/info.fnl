@@ -8,6 +8,7 @@
 (local base-window-mod (require :metabuffer.window.base))
 (local file-info (require :metabuffer.source.file_info))
 (local disable-airline-statusline! (. base-window-mod :disable-airline-statusline!))
+(local apply-metabuffer-window-highlights! (. base-window-mod :apply-metabuffer-window-highlights!))
 
 (fn str
   [x]
@@ -189,13 +190,15 @@
              :row 0
              :col (vim.api.nvim_win_get_width host-win)
              :width width
-             :height height}
+             :height height
+             :focusable false}
             {:relative "editor"
              :anchor "NE"
              :row 1
              :col vim.o.columns
              :width width
-             :height height}))))
+             :height height
+             :focusable false}))))
   (var ensure_info_window nil)
   (set ensure_info_window
     (fn [session]
@@ -219,6 +222,7 @@
           (set session.info-buf buf)
           (set session.info-win win.window)
           (disable-airline-statusline! session.info-win)
+          (apply-metabuffer-window-highlights! session.info-win)
           (let [bo (. vim.bo buf)]
             (set (. bo :buftype) "nofile")
             (set (. bo :bufhidden) "wipe")
@@ -234,7 +238,8 @@
             (set (. wo :linebreak) false)
             (set (. wo :signcolumn) "no")
             (set (. wo :foldcolumn) "0")
-            (set (. wo :spell) false))
+            (set (. wo :spell) false)
+            (set (. wo :cursorline) false))
           (when animate-info?
             (set session.info-animated? true)
             (set session.info-render-suspended? true)
@@ -617,7 +622,7 @@
                       (rerender!)))))))))))
 
   (fn update-regular!
-    [session]
+    [session refresh-lines]
     (ensure_info_window session)
     (when (and session.info-render-suspended?
                (not session.prompt-animating?)
@@ -629,8 +634,46 @@
     (when (and (not session.info-render-suspended?)
                session.info-buf
                (vim.api.nvim_buf_is_valid session.info-buf))
-      (let [[start-index stop-index] (render-current-range! session session.meta)]
-        (schedule-regular-line-meta-refresh! session session.meta start-index stop-index))))
+      (let [meta session.meta
+            force-refresh? (or (= session.info-render-sig nil)
+                               (= session.info-start-index nil)
+                               (= session.info-stop-index nil))
+            selected1 (+ meta.selected_index 1)
+            idxs (or meta.buf.indices [])
+            [wanted-start wanted-stop] (info-visible-range
+                                         session
+                                         meta
+                                         (# idxs)
+                                         info_max_lines)
+            start-index (or session.info-start-index 1)
+            stop-index (or session.info-stop-index 0)
+            out-of-range (or (< selected1 start-index) (> selected1 stop-index))
+            range-changed (or (~= wanted-start start-index)
+                              (~= wanted-stop stop-index))
+            sig (join-str
+                  "|"
+                  [idxs
+                   (# idxs)
+                   wanted-start
+                   wanted-stop
+                   (info-max-width-now session)
+                   (info_height session)
+                   vim.o.columns
+                   (str (not (not session.single-file-info-ready)))
+                   (str (not (not session.single-file-info-fetch-ready)))])]
+        (if (or force-refresh?
+                refresh-lines
+                out-of-range
+                range-changed
+                (~= session.info-render-sig sig))
+            (do
+              (set session.info-render-sig sig)
+              (render-info-lines! session meta wanted-start wanted-stop)
+              (set session.info-start-index wanted-start)
+              (set session.info-stop-index wanted-stop)
+              (sync-info-selection! session meta)
+              (schedule-regular-line-meta-refresh! session meta wanted-start wanted-stop))
+            (sync-info-selection! session meta)))))
   (fn startup-layout-pending?
     [session]
     (let [initializing (or session.startup-initializing false)
@@ -780,9 +823,8 @@
   (set update! (fn [session refresh-lines]
   (let [refresh-lines (if (= refresh-lines nil) true refresh-lines)]
   (if session.project-mode
-  (do (update-regular! session)
-      (update-project! session refresh-lines))
-  (update-regular! session)))))
+  (update-project! session refresh-lines)
+  (update-regular! session refresh-lines)))))
 
   {:close-window! close-info-window!
   :update! update!}))

@@ -26,6 +26,14 @@ local function clear_buffer_modified_21(buf)
     return nil
   end
 end
+local function restore_main_window_opts_21(session)
+  local win = (session and session.meta and session.meta.win)
+  if (win and win.window and vim.api.nvim_win_is_valid(win.window) and win.destroy) then
+    return pcall(win.destroy)
+  else
+    return nil
+  end
+end
 local function remove_session_21(deps, session)
   local router = deps.router
   local mods = deps.mods
@@ -42,15 +50,16 @@ local function remove_session_21(deps, session)
   local instances = router.instances
   if session then
     session.closing = true
-    local or_4_ = session["last-prompt-text"]
-    if not or_4_ then
+    restore_main_window_opts_21(session)
+    local or_5_ = session["last-prompt-text"]
+    if not or_5_ then
       if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
-        or_4_ = router_util_mod["prompt-text"](session)
+        or_5_ = router_util_mod["prompt-text"](session)
       else
-        or_4_ = ""
+        or_5_ = ""
       end
     end
-    history_api["push-history-entry!"](session, or_4_)
+    history_api["push-history-entry!"](session, or_5_)
     router_util_mod["persist-prompt-height!"](session)
     if session.augroup then
       pcall(vim.api.nvim_del_augroup_by_id, session.augroup)
@@ -190,11 +199,11 @@ local function restore_session_ui_21(deps, session, opts)
     end
     local prompt_win
     if (local_layout_3f and vim.api.nvim_win_is_valid(curr.win.window)) then
-      local function _24_()
+      local function _25_()
         vim.cmd(("belowright " .. tostring(height) .. "new"))
         return vim.api.nvim_get_current_win()
       end
-      prompt_win = vim.api.nvim_win_call(curr.win.window, _24_)
+      prompt_win = vim.api.nvim_win_call(curr.win.window, _25_)
     else
       vim.cmd(("botright " .. tostring(height) .. "new"))
       prompt_win = vim.api.nvim_get_current_win()
@@ -335,7 +344,7 @@ local function finish_accept(deps, session)
     session["results-edit-mode"] = false
     hide_session_ui_21(deps, session)
   else
-    local function _39_()
+    local function _40_()
       if (active_by_prompt[session["prompt-buf"]] == session) then
         router_prompt_mod["begin-session-close!"](session, router_prompt_mod["cancel-prompt-update!"])
         pcall(vim.cmd, "stopinsert")
@@ -351,7 +360,7 @@ local function finish_accept(deps, session)
         return nil
       end
     end
-    vim.schedule(_39_)
+    vim.schedule(_40_)
   end
   return curr
 end
@@ -381,10 +390,10 @@ local function finish_cancel(deps, session)
     pcall(vim.api.nvim_set_current_win, session["origin-win"])
     pcall(vim.api.nvim_win_set_buf, session["origin-win"], session["origin-buf"])
     if session["source-view"] then
-      local function _44_()
+      local function _45_()
         return pcall(vim.fn.winrestview, session["source-view"])
       end
-      vim.api.nvim_win_call(session["origin-win"], _44_)
+      vim.api.nvim_win_call(session["origin-win"], _45_)
     else
     end
   else
@@ -471,10 +480,10 @@ local function append_current_symbol_21(deps, prompt_buf, f, opts)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if session then
     local word
-    local function _54_()
+    local function _55_()
       return vim.fn.expand("<cword>")
     end
-    word = vim.api.nvim_win_call(session.meta.win.window, _54_)
+    word = vim.api.nvim_win_call(session.meta.win.window, _55_)
     local token = f(word)
     if (token ~= "") then
       local current = router_util_mod["prompt-text"](session)
@@ -502,34 +511,34 @@ local function append_current_symbol_21(deps, prompt_buf, f, opts)
   end
 end
 M["exclude-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _60_(word)
+  local function _61_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return ("!" .. word)
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _60_)
+  return append_current_symbol_21(deps, prompt_buf, _61_)
 end
 M["insert-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _62_(word)
+  local function _63_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return word
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _62_)
+  return append_current_symbol_21(deps, prompt_buf, _63_)
 end
 M["insert-symbol-under-cursor-newline!"] = function(deps, prompt_buf)
-  local function _64_(word)
+  local function _65_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return word
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _64_, {newline = true})
+  return append_current_symbol_21(deps, prompt_buf, _65_, {newline = true})
 end
 M["toggle-prompt-results-focus!"] = function(deps, prompt_buf)
   local router = deps.router
@@ -651,15 +660,16 @@ M["on-results-buffer-wipe!"] = function(deps, results_buf)
   if (session and not session._results_wiped) then
     session._results_wiped = true
     session.closing = true
-    local or_78_ = session["last-prompt-text"]
-    if not or_78_ then
+    restore_main_window_opts_21(session)
+    local or_79_ = session["last-prompt-text"]
+    if not or_79_ then
       if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
-        or_78_ = router_util_mod["prompt-text"](session)
+        or_79_ = router_util_mod["prompt-text"](session)
       else
-        or_78_ = ""
+        or_79_ = ""
       end
     end
-    history_api["push-history-entry!"](session, or_78_)
+    history_api["push-history-entry!"](session, or_79_)
     router_util_mod["persist-prompt-height!"](session)
     if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
       pcall(vim.api.nvim_win_close, session["prompt-win"], true)
@@ -750,11 +760,11 @@ local function projected_rows_from_edits(baseline_rows, baseline_lines, current_
   local out = {}
   local idx = {old = 1, new = 1}
   for _, h in ipairs(hunks) do
-    local _let_87_ = hunk_indices(h)
-    local a_start = _let_87_[1]
-    local a_count = _let_87_[2]
-    local b_start = _let_87_[3]
-    local b_count = _let_87_[4]
+    local _let_88_ = hunk_indices(h)
+    local a_start = _let_88_[1]
+    local a_count = _let_88_[2]
+    local b_start = _let_88_[3]
+    local b_count = _let_88_[4]
     local common = math.min(a_count, b_count)
     while (idx.old < a_start) do
       local txt = (current_lines[idx.new] or "")
@@ -831,11 +841,11 @@ local function collect_file_ops(session)
   local hunks = diff_hunks(baseline_lines, current_lines)
   local ops = {}
   for _, h in ipairs(hunks) do
-    local _let_90_ = hunk_indices(h)
-    local a_start = _let_90_[1]
-    local a_count = _let_90_[2]
-    local b_start = _let_90_[3]
-    local b_count = _let_90_[4]
+    local _let_91_ = hunk_indices(h)
+    local a_start = _let_91_[1]
+    local a_count = _let_91_[2]
+    local b_start = _let_91_[3]
+    local b_count = _let_91_[4]
     local common = math.min(a_count, b_count)
     local old_rows = slice_lines(baseline_rows, a_start, a_count)
     local new_lines = slice_lines(current_lines, b_start, b_count)
@@ -992,19 +1002,19 @@ local function apply_file_ops_21(ops)
       local delta = 0
       local changed = 0
       for _, op in ipairs((per_file or {})) do
-        local _let_111_ = apply_op_to_loaded_buffer_21(bufnr, op, delta)
-        local next_delta = _let_111_[1]
-        local bump = _let_111_[2]
+        local _let_112_ = apply_op_to_loaded_buffer_21(bufnr, op, delta)
+        local next_delta = _let_112_[1]
+        local bump = _let_112_[2]
         delta = next_delta
         changed = (changed + bump)
       end
       bo["modifiable"] = old_mod
       bo["readonly"] = old_ro
       if (changed > 0) then
-        local function _112_()
+        local function _113_()
           return vim.cmd("silent keepalt noautocmd write")
         end
-        local ok_write = pcall(vim.api.nvim_buf_call, bufnr, _112_)
+        local ok_write = pcall(vim.api.nvim_buf_call, bufnr, _113_)
         if ok_write then
           any_write = true
           total = (total + changed)
@@ -1033,9 +1043,9 @@ local function apply_file_ops_21(ops)
         local delta = 0
         local changed = 0
         for _, op in ipairs((per_file or {})) do
-          local _let_117_ = apply_op_to_lines_21(lines, op, delta)
-          local next_delta = _let_117_[1]
-          local bump = _let_117_[2]
+          local _let_118_ = apply_op_to_lines_21(lines, op, delta)
+          local next_delta = _let_118_[1]
+          local bump = _let_118_[2]
           delta = next_delta
           changed = (changed + bump)
         end
@@ -1166,13 +1176,13 @@ M["write-results!"] = function(deps, prompt_buf)
       pcall(sign_mod["refresh-change-signs!"], session)
     else
     end
-    local _135_
+    local _136_
     if (result.changed > 0) then
-      _135_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+      _136_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
     else
-      _135_ = "metabuffer: no changes"
+      _136_ = "metabuffer: no changes"
     end
-    return vim.notify(_135_, vim.log.levels.INFO)
+    return vim.notify(_136_, vim.log.levels.INFO)
   else
     return nil
   end
@@ -1199,6 +1209,17 @@ M["enter-edit-mode!"] = function(deps, prompt_buf)
       pcall(vim.api.nvim_win_set_buf, session.meta.win.window, session.meta.buf.buffer)
     else
     end
+    return pcall(vim.cmd, "stopinsert")
+  else
+    return nil
+  end
+end
+M["hide-visible-ui!"] = function(deps, prompt_buf)
+  local router = deps.router
+  local session = session_by_prompt(router["active-by-prompt"], prompt_buf)
+  if (session and not session["ui-hidden"] and not session.closing) then
+    session["results-edit-mode"] = false
+    hide_session_ui_21(deps, session)
     return pcall(vim.cmd, "stopinsert")
   else
     return nil

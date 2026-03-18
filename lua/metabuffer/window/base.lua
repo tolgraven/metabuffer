@@ -8,6 +8,16 @@ local function disable_airline_statusline_21(win)
     return nil
   end
 end
+local function metabuffer_winhighlight()
+  return "CursorLine:MetaWindowCursorLine,WinSeparator:MetaWindowSeparator,VertSplit:MetaWindowSeparator"
+end
+local function apply_metabuffer_window_highlights_21(win)
+  if (win and vim.api.nvim_win_is_valid(win)) then
+    return pcall(vim.api.nvim_set_option_value, "winhighlight", metabuffer_winhighlight(), {win = win})
+  else
+    return nil
+  end
+end
 M.new = function(nvim, win, opts_to_stash, opts)
   local self = handle.new(nvim, win, win, opts_to_stash, opts)
   self.window = win
@@ -38,4 +48,6 @@ M.new = function(nvim, win, opts_to_stash, opts)
   return self
 end
 M["disable-airline-statusline!"] = disable_airline_statusline_21
+M["metabuffer-winhighlight"] = metabuffer_winhighlight
+M["apply-metabuffer-window-highlights!"] = apply_metabuffer_window_highlights_21
 return M

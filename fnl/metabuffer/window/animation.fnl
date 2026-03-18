@@ -334,7 +334,8 @@
                             (done! to-cfg)))})))))
 
 (set animate-view!
-  (fn [session key win from-view to-view duration-ms]
+  (fn [session key win from-view to-view duration-ms opts]
+    (let [opts (or opts {})]
     (run! session key
           {:duration-ms duration-ms
            :steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
@@ -360,12 +361,15 @@
                     (vim.api.nvim_win_call
                       win
                       (fn []
-                        (pcall vim.fn.winrestview to-view))))})))
+                        (pcall vim.fn.winrestview to-view)))
+                    (when-let [done! (. opts :done!)]
+                      (done! to-view)))}))))
 
 (set animate-scroll-view-mini!
-  (fn [session key win from-view to-view duration-ms]
+  (fn [session key win from-view to-view duration-ms opts]
     "Animate vertical results scrolling with `mini.animate` timing/subscroll helpers."
-    (let [mini (mini-animate-mod)
+    (let [opts (or opts {})
+          mini (mini-animate-mod)
           from-top (or (. from-view :topline) 1)
           to-top (or (. to-view :topline) from-top)
           total-scroll (math.abs (- to-top from-top))
@@ -380,7 +384,10 @@
           step-scrolls (subscroll-fn total-scroll)
           n-steps (# step-scrolls)]
       (if (or (<= total-scroll 0) (<= n-steps 0))
-          (win-restore to-view)
+          (do
+            (win-restore to-view)
+            (when-let [done! (. opts :done!)]
+              (done! to-view)))
           (let [token (next-token! session key)
                 timing ((. (. mini :gen_timing) :cubic)
                         {:easing "in-out"
@@ -409,18 +416,20 @@
                          true
                          (do
                            (win-restore to-view)
+                           (when-let [done! (. opts :done!)]
+                             (done! to-view))
                            false)))))
              (fn [step]
                (timing step n-steps))
              {:max_steps (+ n-steps 1)}))))))
 
 (set animate-scroll-view!
-  (fn [session key win from-view to-view duration-ms]
+  (fn [session key win from-view to-view duration-ms opts]
     "Animate scroll view with configured backend and native fallback."
     (if (and (= (animation-backend session :scroll) "mini")
              (supports-backend? "mini"))
-        (animate-scroll-view-mini! session key win from-view to-view duration-ms)
-        (animate-view! session key win from-view to-view duration-ms))))
+        (animate-scroll-view-mini! session key win from-view to-view duration-ms opts)
+        (animate-view! session key win from-view to-view duration-ms opts))))
 
 (fn reset-mini-animate-cache!
   []

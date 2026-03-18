@@ -7,6 +7,16 @@
   (when (and win (vim.api.nvim_win_is_valid win))
     (pcall vim.api.nvim_win_set_var win "airline_disable_statusline" 1)))
 
+(fn metabuffer-winhighlight
+  []
+  "Window-local highlight remap for Meta-owned UI windows."
+  "CursorLine:MetaWindowCursorLine,WinSeparator:MetaWindowSeparator,VertSplit:MetaWindowSeparator")
+
+(fn apply-metabuffer-window-highlights!
+  [win]
+  (when (and win (vim.api.nvim_win_is_valid win))
+    (pcall vim.api.nvim_set_option_value "winhighlight" (metabuffer-winhighlight) {:win win})))
+
 (fn M.new
   [nvim win opts-to-stash opts]
   "Public API: M.new."
@@ -40,5 +50,7 @@
     self))
 
 (set M.disable-airline-statusline! disable-airline-statusline!)
+(set M.metabuffer-winhighlight metabuffer-winhighlight)
+(set M.apply-metabuffer-window-highlights! apply-metabuffer-window-highlights!)
 
 M

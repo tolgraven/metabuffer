@@ -9,6 +9,7 @@
          : default-main-keymaps
          : on-prompt-changed : update-info-window : maybe-sync-from-main!
          : schedule-scroll-sync! : maybe-restore-hidden-ui!
+         : hide-visible-ui!
          : maybe-refresh-preview-statusline! : sign-mod} opts]
     (let [animation-enabled? (. animation-mod :enabled?)
           animation-duration-ms (. animation-mod :duration-ms)]
@@ -62,6 +63,54 @@
           (when (= needle item)
             (set hit true)))
         hit))
+
+    (fn window-rect
+      [win]
+      (when (and win (= (type win) "number") (vim.api.nvim_win_is_valid win))
+        (let [pos (vim.api.nvim_win_get_position win)
+              row (or (. pos 1) 0)
+              col (or (. pos 2) 0)
+              height (vim.api.nvim_win_get_height win)
+              width (vim.api.nvim_win_get_width win)]
+          {:top row
+           :left col
+           :bottom (+ row height -1)
+           :right (+ col width -1)})))
+
+    (fn rect-overlap?
+      [a b]
+      (and a b
+           (<= (. a :top) (. b :bottom))
+           (<= (. b :top) (. a :bottom))
+           (<= (. a :left) (. b :right))
+           (<= (. b :left) (. a :right))))
+
+    (fn covered-by-new-window?
+      [session win]
+      (let [target (window-rect win)
+            meta-win (and session.meta session.meta.win session.meta.win.window)
+            prompt-win session.prompt-win
+            info-win session.info-win
+            preview-win session.preview-win
+            history-win session.history-browser-win]
+        (and target
+             (not (= win meta-win))
+             (not (= win prompt-win))
+             (or (rect-overlap? target (window-rect info-win))
+                 (rect-overlap? target (window-rect preview-win))
+                 (rect-overlap? target (window-rect history-win))
+                 (and session.prompt-floating?
+                      (rect-overlap? target (window-rect prompt-win)))))))
+
+    (fn transient-overlay-buffer?
+      [buf]
+      (when (and buf (= (type buf) "number") (vim.api.nvim_buf_is_valid buf))
+        (let [bo (. vim.bo buf)
+              ft (or (. bo :filetype) "")
+              bt (or (. bo :buftype) "")]
+          (or (= ft "help")
+              (= ft "man")
+              (= bt "help")))))
 
     (fn control-token-style
       [tok]
@@ -661,7 +710,33 @@
                            (fn []
                              (when (and session.prompt-buf
                                         (= (. active-by-prompt session.prompt-buf) session))
-                               (pcall maybe-restore-hidden-ui! session))))))})
+                             (pcall maybe-restore-hidden-ui! session))))))})
+        (vim.api.nvim_create_autocmd "WinNew"
+          {:group aug
+           :callback (fn [_]
+                       (vim.defer_fn
+                         (fn []
+                           (when (and hide-visible-ui!
+                                      (not session.ui-hidden)
+                                      session.prompt-buf
+                                      (= (. active-by-prompt session.prompt-buf) session))
+                             (let [win (vim.api.nvim_get_current_win)]
+                               (when (covered-by-new-window? session win)
+                                 (pcall hide-visible-ui! session)))))
+                         20))})
+        (vim.api.nvim_create_autocmd "BufWinEnter"
+          {:group aug
+           :callback (fn [_]
+                       (vim.defer_fn
+                         (fn []
+                           (when (and hide-visible-ui!
+                                      (not session.ui-hidden)
+                                      session.prompt-buf
+                                      (= (. active-by-prompt session.prompt-buf) session))
+                             (let [buf (vim.api.nvim_get_current_buf)]
+                               (when (transient-overlay-buffer? buf)
+                                 (pcall hide-visible-ui! session)))))
+                         20))})
         (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
           {:group aug
            :buffer session.meta.buf.buffer

@@ -42,6 +42,7 @@
         maybe-sync-from-main! (. deps :maybe-sync-from-main!)
         schedule-scroll-sync! (. deps :schedule-scroll-sync!)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)
+        hide-visible-ui! (. deps :hide-visible-ui!)
         preview-window (. windows :preview)
         context-window (. windows :context)
         sign-mod (. deps :sign-mod)
@@ -56,9 +57,10 @@
            :maybe-sync-from-main! maybe-sync-from-main!
            :schedule-scroll-sync! schedule-scroll-sync!
            :maybe-restore-hidden-ui! maybe-restore-hidden-ui!
-          :maybe-refresh-preview-statusline! (fn [s]
-                                              (when (and preview-window
-                                                         preview-window.refresh-statusline!)
+           :hide-visible-ui! hide-visible-ui!
+           :maybe-refresh-preview-statusline! (fn [s]
+                                               (when (and preview-window
+                                                          preview-window.refresh-statusline!)
                                                  (preview-window.refresh-statusline! s)))
            :update-context-window! (fn [s]
                                      (when (and context-window context-window.update!)

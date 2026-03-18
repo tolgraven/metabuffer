@@ -314,13 +314,19 @@ M["maybe-restore-hidden-ui"] = function(prompt_buf, force)
   end
   return router_actions_mod["maybe-restore-ui!"](actions_deps, prompt_buf, _36_())
 end
+M["hide-visible-ui"] = function(prompt_buf)
+  return router_actions_mod["hide-visible-ui!"](actions_deps, prompt_buf)
+end
 local function _37_(prompt_buf, force, event_tick)
   return M["on-prompt-changed"](prompt_buf, force, event_tick)
 end
 local function _38_(session, force)
   return M["maybe-restore-hidden-ui"](session["prompt-buf"], force)
 end
-session_deps = {router = M, ["history-api"] = history_api, ["query-mod"] = query_mod, ["remove-session!"] = remove_session, ["session-view"] = session_view, ["base-buffer"] = base_buffer, ["project-source"] = project_source, ["history-store"] = history_store, ["next-instance-id!"] = next_instance_id_21, ["sync-prompt-buffer-name!"] = sync_prompt_buffer_name_21, ["apply-prompt-lines"] = apply_prompt_lines, ["update-preview-window"] = update_preview_window, ["update-info-window"] = update_info_window, ["on-prompt-changed"] = _37_, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21, ["maybe-restore-hidden-ui!"] = _38_, mods = {meta = meta_mod, ["router-util"] = router_util_mod, ["prompt-window"] = prompt_window_mod, ["meta-window"] = meta_window_mod, ["prompt-hooks"] = prompt_hooks_mod, animation = animation_mod}, windows = {preview = preview_window, info = info_window, context = context_window}, ui = {["loading-indicator"] = M["ui-loading-indicator"], animation = {enabled = M["ui-animations-enabled"], ["time-scale"] = M["ui-animations-time-scale"], prompt = {enabled = M["ui-animation-prompt-enabled"], ms = M["ui-animation-prompt-ms"], ["time-scale"] = M["ui-animation-prompt-time-scale"], backend = M["ui-animation-prompt-backend"]}, preview = {enabled = M["ui-animation-preview-enabled"], ms = M["ui-animation-preview-ms"], ["time-scale"] = M["ui-animation-preview-time-scale"]}, info = {enabled = M["ui-animation-info-enabled"], ms = M["ui-animation-info-ms"], ["time-scale"] = M["ui-animation-info-time-scale"], backend = M["ui-animation-info-backend"]}, loading = {enabled = M["ui-animation-loading-enabled"], ms = M["ui-animation-loading-ms"], ["time-scale"] = M["ui-animation-loading-time-scale"]}, scroll = {enabled = M["ui-animation-scroll-enabled"], ms = M["ui-animation-scroll-ms"], ["time-scale"] = M["ui-animation-scroll-time-scale"], backend = M["ui-animation-scroll-backend"]}}}}
+local function _39_(session)
+  return M["hide-visible-ui"](session["prompt-buf"])
+end
+session_deps = {router = M, ["history-api"] = history_api, ["query-mod"] = query_mod, ["remove-session!"] = remove_session, ["session-view"] = session_view, ["base-buffer"] = base_buffer, ["project-source"] = project_source, ["history-store"] = history_store, ["next-instance-id!"] = next_instance_id_21, ["sync-prompt-buffer-name!"] = sync_prompt_buffer_name_21, ["apply-prompt-lines"] = apply_prompt_lines, ["update-preview-window"] = update_preview_window, ["update-info-window"] = update_info_window, ["on-prompt-changed"] = _37_, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21, ["maybe-restore-hidden-ui!"] = _38_, ["hide-visible-ui!"] = _39_, mods = {meta = meta_mod, ["router-util"] = router_util_mod, ["prompt-window"] = prompt_window_mod, ["meta-window"] = meta_window_mod, ["prompt-hooks"] = prompt_hooks_mod, animation = animation_mod}, windows = {preview = preview_window, info = info_window, context = context_window}, ui = {["loading-indicator"] = M["ui-loading-indicator"], animation = {enabled = M["ui-animations-enabled"], ["time-scale"] = M["ui-animations-time-scale"], prompt = {enabled = M["ui-animation-prompt-enabled"], ms = M["ui-animation-prompt-ms"], ["time-scale"] = M["ui-animation-prompt-time-scale"], backend = M["ui-animation-prompt-backend"]}, preview = {enabled = M["ui-animation-preview-enabled"], ms = M["ui-animation-preview-ms"], ["time-scale"] = M["ui-animation-preview-time-scale"]}, info = {enabled = M["ui-animation-info-enabled"], ms = M["ui-animation-info-ms"], ["time-scale"] = M["ui-animation-info-time-scale"], backend = M["ui-animation-info-backend"]}, loading = {enabled = M["ui-animation-loading-enabled"], ms = M["ui-animation-loading-ms"], ["time-scale"] = M["ui-animation-loading-time-scale"]}, scroll = {enabled = M["ui-animation-scroll-enabled"], ms = M["ui-animation-scroll-ms"], ["time-scale"] = M["ui-animation-scroll-time-scale"], backend = M["ui-animation-scroll-backend"]}}}}
 M["toggle-scan-option"] = function(prompt_buf, which)
   return router_actions_mod["toggle-scan-option!"](actions_deps, prompt_buf, which)
 end
@@ -339,14 +345,14 @@ M.sync = function(meta, query)
   else
   end
   if meta then
-    local function _40_()
+    local function _41_()
       if (query and (query ~= "")) then
         return {query}
       else
         return {}
       end
     end
-    meta["set-query-lines"](_40_())
+    meta["set-query-lines"](_41_())
     meta["on-update"](0)
     M._store_vars(meta)
     return meta
@@ -475,16 +481,16 @@ M["fail-safe-teardown!"] = function(where, err)
     M["_teardown-in-progress"] = false
   else
   end
-  local function _55_()
+  local function _56_()
     return vim.notify(("metabuffer: torn down after error in " .. tostring(where) .. "\n" .. tostring(err)), vim.log.levels.ERROR)
   end
-  return vim.schedule(_55_)
+  return vim.schedule(_56_)
 end
 local function wrap_public_api_with_failsafe_21()
   if not M["_failsafe-wrapped"] then
     for k, v in pairs(M) do
       if ((type(k) == "string") and (type(v) == "function") and not vim.startswith(k, "_") and (k ~= "configure") and (k ~= "fail-safe-teardown!")) then
-        local function _56_(...)
+        local function _57_(...)
           local res = {pcall(v, ...)}
           local ok = res[1]
           local result = res[2]
@@ -495,7 +501,7 @@ local function wrap_public_api_with_failsafe_21()
             return error(result)
           end
         end
-        M[k] = _56_
+        M[k] = _57_
       else
       end
     end

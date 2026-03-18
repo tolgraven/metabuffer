@@ -4,6 +4,11 @@ local source_mod = require("metabuffer.source")
 local lineno_mod = require("metabuffer.window.lineno")
 local statusline_mod = require("metabuffer.window.statusline")
 local base_window_mod = require("metabuffer.window.base")
+local disable_airline_statusline_21 = base_window_mod["disable-airline-statusline!"]
+local metabuffer_winhighlight = base_window_mod["metabuffer-winhighlight"]
+local function preview_winhighlight()
+  return (metabuffer_winhighlight() .. ",StatusLine:MetaPreviewStatusline,StatusLineNC:MetaPreviewStatusline")
+end
 local function trim_or_pad_lines(lines, target)
   local out = {}
   for _, line in ipairs((lines or {})) do
@@ -23,7 +28,7 @@ local function leading_indent_width(line)
   return vim.fn.strdisplaywidth(ws)
 end
 local function preview_statusline_text_for_path(path)
-  return statusline_mod["render-path"](path, {["default-text"] = "Preview", ["file-group"] = "MetaStatuslinePathFile"})
+  return statusline_mod["render-path"](path, {["default-text"] = "Preview", ["base-group"] = "MetaPreviewStatusline", ["seg-prefix"] = "MetaPreviewStatuslinePathSeg", ["sep-group"] = "MetaPreviewStatuslinePathSep", ["file-group"] = "MetaPreviewStatuslinePathFile"})
 end
 local function apply_ft_buffer_vars_21(buf, ft)
   if (buf and vim.api.nvim_buf_is_valid(buf) and (ft == "fennel")) then
@@ -139,7 +144,7 @@ M.new = function(opts)
   local apply_preview_window_opts_21
   local function _18_(session, win)
     if (win and vim.api.nvim_win_is_valid(win)) then
-      base_window_mod["disable-airline-statusline!"](win)
+      disable_airline_statusline_21(win)
       local win_opts
       local _19_
       if session["preview-float?"] then
@@ -147,7 +152,7 @@ M.new = function(opts)
       else
         _19_ = (session["preview-statusline-text"] or "")
       end
-      win_opts = {winfixwidth = true, signcolumn = "no", foldcolumn = "0", statuscolumn = "", cursorline = true, winblend = 0, winhighlight = "NormalFloat:Normal,Normal:Normal,NormalNC:Normal,CursorLine:CursorLine,SignColumn:SignColumn,FloatBorder:Normal,StatusLine:Normal,StatusLineNC:Normal", statusline = _19_, linebreak = false, number = false, relativenumber = false, spell = false, wrap = false}
+      win_opts = {winfixwidth = true, signcolumn = "no", foldcolumn = "0", statuscolumn = "", cursorline = true, winblend = 0, winhighlight = preview_winhighlight(), statusline = _19_, linebreak = false, number = false, relativenumber = false, spell = false, wrap = false}
       return set_window_options_21(win, win_opts)
     else
       return nil

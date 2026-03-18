@@ -727,6 +727,16 @@ function M.session_active()
   ]])
 end
 
+function M.session_ui_hidden()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      return s and s['ui-hidden'] == true or false
+    end)()
+  ]])
+end
+
 function M.session_history_browser_state()
   return M.child.lua_get([[
     (function()

@@ -445,7 +445,8 @@ local function _54_(session, key, win, from_cfg, to_cfg, from_blend, to_blend, d
   end
 end
 animate_float_21 = _54_
-local function _64_(session, key, win, from_view, to_view, duration_ms0)
+local function _64_(session, key, win, from_view, to_view, duration_ms0, opts)
+  local opts0 = (opts or {})
   local function _65_()
     return vim.api.nvim_win_is_valid(win)
   end
@@ -459,33 +460,48 @@ local function _64_(session, key, win, from_view, to_view, duration_ms0)
     local function _69_()
       return pcall(vim.fn.winrestview, to_view)
     end
-    return vim.api.nvim_win_call(win, _69_)
+    vim.api.nvim_win_call(win, _69_)
+    local val_110_auto = opts0["done!"]
+    if val_110_auto then
+      local done_21 = val_110_auto
+      return done_21(to_view)
+    else
+      return nil
+    end
   end
   return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _65_, ["tick!"] = _66_, ["done!"] = _68_})
 end
 animate_view_21 = _64_
-local function _70_(session, key, win, from_view, to_view, duration_ms0)
+local function _71_(session, key, win, from_view, to_view, duration_ms0, opts)
+  local opts0 = (opts or {})
   local mini = mini_animate_mod()
   local from_top = (from_view.topline or 1)
   local to_top = (to_view.topline or from_top)
   local total_scroll = math.abs((to_top - from_top))
   local subscroll_fn
-  local function _71_(n)
+  local function _72_(n)
     return (n > 1)
   end
-  subscroll_fn = mini.gen_subscroll.equal({predicate = _71_, max_output_steps = 60})
+  subscroll_fn = mini.gen_subscroll.equal({predicate = _72_, max_output_steps = 60})
   local win_restore
-  local function _72_(target)
-    local function _73_()
+  local function _73_(target)
+    local function _74_()
       return pcall(vim.fn.winrestview, target)
     end
-    return vim.api.nvim_win_call(win, _73_)
+    return vim.api.nvim_win_call(win, _74_)
   end
-  win_restore = _72_
+  win_restore = _73_
   local step_scrolls = subscroll_fn(total_scroll)
   local n_steps = #step_scrolls
   if ((total_scroll <= 0) or (n_steps <= 0)) then
-    return win_restore(to_view)
+    win_restore(to_view)
+    local val_110_auto = opts0["done!"]
+    if val_110_auto then
+      local done_21 = val_110_auto
+      return done_21(to_view)
+    else
+      return nil
+    end
   else
     local token = next_token_21(session, key)
     local timing = mini.gen_timing.cubic({easing = "in-out", duration = duration_ms0, unit = "total"})
@@ -499,7 +515,7 @@ local function _70_(session, key, win, from_view, to_view, duration_ms0)
     local to_lnum = (to_view.lnum or to_top)
     local scrolled0 = 0
     local scrolled = scrolled0
-    local function _75_(step)
+    local function _77_(step)
       if (not active_token_3f(session, key, token) or not vim.api.nvim_win_is_valid(win)) then
         return false
       else
@@ -514,25 +530,33 @@ local function _70_(session, key, win, from_view, to_view, duration_ms0)
           return true
         else
           win_restore(to_view)
+          do
+            local val_110_auto = opts0["done!"]
+            if val_110_auto then
+              local done_21 = val_110_auto
+              done_21(to_view)
+            else
+            end
+          end
           return false
         end
       end
     end
-    local function _79_(step)
+    local function _82_(step)
       return timing(step, n_steps)
     end
-    return mini.animate(_75_, _79_, {max_steps = (n_steps + 1)})
+    return mini.animate(_77_, _82_, {max_steps = (n_steps + 1)})
   end
 end
-animate_scroll_view_mini_21 = _70_
-local function _81_(session, key, win, from_view, to_view, duration_ms0)
+animate_scroll_view_mini_21 = _71_
+local function _84_(session, key, win, from_view, to_view, duration_ms0, opts)
   if ((animation_backend(session, "scroll") == "mini") and supports_backend_3f("mini")) then
-    return animate_scroll_view_mini_21(session, key, win, from_view, to_view, duration_ms0)
+    return animate_scroll_view_mini_21(session, key, win, from_view, to_view, duration_ms0, opts)
   else
-    return animate_view_21(session, key, win, from_view, to_view, duration_ms0)
+    return animate_view_21(session, key, win, from_view, to_view, duration_ms0, opts)
   end
 end
-animate_scroll_view_21 = _81_
+animate_scroll_view_21 = _84_
 local function reset_mini_animate_cache_21()
   mini_animate_cache = nil
   mini_animate_tried_3f = false
@@ -541,10 +565,10 @@ end
 M["enabled?"] = enabled_3f
 M["duration-ms"] = duration_ms
 M["animation-backend"] = animation_backend
-local function _83_(session)
+local function _86_(session)
   return animation_backend(session, "scroll")
 end
-M["scroll-backend"] = _83_
+M["scroll-backend"] = _86_
 M["supports-backend?"] = supports_backend_3f
 M["supports-scroll-backend?"] = supports_backend_3f
 M["with-split-mins"] = with_split_mins

@@ -126,7 +126,7 @@
                          (string.rep " " age-width))
         git-author (let [a (vim.trim (or (. meta :author) ""))]
                      (if (= a "") "?" a))]
-    (.. mtime-text "  " age-fragment "\t" git-author)))
+    (.. mtime-text " " age-fragment "\t " git-author)))
 
 (fn M.file-meta-data
   [session path]
@@ -435,14 +435,13 @@
                       (= (type (. found :status)) "string")
                       found)
                  {:status "clean" :text ""})
-        sign (M.file-status-sign (or (and meta (. meta :status)) ""))
         laid (M.aligned-meta-suffix (. meta :text) path-width)]
     {:path ""
      :icon-path path
      :show-icon false
      :highlight-dir false
      :highlight-file false
-     :sign sign
+     :sign {:text "  " :hl "LineNr"}
      :suffix (or (. laid :text) "")
      :suffix-prefix ""
      :suffix-highlights (or (. laid :suffix-highlights) [])}))

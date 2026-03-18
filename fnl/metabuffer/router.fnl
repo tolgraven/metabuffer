@@ -458,6 +458,11 @@
   "Restore hidden prompt/info UI when revisiting a preserved results buffer."
   (router_actions_mod.maybe-restore-ui! actions-deps prompt-buf (if (= force nil) false force)))
 
+(fn M.hide-visible-ui
+  [prompt-buf]
+  "Hide Meta auxiliary UI while keeping the session resumable."
+  (router_actions_mod.hide-visible-ui! actions-deps prompt-buf))
+
 (set session-deps
   {:router M
    :history-api history-api
@@ -478,6 +483,8 @@
    :schedule-scroll-sync! schedule-scroll-sync!
    :maybe-restore-hidden-ui! (fn [session force]
                                (M.maybe-restore-hidden-ui session.prompt-buf force))
+   :hide-visible-ui! (fn [session]
+                       (M.hide-visible-ui session.prompt-buf))
    :mods {:meta meta_mod
           :router-util router_util_mod
           :prompt-window prompt_window_mod

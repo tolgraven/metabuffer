@@ -22,6 +22,16 @@
   (when (and buf (vim.api.nvim_buf_is_valid buf))
     (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})))
 
+(fn restore-main-window-opts!
+  [session]
+  "Restore the original local options for the main results/origin window."
+  (let [win (and session session.meta session.meta.win)]
+    (when (and win
+               win.window
+               (vim.api.nvim_win_is_valid win.window)
+               win.destroy)
+      (pcall win.destroy))))
+
 (fn remove-session!
   [deps session]
   (let [{: router
@@ -40,6 +50,7 @@
         instances (. router :instances)]
     (when session
       (set session.closing true)
+      (restore-main-window-opts! session)
       (history-api.push-history-entry!
         session
         (or session.last-prompt-text
@@ -497,6 +508,7 @@
     (when (and session (not session._results_wiped))
       (set session._results_wiped true)
       (set session.closing true)
+      (restore-main-window-opts! session)
       (history-api.push-history-entry!
         session
         (or session.last-prompt-text
@@ -946,6 +958,17 @@
         (pcall vim.api.nvim_set_current_win session.meta.win.window)
         (pcall vim.api.nvim_win_set_buf session.meta.win.window session.meta.buf.buffer))
       ;; Enter editing context in Normal mode; prompt starts in Insert mode.
+      (pcall vim.cmd "stopinsert"))))
+
+(fn M.hide-visible-ui!
+  [deps prompt-buf]
+  (let [{: router} deps
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
+    (when (and session
+               (not session.ui-hidden)
+               (not session.closing))
+      (set session.results-edit-mode false)
+      (hide-session-ui! deps session)
       (pcall vim.cmd "stopinsert"))))
 
 (fn M.sync-live-edits!

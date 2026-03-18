@@ -2,6 +2,13 @@
 local base = require("metabuffer.window.base")
 local animation_mod = require("metabuffer.window.animation")
 local M = {}
+local disable_airline_statusline_21 = base["disable-airline-statusline!"]
+local apply_metabuffer_window_highlights_21 = base["apply-metabuffer-window-highlights!"]
+local metabuffer_winhighlight = base["metabuffer-winhighlight"]
+local with_split_mins = animation_mod["with-split-mins"]
+local function prompt_winhighlight()
+  return (metabuffer_winhighlight() .. ",StatusLine:MetaStatuslineMiddle,StatusLineNC:MetaStatuslineMiddle")
+end
 local function prompt_buffer_21(win)
   local buf = vim.api.nvim_win_get_buf(win)
   do
@@ -15,7 +22,8 @@ local function prompt_buffer_21(win)
   return buf
 end
 local function prompt_window_opts_21(win)
-  base["disable-airline-statusline!"](win)
+  disable_airline_statusline_21(win)
+  apply_metabuffer_window_highlights_21(win)
   local wo = vim.wo[win]
   wo["winfixheight"] = true
   wo["number"] = false
@@ -25,8 +33,10 @@ local function prompt_window_opts_21(win)
   wo["statusline"] = " "
   wo["winbar"] = ""
   wo["spell"] = false
+  wo["cursorline"] = false
   wo["wrap"] = true
   wo["linebreak"] = true
+  wo["winhighlight"] = prompt_winhighlight()
   wo["winblend"] = 0
   return nil
 end
@@ -45,7 +55,7 @@ local function open_split_win_21(origin_win, local_layout_3f, start_height)
     end
   end
   open_21 = _1_
-  return animation_mod["with-split-mins"](open_21)
+  return with_split_mins(open_21)
 end
 local function float_config(origin_win, start_height)
   local host

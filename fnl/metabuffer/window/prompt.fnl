@@ -2,6 +2,15 @@
 (local base (require :metabuffer.window.base))
 (local animation-mod (require :metabuffer.window.animation))
 (local M {})
+(local disable-airline-statusline! (. base :disable-airline-statusline!))
+(local apply-metabuffer-window-highlights! (. base :apply-metabuffer-window-highlights!))
+(local metabuffer-winhighlight (. base :metabuffer-winhighlight))
+(local with-split-mins (. animation-mod :with-split-mins))
+
+(fn prompt-winhighlight
+  []
+  (.. (metabuffer-winhighlight)
+      ",StatusLine:MetaStatuslineMiddle,StatusLineNC:MetaStatuslineMiddle"))
 
 (fn prompt-buffer!
   [win]
@@ -16,7 +25,8 @@
 
 (fn prompt-window-opts!
   [win]
-  (base.disable-airline-statusline! win)
+  (disable-airline-statusline! win)
+  (apply-metabuffer-window-highlights! win)
   (let [wo (. vim.wo win)]
     (set (. wo :winfixheight) true)
     (set (. wo :number) false)
@@ -26,8 +36,10 @@
     (set (. wo :statusline) " ")
     (set (. wo :winbar) "")
     (set (. wo :spell) false)
+    (set (. wo :cursorline) false)
     (set (. wo :wrap) true)
     (set (. wo :linebreak) true)
+    (set (. wo :winhighlight) (prompt-winhighlight))
     (set (. wo :winblend) 0)))
 
 (fn open-split-win!
@@ -44,7 +56,7 @@
                     (do
                       (vim.cmd (.. "botright " (tostring start-height) "new"))
                       (vim.api.nvim_get_current_win))))]
-    (animation-mod.with-split-mins open!)))
+    (with-split-mins open!)))
 
 (fn float-config
   [origin-win start-height]

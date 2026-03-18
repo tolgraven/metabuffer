@@ -170,7 +170,7 @@ local function file_meta_line(meta)
       git_author = a
     end
   end
-  return (mtime_text .. "  " .. age_fragment .. "\t" .. git_author)
+  return (mtime_text .. " " .. age_fragment .. "\t " .. git_author)
 end
 M["file-meta-data"] = function(session, path)
   local cache = (session["info-file-meta-cache"] or {})
@@ -548,8 +548,7 @@ M["line-meta-info-view"] = function(session, path, lnum, path_width)
   local mtime = vim.fn.getftime(path)
   local found = cache[key]
   local meta = (((type(found) == "table") and (found.mtime == mtime) and (found.lnum == lnum) and (type(found.text) == "string") and (type(found.status) == "string") and found) or {status = "clean", text = ""})
-  local sign = M["file-status-sign"](((meta and meta.status) or ""))
   local laid = M["aligned-meta-suffix"](meta.text, path_width)
-  return {path = "", ["icon-path"] = path, sign = sign, suffix = (laid.text or ""), ["suffix-prefix"] = "", ["suffix-highlights"] = (laid["suffix-highlights"] or {}), ["highlight-dir"] = false, ["highlight-file"] = false, ["show-icon"] = false}
+  return {path = "", ["icon-path"] = path, sign = {text = "  ", hl = "LineNr"}, suffix = (laid.text or ""), ["suffix-prefix"] = "", ["suffix-highlights"] = (laid["suffix-highlights"] or {}), ["highlight-dir"] = false, ["highlight-file"] = false, ["show-icon"] = false}
 end
 return M

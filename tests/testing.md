@@ -129,6 +129,15 @@ Key helper coverage:
 ### `tests/screen/persistence/test_screen_persistence_statusline_prompt_only.lua`
 - Prompt statusline stays visible while the main results window stays blank.
 
+### `tests/screen/persistence/test_screen_persistence_statusline_restore.lua`
+- Closing Meta restores the original window-local `statusline` and `winhighlight`.
+
+### `tests/screen/persistence/test_screen_persistence_external_split_pause.lua`
+- Opening unrelated windows like `:help` hides Meta auxiliary UI instead of floating over the new split.
+
+### `tests/screen/persistence/test_screen_persistence_existing_split_no_pause.lua`
+- Moving to an already existing split does not hide Meta UI.
+
 ### `tests/screen/persistence/test_screen_persistence_history_commands_*.lua`
 - `:Meta !!` and `:Meta !$` history expansion.
 - `<CR>` from results opens selected hit correctly.

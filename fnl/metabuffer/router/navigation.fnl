@@ -91,6 +91,18 @@
                       (~= col 0))
               (pcall vim.api.nvim_win_set_cursor meta.win.window [target-row 0]))))))))
 
+(fn effective-scroll-target
+  [win restore-view target]
+  "Resolve the effective final winsaveview after Neovim applies window constraints."
+  (vim.api.nvim_win_call
+    win
+    (fn []
+      (let [original (vim.deepcopy restore-view)]
+        (pcall vim.fn.winrestview target)
+        (let [effective (vim.fn.winsaveview)]
+          (pcall vim.fn.winrestview original)
+          effective)))))
+
 (fn M.move-selection!
   [deps prompt-buf delta]
   (let [active-by-prompt (. (. deps :router) :active-by-prompt)
@@ -134,19 +146,22 @@
 	                                     dir (if (or (= action "line-down") (= action "half-down") (= action "page-down")) 1 -1)
 	                                     max-top (math.max 1 (+ (- line-count win-height) 1))
 	                                     view (vim.fn.winsaveview)
-	                                     old-top (. view :topline)
-	                                     old-lnum (. view :lnum)
-	                                     old-col (or (. view :col) 0)
+                                       logical-view (or session.scroll-command-view view)
+	                                     old-top (. logical-view :topline)
+	                                     old-lnum (. logical-view :lnum)
+	                                     old-col (or (. logical-view :col) 0)
 	                                     row-off (math.max 0 (- old-lnum old-top))
 	                                     new-top (math.max 1 (math.min (+ old-top (* dir step)) max-top))
 	                                     new-lnum (if (= 1 new-top)
                                                     1
                                                     (math.max 1 (math.min (+ new-top row-off) line-count)))
-	                                     target {:topline new-top :lnum new-lnum :col old-col :leftcol (or (. view :leftcol) 0)}
+	                                     target0 {:topline new-top :lnum new-lnum :col old-col :leftcol (or (. logical-view :leftcol) 0)}
+                                       target (effective-scroll-target session.meta.win.window view target0)
                                        animate? (and animation-mod
                                                      (animation-mod.enabled? session :scroll)
                                                      (> (animation-mod.duration-ms session :scroll 140) 0)
                                                      (not (= step 1)))]
+                                     (set session.scroll-command-view target)
                                      (if (and animation-mod
                                               animate?)
                                          (animation-mod.animate-scroll-view!
@@ -155,9 +170,17 @@
 	                                       session.meta.win.window
 	                                       view
 	                                       target
-	                                       (animation-mod.duration-ms session :scroll 140))
-	                                     (vim.fn.winrestview target))
-		                                 {:row new-lnum :animated animate?})))]
+	                                       (animation-mod.duration-ms session :scroll 140)
+                                         {:done! (fn []
+                                                   (when (and session
+                                                              session.prompt-buf
+                                                              (= (. active-by-prompt session.prompt-buf) session))
+                                                     (set session.scroll-command-view nil)
+                                                     (M.maybe-sync-from-main! deps session true)))})
+	                                     (do
+                                         (vim.fn.winrestview target)
+                                         (set session.scroll-command-view nil)))
+		                                 {:row (or (. target :lnum) new-lnum) :animated animate?})))]
                          ;; Scroll commands derive an absolute target row.
                          ;; Keep the model and dependent UI in sync immediately,
                          ;; but don't force the real cursor to the destination
@@ -166,13 +189,7 @@
                              (do
                                (set-selected-index! session target-row)
                                (pcall session.meta.refresh_statusline)
-                               (vim.defer_fn
-                                 (fn []
-                                   (when (and session
-                                              session.prompt-buf
-                                              (= (. active-by-prompt session.prompt-buf) session))
-                                     (M.maybe-sync-from-main! deps session true)))
-                                 (+ 24 (animation-mod.duration-ms session :scroll 140))))
+                               nil)
                              (sync-selection-to-row! deps session target-row))))
 	            mode (. (vim.api.nvim_get_mode) :mode)]
 	        (if (and (= (type mode) "string") (vim.startswith mode "i"))
