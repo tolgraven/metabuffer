@@ -45,3 +45,5 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 35 [] when exiting regular `:Meta` mode with `<Esc>`, the viewport jumps. Should stay still.
 - 36 [x] in project mode, selecting a result and trying to jump to it with <CR> just restores the position that existed before starting `:Meta`
 - 37 [x] in project mode, info window gets stuck on "finalizing results" instead of showing the info lines once loaded
+- 38 [x] statusline seems to get stuck under our control, at least Airline isn't being re-enabled.
+- 39 [] write a wrapper/helper for `vim.api.nvim_create_autocmd` for use in prompt/hooks.fnl and anywhere else appropriate. This will inject the correct group, session, and just be passed the inner function on the callback (to be wrapped in schedule-when-valid).

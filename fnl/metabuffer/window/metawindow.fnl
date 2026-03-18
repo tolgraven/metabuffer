@@ -5,7 +5,7 @@
 (local M {})
 
 (set M.default-opts {:spell false :foldenable false :cursorcolumn false :scrolloff 0 :sidescrolloff 0 :signcolumn "yes:1"})
-(set M.opts-to-stash ["foldcolumn" "number" "relativenumber" "wrap" "conceallevel" "signcolumn" "scrolloff" "sidescrolloff"])
+(set M.opts-to-stash ["foldcolumn" "number" "relativenumber" "wrap" "conceallevel" "signcolumn" "scrolloff" "sidescrolloff" "statusline"])
 
 (set M.statusline
   "%%#MetaStatuslineMode%s# %s%%#MetaStatuslineIndicator# %d/%d%s%%#MetaStatuslineMiddle#%%=%%#MetaStatuslineFile# %s %%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s ")

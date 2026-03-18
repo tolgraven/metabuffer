@@ -250,8 +250,8 @@
         (project-source.apply-minimal-source-set! session)
         (project-source.apply-source-set! session))
     (set curr.status-win (meta-window-mod.new vim session.prompt-win))
-    (when-not vim.g.loaded_airline
-      (curr.win.set-statusline ""))
+    (pcall vim.api.nvim_win_set_var curr.win.window "airline_disable_statusline" 1)
+    (curr.win.set-statusline "")
     (curr.on-init)
     (when sign-mod
       (pcall sign-mod.capture-baseline! session))

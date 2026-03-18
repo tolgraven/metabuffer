@@ -69,7 +69,9 @@
         (clear-map-entry! active-by-source session.meta.buf.buffer session))
       (clear-map-entry! active-by-prompt session.prompt-buf session)
       (when session.instance-id
-        (clear-map-entry! instances session.instance-id session)))))
+        (clear-map-entry! instances session.instance-id session))
+      (when (and session.origin-win (vim.api.nvim_win_is_valid session.origin-win))
+        (pcall vim.api.nvim_win_del_var session.origin-win "airline_disable_statusline")))))
 
 (fn apply-prompt-window-opts!
   [win]
