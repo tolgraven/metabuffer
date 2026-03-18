@@ -2,6 +2,8 @@
 
 (local M {})
 (local target-frame-ms 17)
+(var mini-animate-cache nil)
+(var mini-animate-tried? false)
 
 (fn now-ms
   []
@@ -40,6 +42,15 @@
   [v fallback]
   (if (= (type v) "number") v fallback))
 
+(fn mini-animate-mod
+  []
+  "Load `mini.animate` once. Expected output: module table or nil."
+  (when-not mini-animate-tried?
+    (set mini-animate-tried? true)
+    (let [[ok mod] [(pcall require :mini.animate)]]
+      (set mini-animate-cache (if ok mod false))))
+  (if (= mini-animate-cache false) nil mini-animate-cache))
+
 (fn with-split-mins
   [f]
   (let [old-height vim.o.winminheight
@@ -71,6 +82,21 @@
         global-scale (number-or (. settings :time-scale) 1.0)
         local-scale (number-or (. entry :time-scale) 1.0)]
     (math.max 0 (math.floor (+ 0.5 (* base global-scale local-scale))))))
+
+(fn scroll-backend
+  [session]
+  "Return configured scroll backend. Expected output: \"native\" or \"mini\"."
+  (let [settings (or session.animation-settings {})
+        entry (or (. settings :scroll) {})
+        backend (. entry :backend)]
+    (if (= backend "mini") "mini" "native")))
+
+(fn supports-scroll-backend?
+  [backend]
+  "Return whether scroll backend is usable in current runtime."
+  (if (= backend "mini")
+      (not (not (mini-animate-mod)))
+      true))
 
 (fn run!
   [session key opts]
@@ -238,8 +264,74 @@
                     (fn []
                       (pcall vim.fn.winrestview to-view))))}))
 
+(fn animate-scroll-view-mini!
+  [session key win from-view to-view duration-ms]
+  "Animate vertical results scrolling with `mini.animate` timing/subscroll helpers."
+  (let [mini (mini-animate-mod)
+        from-top (or (. from-view :topline) 1)
+        to-top (or (. to-view :topline) from-top)
+        total-scroll (math.abs (- to-top from-top))
+        subscroll-fn ((. (. mini :gen_subscroll) :equal)
+                      {:predicate (fn [n] (> n 1))
+                       :max_output_steps 60})
+        step-scrolls (subscroll-fn total-scroll)
+        n-steps (# step-scrolls)]
+    (if (or (<= total-scroll 0) (<= n-steps 0))
+        (vim.api.nvim_win_call
+          win
+          (fn []
+            (pcall vim.fn.winrestview to-view)))
+        (let [token (next-token! session key)
+              timing ((. (. mini :gen_timing) :cubic)
+                      {:easing "in-out"
+                       :duration duration-ms
+                       :unit "total"})
+              dir (if (< from-top to-top) 1 -1)
+              from-lnum (or (. from-view :lnum) from-top)
+              to-lnum (or (. to-view :lnum) to-top)
+              scrolled0 0]
+          (var scrolled scrolled0)
+          ((. mini :animate)
+           (fn [step]
+             (if (or (not (active-token? session key token))
+                     (not (vim.api.nvim_win_is_valid win)))
+                 false
+                 (do
+                   (when (> step 0)
+                     (set scrolled (+ scrolled (or (. step-scrolls step) 0)))
+                     (let [coef (/ step n-steps)
+                           target {:topline (+ from-top (* dir scrolled))
+                                   :lnum (math.max 1 (math.floor (+ 0.5 (lerp from-lnum to-lnum coef))))
+                                   :leftcol (or (. to-view :leftcol) (. from-view :leftcol) 0)
+                                   :col (or (. to-view :col) (. from-view :col) 0)}]
+                       (vim.api.nvim_win_call
+                         win
+                         (fn []
+                           (pcall vim.fn.winrestview target)))))
+                   (if (< step n-steps)
+                       true
+                       (do
+                         (vim.api.nvim_win_call
+                           win
+                           (fn []
+                             (pcall vim.fn.winrestview to-view)))
+                         false)))))
+           (fn [step]
+             (timing step n-steps))
+           {:max_steps (+ n-steps 1)})))))
+
+(fn animate-scroll-view!
+  [session key win from-view to-view duration-ms]
+  "Animate scroll view with configured backend and native fallback."
+  (if (and (= (scroll-backend session) "mini")
+           (supports-scroll-backend? "mini"))
+      (animate-scroll-view-mini! session key win from-view to-view duration-ms)
+      (animate-view! session key win from-view to-view duration-ms)))
+
 (set M.enabled? enabled?)
 (set M.duration-ms duration-ms)
+(set M.scroll-backend scroll-backend)
+(set M.supports-scroll-backend? supports-scroll-backend?)
 (set M.with-split-mins with-split-mins)
 (set M.run! run!)
 (set M.animate-win-height! animate-win-height!)
@@ -247,5 +339,6 @@
 (set M.animate-win-width! animate-win-width!)
 (set M.animate-float! animate-float!)
 (set M.animate-view! animate-view!)
+(set M.animate-scroll-view! animate-scroll-view!)
 
 M

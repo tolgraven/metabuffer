@@ -102,7 +102,7 @@ T['animated scroll-main does not jump the real cursor before the animation runs'
         ['duration-ms'] = function()
           return 140
         end,
-        ['animate-view!'] = function(_, _, win, from_view, to_view)
+        ['animate-scroll-view!'] = function(_, _, win, from_view, to_view)
           animate_calls = animate_calls + 1
           eq(win, meta_win)
           eq(from_view.topline, 10)
@@ -143,7 +143,7 @@ T['animated scroll-main does not jump the real cursor before the animation runs'
   eq(view.topline, 10)
   eq(cursor[1], 10)
   eq(session.meta['selected_index'], 14)
- 
+
   vim.api.nvim_set_current_win(meta_win)
   vim.cmd('only')
 end

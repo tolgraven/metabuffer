@@ -77,6 +77,11 @@ Animation setup options:
 \tui.animation.scroll.time_scale
 \t\tControls animated half/page scrolling in the results window.
 
+\tui.animation.scroll.backend
+\t\tScroll animation backend. "native" keeps Meta's built-in behavior.
+\t\t"mini" uses mini.animate helpers when available and otherwise falls
+\t\tback to "native".
+
 \tui.animation.loading_indicator
 \t\tIndependent toggle for showing the loading indicator at all.
 

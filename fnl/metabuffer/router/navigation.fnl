@@ -145,7 +145,7 @@
                                                      (not (= step 1)))]
                                      (if (and animation-mod
                                               animate?)
-                                         (animation-mod.animate-view!
+                                         (animation-mod.animate-scroll-view!
 	                                       session
 	                                       "smooth-scroll"
 	                                       session.meta.win.window

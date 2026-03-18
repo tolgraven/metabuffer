@@ -504,7 +504,8 @@
                               :time-scale M.ui-animation-loading-time-scale}
                     :scroll {:enabled M.ui-animation-scroll-enabled
                              :ms M.ui-animation-scroll-ms
-                             :time-scale M.ui-animation-scroll-time-scale}}}})
+                             :time-scale M.ui-animation-scroll-time-scale
+                             :backend M.ui-animation-scroll-backend}}}})
 
 (fn M.toggle-scan-option
   [prompt-buf which]

@@ -128,6 +128,7 @@
     :ui_animation_scroll_enabled true
     :ui_animation_scroll_ms 140
     :ui_animation_scroll_time_scale 1.0
+    :ui_animation_scroll_backend "native"
     :window_local_layout true
     :dep_dir_names
     {"node_modules" true
@@ -318,6 +319,9 @@
       :ui_animation_scroll_time_scale (nested-value opts [:ui :animation :scroll :time_scale]
                                                       (opt-value opts :ui_animation_scroll_time_scale :meta_ui_animation_scroll_time_scale
                                                                  (. defaults :ui_animation_scroll_time_scale)))
+      :ui_animation_scroll_backend (nested-value opts [:ui :animation :scroll :backend]
+                                                   (opt-value opts :ui_animation_scroll_backend :meta_ui_animation_scroll_backend
+                                                              (. defaults :ui_animation_scroll_backend)))
       :window_local_layout (if (= (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)) nil)
                                true
                                (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)))
@@ -392,6 +396,7 @@
     (set router.ui-animation-scroll-enabled (. options :ui_animation_scroll_enabled))
     (set router.ui-animation-scroll-ms (. options :ui_animation_scroll_ms))
     (set router.ui-animation-scroll-time-scale (. options :ui_animation_scroll_time_scale))
+    (set router.ui-animation-scroll-backend (. options :ui_animation_scroll_backend))
     (set router.window-local-layout (. options :window_local_layout))
     (set router.default-prompt-keymaps (. (. M.defaults :keymaps) :prompt))
     (set router.default-main-keymaps (. (. M.defaults :keymaps) :main))
