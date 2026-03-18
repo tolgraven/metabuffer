@@ -1,4 +1,4 @@
--- [nfnl] .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl
+-- [nfnl] .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl
 --[[ "Copyright (c) 2023 Andrey Listopadov and contributors.  All rights reserved.
 The use and distribution terms for this software are covered by the Eclipse
 Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php) which
@@ -6,7 +6,7 @@ can be found in the file LICENSE at the root of this distribution.  By using
 this software in any fashion, you are agreeing to be bound by the terms of
 this license.
 You must not remove this notice, or any other, from this software." ]]
-local lib_name = (... or "src.io.gitlab.andreyorst.async")
+local lib_name = (... or "io.gitlab.andreyorst.async")
 local main_thread = (coroutine.running() or error((lib_name .. " requires Lua 5.2 or higher")))
 local or_1_ = package.preload["io.gitlab.andreyorst.reduced"]
 if not or_1_ then
@@ -136,21 +136,21 @@ local function merge_with(f, t1, t2)
 end
 local function active_3f(h)
   if (nil == h) then
-    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:334", 2)
+    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:203", 2)
   else
   end
   return h["active?"](h)
 end
 local function blockable_3f(h)
   if (nil == h) then
-    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:335", 2)
+    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:204", 2)
   else
   end
   return h["blockable?"](h)
 end
 local function commit(h)
   if (nil == h) then
-    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:336", 2)
+    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:205", 2)
   else
   end
   return h:commit()
@@ -288,32 +288,32 @@ end
 difftime = _54_
 local function add_21(buffer, item)
   if (nil == item) then
-    _G.error("Missing argument item on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:375", 2)
+    _G.error("Missing argument item on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:244", 2)
   else
   end
   if (nil == buffer) then
-    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:375", 2)
+    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:244", 2)
   else
   end
   return buffer["add!"](buffer, item)
 end
 local function close_buf_21(buffer)
   if (nil == buffer) then
-    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:376", 2)
+    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:245", 2)
   else
   end
   return buffer["close-buf!"](buffer)
 end
 local function full_3f(buffer)
   if (nil == buffer) then
-    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:373", 2)
+    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:242", 2)
   else
   end
   return buffer["full?"](buffer)
 end
 local function remove_21(buffer)
   if (nil == buffer) then
-    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:374", 2)
+    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:243", 2)
   else
   end
   return buffer["remove!"](buffer)
@@ -1563,8 +1563,8 @@ local function pipe(from, to, ...)
   else
     close_3f = ...
   end
-  local _let_297_ = require("src.io.gitlab.andreyorst.async")
-  local go_1_auto = _let_297_["go*"]
+  local _let_297_ = require("io.gitlab.andreyorst.async")
+  local go_3_auto = _let_297_["go*"]
   local function _298_()
     local function recur()
       local val = _3c_21(from)
@@ -1581,7 +1581,7 @@ local function pipe(from, to, ...)
     end
     return recur()
   end
-  return go_1_auto(_298_)
+  return go_3_auto(_298_)
 end
 local function pipeline_2a(n, to, xf, from, close_3f, err_handler, kind)
   local jobs = chan(n)
@@ -1597,7 +1597,7 @@ local function pipeline_2a(n, to, xf, from, close_3f, err_handler, kind)
       local p = job[2]
       local res = chan(1, xf, err_handler)
       do
-        local _let_302_ = require("src.io.gitlab.andreyorst.async")
+        local _let_302_ = require("io.gitlab.andreyorst.async")
         local go_1_auto = _let_302_["go*"]
         local function _303_()
           _3e_21(res, v)
@@ -1632,8 +1632,8 @@ local function pipeline_2a(n, to, xf, from, close_3f, err_handler, kind)
   async = _305_
   for _ = 1, n do
     if (kind == "compute") then
-      local _let_307_ = require("src.io.gitlab.andreyorst.async")
-      local go_1_auto = _let_307_["go*"]
+      local _let_307_ = require("io.gitlab.andreyorst.async")
+      local go_3_auto = _let_307_["go*"]
       local function _308_()
         local function recur()
           local job = _3c_21(jobs)
@@ -1645,10 +1645,10 @@ local function pipeline_2a(n, to, xf, from, close_3f, err_handler, kind)
         end
         return recur()
       end
-      go_1_auto(_308_)
+      go_3_auto(_308_)
     elseif (kind == "async") then
-      local _let_310_ = require("src.io.gitlab.andreyorst.async")
-      local go_1_auto = _let_310_["go*"]
+      local _let_310_ = require("io.gitlab.andreyorst.async")
+      local go_3_auto = _let_310_["go*"]
       local function _311_()
         local function recur()
           local job = _3c_21(jobs)
@@ -1661,13 +1661,13 @@ local function pipeline_2a(n, to, xf, from, close_3f, err_handler, kind)
         end
         return recur()
       end
-      go_1_auto(_311_)
+      go_3_auto(_311_)
     else
     end
   end
   do
-    local _let_314_ = require("src.io.gitlab.andreyorst.async")
-    local go_1_auto = _let_314_["go*"]
+    local _let_314_ = require("io.gitlab.andreyorst.async")
+    local go_3_auto = _let_314_["go*"]
     local function _315_()
       local function recur()
         local case_316_ = _3c_21(from)
@@ -1685,10 +1685,10 @@ local function pipeline_2a(n, to, xf, from, close_3f, err_handler, kind)
       end
       return recur()
     end
-    go_1_auto(_315_)
+    go_3_auto(_315_)
   end
-  local _let_318_ = require("src.io.gitlab.andreyorst.async")
-  local go_1_auto = _let_318_["go*"]
+  local _let_318_ = require("io.gitlab.andreyorst.async")
+  local go_3_auto = _let_318_["go*"]
   local function _319_()
     local function recur()
       local case_320_ = _3c_21(results)
@@ -1728,7 +1728,7 @@ local function pipeline_2a(n, to, xf, from, close_3f, err_handler, kind)
     end
     return recur()
   end
-  return go_1_auto(_319_)
+  return go_3_auto(_319_)
 end
 local function pipeline_async(n, to, af, from, ...)
   local close_3f
@@ -1752,8 +1752,8 @@ local function split(p, ch, t_buf_or_n, f_buf_or_n)
   local tc = chan(t_buf_or_n)
   local fc = chan(f_buf_or_n)
   do
-    local _let_330_ = require("src.io.gitlab.andreyorst.async")
-    local go_1_auto = _let_330_["go*"]
+    local _let_330_ = require("io.gitlab.andreyorst.async")
+    local go_3_auto = _let_330_["go*"]
     local function _331_()
       local function recur()
         local v = _3c_21(ch)
@@ -1776,13 +1776,13 @@ local function split(p, ch, t_buf_or_n, f_buf_or_n)
       end
       return recur()
     end
-    go_1_auto(_331_)
+    go_3_auto(_331_)
   end
   return {tc, fc}
 end
 local function reduce(f, init, ch)
-  local _let_337_ = require("src.io.gitlab.andreyorst.async")
-  local go_1_auto = _let_337_["go*"]
+  local _let_337_ = require("io.gitlab.andreyorst.async")
+  local go_3_auto = _let_337_["go*"]
   local function _338_()
     local _2_336_ = init
     local ret = _2_336_
@@ -1801,11 +1801,11 @@ local function reduce(f, init, ch)
     end
     return recur(_2_336_)
   end
-  return go_1_auto(_338_)
+  return go_3_auto(_338_)
 end
 local function transduce(xform, f, init, ch)
   local f0 = xform(f)
-  local _let_341_ = require("src.io.gitlab.andreyorst.async")
+  local _let_341_ = require("io.gitlab.andreyorst.async")
   local go_1_auto = _let_341_["go*"]
   local function _342_()
     local ret = _3c_21(reduce(f0, init, ch))
@@ -1820,7 +1820,7 @@ local function onto_chan_21(ch, coll, ...)
   else
     close_3f = ...
   end
-  local _let_344_ = require("src.io.gitlab.andreyorst.async")
+  local _let_344_ = require("io.gitlab.andreyorst.async")
   local go_1_auto = _let_344_["go*"]
   local function _345_()
     for _, v in ipairs(coll) do
@@ -1861,7 +1861,7 @@ local function pipeline_unordered_2a(n, to, xf, from, close_3f, err_handler, kin
   local process
   local function _349_(v, p)
     local res = chan(1, xf, err_handler)
-    local _let_350_ = require("src.io.gitlab.andreyorst.async")
+    local _let_350_ = require("io.gitlab.andreyorst.async")
     local go_1_auto = _let_350_["go*"]
     local function _351_()
       _3e_21(res, v)
@@ -1883,8 +1883,8 @@ local function pipeline_unordered_2a(n, to, xf, from, close_3f, err_handler, kin
   end
   process = _349_
   for _ = 1, n do
-    local _let_354_ = require("src.io.gitlab.andreyorst.async")
-    local go_1_auto = _let_354_["go*"]
+    local _let_354_ = require("io.gitlab.andreyorst.async")
+    local go_3_auto = _let_354_["go*"]
     local function _355_()
       local function recur()
         local case_356_ = _3c_21(from)
@@ -1892,19 +1892,19 @@ local function pipeline_unordered_2a(n, to, xf, from, close_3f, err_handler, kin
           local v = case_356_
           local c = chan(1)
           if (kind == "compute") then
-            local _let_357_ = require("src.io.gitlab.andreyorst.async")
-            local go_1_auto0 = _let_357_["go*"]
+            local _let_357_ = require("io.gitlab.andreyorst.async")
+            local go_1_auto = _let_357_["go*"]
             local function _358_()
               return process(v, c)
             end
-            go_1_auto0(_358_)
+            go_1_auto(_358_)
           elseif (kind == "async") then
-            local _let_359_ = require("src.io.gitlab.andreyorst.async")
-            local go_1_auto0 = _let_359_["go*"]
+            local _let_359_ = require("io.gitlab.andreyorst.async")
+            local go_1_auto = _let_359_["go*"]
             local function _360_()
               return xf(v, c)
             end
-            go_1_auto0(_360_)
+            go_1_auto(_360_)
           else
           end
           local function loop()
@@ -1937,7 +1937,7 @@ local function pipeline_unordered_2a(n, to, xf, from, close_3f, err_handler, kin
       end
       return recur()
     end
-    go_1_auto(_355_)
+    go_3_auto(_355_)
   end
   return nil
 end
@@ -1967,18 +1967,18 @@ local muxch_2a0 = _local_370_["muxch*"]
 local Mux = _local_370_
 local function tap_2a(_, ch, close_3f)
   if (nil == close_3f) then
-    _G.error("Missing argument close? on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1339", 2)
+    _G.error("Missing argument close? on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1208", 2)
   else
   end
   if (nil == ch) then
-    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1339", 2)
+    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1208", 2)
   else
   end
   return _["tap*"](_, ch, close_3f)
 end
 local function untap_2a(_, ch)
   if (nil == ch) then
-    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1340", 2)
+    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1209", 2)
   else
   end
   return _["untap*"](_, ch)
@@ -2069,8 +2069,8 @@ local function mult(ch)
   end
   done = _389_
   do
-    local _let_391_ = require("src.io.gitlab.andreyorst.async")
-    local go_1_auto = _let_391_["go*"]
+    local _let_391_ = require("io.gitlab.andreyorst.async")
+    local go_3_auto = _let_391_["go*"]
     local function _392_()
       local function recur()
         local val = _3c_21(ch)
@@ -2113,7 +2113,7 @@ local function mult(ch)
       end
       return recur()
     end
-    go_1_auto(_392_)
+    go_3_auto(_392_)
   end
   return m
 end
@@ -2135,28 +2135,28 @@ local function untap_all(mult0)
 end
 local function admix_2a(_, ch)
   if (nil == ch) then
-    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1403", 2)
+    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1272", 2)
   else
   end
   return _["admix*"](_, ch)
 end
 local function solo_mode_2a(_, mode)
   if (nil == mode) then
-    _G.error("Missing argument mode on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1407", 2)
+    _G.error("Missing argument mode on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1276", 2)
   else
   end
   return _["solo-mode*"](_, mode)
 end
 local function toggle_2a(_, state_map)
   if (nil == state_map) then
-    _G.error("Missing argument state-map on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1406", 2)
+    _G.error("Missing argument state-map on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1275", 2)
   else
   end
   return _["toggle*"](_, state_map)
 end
 local function unmix_2a(_, ch)
   if (nil == ch) then
-    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1404", 2)
+    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1273", 2)
   else
   end
   return _["unmix*"](_, ch)
@@ -2353,8 +2353,8 @@ local function mix(out)
     m = setmetatable({}, {__fennelview = _436_, __index = _414_, __name = "reify"})
   end
   do
-    local _let_438_ = require("src.io.gitlab.andreyorst.async")
-    local go_1_auto = _let_438_["go*"]
+    local _let_438_ = require("io.gitlab.andreyorst.async")
+    local go_3_auto = _let_438_["go*"]
     local function _439_()
       local _2_437_ = calc_state()
       local solos = _2_437_.solos
@@ -2390,7 +2390,7 @@ local function mix(out)
       end
       return recur(_2_437_)
     end
-    go_1_auto(_439_)
+    go_3_auto(_439_)
   end
   return m
 end
@@ -2411,33 +2411,33 @@ local function solo_mode(mix0, mode)
 end
 local function sub_2a(_, v, ch, close_3f)
   if (nil == close_3f) then
-    _G.error("Missing argument close? on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1508", 2)
+    _G.error("Missing argument close? on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1377", 2)
   else
   end
   if (nil == ch) then
-    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1508", 2)
+    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1377", 2)
   else
   end
   if (nil == v) then
-    _G.error("Missing argument v on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1508", 2)
+    _G.error("Missing argument v on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1377", 2)
   else
   end
   return _["sub*"](_, v, ch, close_3f)
 end
 local function unsub_2a(_, v, ch)
   if (nil == ch) then
-    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1509", 2)
+    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1378", 2)
   else
   end
   if (nil == v) then
-    _G.error("Missing argument v on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1509", 2)
+    _G.error("Missing argument v on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1378", 2)
   else
   end
   return _["unsub*"](_, v, ch)
 end
 local function unsub_all_2a(_, v)
   if (nil == v) then
-    _G.error("Missing argument v on .deps/git/io.gitlab.andreyorst/async.fnl/a83b13b397fdfab3ebf7f17a16d21a7ec2674ceb/src/io/gitlab/andreyorst/async.fnl:1510", 2)
+    _G.error("Missing argument v on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1379", 2)
   else
   end
   return _["unsub-all*"](_, v)
@@ -2550,8 +2550,8 @@ local function pub(ch, topic_fn, buf_fn)
     p = setmetatable({}, {__fennelview = _474_, __index = _458_, __name = "reify"})
   end
   do
-    local _let_475_ = require("src.io.gitlab.andreyorst.async")
-    local go_1_auto = _let_475_["go*"]
+    local _let_475_ = require("io.gitlab.andreyorst.async")
+    local go_3_auto = _let_475_["go*"]
     local function _476_()
       local function recur()
         local val = _3c_21(ch)
@@ -2578,7 +2578,7 @@ local function pub(ch, topic_fn, buf_fn)
       end
       return recur()
     end
-    go_1_auto(_476_)
+    go_3_auto(_476_)
   end
   return p
 end
@@ -2630,8 +2630,8 @@ local function map(f, chs, buf_or_n)
   if (0 == cnt) then
     close_21(out)
   else
-    local _let_485_ = require("src.io.gitlab.andreyorst.async")
-    local go_1_auto = _let_485_["go*"]
+    local _let_485_ = require("io.gitlab.andreyorst.async")
+    local go_3_auto = _let_485_["go*"]
     local function _486_()
       local function recur()
         dctr = cnt
@@ -2661,15 +2661,15 @@ local function map(f, chs, buf_or_n)
       end
       return recur()
     end
-    go_1_auto(_486_)
+    go_3_auto(_486_)
   end
   return out
 end
 local function merge(chs, buf_or_n)
   local out = chan(buf_or_n)
   do
-    local _let_493_ = require("src.io.gitlab.andreyorst.async")
-    local go_1_auto = _let_493_["go*"]
+    local _let_493_ = require("io.gitlab.andreyorst.async")
+    local go_3_auto = _let_493_["go*"]
     local function _494_()
       local _2_492_ = chs
       local cs = _2_492_
@@ -2708,7 +2708,7 @@ local function merge(chs, buf_or_n)
       end
       return recur(_2_492_)
     end
-    go_1_auto(_494_)
+    go_3_auto(_494_)
   end
   return out
 end
@@ -2722,7 +2722,7 @@ end
 local function take(n, ch, buf_or_n)
   local out = chan(buf_or_n)
   do
-    local _let_502_ = require("src.io.gitlab.andreyorst.async")
+    local _let_502_ = require("io.gitlab.andreyorst.async")
     local go_1_auto = _let_502_["go*"]
     local function _503_()
       local done = false
@@ -2743,4 +2743,4 @@ local function take(n, ch, buf_or_n)
   end
   return out
 end
-return {buffer = buffer, ["dropping-buffer"] = dropping_buffer, ["sliding-buffer"] = sliding_buffer, ["promise-buffer"] = promise_buffer, ["unblocking-buffer?"] = unblocking_buffer_3f, ["main-thread?"] = main_thread_3f, chan = chan, ["chan?"] = chan_3f, ["promise-chan"] = promise_chan, ["take!"] = take_21, ["<!!"] = _3c_21_21, ["<!"] = _3c_21, timeout = timeout, ["put!"] = put_21, [">!!"] = _3e_21_21, [">!"] = _3e_21, ["close!"] = close_21, ["go*"] = go_2a, ["alts!"] = alts_21, ["offer!"] = offer_21, ["poll!"] = poll_21, pipe = pipe, ["pipeline-async"] = pipeline_async, pipeline = pipeline, ["pipeline-async-unordered"] = pipeline_async_unordered, ["pipeline-unordered"] = pipeline_unordered, reduce = reduce, reduced = reduced, ["reduced?"] = reduced_3f, transduce = transduce, split = split, ["onto-chan!"] = onto_chan_21, ["to-chan!"] = to_chan_21, mult = mult, tap = tap, untap = untap, ["untap-all"] = untap_all, mix = mix, admix = admix, unmix = unmix, ["unmix-all"] = unmix_all, toggle = toggle, ["solo-mode"] = solo_mode, pub = pub, sub = sub, unsub = unsub, ["unsub-all"] = unsub_all, map = map, merge = merge, into = into, take = take, buffers = {FixedBuffer = FixedBuffer, SlidingBuffer = SlidingBuffer, DroppingBuffer = DroppingBuffer, PromiseBuffer = PromiseBuffer}, __VERSION = "dev"}
+return {buffer = buffer, ["dropping-buffer"] = dropping_buffer, ["sliding-buffer"] = sliding_buffer, ["promise-buffer"] = promise_buffer, ["unblocking-buffer?"] = unblocking_buffer_3f, ["main-thread?"] = main_thread_3f, chan = chan, ["chan?"] = chan_3f, ["promise-chan"] = promise_chan, ["take!"] = take_21, ["<!!"] = _3c_21_21, ["<!"] = _3c_21, timeout = timeout, ["put!"] = put_21, [">!!"] = _3e_21_21, [">!"] = _3e_21, ["close!"] = close_21, ["go*"] = go_2a, ["alts!"] = alts_21, ["offer!"] = offer_21, ["poll!"] = poll_21, pipe = pipe, ["pipeline-async"] = pipeline_async, pipeline = pipeline, ["pipeline-async-unordered"] = pipeline_async_unordered, ["pipeline-unordered"] = pipeline_unordered, reduce = reduce, reduced = reduced, ["reduced?"] = reduced_3f, transduce = transduce, split = split, ["onto-chan!"] = onto_chan_21, ["to-chan!"] = to_chan_21, mult = mult, tap = tap, untap = untap, ["untap-all"] = untap_all, mix = mix, admix = admix, unmix = unmix, ["unmix-all"] = unmix_all, toggle = toggle, ["solo-mode"] = solo_mode, pub = pub, sub = sub, unsub = unsub, ["unsub-all"] = unsub_all, map = map, merge = merge, into = into, take = take, buffers = {FixedBuffer = FixedBuffer, SlidingBuffer = SlidingBuffer, DroppingBuffer = DroppingBuffer, PromiseBuffer = PromiseBuffer}, __VERSION = "1.6.42"}

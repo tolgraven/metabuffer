@@ -3,6 +3,8 @@
 
  :deps {"io.gitlab.andreyorst/fennel-cljlib"
         {:type :git :sha "256d59ef6efd0f39ca35bb6815e9c29bc8b8584a"}
+        "io.gitlab.andreyorst/async.fnl"
+        {:type "git" :sha "ea0a63f2c87651f9c63ee775f2a066281b868573"}
         "io.gitlab.andreyorst/reader.fnl"
         {:type "git" :sha "3ff2bc790c8b7922267af5712a64a14572a172cf"}
         

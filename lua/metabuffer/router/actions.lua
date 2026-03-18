@@ -1,5 +1,4 @@
 -- [nfnl] fnl/metabuffer/router/actions.fnl
-local core = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local function session_by_prompt(active_by_prompt, prompt_buf)
   return active_by_prompt[prompt_buf]
@@ -103,7 +102,7 @@ end
 local function apply_prompt_window_opts_21(win)
   if (win and vim.api.nvim_win_is_valid(win)) then
     pcall(vim.api.nvim_win_set_var, win, "airline_disable_statusline", 1)
-    vim.wo[win] = core.merge(vim.wo[win], {winfixwidth = true, winfixheight = true, signcolumn = "no", foldcolumn = "0", statusline = " ", wrap = true, linebreak = true, number = false, relativenumber = false, spell = false})
+    vim.wo[win] = vim.wo[win]
     return nil
   else
     return nil

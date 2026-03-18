@@ -1,5 +1,5 @@
 (import-macros {: when-let : when-not} :io.gitlab.andreyorst.cljlib.core)
-(local core (require :io.gitlab.andreyorst.cljlib.core))
+; (local core (require :io.gitlab.andreyorst.cljlib.core))
 
 (local M {})
 
@@ -77,18 +77,18 @@
   [win]
   (when (and win (vim.api.nvim_win_is_valid win))
     (pcall vim.api.nvim_win_set_var win "airline_disable_statusline" 1)
-    (set (. vim.wo win)
-         (core.merge (. vim.wo win)
-                     {:winfixwidth true
-                     :winfixheight true
-                     :number false
-                     :relativenumber false
-                     :signcolumn "no"
-                     :foldcolumn "0"
-                     :statusline " "
-                     :spell false
-                     :wrap true
-                     :linebreak true}))))
+    (set (. vim.wo win) (. vim.wo win))))
+         ; (core.merge (. vim.wo win)
+         ;             {:winfixwidth true
+         ;             :winfixheight true
+         ;             :number false
+         ;             :relativenumber false
+         ;             :signcolumn "no"
+         ;             :foldcolumn "0"
+         ;             :statusline " "
+         ;             :spell false
+         ;             :wrap true
+         ;             :linebreak true}))))
 
 (fn hide-session-ui!
   [deps session]
