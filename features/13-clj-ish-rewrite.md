@@ -5,7 +5,7 @@ As much purity as possible, build complete maps rather than separately setting v
 - Use all of the Clojure core library available to us.
   - Always use `require-macros` to import all macros unqualified, and use them as such.
   - Use `import` to import all core functions unqualified, and use them as such.
-- Don't forget core.async (should be very useful) and some other stuff is also available.
+- Completely avoid all usages of core.async, since it requires Lua 5.2+, which Neovim does not have.
 - Generally stick to Clojure best practices, including keeping functions small and isolating side-effecting sections.
 
 Update your instructions to always follow this way of coding in the future.

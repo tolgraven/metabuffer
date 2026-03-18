@@ -1,6 +1,8 @@
 #!/usr//bin/env bash
-# This script is used to initialize the project. It will install the dependencies and create the necessary files.
+# This script is used to initialize the project. It will install and patch the dependencies and create the necessary files.
 #
 command -v deps >/dev/null 2>&1 || { echo >&2 "deps bin is not installed. Please install deps and run this script again."; exit 1; }
 ./scripts/init-nfnl
 deps --show
+
+patch -p1 < scripts/async.fnl.patch_lua51

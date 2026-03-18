@@ -1,0 +1,14 @@
+diff --git a/.deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl b/.deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl
+index bb341dd..f4e880e 100644
+--- a/.deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl
++++ b/.deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl
+@@ -11,7 +11,8 @@ You must not remove this notice, or any other, from this software.")
+   (or ... :io.gitlab.andreyorst.async))
+ 
+ (local main-thread
+-  (or (coroutine.running)
++  (or true
++      (coroutine.running)
+       (error (.. lib-name " requires Lua 5.2 or higher"))))
+ 
+ ;;; Helpers
