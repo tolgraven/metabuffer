@@ -275,23 +275,28 @@ M.new = function(opts)
           if (session and session_active_3f(session) and session["lazy-refresh-dirty"]) then
             session["lazy-refresh-dirty"] = false
             if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
-              local ok,err = pcall(session.meta["on-update"], 0)
-              if ok then
+              if (not session["lazy-stream-done"] and not prompt_has_active_query_3f(session)) then
                 pcall(session.meta.refresh_statusline)
                 pcall(update_info_window, session)
               else
-                if (err and string.find(tostring(err), "E565")) then
-                  local function _31_()
-                    if (session and session_active_3f(session) and session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
-                      pcall(session.meta["on-update"], 0)
-                      pcall(session.meta.refresh_statusline)
-                      return pcall(update_info_window, session)
-                    else
-                      return nil
-                    end
-                  end
-                  vim.defer_fn(_31_, 1)
+                local ok,err = pcall(session.meta["on-update"], 0)
+                if ok then
+                  pcall(session.meta.refresh_statusline)
+                  pcall(update_info_window, session)
                 else
+                  if (err and string.find(tostring(err), "E565")) then
+                    local function _31_()
+                      if (session and session_active_3f(session) and session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
+                        pcall(session.meta["on-update"], 0)
+                        pcall(session.meta.refresh_statusline)
+                        return pcall(update_info_window, session)
+                      else
+                        return nil
+                      end
+                    end
+                    vim.defer_fn(_31_, 1)
+                  else
+                  end
                 end
               end
             else
@@ -400,29 +405,29 @@ M.new = function(opts)
       local meta = session.meta
       for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)) do
         table.insert(content, "")
-        local _50_
+        local _51_
         do
           local rel = vim.fn.fnamemodify(path, ":.")
           if ((type(rel) == "string") and (rel ~= "")) then
-            _50_ = rel
+            _51_ = rel
           else
-            _50_ = path
+            _51_ = path
           end
         end
-        table.insert(refs, {path = path, lnum = 1, line = _50_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
+        table.insert(refs, {path = path, lnum = 1, line = _51_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
       end
       do local _ = {content = content, refs = refs} end
     else
     end
     local total_lines = 0
     local push_line_21
-    local function _53_(path, lnum, line)
+    local function _54_(path, lnum, line)
       table.insert(content, line)
       table.insert(refs, {path = path, lnum = lnum, line = line})
       total_lines = (total_lines + 1)
       return nil
     end
-    push_line_21 = _53_
+    push_line_21 = _54_
     for i, line in ipairs((session["single-content"] or {})) do
       push_line_21((current_path or "[Current Buffer]"), i, line)
     end
@@ -506,7 +511,7 @@ M.new = function(opts)
     end
   end
   local function lazy_preferred_3f(session, estimated_lines)
-    return (lazy_streaming_allowed_3f(session) and truthy_3f(session["lazy-mode"]) and ((settings["project-lazy-min-estimated-lines"] <= 0) or (estimated_lines >= settings["project-lazy-min-estimated-lines"])))
+    return (lazy_streaming_allowed_3f(session) and truthy_3f(session["lazy-mode"]) and ((session["project-mode"] and not session["project-bootstrapped"] and not prompt_has_active_query_3f(session)) or (settings["project-lazy-min-estimated-lines"] <= 0) or (estimated_lines >= settings["project-lazy-min-estimated-lines"])))
   end
   local function start_project_stream_21(session, prefilter, init)
     session["lazy-stream-id"] = (1 + (session["lazy-stream-id"] or 0))
@@ -521,9 +526,11 @@ M.new = function(opts)
         local paths = session["lazy-stream-paths"]
         local total = #paths
         local chunk = math.max(1, settings["project-lazy-chunk-size"])
+        local frame_budget = math.max(1, (settings["project-lazy-frame-budget-ms"] or 6))
+        local batch_start = now_ms()
         local consumed = 0
         local touched = false
-        while ((consumed < chunk) and (session["lazy-stream-next"] <= total) and (#session.meta.buf.content < settings["project-max-total-lines"])) do
+        while ((consumed < chunk) and ((now_ms() - batch_start) < frame_budget) and (session["lazy-stream-next"] <= total) and (#session.meta.buf.content < settings["project-max-total-lines"])) do
           local path = paths[session["lazy-stream-next"]]
           local lines = (path and read_file_lines_cached(path, {["include-binary"] = session["effective-include-binary"], ["hex-view"] = session["effective-include-hex"]}))
           local before = #session.meta.buf.content
@@ -542,12 +549,19 @@ M.new = function(opts)
           session["lazy-stream-done"] = true
         else
         end
+        if (session["lazy-stream-done"] and session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
+          session.meta.buf["visible-source-syntax-only"] = false
+          pcall(session.meta.buf["apply-source-syntax-regions"])
+          pcall(session.meta.refresh_statusline)
+          pcall(update_info_window, session, true)
+        else
+        end
         if touched then
           schedule_lazy_refresh_21(session)
         else
         end
         if (not session["lazy-stream-done"] and (stream_id == session["lazy-stream-id"]) and session_active_3f(session)) then
-          return vim.defer_fn(run_batch, 0)
+          return vim.defer_fn(run_batch, 17)
         else
           return nil
         end
@@ -575,6 +589,11 @@ M.new = function(opts)
         meta.buf.content = pool.content
         meta.buf["source-refs"] = pool.refs
         session["lazy-stream-done"] = true
+        if (session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
+          session.meta.buf["visible-source-syntax-only"] = false
+          pcall(session.meta.buf["apply-source-syntax-regions"])
+        else
+        end
       end
     else
       session["lazy-stream-id"] = (1 + (session["lazy-stream-id"] or 0))
@@ -599,7 +618,7 @@ M.new = function(opts)
       session["source-set-rebuild-token"] = (1 + (session["source-set-rebuild-token"] or 0))
       local token = session["source-set-rebuild-token"]
       session["source-set-rebuild-pending"] = true
-      local function _74_()
+      local function _77_()
         if (session and (token == session["source-set-rebuild-token"])) then
           session["source-set-rebuild-pending"] = false
         else
@@ -615,7 +634,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_74_, math.max(0, (wait_ms or 0)))
+      return vim.defer_fn(_77_, math.max(0, (wait_ms or 0)))
     else
       return nil
     end
@@ -642,7 +661,7 @@ M.new = function(opts)
       session["project-bootstrap-token"] = (1 + (session["project-bootstrap-token"] or 0))
       local token = session["project-bootstrap-token"]
       session["project-bootstrap-pending"] = true
-      local function _80_()
+      local function _83_()
         if (session and (token == session["project-bootstrap-token"])) then
           session["project-bootstrap-pending"] = false
         else
@@ -665,7 +684,7 @@ M.new = function(opts)
           end
           if not has_query then
             pcall(session.meta.buf.render)
-            restore_meta_view_21(session.meta, session["source-view"])
+            restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
             pcall(session.meta.refresh_statusline)
             return pcall(update_info_window, session)
           else
@@ -675,7 +694,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_80_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
+      return vim.defer_fn(_83_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
     else
       return nil
     end

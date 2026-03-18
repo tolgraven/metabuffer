@@ -29,20 +29,6 @@
     session
     delay))
 
-(fn recent-identical-forced-refresh?
-  [settings session txt now]
-  (and (= txt (or session.prompt-last-applied-text ""))
-       (> (math.max 0 (or settings.prompt-forced-coalesce-ms 0)) 0)
-       (< (- now (or session.prompt-last-apply-ms 0))
-          (math.max 0 (or settings.prompt-forced-coalesce-ms 0)))))
-
-(fn force-blocked-by-active-input?
-  [settings session now]
-  (< (- now (or session.prompt-last-change-ms 0))
-     (math.max
-       (math.max 0 (or settings.prompt-update-idle-ms 0))
-       (math.max 0 (or settings.prompt-forced-coalesce-ms 0)))))
-
 (fn force-within-idle-window?
   [settings session now]
   (and (> (math.max 0 (or settings.prompt-update-idle-ms 0)) 0)
@@ -50,7 +36,7 @@
           (math.max 0 (or settings.prompt-update-idle-ms 0)))))
 
 (fn queue-update-after-edit!
-  [settings prompt-scheduler-ctx session force txt now delay]
+  [settings prompt-scheduler-ctx session force now delay]
   (when-not (and force session.prompt-update-pending)
     (if (and force (force-within-idle-window? settings session now))
         (schedule-update!
@@ -58,28 +44,6 @@
           session
           (math.max delay settings.prompt-update-idle-ms))
         (schedule-update! prompt-scheduler-ctx session delay))))
-
-(fn apply-fresh-prompt-event!
-  [query-mod project-source settings prompt-scheduler-ctx session force txt now delay]
-  (set session.prompt-last-event-text txt)
-  (set session.last-prompt-text txt)
-  (set session.prompt-update-dirty true)
-  (set session.prompt-last-change-ms now)
-  (when-not force
-    (set session.prompt-force-block-until (+ now (math.max 0 delay))))
-  (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0)))
-  (when (and session.project-mode
-             (not session.project-bootstrapped)
-             (prompt-has-active-query? query-mod session))
-    (project-source.schedule-project-bootstrap! session settings.project-bootstrap-delay-ms))
-  (queue-update-after-edit! settings prompt-scheduler-ctx session force txt now delay))
-
-(fn apply-duplicate-text-event!
-  [prompt-scheduler-ctx session now delay]
-  (set session.prompt-last-change-ms now)
-  (set session.prompt-force-block-until (+ now (math.max 0 delay)))
-  (set session.prompt-update-dirty true)
-  (schedule-update! prompt-scheduler-ctx session delay))
 
 (fn invalidate-filter-cache!
   [session]
@@ -113,9 +77,11 @@
         (~= next-expansion session.expansion-mode))))
 
 (fn refresh-session-ui!
-  [session update-info-window context-window refresh-change-signs! capture-sign-baseline!]
+  [session update-preview-window update-info-window context-window refresh-change-signs! capture-sign-baseline!]
   (session.meta.refresh_statusline)
-  (update-info-window session)
+  (when update-preview-window
+    (update-preview-window session))
+  (update-info-window session true)
   (when (and context-window context-window.update!)
     (context-window.update! session))
   (when refresh-change-signs!
@@ -124,7 +90,7 @@
     (capture-sign-baseline! session)))
 
 (fn retry-textlock-update!
-  [session update-info-window context-window refresh-change-signs! capture-sign-baseline!]
+  [session update-preview-window update-info-window context-window refresh-change-signs! capture-sign-baseline!]
   (vim.defer_fn
     (fn []
       (when (and session.meta
@@ -132,6 +98,7 @@
         (pcall session.meta.on-update 0)
         (pcall refresh-session-ui!
                session
+               update-preview-window
                update-info-window
                context-window
                refresh-change-signs!
@@ -139,11 +106,12 @@
     1))
 
 (fn run-meta-update!
-  [session update-info-window context-window refresh-change-signs! capture-sign-baseline!]
+  [session update-preview-window update-info-window context-window refresh-change-signs! capture-sign-baseline!]
   (let [[ok err] [(pcall session.meta.on-update 0)]]
     (if ok
         (refresh-session-ui!
           session
+          update-preview-window
           update-info-window
           context-window
           refresh-change-signs!
@@ -151,6 +119,7 @@
         (when (string.find (tostring err) "E565")
           (retry-textlock-update!
             session
+            update-preview-window
             update-info-window
             context-window
             refresh-change-signs!
@@ -190,18 +159,18 @@
 
 (fn M.apply-prompt-lines!
   [deps session]
-  (let [{: query-mod
-         : project-source
-         : update-info-window
-         : context-window
-         : refresh-change-signs!
-         : capture-sign-baseline!
-         : settings
-         : merge-history-into-session!
-         : save-current-prompt-tag!
-         : restore-saved-prompt-tag!
-         : open-saved-browser!}
-        deps]
+  (let [{: mods : project : refresh : windows : history} deps
+        query-mod (. mods :query)
+        project-source (. project :source)
+        update-preview-window (. refresh :preview!)
+        update-info-window (. refresh :info!)
+        context-window (. windows :context)
+        refresh-change-signs! (. refresh :change-signs!)
+        capture-sign-baseline! (. refresh :capture-sign-baseline!)
+        merge-history-into-session! (. history :merge-into-session!)
+        save-current-prompt-tag! (. history :save-current-prompt-tag!)
+        restore-saved-prompt-tag! (. history :restore-saved-prompt-tag!)
+        open-saved-browser! (. history :open-saved-browser!)]
     (when (and session
                (not session.closing)
                (vim.api.nvim_buf_is_valid session.prompt-buf)
@@ -286,27 +255,29 @@
           (if (and session.project-mode source-changed? (not text-changed?))
               (refresh-session-ui!
                 session
+                update-preview-window
                 update-info-window
                 context-window
                 refresh-change-signs!
                 capture-sign-baseline!)
-              (run-meta-update!
-                session
-                update-info-window
-                context-window
-                refresh-change-signs!
+          (run-meta-update!
+            session
+            update-preview-window
+            update-info-window
+            context-window
+            refresh-change-signs!
                 capture-sign-baseline!))))))
       )
 
 (fn M.on-prompt-changed!
   [deps prompt-buf force event-tick]
   "Entry point for prompt edits; keeps typing fast by deferring matcher work."
-  (let [{: active-by-prompt
-         : query-mod
-         : project-source
-         : settings
-         : prompt-scheduler-ctx}
-        deps
+  (let [{: router : mods : project : state} deps
+        active-by-prompt (. router :active-by-prompt)
+        query-mod (. mods :query)
+        project-source (. project :source)
+        settings router
+        prompt-scheduler-ctx (. state :prompt-scheduler-ctx)
         session (. active-by-prompt prompt-buf)]
     (when (and session (not session.closing))
       (let [lines (router_util_mod.prompt-lines session)
@@ -327,8 +298,7 @@
         (when-not force
           (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0))))
         (when (and session.project-mode
-                   (not session.project-bootstrapped)
-                   (prompt-has-active-query? query-mod session))
+                   (not session.project-bootstrapped))
           (project-source.schedule-project-bootstrap! session settings.project-bootstrap-delay-ms))
         (if pure-flag-edit?
             (do
@@ -338,6 +308,6 @@
               (set session.prompt-update-dirty false)
               (router_prompt_mod.cancel-prompt-update! session)
               (M.apply-prompt-lines! deps session))
-            (queue-update-after-edit! settings prompt-scheduler-ctx session force "" now delay))))))
+            (queue-update-after-edit! settings prompt-scheduler-ctx session force now delay))))))
 
 M

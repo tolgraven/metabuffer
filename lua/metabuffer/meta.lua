@@ -400,6 +400,7 @@ M.new = function(nvim, condition)
       end
       self.buf["apply-syntax"](_48_())
     end
+    self.buf["visible-source-syntax-only"] = not not cond["project-mode"]
     clear_all_highlights()
     self.buf.render()
     do
@@ -610,7 +611,7 @@ M.new = function(nvim, condition)
         else
         end
       end
-      local highlight_max_hits = (vim.g.meta_highlight_max_hits or 20000)
+      local highlight_max_hits = (vim.g.meta_highlight_max_hits or 40000)
       if ((#queries == 0) or (#self.buf.indices >= highlight_max_hits)) then
         matcher["remove-highlight"](matcher)
       else

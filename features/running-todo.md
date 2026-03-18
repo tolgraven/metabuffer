@@ -39,4 +39,14 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 29 [] preview window should anchor one line higher so gets 8 lines by default.
 - 30 [] we should properly document all required and optional dependencies, and document what having those entails.
 - 31 [] is there any way to speed up the full screen tests in general? they're now taking 8s or so. can we run more tests in parallell instead?
-
+- 32 [x] airline continously overwrites statusline, which was not the case earlier. timing change thing?
+- 33 [] there is a white line dividing prompt window and preview window. it should be removed.
+- 34 [] in project mode, there is a jump once loader inevitably runs into a file longer than 999 lines (which most file we start from will be), so we should pin lineno col to width 3 from start, but then dynamically allow the full 4 _if they are in view_
+- 35 [] when exiting regular `:Meta` mode with `<Esc>`, the viewport jumps. Should stay still.
+- 36 [x] in project mode, selecting a result and trying to jump to it with <CR> just restores the position that existed before starting `:Meta`
+- 37 [x] in project mode, info window gets stuck on "finalizing results" instead of showing the info lines once loaded
+- 38 [x] statusline seems to get stuck under our control, at least Airline isn't being re-enabled.
+- 39 [] write a wrapper/helper for `vim.api.nvim_create_autocmd` for use in prompt/hooks.fnl and anywhere else appropriate. This will inject the correct group, session, and just be passed the inner function on the callback (to be wrapped in schedule-when-valid).
+- 40 [x] there is sometimes a flash when scrolling with `<C-d>` etc, one frame where the viewport jumps down several hundred lines then back. This appears to be because the nvim selected line and our model of it are out of sync. Ensure they always update in tandem and that what's visible is what we read. Or just always read it directly...
+- 41 [] if changing lines starts lagging behind due to updating info and preview buffers, we should skip directly to the latest directly, "dropping frames" so to speak, and not building up a queue of movements. Bundle them together instead. However, we should also profile what exactly is taking long when changing lines. This entire thing also applies to page scrolling with <C-d> etc.
+- 42 [] <C-d> etc behaves weird at start and end. Should jump to first and last line respectively if that's closer than where it wants to go.

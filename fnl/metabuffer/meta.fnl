@@ -332,6 +332,7 @@
                                (metabuffer-display-name self.buf.model)))
         (let [init-syntax (or (. vim.g "meta#syntax_on_init") "buffer")]
           (self.buf.apply-syntax (if (= init-syntax "meta") "meta" "buffer")))
+        (set self.buf.visible-source-syntax-only (not (not cond.project-mode)))
     (clear-all-highlights)
     (self.buf.render)
     (let [line-count (vim.api.nvim_buf_line_count self.buf.buffer)
@@ -517,7 +518,7 @@
           (when (and m (~= m matcher))
             (m.remove-highlight m)))
         (let [highlight-max-hits
-              (or vim.g.meta_highlight_max_hits 20000)]
+              (or vim.g.meta_highlight_max_hits 40000)]
         (if (or (= (# queries) 0) (>= (# self.buf.indices) highlight-max-hits))
             (matcher.remove-highlight matcher)
             (matcher.highlight matcher effective-query ignorecase self.win.window))))))

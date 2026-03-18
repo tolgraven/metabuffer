@@ -52,8 +52,31 @@ end
 
 function M.stop_child_once()
   if M.child.is_running() then
+    pcall(function()
+      M.child.lua([[
+        pcall(vim.cmd, 'stopinsert')
+        vim.schedule(function()
+          pcall(vim.cmd, 'silent! qa!')
+        end)
+      ]])
+    end)
     M.child.stop()
   end
+end
+
+local function ensure_prompt_insert()
+  M.child.lua([[
+    local router = require('metabuffer.router')
+    local session = router['active-by-source'][_G.__meta_source_buf]
+    assert(session and session['prompt-win'], 'missing prompt window')
+    if vim.api.nvim_win_is_valid(session['prompt-win']) then
+      vim.api.nvim_set_current_win(session['prompt-win'])
+      local mode = vim.fn.mode(1)
+      if mode ~= 'i' and mode ~= 'ic' and mode ~= 'ix' then
+        vim.cmd('startinsert')
+      end
+    end
+  ]])
 end
 
 function M.case_name()
@@ -88,15 +111,11 @@ function M.open_meta_with_lines(lines)
   M.child.cmd("enew")
   M.child.api.nvim_buf_set_lines(0, 0, -1, false, lines)
   M.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
-  M.child.cmd("Meta")
-
+  M.child.type_keys(":", "Meta", "<CR>")
+  vim.loop.sleep(150)
+  M.child.lua("if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end")
   M.wait_for(function()
     return M.child.lua_get("require('metabuffer.router')['active-by-source'][_G.__meta_source_buf] ~= nil")
-  end)
-
-  M.wait_for(function()
-    local mode = M.child.fn.mode(1)
-    return mode == "i" or mode == "ic" or mode == "ix"
   end)
 end
 
@@ -257,16 +276,12 @@ function M.open_project_meta_from_file(path)
   M.child.cmd("cd " .. root)
   M.child.cmd("edit " .. root .. "/" .. path)
   M.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
-  M.child.cmd("Meta!")
-
+  M.child.type_keys(":", "Meta!", "<CR>")
+  vim.loop.sleep(150)
+  M.child.lua("if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end")
   M.wait_for(function()
     return M.child.lua_get("require('metabuffer.router')['active-by-source'][_G.__meta_source_buf] ~= nil")
   end, 6000)
-
-  M.wait_for(function()
-    local mode = M.child.fn.mode(1)
-    return mode == "i" or mode == "ic" or mode == "ix"
-  end)
 end
 
 function M.make_temp_project()
@@ -300,7 +315,9 @@ function M.open_project_meta_in_dir(root, relpath)
   M.child.cmd("cd " .. root)
   M.child.cmd("edit " .. root .. "/" .. relpath)
   M.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
-  M.child.cmd("Meta!")
+  M.child.type_keys(":", "Meta!", "<CR>")
+  vim.loop.sleep(150)
+  M.child.lua("if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end")
   M.wait_for(function()
     return M.child.lua_get("require('metabuffer.router')['active-by-source'][_G.__meta_source_buf] ~= nil")
   end, 6000)
@@ -493,7 +510,7 @@ function M.session_statusline()
 end
 
 function M.session_info_snapshot()
-  return M.child.lua_get([[
+  local encoded = M.child.lua_get([[
     (function()
       local router = require('metabuffer.router')
       local s = router['active-by-source'][_G.__meta_source_buf]
@@ -505,9 +522,11 @@ function M.session_info_snapshot()
       local row = vim.api.nvim_win_get_cursor(info_win)[1]
       local line = vim.api.nvim_buf_get_lines(info_buf, row - 1, row, false)[1] or ''
       local count = vim.api.nvim_buf_line_count(info_buf)
-      return { row = row, line = line, count = count }
+      return vim.json.encode({ row = row, line = line, count = count })
     end)()
   ]])
+  if encoded == nil or encoded == vim.NIL then return nil end
+  return vim.json.decode(encoded)
 end
 
 function M.session_selected_ref()
@@ -523,6 +542,35 @@ function M.session_selected_ref()
       return { path = ref.path or '', lnum = ref.lnum or 0 }
     end)()
   ]])
+end
+
+function M.session_main_view()
+  local encoded = M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta and s.meta.win) then
+        return nil
+      end
+      local win = s.meta.win.window
+      if not (win and vim.api.nvim_win_is_valid(win)) then
+        return nil
+      end
+      local view = vim.api.nvim_win_call(win, function()
+        return vim.fn.winsaveview()
+      end)
+      local height = vim.api.nvim_win_get_height(win)
+      return vim.json.encode({
+        lnum = view.lnum or 0,
+        topline = view.topline or 0,
+        leftcol = view.leftcol or 0,
+        col = view.col or 0,
+        height = height,
+      })
+    end)()
+  ]])
+  if encoded == nil or encoded == vim.NIL then return nil end
+  return vim.json.decode(encoded)
 end
 
 function M.session_preview_contains(needle)
@@ -652,12 +700,14 @@ function M.dump_state(tag)
 end
 
 function M.type_prompt(keys)
+  ensure_prompt_insert()
   local encoded = M.child.api.nvim_replace_termcodes(keys, true, false, true)
   M.child.api.nvim_input(encoded)
   M.dump_state("type " .. keys)
 end
 
 function M.type_prompt_text(text)
+  ensure_prompt_insert()
   for i = 1, #text do
     M.child.api.nvim_input(string.sub(text, i, i))
   end
@@ -667,6 +717,7 @@ end
 function M.type_prompt_human(text, per_key_ms)
   local delay = per_key_ms or 25
   local slept = 0
+  ensure_prompt_insert()
   for i = 1, #text do
     M.child.api.nvim_input(string.sub(text, i, i))
     if delay > 0 then
@@ -681,6 +732,7 @@ end
 function M.type_prompt_tokens(tokens, per_key_ms)
   local delay = per_key_ms or 25
   local slept = 0
+  ensure_prompt_insert()
   for _, key in ipairs(tokens) do
     M.child.type_keys(0, key)
     if delay > 0 then

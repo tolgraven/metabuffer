@@ -10,8 +10,9 @@ M.new = function(nvim, buf, opts)
   local relative = _let_1_.relative
   local anchor = _let_1_.anchor
   local win = _let_1_.win
+  local winblend = _let_1_.winblend
   local lines = (vim.o.lines - 2)
-  local winblend = (vim.g.meta_float_winblend or 13)
+  local winblend0 = (winblend or vim.g.meta_float_winblend or 13)
   local cfg = {relative = (relative or "editor"), width = (width or 20), height = (height or lines), col = (col or 100), row = (row or 1), anchor = (anchor or "NE"), style = "minimal"}
   local _
   if win then
@@ -23,7 +24,7 @@ M.new = function(nvim, buf, opts)
   local win0 = vim.api.nvim_open_win(buf, false, cfg)
   do
     local wo = vim.wo[win0]
-    wo["winblend"] = winblend
+    wo["winblend"] = winblend0
   end
   return window_base.new(nvim, win0, {}, {})
 end

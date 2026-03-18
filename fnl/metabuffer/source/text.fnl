@@ -1,7 +1,18 @@
 (local path-hl (require :metabuffer.path_highlight))
 (local util (require :metabuffer.util))
+(local file-info (require :metabuffer.source.file_info))
 
 (local M {})
+
+(fn ref-path
+  [session ref]
+  (or (and ref ref.path)
+      (and session session.source-buf
+           (vim.api.nvim_buf_is_valid session.source-buf)
+           (let [name (vim.api.nvim_buf_get_name session.source-buf)]
+             (when (and (= (type name) "string") (~= name ""))
+               name)))
+      ""))
 
 (fn icon-field
   [icon]
@@ -93,16 +104,34 @@
 (fn M.info-view
   [session ref ctx]
   (let [mode (or (and ctx ctx.mode) "meta")
-        read-file-lines-cached (and ctx ctx.read-file-lines-cached)]
-    {:path (M.info-path ref false)
-     :icon-path (M.info-path ref false)
-     :show-icon true
-     :highlight-dir true
-     :highlight-file true
-     :sign {:text "  " :hl "LineNr"}
-     :suffix (M.info-suffix session ref mode read-file-lines-cached)
-     :suffix-prefix "  "
-     :suffix-highlights []}))
+        read-file-lines-cached (and ctx ctx.read-file-lines-cached)
+        single-source? (not (not (and ctx ctx.single-source?)))]
+    (if single-source?
+        (let [path (ref-path session ref)]
+          (if (and session.single-file-info-ready
+                   ref
+                   (~= path "")
+                   ref.lnum
+                   (= 1 (vim.fn.filereadable path)))
+              (file-info.line-meta-info-view session path ref.lnum 1)
+              {:path ""
+               :icon-path ""
+               :show-icon false
+               :highlight-dir false
+               :highlight-file false
+               :sign {:text "  " :hl "LineNr"}
+               :suffix (M.info-suffix session ref mode read-file-lines-cached)
+               :suffix-prefix ""
+               :suffix-highlights []}))
+        {:path (M.info-path ref false)
+         :icon-path (M.info-path ref false)
+         :show-icon true
+         :highlight-dir true
+         :highlight-file true
+         :sign {:text "  " :hl "LineNr"}
+         :suffix (M.info-suffix session ref mode read-file-lines-cached)
+         :suffix-prefix "  "
+         :suffix-highlights []})))
 
 (fn M.preview-filetype
   [ref]

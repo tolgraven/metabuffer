@@ -26,7 +26,7 @@ default_jobs() {
   local cpu_n="$1"
   local file_n="$2"
   local oversubscribe="${TEST_JOBS_MULTIPLIER:-1}"
-  local extra_jobs="${TEST_JOBS_EXTRA:-2}"
+  local extra_jobs="${TEST_JOBS_EXTRA:-0}"
   local default_max_jobs=$((cpu_n * 2))
   local max_jobs="${TEST_MAX_JOBS:-$default_max_jobs}"
   local jobs
@@ -97,10 +97,20 @@ fi
 
 FILTERS=()
 PROFILE_MODE=0
+VERBOSE=0
+TEST_FILE_TIMEOUT_MS="${TEST_FILE_TIMEOUT_MS:-10000}"
+if [[ "$TEST_FILE_TIMEOUT_MS" =~ ^[0-9]+$ ]]; then
+  :
+else
+  echo "error: TEST_FILE_TIMEOUT_MS must be an integer in milliseconds (got '$TEST_FILE_TIMEOUT_MS')" >&2
+  exit 2
+fi
 POSITIONAL=()
 for arg in "$@"; do
   if [[ "$arg" == "--profile" ]]; then
     PROFILE_MODE=1
+  elif [[ "$arg" == "--verbose" ]]; then
+    VERBOSE=1
   else
     POSITIONAL+=("$arg")
   fi
@@ -195,6 +205,8 @@ run_worker() {
   local profile="$PROFILE_DIR/$idx-$(basename "$file" .lua).profile.log"
   local appname="metabuffer-mini-${idx}-$$"
   local xdg_root="$tmp_dir/xdg-$idx"
+  local timeout_flag="$tmp_dir/$idx.timeout"
+  local timeout_s=$(((TEST_FILE_TIMEOUT_MS + 999) / 1000))
 
   local file_start_ms
   file_start_ms=$(python3 - <<'PY'
@@ -206,24 +218,55 @@ PY
   if (( PROFILE_MODE == 1 )); then
     : > "$profile"
   fi
+  : > "$log"
+  rm -f "$timeout_flag"
 
-  {
-    echo "[worker $idx] FILE START $file"
-    if (( PROFILE_MODE == 1 )); then
-      echo "[worker $idx] PROFILE FILE $profile"
+  local rc=0
+  if (( VERBOSE == 1 )); then
+    {
+      echo "[worker $idx] FILE START $file"
+      if (( PROFILE_MODE == 1 )); then
+        echo "[worker $idx] PROFILE FILE $profile"
+      fi
+    } >> "$log"
+  fi
+
+  TEST_FILE="$file" TEST_PROFILE="$PROFILE_MODE" TEST_PROFILE_PATH="$profile" TEST_WORKER_INDEX="$idx" NVIM_APPNAME="$appname" \
+    TMPDIR="/tmp" \
+    XDG_DATA_HOME="$xdg_root/data" \
+    XDG_STATE_HOME="$xdg_root/state" \
+    XDG_CACHE_HOME="$xdg_root/cache" \
+    XDG_CONFIG_HOME="$xdg_root/config" \
+    nvim --headless -u tests/minimal_init.lua -n -i NONE \
+    -c "lua local ok, err = pcall(function() MiniTest.run({collect={find_files=function() return {vim.env.TEST_FILE} end}, execute={stop_on_error=false, reporter=MiniTest.gen_reporter.stdout({group_depth=1})}}) end); if not ok then vim.api.nvim_err_writeln(tostring(err)); vim.cmd('cquit 1'); end" \
+    -c "lua vim.wait(600000, function() return not MiniTest.is_executing() end, 20); local fails = 0; for _, c in ipairs(MiniTest.current.all_cases or {}) do local s = c.exec and c.exec.state or ''; if s == 'Fail' or s == 'Fail with notes' then fails = fails + 1 end end; if fails > 0 then vim.cmd('cquit 1'); end" \
+    -c "qa!" >"$log" 2>&1 &
+  local test_pid=$!
+
+  (
+    sleep "$timeout_s"
+    if kill -0 "$test_pid" 2>/dev/null; then
+      echo "[mini-runner] TIMEOUT file=$file timeout_ms=$TEST_FILE_TIMEOUT_MS" >> "$log"
+      : > "$timeout_flag"
+      kill -TERM "$test_pid" 2>/dev/null || true
+      sleep 2
+      kill -KILL "$test_pid" 2>/dev/null || true
     fi
-    TEST_FILE="$file" TEST_PROFILE="$PROFILE_MODE" TEST_PROFILE_PATH="$profile" TEST_WORKER_INDEX="$idx" NVIM_APPNAME="$appname" \
-      TMPDIR="/tmp" \
-      XDG_DATA_HOME="$xdg_root/data" \
-      XDG_STATE_HOME="$xdg_root/state" \
-      XDG_CACHE_HOME="$xdg_root/cache" \
-      XDG_CONFIG_HOME="$xdg_root/config" \
-      nvim --headless -u tests/minimal_init.lua -n -i NONE \
-      -c "lua local ok, err = pcall(function() MiniTest.run({collect={find_files=function() return {vim.env.TEST_FILE} end}, execute={stop_on_error=false, reporter=MiniTest.gen_reporter.stdout({group_depth=1})}}) end); if not ok then vim.api.nvim_err_writeln(tostring(err)); vim.cmd('cquit 1'); end" \
-      -c "lua vim.wait(600000, function() return not MiniTest.is_executing() end, 20); local fails = 0; for _, c in ipairs(MiniTest.current.all_cases or {}) do local s = c.exec and c.exec.state or ''; if s == 'Fail' or s == 'Fail with notes' then fails = fails + 1 end end; if fails > 0 then vim.cmd('cquit 1'); end" \
-      -c "qa!"
-  } 2>&1 | sed -u "s/^/[w${idx}:${base}] /" | tee "$log"
-  local rc=${PIPESTATUS[0]}
+  ) &
+  local watchdog_pid=$!
+
+  if ! wait "$test_pid"; then
+    rc=$?
+  fi
+  kill "$watchdog_pid" 2>/dev/null || true
+  wait "$watchdog_pid" 2>/dev/null || true
+  if [[ -f "$timeout_flag" ]]; then
+    rc=124
+  fi
+
+  if (( VERBOSE == 1 )); then
+    sed -u "s/^/[w${idx}:${base}] /" "$log"
+  fi
 
   local file_end_ms
   file_end_ms=$(python3 - <<'PY'
@@ -234,11 +277,17 @@ PY
   local file_dt_ms=$((file_end_ms - file_start_ms))
 
   if (( PROFILE_MODE == 1 )) && [[ -s "$profile" ]]; then
-    sed -u "s/^/[w${idx}:${base}] /" "$profile" | tee -a "$log"
+    if (( VERBOSE == 1 )); then
+      sed -u "s/^/[w${idx}:${base}] /" "$profile" | tee -a "$log"
+    else
+      echo "[mini-runner] PROFILE $file | $profile" >> "$log"
+    fi
   fi
 
   echo "$file_dt_ms" > "$elapsed_ms_file"
-  echo "[worker $idx] FILE END $file | rc=$rc | ${file_dt_ms}ms" | sed -u "s/^/[w${idx}:${base}] /" | tee -a "$log"
+  if (( VERBOSE == 1 )); then
+    echo "[worker $idx] FILE END $file | rc=$rc | ${file_dt_ms}ms" | sed -u "s/^/[w${idx}:${base}] /" | tee -a "$log"
+  fi
   echo "$rc" > "$status"
   return 0
 }
@@ -247,6 +296,7 @@ export -f run_worker
 export ROOT_DIR
 export PROFILE_MODE
 export PROFILE_DIR
+export TEST_FILE_TIMEOUT_MS
 
 xargs -P "$JOBS" -n3 bash -c 'run_worker "$1" "$2" "$3"' _ < <(
   awk -F '\t' '{print $1" "$2" '"$TMP_DIR"'"}' "$TMP_DIR/indexed.tsv"
@@ -287,7 +337,7 @@ for i in "${!TEST_FILES[@]}"; do
   fi
 done
 
-if (( ${#TIMING_ROWS[@]} > 0 )); then
+if (( VERBOSE == 1 )) && (( ${#TIMING_ROWS[@]} > 0 )); then
   echo "[mini-runner] FILE TIMINGS"
   rank=0
   while IFS=$'\t' read -r elapsed_ms file; do

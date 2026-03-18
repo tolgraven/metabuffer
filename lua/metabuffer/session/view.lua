@@ -41,30 +41,50 @@ M["setup-state"] = function(query, mode, source_view)
     return ctx
   end
 end
-M["restore-meta-view!"] = function(meta, source_view)
+M["restore-meta-view!"] = function(meta, source_view, session, update_info_window)
   if (meta and vim.api.nvim_win_is_valid(meta.win.window)) then
     local line_count = vim.api.nvim_buf_line_count(meta.buf.buffer)
     local line = math.max(1, math.min(meta.selected_line(), line_count))
-    local src_view = (source_view or {})
-    local src_lnum = (src_view.lnum or line)
-    local src_topline = (src_view.topline or src_lnum)
-    local offset = math.max(0, (src_lnum - src_topline))
-    local topline = math.max(1, math.min((line - offset), line_count))
+    local current_view
     local function _8_()
+      return vim.fn.winsaveview()
+    end
+    current_view = vim.api.nvim_win_call(meta.win.window, _8_)
+    local src_view = (source_view or {})
+    local use_src_scroll_3f = ((src_view.topline ~= nil) and (not (session and session["project-mode"]) or session["startup-initializing"] or not not session["project-mode-starting?"]))
+    local base_view
+    if use_src_scroll_3f then
+      base_view = src_view
+    else
+      base_view = current_view
+    end
+    local base_lnum = (base_view.lnum or line)
+    local base_topline = (base_view.topline or base_lnum)
+    local offset = math.max(0, (base_lnum - base_topline))
+    local topline = math.max(1, math.min((line - offset), line_count))
+    local function _10_()
       local view = vim.fn.winsaveview()
       view["lnum"] = line
       view["topline"] = topline
-      if (src_view.leftcol ~= nil) then
-        view["leftcol"] = src_view.leftcol
+      if (base_view.leftcol ~= nil) then
+        view["leftcol"] = base_view.leftcol
       else
       end
-      if (src_view.col ~= nil) then
-        view["col"] = src_view.col
+      if (base_view.col ~= nil) then
+        view["col"] = base_view.col
       else
       end
-      return vim.fn.winrestview(view)
+      vim.fn.winrestview(view)
+      if (update_info_window and session) then
+        local function _13_()
+          return pcall(update_info_window, session, true)
+        end
+        return vim.defer_fn(_13_, 50)
+      else
+        return nil
+      end
     end
-    return vim.api.nvim_win_call(meta.win.window, _8_)
+    return vim.api.nvim_win_call(meta.win.window, _10_)
   else
     return nil
   end
@@ -92,12 +112,13 @@ M["sync-selected-from-main-cursor!"] = function(session)
   end
 end
 M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
-  local _let_15_ = (opts or {})
-  local active_by_prompt = _let_15_["active-by-prompt"]
-  local schedule_source_syntax_refresh_21 = _let_15_["schedule-source-syntax-refresh!"]
-  local update_info_window = _let_15_["update-info-window"]
-  local update_context_window_21 = _let_15_["update-context-window!"]
-  if (session and not session["startup-initializing"] and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
+  local _let_19_ = (opts or {})
+  local active_by_prompt = _let_19_["active-by-prompt"]
+  local schedule_source_syntax_refresh_21 = _let_19_["schedule-source-syntax-refresh!"]
+  local update_info_window = _let_19_["update-info-window"]
+  local update_preview_window_21 = _let_19_["update-preview-window!"]
+  local update_context_window_21 = _let_19_["update-context-window!"]
+  if (session and (not session["startup-initializing"] or session["project-mode"]) and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
     local before = session.meta.selected_index
     M["sync-selected-from-main-cursor!"](session)
     if force_refresh then
@@ -106,7 +127,11 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
     end
     if (force_refresh or (before ~= session.meta.selected_index)) then
       pcall(session.meta.refresh_statusline)
-      pcall(update_info_window, session, false)
+      if update_preview_window_21 then
+        pcall(update_preview_window_21, session)
+      else
+      end
+      pcall(update_info_window, session, true)
       if update_context_window_21 then
         return pcall(update_context_window_21, session)
       else
@@ -120,16 +145,16 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
   end
 end
 M["schedule-scroll-sync!"] = function(session, opts)
-  local _let_20_ = (opts or {})
-  local maybe_sync_from_main_21 = _let_20_["maybe-sync-from-main!"]
-  local scroll_sync_debounce_ms = _let_20_["scroll-sync-debounce-ms"]
+  local _let_25_ = (opts or {})
+  local maybe_sync_from_main_21 = _let_25_["maybe-sync-from-main!"]
+  local scroll_sync_debounce_ms = _let_25_["scroll-sync-debounce-ms"]
   if (session and not session["scroll-sync-pending"]) then
     session["scroll-sync-pending"] = true
-    local function _21_()
+    local function _26_()
       session["scroll-sync-pending"] = false
       return maybe_sync_from_main_21(session, true)
     end
-    return vim.defer_fn(_21_, scroll_sync_debounce_ms)
+    return vim.defer_fn(_26_, scroll_sync_debounce_ms)
   else
     return nil
   end

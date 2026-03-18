@@ -6,9 +6,9 @@
 (fn M.new
   [nvim buf opts]
   "Create a minimal floating window wrapper for auxiliary Meta UI."
-  (let [{: width : height : col : row : relative : anchor : win} (or opts {})
+  (let [{: width : height : col : row : relative : anchor : win : winblend} (or opts {})
         lines (- vim.o.lines 2)
-        winblend (or vim.g.meta_float_winblend 13)
+        winblend (or winblend vim.g.meta_float_winblend 13)
         cfg {:relative (or relative "editor")
              :width (or width 20)
              :height (or height lines)

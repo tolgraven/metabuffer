@@ -17,6 +17,18 @@ require("metabuffer").setup({
     window_local_layout = true,
     project_lazy_enabled = true,
   },
+  ui = {
+    animation = {
+      enabled = true,
+      time_scale = 1.0,
+      loading_indicator = true,
+      prompt = { enabled = true, time_scale = 1.0 },
+      preview = { enabled = true, time_scale = 1.0 },
+      info = { enabled = true, time_scale = 1.0 },
+      loading = { enabled = true, time_scale = 1.0 },
+      scroll = { enabled = true, time_scale = 1.0 },
+    },
+  },
   keymaps = {
     prompt = {
       { { "n", "i" }, "<CR>", "accept" },
@@ -91,6 +103,23 @@ Inspect defaults from Lua:
 ```lua
 require("metabuffer").defaults
 ```
+
+Animation controls:
+
+- `ui.animation.enabled`: master on/off switch for Meta window animations
+- `ui.animation.time_scale`: master speed multiplier
+  - `1.0` = normal
+  - `0.5` = twice as fast
+  - `2.0` = half speed
+- Per-animation toggles and speed scales:
+  - `ui.animation.prompt.enabled`, `ui.animation.prompt.time_scale`
+  - `ui.animation.preview.enabled`, `ui.animation.preview.time_scale`
+  - `ui.animation.info.enabled`, `ui.animation.info.time_scale`
+  - `ui.animation.loading.enabled`, `ui.animation.loading.time_scale`
+  - `ui.animation.scroll.enabled`, `ui.animation.scroll.time_scale`
+- `ui.animation.loading_indicator` controls whether the animated prompt footer loading word is shown at all
+
+Durations are not part of the public setup surface. Meta keeps sensible base timings internally and applies the master/per-animation scales on top.
 
 ### Commands
 
@@ -183,7 +212,7 @@ This repository follows the `nfnl` plugin pattern:
 
 Cljlib integration for Clojure-style macros:
 
-- macro entrypoint vendored at `fnl/io/gitlab/andreyorst/cljlib/core/init.fnlm`
+- managed via dependencies in `deps.fnl` and resolved by `.nfnl.fnl` during compilation.
 - project modules import selected cljlib macros (for example `when-let` / `if-let`) via:
   `(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)`
 
@@ -206,7 +235,7 @@ Utility scripts:
 
 ```sh
 # Embed a namespaced copy of nfnl under lua/metabuffer/nfnl
-./script/nfnl
+./scripts/init-nfnl
 
 # One-shot project compile via headless Neovim + embedded nfnl
 ./scripts/compile-fennel.sh

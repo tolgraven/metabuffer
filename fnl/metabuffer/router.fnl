@@ -3,7 +3,7 @@
 (local prompt_window_mod (require :metabuffer.window.prompt))
 (local meta_window_mod (require :metabuffer.window.metawindow))
 (local floating_window_mod (require :metabuffer.window.floating))
-; hey
+(local animation_mod (require :metabuffer.window.animation))
 (local preview_window_mod (require :metabuffer.window.preview))
 (local context_window_mod (require :metabuffer.window.context))
 (local info_window_mod (require :metabuffer.window.info))
@@ -88,7 +88,12 @@
                                session.prompt-buf
                                (= (. M.active-by-prompt session.prompt-buf) session)))
      :debug-log debug-log
-     :source-switch-debounce-ms M.preview-source-switch-debounce-ms}))
+     :source-switch-debounce-ms M.preview-source-switch-debounce-ms
+     :animation-mod animation_mod
+     :animate-enter? (fn [session]
+                       (and session
+                            session.animate-enter?))
+     :preview-slide-ms M.ui-animation-preview-ms}))
 
 (set info-window
   (let [candidate
@@ -99,14 +104,24 @@
            :info-max-lines M.info-max-lines
            :info-height router_util_mod.info-height
            :debug-log debug-log
+           :animation-mod animation_mod
+           :animate-enter? (fn [session]
+                             (and session
+                                  session.animate-enter?))
+           :info-fade-ms M.ui-animation-info-ms
            :read-file-lines-cached (fn [path]
-                                     (router_util_mod.read-file-lines-cached M path))
-           :update-preview (fn [session]
-                             (preview-window.maybe-update-for-selection! session))})]
-    (if (= (type candidate) "function")
+                                     (router_util_mod.read-file-lines-cached M path))})]
+    (if false ;(= (type candidate) "function")
         {:update! candidate
          :close-window! (fn [_] nil)}
         candidate)))
+
+(local update-preview-window
+  (fn [session]
+    (when (and session
+               (= (type preview-window) "table")
+               preview-window.maybe-update-for-selection!)
+      (preview-window.maybe-update-for-selection! session))))
 
 (set history-browser-window
   (history_browser_window_mod.new
@@ -183,20 +198,20 @@
      :update-info-window update-info-window}))
 
 (set query-flow-deps
-  {:active-by-prompt M.active-by-prompt
-   :query-mod query_mod
-   :project-source project-source
-   :update-info-window update-info-window
-   :context-window context-window
-   :settings M
-   :prompt-scheduler-ctx prompt-scheduler-ctx
-   :merge-history-into-session! history-api.merge-history-into-session!
-   :save-current-prompt-tag! history-api.save-current-prompt-tag!
-   :restore-saved-prompt-tag! history-api.restore-saved-prompt-tag!
-   :open-saved-browser! (fn [session]
-                          (history-api.open-history-browser! session "saved"))
-   :refresh-change-signs! sign_mod.refresh-change-signs!
-   :capture-sign-baseline! sign_mod.capture-baseline!
+  {:router M
+   :mods {:query query_mod}
+   :project {:source project-source}
+   :windows {:context context-window}
+   :history {:merge-into-session! history-api.merge-history-into-session!
+             :save-current-prompt-tag! history-api.save-current-prompt-tag!
+             :restore-saved-prompt-tag! history-api.restore-saved-prompt-tag!
+             :open-saved-browser! (fn [session]
+                                    (history-api.open-history-browser! session "saved"))}
+   :refresh {:preview! update-preview-window
+             :info! update-info-window
+             :change-signs! sign_mod.refresh-change-signs!
+             :capture-sign-baseline! sign_mod.capture-baseline!}
+   :state {:prompt-scheduler-ctx prompt-scheduler-ctx}
    :apply-prompt-lines (fn [session]
                          (apply-prompt-lines session))})
 
@@ -224,81 +239,40 @@
     (router_query_flow_mod.apply-prompt-lines! query-flow-deps session)))
 
 (set actions-deps
-  {:active-by-source M.active-by-source
-   :active-by-prompt M.active-by-prompt
-   :instances M.instances
-   :settings M
-   :history-api history-api
-   :history-store history_store
-   :sign-mod sign_mod
-   :prompt-window-mod prompt_window_mod
-   :meta-window-mod meta_window_mod
-   :router-util-mod router_util_mod
-   :router-prompt-mod router_prompt_mod
-   :session-view session_view
-   :base-buffer base_buffer
-   :info-window info-window
-   :preview-window preview-window
-   :context-window context-window
-   :project-source project-source
-   :update-info-window update-info-window
-   :sync-prompt-buffer-name! sync-prompt-buffer-name!
-   :apply-prompt-lines apply-prompt-lines
-   :wrapup M._wrapup})
+  {:router M
+   :mods {:sign sign_mod
+          :prompt-window prompt_window_mod
+          :meta-window meta_window_mod
+          :router-util router_util_mod
+          :router-prompt router_prompt_mod
+          :session-view session_view
+          :base-buffer base_buffer}
+   :windows {:info info-window
+             :preview preview-window
+             :context context-window}
+   :history {:api history-api
+             :store history_store}
+   :project {:source project-source}
+   :refresh {:info! update-info-window
+             :sync-prompt-buffer-name! sync-prompt-buffer-name!
+             :apply-prompt-lines! apply-prompt-lines
+             :wrapup M._wrapup}})
+
+(local next-instance-id!
+  (fn []
+    (set M._instance-seq (+ (or M._instance-seq 0) 1))
+    M._instance-seq))
 
 (set navigation-deps
-  {:active-by-prompt M.active-by-prompt
-   :update-info-window update-info-window
-   :context-window context-window
-   :session-view session_view
-   :scroll-sync-debounce-ms M.scroll-sync-debounce-ms
-   :source-syntax-refresh-debounce-ms M.source-syntax-refresh-debounce-ms})
+  {:router M
+   :mods {:session-view session_view
+          :animation animation_mod}
+   :windows {:context context-window}
+   :refresh {:preview! update-preview-window
+             :info! update-info-window}
+   :timing {:scroll-sync-debounce-ms M.scroll-sync-debounce-ms
+            :source-syntax-refresh-debounce-ms M.source-syntax-refresh-debounce-ms}})
 
-(set session-deps
-  {:router-api M
-   :settings M
-   :history-api history-api
-   :query-mod query_mod
-   :remove-session! remove-session
-   :active-by-source M.active-by-source
-   :active-by-prompt M.active-by-prompt
-   :instances M.instances
-   :session-view session_view
-   :meta-mod meta_mod
-   :base-buffer base_buffer
-   :router-util-mod router_util_mod
-   :prompt-window-mod prompt_window_mod
-   :project-source project-source
-   :meta-window-mod meta_window_mod
-   :preview-window preview-window
-   :context-window context-window
-   :history-store history_store
-   :sign-mod sign_mod
-   :next-instance-id! (fn []
-                        (set M._instance-seq (+ (or M._instance-seq 0) 1))
-                        M._instance-seq)
-   :sync-prompt-buffer-name! sync-prompt-buffer-name!
-   :apply-prompt-lines apply-prompt-lines
-   :update-info-window update-info-window
-   :prompt-hooks-mod prompt_hooks_mod
-   :default-prompt-keymaps M.prompt-keymaps
-   :default-main-keymaps M.main-keymaps
-   :on-prompt-changed (fn [prompt-buf force event-tick]
-                        (M.on-prompt-changed prompt-buf force event-tick))
-   :maybe-sync-from-main! (fn [session force-refresh]
-                            (router_navigation_mod.maybe-sync-from-main!
-                              navigation-deps
-                              session
-                              force-refresh))
-   :schedule-scroll-sync! (fn [session]
-                            (router_navigation_mod.schedule-scroll-sync!
-                              navigation-deps
-                              session))
-   :maybe-restore-hidden-ui! (fn [session force]
-                               (router_actions_mod.maybe-restore-ui!
-                                 actions-deps
-                                 session.prompt-buf
-                                 (if (= force nil) false force)))})
 
 (fn M.on-prompt-changed
   [prompt-buf force event-tick]
@@ -480,9 +454,57 @@
   (router_actions_mod.on-results-buffer-wipe! actions-deps results-buf))
 
 (fn M.maybe-restore-hidden-ui
-  [prompt-buf]
+  [prompt-buf force]
   "Restore hidden prompt/info UI when revisiting a preserved results buffer."
-  (router_actions_mod.maybe-restore-ui! actions-deps prompt-buf false))
+  (router_actions_mod.maybe-restore-ui! actions-deps prompt-buf (if (= force nil) false force)))
+
+(set session-deps
+  {:router M
+   :history-api history-api
+   :query-mod query_mod
+   :remove-session! remove-session
+   :session-view session_view
+   :base-buffer base_buffer
+   :project-source project-source
+   :history-store history_store
+   :next-instance-id! next-instance-id!
+   :sync-prompt-buffer-name! sync-prompt-buffer-name!
+   :apply-prompt-lines apply-prompt-lines
+   :update-preview-window update-preview-window
+   :update-info-window update-info-window
+   :on-prompt-changed (fn [prompt-buf force event-tick]
+                        (M.on-prompt-changed prompt-buf force event-tick))
+   :maybe-sync-from-main! maybe-sync-from-main!
+   :schedule-scroll-sync! schedule-scroll-sync!
+   :maybe-restore-hidden-ui! (fn [session force]
+                               (M.maybe-restore-hidden-ui session.prompt-buf force))
+   :mods {:meta meta_mod
+          :router-util router_util_mod
+          :prompt-window prompt_window_mod
+          :meta-window meta_window_mod
+          :prompt-hooks prompt_hooks_mod
+          :animation animation_mod}
+   :windows {:preview preview-window
+             :info info-window
+             :context context-window}
+   :ui {:loading-indicator M.ui-loading-indicator
+        :animation {:enabled M.ui-animations-enabled
+                    :time-scale M.ui-animations-time-scale
+                    :prompt {:enabled M.ui-animation-prompt-enabled
+                             :ms M.ui-animation-prompt-ms
+                             :time-scale M.ui-animation-prompt-time-scale}
+                    :preview {:enabled M.ui-animation-preview-enabled
+                              :ms M.ui-animation-preview-ms
+                              :time-scale M.ui-animation-preview-time-scale}
+                    :info {:enabled M.ui-animation-info-enabled
+                           :ms M.ui-animation-info-ms
+                           :time-scale M.ui-animation-info-time-scale}
+                    :loading {:enabled M.ui-animation-loading-enabled
+                              :ms M.ui-animation-loading-ms
+                              :time-scale M.ui-animation-loading-time-scale}
+                    :scroll {:enabled M.ui-animation-scroll-enabled
+                             :ms M.ui-animation-scroll-ms
+                             :time-scale M.ui-animation-scroll-time-scale}}}})
 
 (fn M.toggle-scan-option
   [prompt-buf which]
@@ -609,7 +631,8 @@
           (maybe-delete-buf! session.meta.buf.buffer))
         (when (and info-window info-window.close-window!)
           (pcall info-window.close-window! session))
-        (when (and preview-window preview-window.close-window!)
+        (when (and (= (type preview-window) "table")
+                   preview-window.close-window!)
           (pcall preview-window.close-window! session))
         (when (and context-window context-window.close-window!)
           (pcall context-window.close-window! session))

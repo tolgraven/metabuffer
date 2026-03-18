@@ -231,23 +231,31 @@
               (when (and session.meta
                          session.meta.buf
                          (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-                (let [[ok err] [(pcall session.meta.on-update 0)]]
-                  (if ok
-                      (do
-                        (pcall session.meta.refresh_statusline)
-                        (pcall update-info-window session))
-                      (when (and err (string.find (tostring err) "E565"))
-                        (vim.defer_fn
-                          (fn []
-                            (when (and session
-                                       (session-active? session)
-                                       session.meta
-                                       session.meta.buf
-                                       (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-                              (pcall session.meta.on-update 0)
-                              (pcall session.meta.refresh_statusline)
-                              (pcall update-info-window session)))
-                          1))))))
+                (if (and (not session.lazy-stream-done)
+                         (not (prompt-has-active-query? session)))
+                    (do
+                      ;; During empty-query startup streaming, visible results stay stable.
+                      ;; Avoid re-running the full filter/render path on every batch and
+                      ;; update only progress/status UI until the stream completes.
+                      (pcall session.meta.refresh_statusline)
+                      (pcall update-info-window session))
+                    (let [[ok err] [(pcall session.meta.on-update 0)]]
+                      (if ok
+                          (do
+                            (pcall session.meta.refresh_statusline)
+                            (pcall update-info-window session))
+                          (when (and err (string.find (tostring err) "E565"))
+                            (vim.defer_fn
+                              (fn []
+                                (when (and session
+                                           (session-active? session)
+                                           session.meta
+                                           session.meta.buf
+                                           (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+                                  (pcall session.meta.on-update 0)
+                                  (pcall session.meta.refresh_statusline)
+                                  (pcall update-info-window session)))
+                              1)))))))
             (when (and session (session-active? session) session.lazy-refresh-dirty)
               (schedule-lazy-refresh! session)))
           (math.max
@@ -434,7 +442,10 @@
     [session estimated-lines]
     (and (lazy-streaming-allowed? session)
          (truthy? session.lazy-mode)
-         (or (<= settings.project-lazy-min-estimated-lines 0)
+         (or (and session.project-mode
+                  (not session.project-bootstrapped)
+                  (not (prompt-has-active-query? session)))
+             (<= settings.project-lazy-min-estimated-lines 0)
              (>= estimated-lines settings.project-lazy-min-estimated-lines))))
 
   (fn start-project-stream!
@@ -453,10 +464,13 @@
                  (not session.lazy-stream-done))
         (let [paths session.lazy-stream-paths
               total (# paths)
-              chunk (math.max 1 settings.project-lazy-chunk-size)]
+              chunk (math.max 1 settings.project-lazy-chunk-size)
+              frame-budget (math.max 1 (or settings.project-lazy-frame-budget-ms 6))
+              batch-start (now-ms)]
           (var consumed 0)
           (var touched false)
           (while (and (< consumed chunk)
+                      (< (- (now-ms) batch-start) frame-budget)
                       (<= session.lazy-stream-next total)
                       (< (# session.meta.buf.content) settings.project-max-total-lines))
             (let [path (. paths session.lazy-stream-next)
@@ -475,12 +489,24 @@
           (when (or (> session.lazy-stream-next total)
                     (>= (# session.meta.buf.content) settings.project-max-total-lines))
             (set session.lazy-stream-done true))
+          (when (and session.lazy-stream-done
+                     session.meta
+                     session.meta.buf
+                     (not session.prompt-animating?)
+                     (not session.startup-initializing))
+            (set session.meta.buf.visible-source-syntax-only false)
+            (pcall session.meta.buf.apply-source-syntax-regions)
+            ;; Always force one final UI refresh when streaming settles so the
+            ;; info pane leaves its loading/empty state even if the last batch
+            ;; did not append any new visible lines.
+            (pcall session.meta.refresh_statusline)
+            (pcall update-info-window session true))
           (when touched
             (schedule-lazy-refresh! session))
           (when (and (not session.lazy-stream-done)
                      (= stream-id session.lazy-stream-id)
                      (session-active? session))
-            (vim.defer_fn run-batch 0)))))
+            (vim.defer_fn run-batch 17)))))
       (vim.defer_fn run-batch 0)))
 
   (fn apply-source-set!
@@ -506,7 +532,13 @@
                                                   session.effective-include-files)]
                 (set meta.buf.content pool.content)
                 (set meta.buf.source-refs pool.refs)
-                (set session.lazy-stream-done true))))
+                (set session.lazy-stream-done true)
+                (when (and session.meta
+                           session.meta.buf
+                           (not session.prompt-animating?)
+                           (not session.startup-initializing))
+                  (set session.meta.buf.visible-source-syntax-only false)
+                  (pcall session.meta.buf.apply-source-syntax-regions)))))
         (do
           (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
           (set session.lazy-stream-done true)
@@ -605,7 +637,7 @@
                 ;; Keep selection/view stable even when no prompt filter is applied.
                 (when-not has-query
                   (pcall session.meta.buf.render)
-                  (restore-meta-view! session.meta session.source-view)
+                  (restore-meta-view! session.meta session.source-view session update-info-window)
                   (pcall session.meta.refresh_statusline)
                   (pcall update-info-window session)))))
           (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms))))))

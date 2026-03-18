@@ -4,11 +4,7 @@ set -xe
 
 mkdir -p deps
 
-if [ -d "deps/nfnl" ]; then
-  (cd deps/nfnl && git pull)
-else
-  git clone https://github.com/Olical/nfnl.git deps/nfnl
-fi
+test -d deps/nfnl/.git || { echo >&2 "deps/nfnl submodule is missing. Run ./scripts/init to initialize submodules."; exit 1; }
 
 # Embed nfnl under lua/metabuffer/nfnl and fnl/metabuffer/nfnl with project namespacing.
 rm -rf fnl/metabuffer/nfnl lua/metabuffer/nfnl

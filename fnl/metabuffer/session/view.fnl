@@ -32,26 +32,37 @@
         ctx)))
 
 (fn M.restore-meta-view!
-  [meta source-view]
-  "Restore cursor and viewport in the results window from stored source view."
+  [meta source-view session update-info-window]
+  "Restore cursor and viewport in the results window."
   (when (and meta (vim.api.nvim_win_is_valid meta.win.window))
     (let [line-count (vim.api.nvim_buf_line_count meta.buf.buffer)
           line (math.max 1 (math.min (meta.selected_line) line-count))
+          current-view (vim.api.nvim_win_call meta.win.window (fn [] (vim.fn.winsaveview)))
           src-view (or source-view {})
-          src-lnum (or (. src-view :lnum) line)
-          src-topline (or (. src-view :topline) src-lnum)
-          offset (math.max 0 (- src-lnum src-topline))
+          ;; Only use source-view for topline/scroll-offset if we are not in project-mode
+          ;; unless project-mode is still in its startup phase, where we want
+          ;; the current-file selection to inherit the user's original viewport.
+          use-src-scroll? (and (not= (. src-view :topline) nil)
+                               (or (not (and session session.project-mode))
+                                   session.startup-initializing
+                                   (not (not session.project-mode-starting?))))
+          base-view (if use-src-scroll? src-view current-view)
+          base-lnum (or (. base-view :lnum) line)
+          base-topline (or (. base-view :topline) base-lnum)
+          offset (math.max 0 (- base-lnum base-topline))
           topline (math.max 1 (math.min (- line offset) line-count))]
       (vim.api.nvim_win_call meta.win.window
         (fn []
           (let [view (vim.fn.winsaveview)]
             (set (. view :lnum) line)
             (set (. view :topline) topline)
-            (when (~= (. src-view :leftcol) nil)
-              (set (. view :leftcol) (. src-view :leftcol)))
-            (when (~= (. src-view :col) nil)
-              (set (. view :col) (. src-view :col)))
-            (vim.fn.winrestview view)))))))
+            (when (~= (. base-view :leftcol) nil)
+              (set (. view :leftcol) (. base-view :leftcol)))
+            (when (~= (. base-view :col) nil)
+              (set (. view :col) (. base-view :col)))
+            (vim.fn.winrestview view)
+            (when (and update-info-window session)
+              (vim.defer_fn (fn [] (pcall update-info-window session true)) 50))))))))
 
 (fn M.sync-selected-from-main-cursor!
   [session]
@@ -74,10 +85,12 @@
   (let [{: active-by-prompt
          : schedule-source-syntax-refresh!
          : update-info-window
+         : update-preview-window!
          : update-context-window!}
         (or opts {})]
     (when (and session
-               (not session.startup-initializing)
+               (or (not session.startup-initializing)
+                   session.project-mode)
                (vim.api.nvim_win_is_valid session.meta.win.window)
                (vim.api.nvim_buf_is_valid session.prompt-buf)
                (= (. active-by-prompt session.prompt-buf) session))
@@ -87,7 +100,9 @@
           (schedule-source-syntax-refresh! session))
         (when (or force-refresh (~= before session.meta.selected_index))
           (pcall session.meta.refresh_statusline)
-          (pcall update-info-window session false)
+          (when update-preview-window!
+            (pcall update-preview-window! session))
+          (pcall update-info-window session true)
           (when update-context-window!
             (pcall update-context-window! session)))))))
 

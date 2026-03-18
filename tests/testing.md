@@ -13,6 +13,8 @@ This repo now has two parallelized suites:
   - runner prints the persistent `/tmp/...` profile directory and each worker profile file path
 - Use the real metabuffer repo instead of the default generated project fixture:
   - `TEST_REAL_REPO=1 ./scripts/test-mini.sh`
+- Enable UI animations inside the headless mini child:
+  - `TEST_UI_ANIMATIONS=1 ./scripts/test-mini.sh`
 - Override worker count:
   - `TEST_JOBS=4 ./scripts/test-mini.sh`
 - Override default oversubscription:
@@ -55,6 +57,8 @@ Key helper coverage:
   - text files containing stable query terms (`meta`, `metam`, `local`, `lua`, `preview-window`, `info-window`)
   - a synthetic binary `metabuffer.png`
   - enough files to exercise lazy project bootstrap without using the full repo
+- Animations are disabled by default in screen tests for determinism; opt in with
+  `TEST_UI_ANIMATIONS=1` when specifically exercising animation behavior.
 
 ### `tests/screen/matchers/test_screen_matchers_basic_*.lua`
 - Prompt edit hotkeys (`<C-a>`, `<C-e>`, `<C-u>`, `<C-y>`).
@@ -70,6 +74,10 @@ Key helper coverage:
 ### `tests/screen/project/test_screen_project_filtering_*.lua`
 - Project mode immediate typing during lazy stream.
 - Clear-query broadening while preserving source pool.
+
+### `tests/screen/project/test_screen_project_restore_view.lua`
+- Project bootstrap keeps the startup-selected result at the same viewport offset.
+- Guards against post-startup restores pushing the selected line toward the top.
 
 ### `tests/screen/project/test_screen_project_flags_core_*.lua`
 - `#hidden/#deps/#nolazy` consumption + status/debug reflection.
@@ -146,6 +154,7 @@ Key helper coverage:
 - Default keymap exposure.
 - Nested keymap override resolution.
 - Debounce defaults presence.
+- Nested `ui.animation` option resolution, legacy aliases, and time-scale math.
 
 ### `tests/unit/test_prompt_timing_unit.lua`
 - Debounce timing by query length (1/2/3+ chars).

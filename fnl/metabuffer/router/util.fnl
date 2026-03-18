@@ -46,15 +46,38 @@
 
 (fn M.info-height
   [session]
-  (if (and session session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
-      (let [p-row-col (vim.api.nvim_win_get_position session.prompt-win)
-            p-row (. p-row-col 1)]
-        (math.max 7 (- p-row 2)))
-      (math.max 7 (- vim.o.lines (+ (M.prompt-height) 4)))))
+  (cond
+    (and session
+         (or session.startup-initializing session.prompt-animating? session.animate-enter?)
+         session.source-view)
+    (let [host-height (or (. session.source-view :_meta_win_height)
+                          (and session.origin-win
+                               (vim.api.nvim_win_is_valid session.origin-win)
+                               (vim.api.nvim_win_get_height session.origin-win))
+                          (and session.meta
+                               session.meta.win
+                               (vim.api.nvim_win_is_valid session.meta.win.window)
+                               (vim.api.nvim_win_get_height session.meta.win.window))
+                          0)
+          prompt-height (math.max 1 (or session.prompt-target-height (M.prompt-height)))]
+      (math.max 7 (- host-height prompt-height)))
+    (and session
+         session.meta
+         session.meta.win
+         (vim.api.nvim_win_is_valid session.meta.win.window))
+    (math.max 7 (vim.api.nvim_win_get_height session.meta.win.window))
+    (and session session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+    (let [p-row-col (vim.api.nvim_win_get_position session.prompt-win)
+          p-row (. p-row-col 1)]
+      (math.max 7 (- p-row 2)))
+    true
+    (math.max 7 (- vim.o.lines (+ (M.prompt-height) 4)))))
 
 (fn M.prompt-lines
   [session]
-  (if (and session (vim.api.nvim_buf_is_valid session.prompt-buf))
+  (if (and session
+           (= (type session.prompt-buf) "number")
+           (vim.api.nvim_buf_is_valid session.prompt-buf))
       (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)
       []))
 
