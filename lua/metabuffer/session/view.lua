@@ -45,32 +45,33 @@ M["restore-meta-view!"] = function(meta, source_view, session, update_info_windo
   if (meta and vim.api.nvim_win_is_valid(meta.win.window)) then
     local line_count = vim.api.nvim_buf_line_count(meta.buf.buffer)
     local line = math.max(1, math.min(meta.selected_line(), line_count))
+    local current_view
+    local function _8_()
+      return vim.fn.winsaveview()
+    end
+    current_view = vim.api.nvim_win_call(meta.win.window, _8_)
     local src_view = (source_view or {})
-    local use_src_scroll_3f = (not (session and session["project-mode"]) and (src_view.topline ~= nil))
-    local src_lnum
+    local use_src_scroll_3f = ((src_view.topline ~= nil) and (not (session and session["project-mode"]) or session["startup-initializing"] or not not session["project-mode-starting?"]))
+    local base_view
     if use_src_scroll_3f then
-      src_lnum = (src_view.lnum or line)
+      base_view = src_view
     else
-      src_lnum = line
+      base_view = current_view
     end
-    local src_topline
-    if use_src_scroll_3f then
-      src_topline = (src_view.topline or src_lnum)
-    else
-      src_topline = line
-    end
-    local offset = math.max(0, (src_lnum - src_topline))
+    local base_lnum = (base_view.lnum or line)
+    local base_topline = (base_view.topline or base_lnum)
+    local offset = math.max(0, (base_lnum - base_topline))
     local topline = math.max(1, math.min((line - offset), line_count))
     local function _10_()
       local view = vim.fn.winsaveview()
       view["lnum"] = line
       view["topline"] = topline
-      if (use_src_scroll_3f and (src_view.leftcol ~= nil)) then
-        view["leftcol"] = src_view.leftcol
+      if (base_view.leftcol ~= nil) then
+        view["leftcol"] = base_view.leftcol
       else
       end
-      if (use_src_scroll_3f and (src_view.col ~= nil)) then
-        view["col"] = src_view.col
+      if (base_view.col ~= nil) then
+        view["col"] = base_view.col
       else
       end
       vim.fn.winrestview(view)

@@ -21,6 +21,14 @@
                     0)]
     (math.max prompt-ms info-ms)))
 
+(fn project-start-selected-index
+  [project-mode mode source-view condition]
+  (if (and project-mode (= mode "start"))
+      (math.max 0 (- (or (. source-view :lnum)
+                         (+ (or (. condition :selected-index) 0) 1))
+                     1))
+      (or (. condition :selected-index) 0)))
+
 (fn register-prompt-hooks!
   [deps session]
     (let [router (. deps :router)
@@ -276,6 +284,7 @@
     (vim.schedule
       (fn []
         (set session.startup-initializing false)
+        (set session.project-mode-starting? false)
         (pcall update-info-window session)
         (vim.defer_fn
           (fn []
@@ -381,8 +390,8 @@
                     source-view (vim.fn.winsaveview)
                     _ (set (. source-view :_meta_win_height) (vim.api.nvim_win_get_height origin-win))
                     condition (session-view.setup-state query mode source-view)
-                    _ (when (and project-mode (= mode "start"))
-                        (set condition.selected-index 0))
+                    _ (set condition.selected-index
+                           (project-start-selected-index project-mode mode source-view condition))
                     curr (meta-mod.new vim condition)]
 
                 (set curr.project-mode (or project-mode false))
@@ -462,6 +471,7 @@
                                :loading-indicator? (not (not (. ui :loading-indicator)))
                                :animation-settings animation-settings
                                :project-mode (or project-mode false)
+                               :project-mode-starting? (not (not project-mode))
                                :read-file-lines-cached read-file-lines-cached
                                :include-hidden start-hidden
                                :include-ignored start-ignored

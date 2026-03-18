@@ -75,6 +75,10 @@ Key helper coverage:
 - Project mode immediate typing during lazy stream.
 - Clear-query broadening while preserving source pool.
 
+### `tests/screen/project/test_screen_project_restore_view.lua`
+- Project bootstrap keeps the startup-selected result at the same viewport offset.
+- Guards against post-startup restores pushing the selected line toward the top.
+
 ### `tests/screen/project/test_screen_project_flags_core_*.lua`
 - `#hidden/#deps/#nolazy` consumption + status/debug reflection.
 - `#binary/#hex` visibility and toggle-state reflection.

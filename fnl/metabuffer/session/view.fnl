@@ -37,24 +37,29 @@
   (when (and meta (vim.api.nvim_win_is_valid meta.win.window))
     (let [line-count (vim.api.nvim_buf_line_count meta.buf.buffer)
           line (math.max 1 (math.min (meta.selected_line) line-count))
+          current-view (vim.api.nvim_win_call meta.win.window (fn [] (vim.fn.winsaveview)))
           src-view (or source-view {})
           ;; Only use source-view for topline/scroll-offset if we are not in project-mode
-          ;; or if the source-view specifically came from a meta-resume.
-          use-src-scroll? (and (not (and session session.project-mode))
-                               (not= (. src-view :topline) nil))
-          src-lnum (if use-src-scroll? (or (. src-view :lnum) line) line)
-          src-topline (if use-src-scroll? (or (. src-view :topline) src-lnum) line)
-          offset (math.max 0 (- src-lnum src-topline))
+          ;; unless project-mode is still in its startup phase, where we want
+          ;; the current-file selection to inherit the user's original viewport.
+          use-src-scroll? (and (not= (. src-view :topline) nil)
+                               (or (not (and session session.project-mode))
+                                   session.startup-initializing
+                                   (not (not session.project-mode-starting?))))
+          base-view (if use-src-scroll? src-view current-view)
+          base-lnum (or (. base-view :lnum) line)
+          base-topline (or (. base-view :topline) base-lnum)
+          offset (math.max 0 (- base-lnum base-topline))
           topline (math.max 1 (math.min (- line offset) line-count))]
       (vim.api.nvim_win_call meta.win.window
         (fn []
           (let [view (vim.fn.winsaveview)]
             (set (. view :lnum) line)
             (set (. view :topline) topline)
-            (when (and use-src-scroll? (~= (. src-view :leftcol) nil))
-              (set (. view :leftcol) (. src-view :leftcol)))
-            (when (and use-src-scroll? (~= (. src-view :col) nil))
-              (set (. view :col) (. src-view :col)))
+            (when (~= (. base-view :leftcol) nil)
+              (set (. view :leftcol) (. base-view :leftcol)))
+            (when (~= (. base-view :col) nil)
+              (set (. view :col) (. base-view :col)))
             (vim.fn.winrestview view)
             (when (and update-info-window session)
               (vim.defer_fn (fn [] (pcall update-info-window session true)) 50))))))))

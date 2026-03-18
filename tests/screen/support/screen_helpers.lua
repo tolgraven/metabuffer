@@ -544,6 +544,35 @@ function M.session_selected_ref()
   ]])
 end
 
+function M.session_main_view()
+  local encoded = M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta and s.meta.win) then
+        return nil
+      end
+      local win = s.meta.win.window
+      if not (win and vim.api.nvim_win_is_valid(win)) then
+        return nil
+      end
+      local view = vim.api.nvim_win_call(win, function()
+        return vim.fn.winsaveview()
+      end)
+      local height = vim.api.nvim_win_get_height(win)
+      return vim.json.encode({
+        lnum = view.lnum or 0,
+        topline = view.topline or 0,
+        leftcol = view.leftcol or 0,
+        col = view.col or 0,
+        height = height,
+      })
+    end)()
+  ]])
+  if encoded == nil or encoded == vim.NIL then return nil end
+  return vim.json.decode(encoded)
+end
+
 function M.session_preview_contains(needle)
   return M.child.lua_get(string.format([[
     (function()
