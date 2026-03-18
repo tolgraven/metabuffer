@@ -43,15 +43,24 @@
         update-info-window (. refresh :info!)
         context-window (. windows :context)]
     (when session
-      (when force-refresh
-        (schedule-source-syntax-refresh! deps session))
-      (pcall session.meta.refresh_statusline)
-      (when update-preview-window
-        (pcall update-preview-window session))
-      (when update-info-window
-        (pcall update-info-window session true))
-      (when (and context-window context-window.update!)
-        (pcall context-window.update! session)))))
+      (set session.selection-refresh-force?
+           (or force-refresh session.selection-refresh-force?))
+      (when-not session.selection-refresh-pending
+        (set session.selection-refresh-pending true)
+        (vim.schedule
+          (fn []
+            (set session.selection-refresh-pending false)
+            (let [force-refresh? (not (not session.selection-refresh-force?))]
+              (set session.selection-refresh-force? false)
+              (when force-refresh?
+                (schedule-source-syntax-refresh! deps session))
+              (pcall session.meta.refresh_statusline)
+              (when update-preview-window
+                (pcall update-preview-window session))
+              (when update-info-window
+                (pcall update-info-window session true))
+              (when (and context-window context-window.update!)
+                (pcall context-window.update! session)))))))))
 
 (fn sync-selection-state!
   [deps session row]

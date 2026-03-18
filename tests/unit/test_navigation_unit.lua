@@ -3,6 +3,13 @@ local eq = MiniTest.expect.equality
 
 local T = MiniTest.new_set()
 
+local function wait_for_refresh(count_fn, expected)
+  vim.wait(1000, function()
+    return count_fn() == expected
+  end, 10)
+  eq(count_fn(), expected)
+end
+
 T['scroll-main keeps selected row in sync with results viewport from prompt window'] = function()
   vim.cmd('enew')
   local meta_buf = vim.api.nvim_get_current_buf()
@@ -51,11 +58,13 @@ T['scroll-main keeps selected row in sync with results viewport from prompt wind
     return vim.fn.winsaveview()
   end)
   local cursor = vim.api.nvim_win_get_cursor(meta_win)
+  wait_for_refresh(function()
+    return status_calls
+  end, 1)
 
   eq(view.topline, 15)
   eq(cursor[1], 15)
   eq(session.meta['selected_index'], 14)
-  eq(status_calls, 1)
 
   vim.api.nvim_set_current_win(meta_win)
   vim.cmd('only')
@@ -126,12 +135,86 @@ T['animated scroll-main does not jump the real cursor before the animation runs'
     return vim.fn.winsaveview()
   end)
   local cursor = vim.api.nvim_win_get_cursor(meta_win)
+  wait_for_refresh(function()
+    return status_calls
+  end, 1)
 
   eq(animate_calls, 1)
   eq(view.topline, 10)
   eq(cursor[1], 10)
   eq(session.meta['selected_index'], 14)
-  eq(status_calls, 1)
+ 
+  vim.api.nvim_set_current_win(meta_win)
+  vim.cmd('only')
+end
+
+T['move-selection coalesces refresh work to the latest selection'] = function()
+  vim.cmd('enew')
+  local meta_buf = vim.api.nvim_get_current_buf()
+  local lines = {}
+  for i = 1, 80 do
+    lines[i] = ('line %03d'):format(i)
+  end
+  vim.api.nvim_buf_set_lines(meta_buf, 0, -1, false, lines)
+
+  local meta_win = vim.api.nvim_get_current_win()
+  vim.cmd('belowright split')
+  local prompt_buf = vim.api.nvim_get_current_buf()
+
+  local status_calls = 0
+  local preview_calls = 0
+  local info_calls = 0
+  local context_calls = 0
+  local deps = {
+    router = { ['active-by-prompt'] = {} },
+    refresh = {
+      ['preview!'] = function(session)
+        preview_calls = preview_calls + 1
+        eq(session.meta['selected_index'], 2)
+      end,
+      ['info!'] = function(session)
+        info_calls = info_calls + 1
+        eq(session.meta['selected_index'], 2)
+      end,
+    },
+    windows = {
+      context = {
+        ['update!'] = function(session)
+          context_calls = context_calls + 1
+          eq(session.meta['selected_index'], 2)
+        end,
+      },
+    },
+    mods = {},
+  }
+  local session = {
+    ['prompt-buf'] = prompt_buf,
+    meta = {
+      ['selected_index'] = 0,
+      win = { window = meta_win },
+      buf = {
+        buffer = meta_buf,
+        indices = lines,
+      },
+      ['refresh_statusline'] = function()
+        status_calls = status_calls + 1
+      end,
+    },
+  }
+  deps.router['active-by-prompt'][prompt_buf] = session
+
+  navigation['move-selection!'](deps, prompt_buf, 1)
+  navigation['move-selection!'](deps, prompt_buf, 1)
+  navigation['move-selection!'](deps, prompt_buf, 1)
+
+  wait_for_refresh(function()
+    return status_calls
+  end, 1)
+
+  eq(session.meta['selected_index'], 2)
+  eq(preview_calls, 1)
+  eq(info_calls, 1)
+  eq(context_calls, 1)
 
   vim.api.nvim_set_current_win(meta_win)
   vim.cmd('only')
