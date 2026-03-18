@@ -15,7 +15,7 @@
 
  :paths {:fennel ["fnl/?.fnl" "fnl/?/?.fnl" "deps/?/?.fnl"]
          :macro ["deps/nfnl/fnl/nfnl/macros/?.fnlm" "deps/nfnl/fnl/nfnl/macros.fnlm" "src/?.fnlm" "src/?/?.fnlm"]
-         :lua ["lua/?.lua" "plugin/?.lua"]}
+         :lua ["lua/?.lua" "plugin/?.lua" ".deps/?/?.lua"]}
 
  :profiles
  {:dev

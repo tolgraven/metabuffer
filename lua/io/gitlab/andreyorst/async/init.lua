@@ -7,7 +7,7 @@ this software in any fashion, you are agreeing to be bound by the terms of
 this license.
 You must not remove this notice, or any other, from this software." ]]
 local lib_name = (... or "io.gitlab.andreyorst.async")
-local main_thread = (coroutine.running() or error((lib_name .. " requires Lua 5.2 or higher")))
+local main_thread = (true or coroutine.running() or error((lib_name .. " requires Lua 5.2 or higher")))
 local or_1_ = package.preload["io.gitlab.andreyorst.reduced"]
 if not or_1_ then
   local function _2_()
@@ -136,21 +136,21 @@ local function merge_with(f, t1, t2)
 end
 local function active_3f(h)
   if (nil == h) then
-    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:203", 2)
+    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:204", 2)
   else
   end
   return h["active?"](h)
 end
 local function blockable_3f(h)
   if (nil == h) then
-    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:204", 2)
+    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:205", 2)
   else
   end
   return h["blockable?"](h)
 end
 local function commit(h)
   if (nil == h) then
-    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:205", 2)
+    _G.error("Missing argument h on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:206", 2)
   else
   end
   return h:commit()
@@ -288,32 +288,32 @@ end
 difftime = _54_
 local function add_21(buffer, item)
   if (nil == item) then
-    _G.error("Missing argument item on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:244", 2)
+    _G.error("Missing argument item on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:245", 2)
   else
   end
   if (nil == buffer) then
-    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:244", 2)
+    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:245", 2)
   else
   end
   return buffer["add!"](buffer, item)
 end
 local function close_buf_21(buffer)
   if (nil == buffer) then
-    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:245", 2)
+    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:246", 2)
   else
   end
   return buffer["close-buf!"](buffer)
 end
 local function full_3f(buffer)
   if (nil == buffer) then
-    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:242", 2)
+    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:243", 2)
   else
   end
   return buffer["full?"](buffer)
 end
 local function remove_21(buffer)
   if (nil == buffer) then
-    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:243", 2)
+    _G.error("Missing argument buffer on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:244", 2)
   else
   end
   return buffer["remove!"](buffer)
@@ -1967,18 +1967,18 @@ local muxch_2a0 = _local_370_["muxch*"]
 local Mux = _local_370_
 local function tap_2a(_, ch, close_3f)
   if (nil == close_3f) then
-    _G.error("Missing argument close? on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1208", 2)
+    _G.error("Missing argument close? on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1209", 2)
   else
   end
   if (nil == ch) then
-    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1208", 2)
+    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1209", 2)
   else
   end
   return _["tap*"](_, ch, close_3f)
 end
 local function untap_2a(_, ch)
   if (nil == ch) then
-    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1209", 2)
+    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1210", 2)
   else
   end
   return _["untap*"](_, ch)
@@ -2135,28 +2135,28 @@ local function untap_all(mult0)
 end
 local function admix_2a(_, ch)
   if (nil == ch) then
-    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1272", 2)
+    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1273", 2)
   else
   end
   return _["admix*"](_, ch)
 end
 local function solo_mode_2a(_, mode)
   if (nil == mode) then
-    _G.error("Missing argument mode on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1276", 2)
+    _G.error("Missing argument mode on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1277", 2)
   else
   end
   return _["solo-mode*"](_, mode)
 end
 local function toggle_2a(_, state_map)
   if (nil == state_map) then
-    _G.error("Missing argument state-map on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1275", 2)
+    _G.error("Missing argument state-map on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1276", 2)
   else
   end
   return _["toggle*"](_, state_map)
 end
 local function unmix_2a(_, ch)
   if (nil == ch) then
-    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1273", 2)
+    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1274", 2)
   else
   end
   return _["unmix*"](_, ch)
@@ -2411,20 +2411,9 @@ local function solo_mode(mix0, mode)
 end
 local function sub_2a(_, v, ch, close_3f)
   if (nil == close_3f) then
-    _G.error("Missing argument close? on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1377", 2)
+    _G.error("Missing argument close? on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1378", 2)
   else
   end
-  if (nil == ch) then
-    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1377", 2)
-  else
-  end
-  if (nil == v) then
-    _G.error("Missing argument v on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1377", 2)
-  else
-  end
-  return _["sub*"](_, v, ch, close_3f)
-end
-local function unsub_2a(_, v, ch)
   if (nil == ch) then
     _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1378", 2)
   else
@@ -2433,11 +2422,22 @@ local function unsub_2a(_, v, ch)
     _G.error("Missing argument v on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1378", 2)
   else
   end
+  return _["sub*"](_, v, ch, close_3f)
+end
+local function unsub_2a(_, v, ch)
+  if (nil == ch) then
+    _G.error("Missing argument ch on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1379", 2)
+  else
+  end
+  if (nil == v) then
+    _G.error("Missing argument v on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1379", 2)
+  else
+  end
   return _["unsub*"](_, v, ch)
 end
 local function unsub_all_2a(_, v)
   if (nil == v) then
-    _G.error("Missing argument v on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1379", 2)
+    _G.error("Missing argument v on .deps/git/io.gitlab.andreyorst/async.fnl/ea0a63f2c87651f9c63ee775f2a066281b868573/src/io/gitlab/andreyorst/async/init.fnl:1380", 2)
   else
   end
   return _["unsub-all*"](_, v)

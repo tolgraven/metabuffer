@@ -53,10 +53,26 @@
       (when (and context-window context-window.update!)
         (pcall context-window.update! session)))))
 
+(fn sync-selection-to-row!
+  [deps session row]
+  (let [meta session.meta
+        max (# meta.buf.indices)]
+    (if (<= max 0)
+        (set meta.selected_index 0)
+        (let [target-row (math.max 1 (math.min row max))
+              next-index (- target-row 1)]
+          (set meta.selected_index next-index)
+          (when (vim.api.nvim_win_is_valid meta.win.window)
+            (let [cursor (vim.api.nvim_win_get_cursor meta.win.window)
+                  col (or (. cursor 2) 0)]
+              (when (or (~= (. cursor 1) target-row)
+                        (~= col 0))
+                (pcall vim.api.nvim_win_set_cursor meta.win.window [target-row 0]))))))
+    (refresh-windows! deps session false)))
+
 (fn M.move-selection!
   [deps prompt-buf delta]
-  (let [{: router : refresh : windows} deps
-        active-by-prompt (. router :active-by-prompt)
+  (let [active-by-prompt (. (. deps :router) :active-by-prompt)
         session (. active-by-prompt prompt-buf)]
     (when session
       (let [runner (fn []
@@ -76,9 +92,8 @@
 
 (fn M.scroll-main!
   [deps prompt-buf action]
-  (let [{: router : refresh : windows : mods} deps
-        active-by-prompt (. router :active-by-prompt)
-        animation-mod (. mods :animation)
+  (let [active-by-prompt (. (. deps :router) :active-by-prompt)
+        animation-mod (. (. deps :mods) :animation)
         session (. active-by-prompt prompt-buf)]
 	    (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
 	      (let [runner (fn []
@@ -107,11 +122,11 @@
                                                     1
                                                     (math.max 1 (math.min (+ new-top row-off) line-count)))
 	                                     target {:topline new-top :lnum new-lnum :col old-col :leftcol (or (. view :leftcol) 0)}]
-	                                 (if (and animation-mod
-	                                          (animation-mod.enabled? session :scroll)
-	                                          (> (animation-mod.duration-ms session :scroll 140) 0)
-	                                          (not (= step 1)))
-	                                     (animation-mod.animate-view!
+                                     (if (and animation-mod
+                                              (animation-mod.enabled? session :scroll)
+                                              (> (animation-mod.duration-ms session :scroll 140) 0)
+                                              (not (= step 1)))
+                                         (animation-mod.animate-view!
 	                                       session
 	                                       "smooth-scroll"
 	                                       session.meta.win.window
@@ -120,17 +135,11 @@
 	                                       (animation-mod.duration-ms session :scroll 140))
 	                                     (vim.fn.winrestview target))
 	                                 new-lnum)))]
-	                       ;; Keep selection-dependent UI in sync with the target row
-	                       ;; even when the scroll uses animation frames.
-                         (if (not= (. (vim.fn.winsaveview) :topline) target-row)
-                             (M.move-selection! deps prompt-buf target-row))
-                         ;; Do a full move-selection! call here, which triggers the rest of the updates. Not good design though...
-	                       ; (set session.meta.selected_index
-	                       ;      (math.max 0 (math.min (- target-row 1)
-	                       ;                            (math.max 0 (- (# session.meta.buf.indices) 1)))))
-                         ;
-                        ;(refresh-windows! deps session false)
-                        ))
+                         ;; Scroll commands derive an absolute target row.
+                         ;; Keep model selection and visible cursor in lockstep
+                         ;; inside the results window instead of routing that
+                         ;; row through the delta-based move-selection path.
+                         (sync-selection-to-row! deps session target-row)))
 	            mode (. (vim.api.nvim_get_mode) :mode)]
 	        (if (and (= (type mode) "string") (vim.startswith mode "i"))
 	            (vim.schedule runner)

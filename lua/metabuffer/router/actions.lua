@@ -102,7 +102,17 @@ end
 local function apply_prompt_window_opts_21(win)
   if (win and vim.api.nvim_win_is_valid(win)) then
     pcall(vim.api.nvim_win_set_var, win, "airline_disable_statusline", 1)
-    vim.wo[win] = vim.wo[win]
+    local wo = vim.wo[win]
+    wo["winfixwidth"] = true
+    wo["winfixheight"] = true
+    wo["number"] = false
+    wo["relativenumber"] = false
+    wo["signcolumn"] = "no"
+    wo["foldcolumn"] = "0"
+    wo["statusline"] = " "
+    wo["spell"] = false
+    wo["wrap"] = true
+    wo["linebreak"] = true
     return nil
   else
     return nil
