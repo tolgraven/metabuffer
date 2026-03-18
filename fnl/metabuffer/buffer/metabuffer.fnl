@@ -77,7 +77,7 @@
 
 (fn session_has_pending_work
   [self]
-  (let [session self.model.session]
+  (let [session self.session]
     (and session
          (or session.prompt-update-pending
              session.prompt-update-dirty
@@ -88,7 +88,7 @@
 
 (fn session_has_active_query
   [self]
-  (let [session self.model.session
+  (let [session self.session
         parsed (and session session.last-parsed-query)]
     (and parsed
          (query-mod.query-lines-has-active? (or (. parsed :lines) [])))))
@@ -104,7 +104,7 @@
 
 (fn session_has_active_filter
   [self]
-  (let [session self.model.session
+  (let [session self.session
         parsed (and session session.last-parsed-query)]
     (and session
          parsed
@@ -439,7 +439,7 @@
 
       (fn self.run-source-syntax-fill-step
   [total-lines]
-    (let [session self.model.session
+    (let [session self.session
           chunk (math.max 1 (or (and session session.project-source-syntax-chunk-lines) 240))
           token self.source-syntax-fill-token]
       (when (and self.source-syntax-fill-pending
@@ -487,7 +487,7 @@
                   (> (# self.indices) 0)))
         (self.clear-source-syntax)
         (let [n (# self.indices)
-              session self.model.session
+              session self.session
               chunk (math.max 1 (or (and session session.project-source-syntax-chunk-lines) 240))]
           (var visible-start 1)
           (var visible-stop n)

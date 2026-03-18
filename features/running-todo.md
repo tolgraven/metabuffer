@@ -43,5 +43,5 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 33 [] there is a white line dividing prompt window and preview window. it should be removed.
 - 34 [] in project mode, there is a jump once loader inevitably runs into a file longer than 999 lines (which most file we start from will be), so we should pin lineno col to width 3 from start, but then dynamically allow the full 4 _if they are in view_
 - 35 [] when exiting regular `:Meta` mode with `<Esc>`, the viewport jumps. Should stay still.
-- 36 [] in project mode, selecting a result and trying to jump to it with <CR> just restores the position that existed before starting `:Meta`
-- 37 [] in proje3ct mode, info window gets stuck on "finalizing results" instead of showing the info lines once loaded
+- 36 [x] in project mode, selecting a result and trying to jump to it with <CR> just restores the position that existed before starting `:Meta`
+- 37 [x] in project mode, info window gets stuck on "finalizing results" instead of showing the info lines once loaded

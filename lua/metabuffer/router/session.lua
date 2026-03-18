@@ -537,6 +537,7 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
     end
     local initial_query_active = session["initial-query-active"]
     curr.session = session
+    curr.buf.session = session
     activate_session_ui_21(deps, session, initial_lines)
     finish_session_startup_21(deps, curr, session, initial_query_active)
     return curr

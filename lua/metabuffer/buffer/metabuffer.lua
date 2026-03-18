@@ -94,11 +94,11 @@ local function bvar(buf, name, default)
   end
 end
 local function session_has_pending_work(self)
-  local session = self.model.session
+  local session = self.session
   return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["lazy-refresh-pending"] or session["lazy-refresh-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["project-bootstrapped"])))
 end
 local function session_has_active_query(self)
-  local session = self.model.session
+  local session = self.session
   local parsed = (session and session["last-parsed-query"])
   return (parsed and query_mod["query-lines-has-active?"]((parsed.lines or {})))
 end
@@ -114,7 +114,7 @@ local function any_non_empty_line_3f(lines)
   return out
 end
 local function session_has_active_filter(self)
-  local session = self.model.session
+  local session = self.session
   local parsed = (session and session["last-parsed-query"])
   return (session and parsed and (query_mod["query-lines-has-active?"]((parsed.lines or {})) or any_non_empty_line_3f((parsed["file-lines"] or {}))))
 end
@@ -446,7 +446,7 @@ M.new = function(nvim, model)
     end
   end
   self["run-source-syntax-fill-step"] = function(total_lines)
-    local session = self.model.session
+    local session = self.session
     local chunk = math.max(1, ((session and session["project-source-syntax-chunk-lines"]) or 240))
     local token = self["source-syntax-fill-token"]
     if (self["source-syntax-fill-pending"] and vim.api.nvim_buf_is_valid(self.buffer) and (token == self["source-syntax-fill-token"])) then
@@ -495,7 +495,7 @@ M.new = function(nvim, model)
       return self["clear-source-syntax"]()
     else
       local n = #self.indices
-      local session = self.model.session
+      local session = self.session
       local chunk = math.max(1, ((session and session["project-source-syntax-chunk-lines"]) or 240))
       local visible_start = 1
       local visible_stop = n

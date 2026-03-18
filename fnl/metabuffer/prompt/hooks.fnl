@@ -670,7 +670,8 @@
                        ;; was in is now showing something else. If so, close Meta.
                        (vim.schedule
                          (fn []
-                           (when (and session.prompt-buf
+                           (when (and (not session.ui-hidden)
+                                      session.prompt-buf
                                       (vim.api.nvim_buf_is_valid session.prompt-buf)
                                       (= (. active-by-prompt session.prompt-buf) session))
                              (let [win session.meta.win.window]

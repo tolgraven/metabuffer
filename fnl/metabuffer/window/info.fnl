@@ -713,7 +713,7 @@
             (update-project-startup! session)
             (do
               (ensure_info_window session)
-            (when (and session.info-render-suspended?
+              (when (and session.info-render-suspended?
                        (not session.prompt-animating?)
                        (not session.startup-initializing))
               (set session.info-post-fade-refresh? nil)

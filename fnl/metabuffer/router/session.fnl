@@ -510,6 +510,7 @@
 
                   (let [initial-query-active session.initial-query-active]
                     (set curr.session session)
+                    (set curr.buf.session session)
                     (activate-session-ui! deps session initial-lines)
                     (finish-session-startup!
                       deps
