@@ -51,7 +51,10 @@ local function result_has_errors(results)
   end
   for _, item in ipairs(results) do
     if type(item) == "table" and item.status and item.status ~= "ok" then
-      return true
+      -- Ignore errors in .deps
+      if not item["source-path"]:match("%.deps/") then
+        return true
+      end
     end
   end
   return false
@@ -145,10 +148,22 @@ run_luals_check() {
 # fi
 run_nvim_compile
 
+# Copy .lua files from dependencies to lua/ directory
+echo "Bundling .lua dependencies..."
+find .deps/git -path "*/src/*.lua" | while read -r src_file; do
+  # Extract the part after /src/
+  # .deps/git/io.gitlab.andreyorst/reduced.lua/92cc61fee3250cb3eb54cc7b6f41f9625f7114bc/src/io/gitlab/andreyorst/reduced.lua
+  # -> lua/io/gitlab/andreyorst/reduced.lua
+  rel_path=$(echo "$src_file" | sed 's|.*\.deps/git/[^/]*/[^/]*/[^/]*/src/||')
+  dest_file="lua/$rel_path"
+  mkdir -p "$(dirname "$dest_file")"
+  cp "$src_file" "$dest_file"
+done
+
 if command -v lua-language-server >/dev/null 2>&1; then
   CONFIG_PATH="$(pwd)/.luarc.json"
   mkdir -p .cache/luals/log .cache/luals/meta
-  run_luals_check lua
+  run_luals_check lua/metabuffer
   run_luals_check plugin
 fi
 

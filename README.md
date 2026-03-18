@@ -212,7 +212,7 @@ This repository follows the `nfnl` plugin pattern:
 
 Cljlib integration for Clojure-style macros:
 
-- macro entrypoint vendored at `fnl/io/gitlab/andreyorst/cljlib/core/init.fnlm`
+- managed via dependencies in `deps.fnl` and resolved by `.nfnl.fnl` during compilation.
 - project modules import selected cljlib macros (for example `when-let` / `if-let`) via:
   `(import-macros {: when-let : if-let : when-some : if-some} :io.gitlab.andreyorst.cljlib.core)`
 
@@ -235,7 +235,7 @@ Utility scripts:
 
 ```sh
 # Embed a namespaced copy of nfnl under lua/metabuffer/nfnl
-./script/nfnl
+./scripts/init-nfnl
 
 # One-shot project compile via headless Neovim + embedded nfnl
 ./scripts/compile-fennel.sh

@@ -27,7 +27,7 @@
 ## Build / Maintenance Commands
 
 - Embed or refresh bundled nfnl:
-  - `./script/nfnl`
+  - `./scripts/init-nfnl`
 - Compile all Fennel through nfnl (headless Neovim):
   - `./scripts/compile-fennel.sh`
 - Continuous source lint watch (for immediate paren/syntax failures):
@@ -55,7 +55,7 @@
 - The previous raw compiler flow (`fennel --compile`) was replaced with headless Neovim + `metabuffer.nfnl.api` compile flow.
 - `scripts/compile-fennel.sh` must not delete `lua/`; deleting it removes vendored `lua/metabuffer/nfnl`.
 - nfnl trust behavior in headless environments can block `.nfnl.fnl` (`vim.secure.read` untrusted); compile script includes a controlled local fallback reader for non-interactive compilation.
-- `script/nfnl` was implemented to avoid dependency on `sd`/`fd` (uses standard shell tools + `perl`), because those were not available in this environment.
+- `scripts/init-nfnl` was implemented to avoid dependency on `sd`/`fd` (uses standard shell tools + `perl`), because those were not available in this environment.
 
 ## Repo Hygiene
 

@@ -1,3 +1,0 @@
-[submodule "deps/fennel-cljlib"]
-	path = deps/fennel-cljlib
-	url = https://gitlab.com/andreyorst/fennel-cljlib
