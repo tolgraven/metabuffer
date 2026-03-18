@@ -119,6 +119,14 @@ function M.open_meta_with_lines(lines)
   end)
 end
 
+function M.configure_animation(opts)
+  M.child.lua(string.format([[
+    (function()
+      require('metabuffer').setup(%s)
+    end)()
+  ]], vim.inspect(opts or {})))
+end
+
 local function project_root_for_tests()
   if vim.env.TEST_REAL_REPO == '1' then
     return M.child.fn.getcwd()
@@ -571,6 +579,63 @@ function M.session_main_view()
   ]])
   if encoded == nil or encoded == vim.NIL then return nil end
   return vim.json.decode(encoded)
+end
+
+function M.set_session_main_view(topline, lnum, height)
+  M.child.lua(string.format([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta and s.meta.win) then
+        return
+      end
+      local win = s.meta.win.window
+      if not (win and vim.api.nvim_win_is_valid(win)) then
+        return
+      end
+      pcall(vim.api.nvim_win_set_height, win, %d)
+      vim.api.nvim_win_call(win, function()
+        vim.fn.winrestview({ topline = %d, lnum = %d, col = 0, leftcol = 0 })
+      end)
+    end)()
+  ]], height, topline, lnum))
+end
+
+function M.scroll_main_and_wait(action, timeout_ms)
+  local target = M.child.lua_get(string.format([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta and s.meta.win and vim.api.nvim_win_is_valid(s.meta.win.window)) then
+        return nil
+      end
+      local win = s.meta.win.window
+      local target = vim.api.nvim_win_call(win, function()
+        local line_count = vim.api.nvim_buf_line_count(s.meta.buf.buffer)
+        local win_height = math.max(1, vim.api.nvim_win_get_height(win))
+        local half_step = math.max(1, math.floor(win_height / 2))
+        local page_step = math.max(1, win_height - 2)
+        local step = (%q == 'line-down' or %q == 'line-up') and 1
+          or ((%q == 'half-down' or %q == 'half-up') and half_step or page_step)
+        local dir = (%q == 'line-down' or %q == 'half-down' or %q == 'page-down') and 1 or -1
+        local max_top = math.max(1, (line_count - win_height) + 1)
+        local view = vim.fn.winsaveview()
+        local old_top = view.topline
+        local old_lnum = view.lnum
+        local row_off = math.max(0, old_lnum - old_top)
+        local new_top = math.max(1, math.min(old_top + (dir * step), max_top))
+        local new_lnum = (new_top == 1) and 1 or math.max(1, math.min(new_top + row_off, line_count))
+        return { topline = new_top, lnum = new_lnum }
+      end)
+      router['scroll-main'](s.prompt_buf, %q)
+      return target
+    end)()
+  ]], action, action, action, action, action, action))
+  M.wait_for(function()
+    local view = M.session_main_view()
+    return view and target and view.topline == target.topline and view.lnum == target.lnum
+  end, timeout_ms or 3000)
+  return target
 end
 
 function M.session_preview_contains(needle)

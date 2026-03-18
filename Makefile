@@ -1,4 +1,4 @@
-.PHONY: all compile check check-fnl check-lua test
+.PHONY: all compile check check-fnl check-lua test test-profile
 
 XDG_STATE_HOME := /tmp
 XDG_DATA_HOME := /tmp
@@ -35,6 +35,10 @@ check-lua:
 test:
 	@echo "[make] running tests..."
 	$(NVIM_ENV) ./scripts/test-mini.sh $(FILE_ARGS)
+
+test-profile:
+	@echo "[make] running tests with profiling..."
+	$(NVIM_ENV) ./scripts/test-mini.sh --profile $(FILE_ARGS)
 
 # Catch-all target to allow passing arguments to 'make test'
 %:

@@ -9,8 +9,10 @@ This repo now has two parallelized suites:
 - Full run (screen + unit, parallel workers):
   - `./scripts/test-mini.sh`
 - Full run with profiling:
-  - `./scripts/test-mini.sh --profile`
+- `./scripts/test-mini.sh --profile`
   - runner prints the persistent `/tmp/...` profile directory and each worker profile file path
+- `make test-profile`
+- `make test-profile tests/screen/project/test_screen_project_profile_scroll.lua`
 - Use the real metabuffer repo instead of the default generated project fixture:
   - `TEST_REAL_REPO=1 ./scripts/test-mini.sh`
 - Enable UI animations inside the headless mini child:
@@ -78,6 +80,10 @@ Key helper coverage:
 ### `tests/screen/project/test_screen_project_restore_view.lua`
 - Project bootstrap keeps the startup-selected result at the same viewport offset.
 - Guards against post-startup restores pushing the selected line toward the top.
+
+### `tests/screen/project/test_screen_project_profile_scroll.lua`
+- Profile-oriented scroll benchmark coverage for both `"native"` and `"mini"` backends.
+- Uses dedicated benchmark spans so `--profile` output shows backend cost directly.
 
 ### `tests/screen/project/test_screen_project_flags_core_*.lua`
 - `#hidden/#deps/#nolazy` consumption + status/debug reflection.
