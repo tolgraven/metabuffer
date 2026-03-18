@@ -284,7 +284,7 @@ M.new = function(opts)
                 return nil
               end
             end
-            return animation_mod["animate-float!"](session, "info-enter", session["info-win"], cfg, target, 100, (vim.g.meta_float_winblend or 13), animation_mod["duration-ms"](session, "info", (info_fade_ms or 220)), {["done!"] = _33_})
+            return animation_mod["animate-float!"](session, "info-enter", session["info-win"], cfg, target, 100, (vim.g.meta_float_winblend or 13), animation_mod["duration-ms"](session, "info", (info_fade_ms or 220)), {kind = "info", ["done!"] = _33_})
           else
             return nil
           end
@@ -484,7 +484,7 @@ M.new = function(opts)
     end
     return {line = line, highlights = highlights}
   end
-  local function schedule_info_highlight_fill_21(session, ns, refs, idxs, target_width, lnum_digit_width, deferred_rows)
+  local function schedule_info_highlight_fill_21(session, ns, refs, target_width, lnum_digit_width, deferred_rows)
     local pending = (deferred_rows or {})
     local batch_size = math.max(4, math.min(24, math.max(1, info_height(session))))
     if (#pending == 0) then
@@ -594,7 +594,6 @@ M.new = function(opts)
     end
   end
   local function build_info_lines(session, refs, idxs, target_width, start_index, stop_index, visible_rows, read_file_lines_cached0)
-    local line_hl = "LineNr"
     local lnum_digit_width
     do
       local limit = math.min(#idxs, info_max_lines)
@@ -613,7 +612,6 @@ M.new = function(opts)
       end
       lnum_digit_width = lineno_mod["digit-width-from-max-len"](max_lnum_len)
     end
-    local lnum_field_width = (lnum_digit_width + 1)
     local lines = {}
     local highlights = {}
     local deferred_rows = {}
@@ -676,7 +674,7 @@ M.new = function(opts)
     end
     vim.api.nvim_buf_clear_namespace(session["info-buf"], ns, 0, -1)
     apply_info_highlights_21(session, ns, highlights)
-    schedule_info_highlight_fill_21(session, ns, refs, idxs, info_max_width_now(session), lnum_digit_width, deferred_rows)
+    schedule_info_highlight_fill_21(session, ns, refs, info_max_width_now(session), lnum_digit_width, deferred_rows)
     local bo = vim.bo[session["info-buf"]]
     bo["modifiable"] = false
     return nil

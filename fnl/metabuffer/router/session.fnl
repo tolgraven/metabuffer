@@ -198,7 +198,8 @@
                      0
                      0
                      duration
-                     {:done! done!})
+                     {:done! done!
+                      :kind :prompt})
                    (animation-mod.animate-win-height-stepwise!
                      session
                      "prompt-enter"
@@ -414,13 +415,15 @@
                                           :time-scale (or (. ui-animation :time-scale) 1.0)
                                           :prompt {:enabled (not (= false (. ui-animation-prompt :enabled)))
                                                    :ms (. ui-animation-prompt :ms)
-                                                   :time-scale (or (. ui-animation-prompt :time-scale) 1.0)}
+                                                   :time-scale (or (. ui-animation-prompt :time-scale) 1.0)
+                                                   :backend (or (. ui-animation-prompt :backend) "native")}
                                           :preview {:enabled (not (= false (. ui-animation-preview :enabled)))
                                                     :ms (. ui-animation-preview :ms)
                                                     :time-scale (or (. ui-animation-preview :time-scale) 1.0)}
                                           :info {:enabled (not (= false (. ui-animation-info :enabled)))
                                                  :ms (. ui-animation-info :ms)
-                                                 :time-scale (or (. ui-animation-info :time-scale) 1.0)}
+                                                 :time-scale (or (. ui-animation-info :time-scale) 1.0)
+                                                 :backend (or (. ui-animation-info :backend) "native")}
                                           :loading {:enabled (not (= false (. ui-animation-loading :enabled)))
                                                     :ms (. ui-animation-loading :ms)
                                                     :time-scale (or (. ui-animation-loading :time-scale) 1.0)}

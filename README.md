@@ -112,14 +112,16 @@ Animation controls:
   - `0.5` = twice as fast
   - `2.0` = half speed
 - Per-animation toggles and speed scales:
-  - `ui.animation.prompt.enabled`, `ui.animation.prompt.time_scale`
+  - `ui.animation.prompt.enabled`, `ui.animation.prompt.time_scale`, `ui.animation.prompt.backend`
   - `ui.animation.preview.enabled`, `ui.animation.preview.time_scale`
-  - `ui.animation.info.enabled`, `ui.animation.info.time_scale`
+  - `ui.animation.info.enabled`, `ui.animation.info.time_scale`, `ui.animation.info.backend`
   - `ui.animation.loading.enabled`, `ui.animation.loading.time_scale`
   - `ui.animation.scroll.enabled`, `ui.animation.scroll.time_scale`, `ui.animation.scroll.backend`
 - `ui.animation.loading_indicator` controls whether the animated prompt footer loading word is shown at all
 
 `ui.animation.scroll.backend` defaults to `"native"`. Set it to `"mini"` to use `mini.animate` timing and subscroll helpers for results scrolling when `mini.nvim` is available; Meta falls back to the native backend if it is not.
+
+`ui.animation.prompt.backend` and `ui.animation.info.backend` also default to `"native"`. Set them to `"mini"` to use `mini.animate` resize and fade helpers for those animations when `mini.nvim` is available; Meta falls back to the native backend if it is not.
 
 Durations are not part of the public setup surface. Meta keeps sensible base timings internally and applies the master/per-animation scales on top.
 

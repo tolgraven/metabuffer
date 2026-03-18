@@ -59,6 +59,7 @@ Animation setup options:
 
 \tui.animation.prompt.enabled
 \tui.animation.prompt.time_scale
+\tui.animation.prompt.backend
 \t\tControls prompt split slide animation.
 
 \tui.animation.preview.enabled
@@ -67,6 +68,7 @@ Animation setup options:
 
 \tui.animation.info.enabled
 \tui.animation.info.time_scale
+\tui.animation.info.backend
 \t\tControls info window fade/slide animation.
 
 \tui.animation.loading.enabled
@@ -81,6 +83,11 @@ Animation setup options:
 \t\tScroll animation backend. "native" keeps Meta's built-in behavior.
 \t\t"mini" uses mini.animate helpers when available and otherwise falls
 \t\tback to "native".
+
+\tui.animation.prompt.backend / ui.animation.info.backend
+\t\tPer-animation backend override. "native" keeps Meta's built-in
+\t\tbehavior. "mini" uses mini.animate resize/fade helpers when
+\t\tavailable and otherwise falls back to "native".
 
 \tui.animation.loading_indicator
 \t\tIndependent toggle for showing the loading indicator at all.

@@ -53,8 +53,9 @@ T['resolve exposes animation controls with master and per-animation settings'] =
       animation = {
         enabled = false,
         time_scale = 0.5,
-        prompt = { enabled = true, time_scale = 2.0 },
+        prompt = { enabled = true, time_scale = 2.0, backend = 'mini' },
         preview = { enabled = false },
+        info = { backend = 'mini' },
         scroll = { time_scale = 0.75, backend = 'mini' },
         loading_indicator = false,
       },
@@ -65,7 +66,9 @@ T['resolve exposes animation controls with master and per-animation settings'] =
   eq(resolved.options.ui_animations_time_scale, 0.5)
   eq(resolved.options.ui_animation_prompt_enabled, true)
   eq(resolved.options.ui_animation_prompt_time_scale, 2.0)
+  eq(resolved.options.ui_animation_prompt_backend, 'mini')
   eq(resolved.options.ui_animation_preview_enabled, false)
+  eq(resolved.options.ui_animation_info_backend, 'mini')
   eq(resolved.options.ui_animation_scroll_time_scale, 0.75)
   eq(resolved.options.ui_animation_scroll_backend, 'mini')
   eq(resolved.options.ui_loading_indicator, false)
@@ -89,8 +92,9 @@ T['animation helper applies master and local time scales'] = function()
     ['animation-settings'] = {
       enabled = true,
       ['time-scale'] = 0.5,
-      prompt = { enabled = true, ms = 140, ['time-scale'] = 2.0 },
+      prompt = { enabled = true, ms = 140, ['time-scale'] = 2.0, backend = 'mini' },
       preview = { enabled = false, ms = 180, ['time-scale'] = 1.0 },
+      info = { backend = 'mini' },
       scroll = { backend = 'mini' },
     },
   }
@@ -99,7 +103,10 @@ T['animation helper applies master and local time scales'] = function()
   eq(animation['enabled?'](session, 'preview'), false)
   eq(animation['duration-ms'](session, 'prompt', 140), 140)
   eq(animation['duration-ms'](session, 'preview', 180), 90)
+  eq(animation['animation-backend'](session, 'prompt'), 'mini')
+  eq(animation['animation-backend'](session, 'info'), 'mini')
   eq(animation['scroll-backend'](session), 'mini')
+  eq(animation['supports-backend?']('native'), true)
   eq(animation['supports-scroll-backend?']('native'), true)
 end
 

@@ -492,13 +492,15 @@
                     :time-scale M.ui-animations-time-scale
                     :prompt {:enabled M.ui-animation-prompt-enabled
                              :ms M.ui-animation-prompt-ms
-                             :time-scale M.ui-animation-prompt-time-scale}
+                             :time-scale M.ui-animation-prompt-time-scale
+                             :backend M.ui-animation-prompt-backend}
                     :preview {:enabled M.ui-animation-preview-enabled
                               :ms M.ui-animation-preview-ms
                               :time-scale M.ui-animation-preview-time-scale}
                     :info {:enabled M.ui-animation-info-enabled
                            :ms M.ui-animation-info-ms
-                           :time-scale M.ui-animation-info-time-scale}
+                           :time-scale M.ui-animation-info-time-scale
+                           :backend M.ui-animation-info-backend}
                     :loading {:enabled M.ui-animation-loading-enabled
                               :ms M.ui-animation-loading-ms
                               :time-scale M.ui-animation-loading-time-scale}

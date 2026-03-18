@@ -115,12 +115,14 @@
     :ui_animation_prompt_enabled true
     :ui_animation_prompt_ms 140
     :ui_animation_prompt_time_scale 1.0
+    :ui_animation_prompt_backend "native"
     :ui_animation_preview_enabled true
     :ui_animation_preview_ms 180
     :ui_animation_preview_time_scale 1.0
     :ui_animation_info_enabled true
     :ui_animation_info_ms 220
     :ui_animation_info_time_scale 1.0
+    :ui_animation_info_backend "native"
     :ui_animation_loading_enabled true
     :ui_animation_loading_ms 90
     :ui_animation_loading_time_scale 1.0
@@ -293,6 +295,9 @@
       :ui_animation_prompt_time_scale (nested-value opts [:ui :animation :prompt :time_scale]
                                                       (opt-value opts :ui_animation_prompt_time_scale :meta_ui_animation_prompt_time_scale
                                                                  (. defaults :ui_animation_prompt_time_scale)))
+      :ui_animation_prompt_backend (nested-value opts [:ui :animation :prompt :backend]
+                                                   (opt-value opts :ui_animation_prompt_backend :meta_ui_animation_prompt_backend
+                                                              (. defaults :ui_animation_prompt_backend)))
       :ui_animation_preview_enabled (nested-value opts [:ui :animation :preview :enabled]
                                                     (opt-value opts :ui_animation_preview_enabled :meta_ui_animation_preview_enabled (. defaults :ui_animation_preview_enabled)))
       :ui_animation_preview_ms (. defaults :ui_animation_preview_ms)
@@ -305,6 +310,9 @@
       :ui_animation_info_time_scale (nested-value opts [:ui :animation :info :time_scale]
                                                     (opt-value opts :ui_animation_info_time_scale :meta_ui_animation_info_time_scale
                                                                (. defaults :ui_animation_info_time_scale)))
+      :ui_animation_info_backend (nested-value opts [:ui :animation :info :backend]
+                                                 (opt-value opts :ui_animation_info_backend :meta_ui_animation_info_backend
+                                                            (. defaults :ui_animation_info_backend)))
       :ui_animation_loading_enabled (nested-value opts [:ui :animation :loading :enabled]
                                                     (opt-value opts :ui_animation_loading_enabled :meta_ui_animation_loading_enabled (. defaults :ui_animation_loading_enabled)))
       :ui_animation_loading_ms (. defaults :ui_animation_loading_ms)
@@ -383,12 +391,14 @@
     (set router.ui-animation-prompt-enabled (. options :ui_animation_prompt_enabled))
     (set router.ui-animation-prompt-ms (. options :ui_animation_prompt_ms))
     (set router.ui-animation-prompt-time-scale (. options :ui_animation_prompt_time_scale))
+    (set router.ui-animation-prompt-backend (. options :ui_animation_prompt_backend))
     (set router.ui-animation-preview-enabled (. options :ui_animation_preview_enabled))
     (set router.ui-animation-preview-ms (. options :ui_animation_preview_ms))
     (set router.ui-animation-preview-time-scale (. options :ui_animation_preview_time_scale))
     (set router.ui-animation-info-enabled (. options :ui_animation_info_enabled))
     (set router.ui-animation-info-ms (. options :ui_animation_info_ms))
     (set router.ui-animation-info-time-scale (. options :ui_animation_info_time_scale))
+    (set router.ui-animation-info-backend (. options :ui_animation_info_backend))
     (set router.ui-animation-loading-enabled (. options :ui_animation_loading_enabled))
     (set router.ui-animation-loading-ms (. options :ui_animation_loading_ms))
     (set router.ui-animation-loading-time-scale (. options :ui_animation_loading_time_scale))

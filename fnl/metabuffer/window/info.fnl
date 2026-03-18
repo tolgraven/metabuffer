@@ -249,7 +249,8 @@
                     100
                     (or vim.g.meta_float_winblend 13)
                     (animation_mod.duration-ms session :info (or info_fade_ms 220))
-                    {:done! (fn [_]
+                    {:kind :info
+                     :done! (fn [_]
                               (when (valid-info-win? session)
                                 (set session.info-post-fade-refresh? nil)
                                 (set session.info-render-suspended? false)
@@ -376,7 +377,7 @@
       {:line line :highlights highlights}))
 
   (fn schedule-info-highlight-fill!
-    [session ns refs idxs target-width lnum-digit-width deferred-rows]
+    [session ns refs target-width lnum-digit-width deferred-rows]
     (let [pending (or deferred-rows [])
           batch-size (math.max 4 (math.min 24 (math.max 1 (info_height session))))]
       (if (= (# pending) 0)
@@ -468,8 +469,7 @@
 
   (fn build-info-lines
     [session refs idxs target-width start-index stop-index visible-rows read_file_lines_cached]
-    (let [line-hl "LineNr"
-          lnum-digit-width (let [limit (math.min (# idxs) info_max_lines)
+    (let [lnum-digit-width (let [limit (math.min (# idxs) info_max_lines)
                            max-lnum-len (if (> limit 0)
                                             (let [lens []]
                                               (for [i 1 limit]
@@ -480,7 +480,6 @@
                                               (numeric-max lens 1))
                                             1)]
                        (lineno-mod.digit-width-from-max-len max-lnum-len))
-          lnum-field-width (+ lnum-digit-width 1)
           lines []
           highlights []
           deferred-rows []]
@@ -535,7 +534,7 @@
           (debug_log (.. "info set_lines failed: " (tostring err-set)))))
       (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
       (apply-info-highlights! session ns highlights)
-      (schedule-info-highlight-fill! session ns refs idxs (info-max-width-now session) lnum-digit-width deferred-rows)
+      (schedule-info-highlight-fill! session ns refs (info-max-width-now session) lnum-digit-width deferred-rows)
       (let [bo (. vim.bo session.info-buf)]
         (set (. bo :modifiable) false))))
 
@@ -781,4 +780,3 @@
   :update! update!}))
 
   M
-

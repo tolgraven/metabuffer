@@ -83,20 +83,67 @@
         local-scale (number-or (. entry :time-scale) 1.0)]
     (math.max 0 (math.floor (+ 0.5 (* base global-scale local-scale))))))
 
-(fn scroll-backend
-  [session]
-  "Return configured scroll backend. Expected output: \"native\" or \"mini\"."
+(fn animation-backend
+  [session kind]
+  "Return configured backend for animation kind. Expected output: \"native\" or \"mini\"."
   (let [settings (or session.animation-settings {})
-        entry (or (. settings :scroll) {})
+        entry (or (. settings kind) {})
         backend (. entry :backend)]
     (if (= backend "mini") "mini" "native")))
 
-(fn supports-scroll-backend?
+(fn supports-backend?
   [backend]
   "Return whether scroll backend is usable in current runtime."
   (if (= backend "mini")
       (not (not (mini-animate-mod)))
       true))
+
+(fn mini-timing
+  [mini duration-ms n-steps]
+  (let [timing ((. (. mini :gen_timing) :cubic)
+                {:easing "in-out"
+                 :duration duration-ms
+                 :unit "total"})]
+    (fn [step]
+      (timing step n-steps))))
+
+(fn set-win-height!
+  [win height]
+  (pcall vim.api.nvim_win_set_height win (math.max 1 height)))
+
+(fn float-step-config
+  [from-cfg to-cfg t]
+  (let [cfg {:relative (. to-cfg :relative)
+             :anchor (. to-cfg :anchor)
+             :row (lerp (or (. from-cfg :row) (. to-cfg :row))
+                        (. to-cfg :row)
+                        t)
+             :col (lerp (or (. from-cfg :col) (. to-cfg :col))
+                        (. to-cfg :col)
+                        t)
+             :width (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-cfg :width) (. to-cfg :width))
+                                                          (. to-cfg :width)
+                                                          t))))
+             :height (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-cfg :height) (. to-cfg :height))
+                                                           (. to-cfg :height)
+                                                           t))))
+             :style "minimal"}]
+    (when-let [host (. to-cfg :win)]
+      (set (. cfg :win) host))
+    cfg))
+
+(fn apply-float-step!
+  [win cfg blend opts step]
+  (pcall vim.api.nvim_win_set_config win cfg)
+  (pcall vim.api.nvim_set_option_value "winblend" blend {:win win})
+  (when-let [tick! (. opts :tick!)]
+    (tick! cfg step)))
+
+(var animate-win-width! nil)
+(var animate-float! nil)
+(var animate-view! nil)
+(var animate-scroll-view-mini! nil)
+(var animate-scroll-view! nil)
 
 (fn run!
   [session key opts]
@@ -157,181 +204,236 @@
         frame-budget (math.max 1 (math.floor (/ (math.max duration-ms target-frame-ms) target-frame-ms)))
         stride (math.max 1 (math.ceil (/ (math.max 1 delta) frame-budget)))
         opts (or opts {})]
-    (with-split-mins
-      (fn []
-        (run! session key
-              {:duration-ms duration-ms
-               :steps (math.max 1 (math.ceil (/ (math.max 1 delta) stride)))
-               :active? (fn [] (vim.api.nvim_win_is_valid win))
-               :tick! (fn [_ idx]
-                        (let [next-height (if (= idx 0)
+    (if (and (= (animation-backend session :prompt) "mini")
+             (supports-backend? "mini"))
+        (let [mini (mini-animate-mod)
+              subresize-fn ((. (. mini :gen_subresize) :equal)
+                            {:predicate (fn [sizes-from sizes-to]
+                                          (~= (. (. sizes-from :prompt) :height)
+                                              (. (. sizes-to :prompt) :height)))})
+              step-sizes (subresize-fn {:prompt {:height start :width 1}}
+                                       {:prompt {:height stop :width 1}})
+              n-steps (# step-sizes)]
+          (with-split-mins
+            (fn []
+              (if (or (<= delta 0) (<= n-steps 0))
+                  (do
+                    (set-win-height! win stop)
+                    (when-let [done! (. opts :done!)]
+                      (done! stop)))
+                  (let [token (next-token! session key)
+                        timing (mini-timing mini duration-ms n-steps)]
+                    ((. mini :animate)
+                     (fn [step]
+                       (if (or (not (active-token? session key token))
+                               (not (vim.api.nvim_win_is_valid win)))
+                           false
+                           (do
+                             (let [step-size (. step-sizes step)
+                                   prompt-size (and step-size (. step-size :prompt))
+                                   height (if (= step 0)
                                               start
-                                              (+ start (* idx stride direction)))
-                              height (if (> direction 0)
-                                         (math.min stop next-height)
-                                         (math.max stop next-height))]
-                          (pcall vim.api.nvim_win_set_height win height)
-                          (when-let [tick! (. opts :tick!)]
-                            (tick! height idx))))
-               :done! (fn []
-                        (pcall vim.api.nvim_win_set_height win stop)
-                        (when-let [done! (. opts :done!)]
-                          (done! stop)))})))))
+                                              (or (and prompt-size (. prompt-size :height))
+                                                  stop))]
+                               (set-win-height! win height)
+                               (when-let [tick! (. opts :tick!)]
+                                 (tick! height step)))
+                             (if (< step n-steps)
+                                 true
+                                 (do
+                                   (set-win-height! win stop)
+                                   (when-let [done! (. opts :done!)]
+                                     (done! stop))
+                                   false)))))
+                     timing
+                     {:max_steps (+ n-steps 1)})))))
+        (with-split-mins
+          (fn []
+            (run! session key
+                  {:duration-ms duration-ms
+                   :steps (math.max 1 (math.ceil (/ (math.max 1 delta) stride)))
+                   :active? (fn [] (vim.api.nvim_win_is_valid win))
+                   :tick! (fn [_ idx]
+                            (let [next-height (if (= idx 0)
+                                                  start
+                                                  (+ start (* idx stride direction)))
+                                  height (if (> direction 0)
+                                             (math.min stop next-height)
+                                             (math.max stop next-height))]
+                              (set-win-height! win height)
+                              (when-let [tick! (. opts :tick!)]
+                                (tick! height idx))))
+                   :done! (fn []
+                            (set-win-height! win stop)
+                            (when-let [done! (. opts :done!)]
+                              (done! stop)))})))))))
 
-(fn animate-win-width!
-  [session key win from to duration-ms opts]
-  (let [start (math.max 1 from)
-        stop (math.max 1 to)
-        opts (or opts {})]
-    (with-split-mins
-      (fn []
-        (run! session key
-              {:duration-ms duration-ms
-               :steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
-               :active? (fn [] (vim.api.nvim_win_is_valid win))
-               :tick! (fn [t]
-                        (let [width (math.max 1 (math.floor (+ 0.5 (lerp start stop t))))]
-                          (pcall vim.api.nvim_win_set_width win width)
-                          (when-let [tick! (. opts :tick!)]
-                            (tick! width t))))
-               :done! (fn []
-                        (pcall vim.api.nvim_win_set_width win stop)
-                        (when-let [done! (. opts :done!)]
-                          (done! stop)))})))))
+(set animate-win-width!
+  (fn [session key win from to duration-ms opts]
+    (let [start (math.max 1 from)
+          stop (math.max 1 to)
+          opts (or opts {})]
+      (with-split-mins
+        (fn []
+          (run! session key
+                {:duration-ms duration-ms
+                 :steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
+                 :active? (fn [] (vim.api.nvim_win_is_valid win))
+                 :tick! (fn [t]
+                          (let [width (math.max 1 (math.floor (+ 0.5 (lerp start stop t))))]
+                            (pcall vim.api.nvim_win_set_width win width)
+                            (when-let [tick! (. opts :tick!)]
+                              (tick! width t))))
+                 :done! (fn []
+                          (pcall vim.api.nvim_win_set_width win stop)
+                          (when-let [done! (. opts :done!)]
+                            (done! stop)))}))))))
 
-(fn animate-float!
-  [session key win from-cfg to-cfg from-blend to-blend duration-ms opts]
-  (let [opts (or opts {})]
+(set animate-float!
+  (fn [session key win from-cfg to-cfg from-blend to-blend duration-ms opts]
+    (let [opts (or opts {})
+          kind (or (. opts :kind) :info)]
+      (if (and (= (animation-backend session kind) "mini")
+               (supports-backend? "mini"))
+          (let [mini (mini-animate-mod)
+                n-steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
+                timing (mini-timing mini duration-ms n-steps)
+                blend-fn ((. (. mini :gen_winblend) :linear)
+                          {:from from-blend
+                           :to to-blend})
+                token (next-token! session key)]
+            ((. mini :animate)
+             (fn [step]
+               (if (or (not (active-token? session key token))
+                       (not (vim.api.nvim_win_is_valid win)))
+                   false
+                   (let [t (/ step n-steps)
+                         cfg (float-step-config from-cfg to-cfg t)
+                         blend (math.max 0 (math.min 100 (blend-fn step n-steps)))]
+                     (apply-float-step! win cfg blend opts t)
+                     (if (< step n-steps)
+                         true
+                         (do
+                           (apply-float-step! win to-cfg to-blend opts 1.0)
+                           (when-let [done! (. opts :done!)]
+                             (done! to-cfg))
+                           false)))))
+             timing
+             {:max_steps (+ n-steps 1)}))
+          (run! session key
+                {:duration-ms duration-ms
+                 :steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
+                 :active? (fn [] (vim.api.nvim_win_is_valid win))
+                 :tick! (fn [t]
+                          (let [cfg (float-step-config from-cfg to-cfg t)
+                                blend (math.max 0 (math.min 100 (math.floor (+ 0.5 (lerp from-blend to-blend t)))))]
+                            (apply-float-step! win cfg blend opts t)))
+                 :done! (fn []
+                          (apply-float-step! win to-cfg to-blend opts 1.0)
+                          (when-let [done! (. opts :done!)]
+                            (done! to-cfg)))})))))
+
+(set animate-view!
+  (fn [session key win from-view to-view duration-ms]
     (run! session key
           {:duration-ms duration-ms
            :steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
            :active? (fn [] (vim.api.nvim_win_is_valid win))
            :tick! (fn [t]
-                    (let [cfg {:relative (. to-cfg :relative)
-                               :anchor (. to-cfg :anchor)
-                               :row (lerp (or (. from-cfg :row) (. to-cfg :row))
-                                          (. to-cfg :row)
-                                          t)
-                               :col (lerp (or (. from-cfg :col) (. to-cfg :col))
-                                          (. to-cfg :col)
-                                          t)
-                               :width (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-cfg :width) (. to-cfg :width))
-                                                                            (. to-cfg :width)
+                    (vim.api.nvim_win_call
+                      win
+                      (fn []
+                        (pcall vim.fn.winrestview
+                               {:topline (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-view :topline) 1)
+                                                                               (or (. to-view :topline) 1)
+                                                                               t))))
+                                :lnum (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-view :lnum) 1)
+                                                                            (or (. to-view :lnum) 1)
                                                                             t))))
-                               :height (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-cfg :height) (. to-cfg :height))
-                                                                             (. to-cfg :height)
-                                                                             t))))
-                               :style "minimal"}
-                          _ (when-let [host (. to-cfg :win)]
-                              (set (. cfg :win) host))
-                          blend (math.max 0 (math.min 100 (math.floor (+ 0.5 (lerp from-blend to-blend t)))))]
-                      (pcall vim.api.nvim_win_set_config win cfg)
-                      (pcall vim.api.nvim_set_option_value "winblend" blend {:win win})
-                      (when-let [tick! (. opts :tick!)]
-                        (tick! cfg t))))
+                                :leftcol (math.max 0 (math.floor (+ 0.5 (lerp (or (. from-view :leftcol) 0)
+                                                                                (or (. to-view :leftcol) 0)
+                                                                                t))))
+                                :col (math.max 0 (math.floor (+ 0.5 (lerp (or (. from-view :col) 0)
+                                                                           (or (. to-view :col) 0)
+                                                                           t))))}))))
            :done! (fn []
-                    (pcall vim.api.nvim_win_set_config win to-cfg)
-                    (pcall vim.api.nvim_set_option_value "winblend" to-blend {:win win})
-                    (when-let [done! (. opts :done!)]
-                      (done! to-cfg)))})))
+                    (vim.api.nvim_win_call
+                      win
+                      (fn []
+                        (pcall vim.fn.winrestview to-view))))})))
 
-(fn animate-view!
-  [session key win from-view to-view duration-ms]
-  (run! session key
-        {:duration-ms duration-ms
-         :steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
-         :active? (fn [] (vim.api.nvim_win_is_valid win))
-         :tick! (fn [t]
-                  (vim.api.nvim_win_call
-                    win
-                    (fn []
-                      (pcall vim.fn.winrestview
-                             {:topline (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-view :topline) 1)
-                                                                             (or (. to-view :topline) 1)
-                                                                             t))))
-                              :lnum (math.max 1 (math.floor (+ 0.5 (lerp (or (. from-view :lnum) 1)
-                                                                          (or (. to-view :lnum) 1)
-                                                                          t))))
-                              :leftcol (math.max 0 (math.floor (+ 0.5 (lerp (or (. from-view :leftcol) 0)
-                                                                              (or (. to-view :leftcol) 0)
-                                                                              t))))
-                              :col (math.max 0 (math.floor (+ 0.5 (lerp (or (. from-view :col) 0)
-                                                                         (or (. to-view :col) 0)
-                                                                         t))))}))))
-         :done! (fn []
-                  (vim.api.nvim_win_call
-                    win
-                    (fn []
-                      (pcall vim.fn.winrestview to-view))))}))
+(set animate-scroll-view-mini!
+  (fn [session key win from-view to-view duration-ms]
+    "Animate vertical results scrolling with `mini.animate` timing/subscroll helpers."
+    (let [mini (mini-animate-mod)
+          from-top (or (. from-view :topline) 1)
+          to-top (or (. to-view :topline) from-top)
+          total-scroll (math.abs (- to-top from-top))
+          subscroll-fn ((. (. mini :gen_subscroll) :equal)
+                        {:predicate (fn [n] (> n 1))
+                         :max_output_steps 60})
+          win-restore (fn [target]
+                        (vim.api.nvim_win_call
+                          win
+                          (fn []
+                            (pcall vim.fn.winrestview target))))
+          step-scrolls (subscroll-fn total-scroll)
+          n-steps (# step-scrolls)]
+      (if (or (<= total-scroll 0) (<= n-steps 0))
+          (win-restore to-view)
+          (let [token (next-token! session key)
+                timing ((. (. mini :gen_timing) :cubic)
+                        {:easing "in-out"
+                         :duration duration-ms
+                         :unit "total"})
+                dir (if (< from-top to-top) 1 -1)
+                from-lnum (or (. from-view :lnum) from-top)
+                to-lnum (or (. to-view :lnum) to-top)
+                scrolled0 0]
+            (var scrolled scrolled0)
+            ((. mini :animate)
+             (fn [step]
+               (if (or (not (active-token? session key token))
+                       (not (vim.api.nvim_win_is_valid win)))
+                   false
+                   (do
+                     (when (> step 0)
+                       (set scrolled (+ scrolled (or (. step-scrolls step) 0)))
+                       (let [coef (/ step n-steps)
+                             target {:topline (+ from-top (* dir scrolled))
+                                     :lnum (math.max 1 (math.floor (+ 0.5 (lerp from-lnum to-lnum coef))))
+                                     :leftcol (or (. to-view :leftcol) (. from-view :leftcol) 0)
+                                     :col (or (. to-view :col) (. from-view :col) 0)}]
+                         (win-restore target)))
+                     (if (< step n-steps)
+                         true
+                         (do
+                           (win-restore to-view)
+                           false)))))
+             (fn [step]
+               (timing step n-steps))
+             {:max_steps (+ n-steps 1)}))))))
 
-(fn animate-scroll-view-mini!
-  [session key win from-view to-view duration-ms]
-  "Animate vertical results scrolling with `mini.animate` timing/subscroll helpers."
-  (let [mini (mini-animate-mod)
-        from-top (or (. from-view :topline) 1)
-        to-top (or (. to-view :topline) from-top)
-        total-scroll (math.abs (- to-top from-top))
-        subscroll-fn ((. (. mini :gen_subscroll) :equal)
-                      {:predicate (fn [n] (> n 1))
-                       :max_output_steps 60})
-        step-scrolls (subscroll-fn total-scroll)
-        n-steps (# step-scrolls)]
-    (if (or (<= total-scroll 0) (<= n-steps 0))
-        (vim.api.nvim_win_call
-          win
-          (fn []
-            (pcall vim.fn.winrestview to-view)))
-        (let [token (next-token! session key)
-              timing ((. (. mini :gen_timing) :cubic)
-                      {:easing "in-out"
-                       :duration duration-ms
-                       :unit "total"})
-              dir (if (< from-top to-top) 1 -1)
-              from-lnum (or (. from-view :lnum) from-top)
-              to-lnum (or (. to-view :lnum) to-top)
-              scrolled0 0]
-          (var scrolled scrolled0)
-          ((. mini :animate)
-           (fn [step]
-             (if (or (not (active-token? session key token))
-                     (not (vim.api.nvim_win_is_valid win)))
-                 false
-                 (do
-                   (when (> step 0)
-                     (set scrolled (+ scrolled (or (. step-scrolls step) 0)))
-                     (let [coef (/ step n-steps)
-                           target {:topline (+ from-top (* dir scrolled))
-                                   :lnum (math.max 1 (math.floor (+ 0.5 (lerp from-lnum to-lnum coef))))
-                                   :leftcol (or (. to-view :leftcol) (. from-view :leftcol) 0)
-                                   :col (or (. to-view :col) (. from-view :col) 0)}]
-                       (vim.api.nvim_win_call
-                         win
-                         (fn []
-                           (pcall vim.fn.winrestview target)))))
-                   (if (< step n-steps)
-                       true
-                       (do
-                         (vim.api.nvim_win_call
-                           win
-                           (fn []
-                             (pcall vim.fn.winrestview to-view)))
-                         false)))))
-           (fn [step]
-             (timing step n-steps))
-           {:max_steps (+ n-steps 1)})))))
+(set animate-scroll-view!
+  (fn [session key win from-view to-view duration-ms]
+    "Animate scroll view with configured backend and native fallback."
+    (if (and (= (animation-backend session :scroll) "mini")
+             (supports-backend? "mini"))
+        (animate-scroll-view-mini! session key win from-view to-view duration-ms)
+        (animate-view! session key win from-view to-view duration-ms))))
 
-(fn animate-scroll-view!
-  [session key win from-view to-view duration-ms]
-  "Animate scroll view with configured backend and native fallback."
-  (if (and (= (scroll-backend session) "mini")
-           (supports-scroll-backend? "mini"))
-      (animate-scroll-view-mini! session key win from-view to-view duration-ms)
-      (animate-view! session key win from-view to-view duration-ms)))
+(fn reset-mini-animate-cache!
+  []
+  "Reset cached `mini.animate` module lookup. Expected output: nil."
+  (set mini-animate-cache nil)
+  (set mini-animate-tried? false))
 
 (set M.enabled? enabled?)
 (set M.duration-ms duration-ms)
-(set M.scroll-backend scroll-backend)
-(set M.supports-scroll-backend? supports-scroll-backend?)
+(set M.animation-backend animation-backend)
+(set M.scroll-backend (fn [session] (animation-backend session :scroll)))
+(set M.supports-backend? supports-backend?)
+(set M.supports-scroll-backend? supports-backend?)
 (set M.with-split-mins with-split-mins)
 (set M.run! run!)
 (set M.animate-win-height! animate-win-height!)
@@ -340,5 +442,6 @@
 (set M.animate-float! animate-float!)
 (set M.animate-view! animate-view!)
 (set M.animate-scroll-view! animate-scroll-view!)
+(set M.reset-mini-animate-cache! reset-mini-animate-cache!)
 
 M
