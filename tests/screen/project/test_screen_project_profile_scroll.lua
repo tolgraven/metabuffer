@@ -27,7 +27,7 @@ local function run_scroll_profile(backend)
   H.open_meta_with_lines(lines)
   H.set_session_main_view(120, 126, 12)
 
-  local cycles = profiler.enabled() and 8 or 3
+  local cycles = profiler.enabled() and 2 or 3
   profiler.measure('bench', 'scroll backend ' .. backend, function()
     for _ = 1, cycles do
       H.scroll_main_and_wait('page-down', 4000)

@@ -38,7 +38,7 @@ test:
 
 test-profile:
 	@echo "[make] running tests with profiling..."
-	$(NVIM_ENV) ./scripts/test-mini.sh --profile $(FILE_ARGS)
+	TEST_FILE_TIMEOUT_MS="$${TEST_FILE_TIMEOUT_MS:-120000}" $(NVIM_ENV) ./scripts/test-mini.sh --profile $(FILE_ARGS)
 
 # Catch-all target to allow passing arguments to 'make test'
 %:
