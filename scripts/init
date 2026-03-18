@@ -3,6 +3,7 @@
 # Rocks must target Lua 5.1/LuaJIT, not whichever standalone `lua` is on PATH.
 
 test -x ./scripts/deps || { echo >&2 "scripts/deps is missing or not executable."; exit 1; }
+git submodule update --init --recursive deps/nfnl deps/mini.nvim
 ./scripts/init-nfnl
 ./scripts/deps --lua-version 5.1 --show
 

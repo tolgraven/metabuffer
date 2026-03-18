@@ -1,5 +1,7 @@
 .nvimlog
 nvim.log
-deps/
+deps/*
+!deps/nfnl/
+!deps/mini.nvim/
 .deps/
 !deps/fennel-cljlib/
