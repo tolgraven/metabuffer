@@ -126,7 +126,7 @@
                          (string.rep " " age-width))
         git-author (let [a (vim.trim (or (. meta :author) ""))]
                      (if (= a "") "?" a))]
-    (.. mtime-text " " age-fragment "\t" git-author)))
+    (.. mtime-text "  " age-fragment "\t" git-author)))
 
 (fn M.file-meta-data
   [session path]

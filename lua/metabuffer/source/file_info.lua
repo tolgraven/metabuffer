@@ -170,7 +170,7 @@ local function file_meta_line(meta)
       git_author = a
     end
   end
-  return (mtime_text .. " " .. age_fragment .. "\t" .. git_author)
+  return (mtime_text .. "  " .. age_fragment .. "\t" .. git_author)
 end
 M["file-meta-data"] = function(session, path)
   local cache = (session["info-file-meta-cache"] or {})
