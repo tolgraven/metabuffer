@@ -514,6 +514,8 @@
                      (not session.startup-initializing))
             (set session.meta.buf.visible-source-syntax-only false)
             (pcall session.meta.buf.apply-source-syntax-regions)
+            (when-not (prompt-has-active-query? session)
+              (restore-meta-view! session.meta session.source-view session update-info-window))
             ;; Always force one final UI refresh when streaming settles so the
             ;; info pane leaves its loading/empty state even if the last batch
             ;; did not append any new visible lines.

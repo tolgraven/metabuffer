@@ -557,6 +557,7 @@ M.new = function(nvim, condition)
       local queries = self["active-queries"]()
       local prev_text = self._prev_text
       local prev_hits = vim.deepcopy((self.buf.indices or {}))
+      local prev_rank = math.max(1, (self.selected_index + 1))
       local prev_line = line_of_index(self.buf, self.selected_index)
       local effective_query = table.concat(queries, "\n")
       local matcher_name = self.matcher().name
@@ -699,16 +700,21 @@ M.new = function(nvim, condition)
       end
       if needs_render_3f then
         local preferred_line = (self["_selection-cache"][cache_key] or prev_line)
+        local preferred_rank = math.max(1, math.min(prev_rank, #self.buf.indices))
         local idx = nil
-        for i, src in ipairs(self.buf.indices) do
-          if (not idx and (src == preferred_line)) then
-            idx = i
+        if broaden_on_delete_3f then
+          idx = preferred_rank
+        else
+          for i, src in ipairs(self.buf.indices) do
+            if (not idx and (src == preferred_line)) then
+              idx = i
+            else
+            end
+          end
+          if not idx then
+            idx = self.buf["closest-index"](preferred_line)
           else
           end
-        end
-        if not idx then
-          idx = self.buf["closest-index"](preferred_line)
-        else
         end
         if idx then
           self.selected_index = (idx - 1)

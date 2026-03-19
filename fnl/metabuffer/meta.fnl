@@ -479,6 +479,7 @@
       (let [queries (self.active-queries)
           prev-text self._prev_text
           prev-hits (vim.deepcopy (or self.buf.indices []))
+          prev-rank (math.max 1 (+ self.selected_index 1))
           prev-line (line_of_index self.buf self.selected_index)
           effective-query (table.concat queries "\n")
           matcher-name (. (self.matcher) :name)
@@ -609,13 +610,17 @@
       (when needs-render?
         (self.buf.render))
       (when needs-render?
-        (let [preferred-line (or (. self._selection-cache cache-key) prev-line)]
+        (let [preferred-line (or (. self._selection-cache cache-key) prev-line)
+              preferred-rank (math.max 1 (math.min prev-rank (# self.buf.indices)))]
         (var idx nil)
-        (each [i src (ipairs self.buf.indices)]
-          (when (and (not idx) (= src preferred-line))
-            (set idx i)))
-        (when-not idx
-          (set idx (self.buf.closest-index preferred-line)))
+        (if broaden-on-delete?
+            (set idx preferred-rank)
+            (do
+              (each [i src (ipairs self.buf.indices)]
+                (when (and (not idx) (= src preferred-line))
+                  (set idx i)))
+              (when-not idx
+                (set idx (self.buf.closest-index preferred-line)))))
         (when idx
           (set self.selected_index (- idx 1))
           (set (. self._selection-cache cache-key)

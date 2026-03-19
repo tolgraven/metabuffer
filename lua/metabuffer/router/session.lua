@@ -306,7 +306,7 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
     pcall(update_info_window, session)
     local function _47_()
       session["animate-enter?"] = false
-      if (session.meta and session.meta.buf and session["lazy-stream-done"]) then
+      if (session["project-mode"] and session.meta and session.meta.buf and session["lazy-stream-done"]) then
         session.meta.buf["visible-source-syntax-only"] = false
         return pcall(session.meta.buf["apply-source-syntax-regions"])
       else

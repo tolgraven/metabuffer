@@ -928,6 +928,11 @@ M.new = function(opts)
     local pending = (session and session["project-mode"] and (initializing or animating))
     return pending
   end
+  local function project_has_renderable_results_3f(session)
+    local meta = (session and session.meta)
+    local idxs = (meta and meta.buf and meta.buf.indices)
+    return (#(idxs or {}) > 0)
+  end
   local function project_loading_pending_3f(session)
     local startup = startup_layout_pending_3f(session)
     local bootstrap_pending = (session["project-bootstrap-pending"] or false)
@@ -935,7 +940,7 @@ M.new = function(opts)
     local refresh_pending = (session["lazy-refresh-pending"] or false)
     local refresh_dirty = (session["lazy-refresh-dirty"] or false)
     local stream_done = (session["lazy-stream-done"] or false)
-    local pending = (session and session["project-mode"] and (startup or bootstrap_pending or not bootstrapped or refresh_pending or refresh_dirty or not stream_done))
+    local pending = (session and session["project-mode"] and (startup or bootstrap_pending or not bootstrapped or (not project_has_renderable_results_3f(session) and (refresh_pending or refresh_dirty or not stream_done))))
     return pending
   end
   local function render_project_loading_21(session)
@@ -989,6 +994,7 @@ M.new = function(opts)
     return nil
   end
   local function update_project_startup_21(session)
+    session["info-project-loading-active?"] = true
     ensure_info_window(session)
     if (session["info-render-suspended?"] and not session["prompt-animating?"] and not session["startup-initializing"]) then
       session["info-post-fade-refresh?"] = nil
@@ -1021,7 +1027,8 @@ M.new = function(opts)
       end
       if (not session["info-render-suspended?"] and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
         local meta = session.meta
-        local force_refresh_3f = (not not session["info-showing-project-loading?"] or (session["info-render-sig"] == nil) or (session["info-start-index"] == nil) or (session["info-stop-index"] == nil))
+        local loading_finished_3f = not not session["info-project-loading-active?"]
+        local force_refresh_3f = (loading_finished_3f or not not session["info-showing-project-loading?"] or refresh_lines or (session["info-render-sig"] == nil) or (session["info-start-index"] == nil) or (session["info-stop-index"] == nil))
         local selected1 = (meta.selected_index + 1)
         local _let_119_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
         local wanted_start = _let_119_[1]
@@ -1030,13 +1037,25 @@ M.new = function(opts)
         local stop_index = (session["info-stop-index"] or 0)
         local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
         local range_changed = ((wanted_start ~= start_index) or (wanted_stop ~= stop_index))
-        if (force_refresh_3f or refresh_lines or out_of_range or range_changed) then
+        if (force_refresh_3f or out_of_range or range_changed) then
           local idxs = (meta.buf.indices or {})
           local sig = join_str("|", {idxs, #idxs, wanted_start, wanted_stop, info_max_width_now(session), info_height(session), vim.o.columns})
-          if (force_refresh_3f or refresh_lines or out_of_range or range_changed or (session["info-render-sig"] ~= sig)) then
+          if (force_refresh_3f or out_of_range or range_changed or (session["info-render-sig"] ~= sig)) then
             session["info-render-sig"] = sig
+            session["info-project-loading-active?"] = false
             session["info-showing-project-loading?"] = false
             render_info_lines_21(session, meta, wanted_start, wanted_stop, wanted_start, wanted_stop)
+            if loading_finished_3f then
+              local function _120_()
+                if (session and valid_info_win_3f(session) and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"]) and not project_loading_pending_3f(session)) then
+                  return update_21(session, true)
+                else
+                  return nil
+                end
+              end
+              vim.defer_fn(_120_, 17)
+            else
+            end
           else
           end
         else
@@ -1047,7 +1066,7 @@ M.new = function(opts)
       end
     end
   end
-  local function _124_(session, refresh_lines)
+  local function _127_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -1060,7 +1079,7 @@ M.new = function(opts)
       return update_regular_21(session, refresh_lines0)
     end
   end
-  update_21 = _124_
+  update_21 = _127_
   return {["close-window!"] = close_info_window_21, ["update!"] = update_21}
 end
 return M

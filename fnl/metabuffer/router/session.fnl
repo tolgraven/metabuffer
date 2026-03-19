@@ -289,7 +289,10 @@
         (vim.defer_fn
           (fn []
             (set session.animate-enter? false)
-            (when (and session.meta session.meta.buf session.lazy-stream-done)
+            (when (and session.project-mode
+                       session.meta
+                       session.meta.buf
+                       session.lazy-stream-done)
               (set session.meta.buf.visible-source-syntax-only false)
               (pcall session.meta.buf.apply-source-syntax-regions)))
           (or session.startup-ui-delay-ms 320))

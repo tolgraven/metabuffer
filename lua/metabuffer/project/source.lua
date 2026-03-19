@@ -554,6 +554,10 @@ M.new = function(opts)
         if (session["lazy-stream-done"] and session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
           session.meta.buf["visible-source-syntax-only"] = false
           pcall(session.meta.buf["apply-source-syntax-regions"])
+          if not prompt_has_active_query_3f(session) then
+            restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
+          else
+          end
           pcall(session.meta.refresh_statusline)
           pcall(update_info_window, session, true)
         else
@@ -621,7 +625,7 @@ M.new = function(opts)
       session["source-set-rebuild-token"] = (1 + (session["source-set-rebuild-token"] or 0))
       local token = session["source-set-rebuild-token"]
       session["source-set-rebuild-pending"] = true
-      local function _77_()
+      local function _78_()
         if (session and (token == session["source-set-rebuild-token"])) then
           session["source-set-rebuild-pending"] = false
         else
@@ -637,7 +641,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_77_, math.max(0, (wait_ms or 0)))
+      return vim.defer_fn(_78_, math.max(0, (wait_ms or 0)))
     else
       return nil
     end
@@ -664,7 +668,7 @@ M.new = function(opts)
       session["project-bootstrap-token"] = (1 + (session["project-bootstrap-token"] or 0))
       local token = session["project-bootstrap-token"]
       session["project-bootstrap-pending"] = true
-      local function _83_()
+      local function _84_()
         if (session and (token == session["project-bootstrap-token"])) then
           session["project-bootstrap-pending"] = false
         else
@@ -690,14 +694,14 @@ M.new = function(opts)
             restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
             pcall(session.meta.refresh_statusline)
             pcall(update_info_window, session, true)
-            local function _87_()
+            local function _88_()
               if (session and session_active_3f(session) and not session.closing) then
                 return pcall(update_info_window, session, true)
               else
                 return nil
               end
             end
-            return vim.defer_fn(_87_, 17)
+            return vim.defer_fn(_88_, 17)
           else
             return nil
           end
@@ -705,7 +709,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_83_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
+      return vim.defer_fn(_84_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
     else
       return nil
     end

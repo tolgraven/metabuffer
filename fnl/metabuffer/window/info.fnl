@@ -775,6 +775,12 @@
           pending (and session session.project-mode (or initializing animating))]
       pending))
 
+  (fn project-has-renderable-results?
+    [session]
+    (let [meta (and session session.meta)
+          idxs (and meta meta.buf meta.buf.indices)]
+      (> (# (or idxs [])) 0)))
+
   (fn project-loading-pending?
     [session]
     (let [startup (startup-layout-pending? session)
@@ -788,9 +794,10 @@
                        (or startup
                            bootstrap-pending
                            (not bootstrapped)
-                           refresh-pending
-                           refresh-dirty
-                           (not stream-done)))]
+                           (and (not (project-has-renderable-results? session))
+                                (or refresh-pending
+                                    refresh-dirty
+                                    (not stream-done)))))]
       pending))
 
   (fn render-project-loading!
@@ -837,6 +844,7 @@
 
   (fn update-project-startup!
     [session]
+    (set session.info-project-loading-active? true)
     (ensure_info_window session)
     (when (and session.info-render-suspended?
                (not session.prompt-animating?)
@@ -876,7 +884,10 @@
                        session.info-buf
                        (vim.api.nvim_buf_is_valid session.info-buf))
               (let [meta session.meta
-                    force-refresh? (or (not (not session.info-showing-project-loading?))
+                    loading-finished? (not (not session.info-project-loading-active?))
+                    force-refresh? (or loading-finished?
+                                       (not (not session.info-showing-project-loading?))
+                                       refresh-lines
                                        (= session.info-render-sig nil)
                                        (= session.info-start-index nil)
                                        (= session.info-stop-index nil))
@@ -891,7 +902,7 @@
                     out-of-range (or (< selected1 start-index) (> selected1 stop-index))
                     range-changed (or (~= wanted-start start-index)
                                       (~= wanted-stop stop-index))]
-                    (when (or force-refresh? refresh-lines out-of-range range-changed)
+                (when (or force-refresh? out-of-range range-changed)
                   (let [idxs (or meta.buf.indices [])
                         sig (join-str
                               "|"
@@ -903,11 +914,11 @@
                                (info_height session)
                                vim.o.columns])]
                     (when (or force-refresh?
-                              refresh-lines
                               out-of-range
                               range-changed
                               (~= session.info-render-sig sig))
                       (set session.info-render-sig sig)
+                      (set session.info-project-loading-active? false)
                       (set session.info-showing-project-loading? false)
                       (render-info-lines!
                         session
@@ -915,7 +926,17 @@
                         wanted-start
                         wanted-stop
                         wanted-start
-                        wanted-stop))))
+                        wanted-stop)
+                      (when loading-finished?
+                        (vim.defer_fn
+                          (fn []
+                            (when (and session
+                                       (valid-info-win? session)
+                                       session.info-buf
+                                       (vim.api.nvim_buf_is_valid session.info-buf)
+                                       (not (project-loading-pending? session)))
+                              (update! session true)))
+                          17)))))
                 (sync-info-selection! session meta))))))
 
   (set update!
