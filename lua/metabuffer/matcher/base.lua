@@ -49,7 +49,6 @@ M.new = function(name, opts)
     return nil
   end
   local function matchadd_in_window(group, pattern, win)
-    local id = nil
     if (win and vim.api.nvim_win_is_valid(win)) then
       local ok,win_id = pcall(vim.fn.matchadd, group, pattern, M["default-match-priority"], -1, {window = win})
       if ok then

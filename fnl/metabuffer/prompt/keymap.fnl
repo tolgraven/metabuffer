@@ -1,7 +1,6 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local key_mod (require :metabuffer.prompt.key))
 (local ks_mod (require :metabuffer.prompt.keystroke))
-(local util (require :metabuffer.prompt.util))
 (local debug (require :metabuffer.debug))
 
 (local M {})
@@ -36,7 +35,7 @@
      :expr opts.expr}))
 
 (fn _getcode
-  [timeoutlen callback interval]
+  [_timeoutlen callback _interval]
   ;; Use blocking getcharstr() so Neovim decodes terminal/tmux escape
   ;; sequences into full key tokens before we resolve mappings.
   (when callback (callback))
@@ -181,5 +180,9 @@
   (if (= (type vim.g.meta_legacy_prompt_keymap_rules) "table")
       vim.g.meta_legacy_prompt_keymap_rules
       default-keymap-rules))
+
+(fn M.default-keymap-rules
+  []
+  M.DEFAULT_KEYMAP_RULES)
 
 M

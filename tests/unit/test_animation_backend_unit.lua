@@ -23,11 +23,17 @@ T['prompt height animation can use mini resize backend'] = function()
   vim.api.nvim_win_set_buf(win, buf)
   vim.api.nvim_win_set_height(win, 1)
 
-  local animate_calls = 0
-  local tick_heights = {}
+  local setup_calls = 0
+  local execute_after_calls = {}
   local done_height
 
   with_stubbed_mini_animate({
+    setup = function(config)
+      setup_calls = setup_calls + 1
+      eq(config.cursor.enable, false)
+      eq(config.resize.enable, true)
+      eq(config.scroll.enable, true)
+    end,
     gen_timing = {
       cubic = function()
         return function()
@@ -47,33 +53,93 @@ T['prompt height animation can use mini resize backend'] = function()
         end
       end,
     },
-    animate = function(step_action)
-      animate_calls = animate_calls + 1
-      for step = 0, 2 do
-        if not step_action(step) then break end
-      end
+    execute_after = function(kind, action)
+      table.insert(execute_after_calls, kind)
+      action()
     end,
   }, function()
     animation['animate-win-height-stepwise!']({
       ['animation-settings'] = {
-        prompt = { backend = 'mini' },
+        backend = 'mini',
+        prompt = {},
+        scroll = {},
       },
     }, 'prompt-enter', win, 1, 4, 140, {
-      ['tick!'] = function(height)
-        table.insert(tick_heights, height)
-      end,
       ['done!'] = function(height)
         done_height = height
       end,
     })
   end)
 
-  eq(animate_calls, 1)
-  eq(tick_heights[1], 1)
-  eq(tick_heights[2], 2)
-  eq(tick_heights[3], 4)
+  eq(setup_calls, 1)
+  eq(execute_after_calls[1], 'resize')
   eq(done_height, 4)
   eq(vim.api.nvim_win_get_height(win), 4)
+end
+
+T['scroll animation can delegate completion to mini execute_after'] = function()
+  vim.cmd('enew')
+  local win = vim.api.nvim_get_current_win()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_win_set_buf(win, buf)
+
+  local setup_calls = 0
+  local execute_after_calls = {}
+  local done_view
+
+  with_stubbed_mini_animate({
+    setup = function(config)
+      setup_calls = setup_calls + 1
+      eq(config.scroll.enable, true)
+      eq(config.resize.enable, true)
+    end,
+    gen_timing = {
+      cubic = function()
+        return function()
+          return 0
+        end
+      end,
+    },
+    gen_subscroll = {
+      equal = function()
+        return function()
+          return { 1 }
+        end
+      end,
+    },
+    gen_subresize = {
+      equal = function()
+        return function()
+          return { { prompt = { height = 1, width = 1 } } }
+        end
+      end,
+    },
+    execute_after = function(kind, action)
+      table.insert(execute_after_calls, kind)
+      action()
+    end,
+  }, function()
+    animation['animate-scroll-view!']({
+      ['animation-settings'] = {
+        backend = 'mini',
+        prompt = {},
+        scroll = {},
+      },
+    }, 'scroll', win,
+    { topline = 1, lnum = 1, leftcol = 0, col = 0 },
+    { topline = 12, lnum = 15, leftcol = 0, col = 0 },
+    140,
+    {
+      ['done!'] = function(view)
+        done_view = view
+      end,
+    })
+  end)
+
+  eq(setup_calls, 1)
+  eq(execute_after_calls[1], 'scroll')
+  eq(done_view.topline, 12)
+  eq(vim.api.nvim_win_call(win, vim.fn.winsaveview).topline, 12)
 end
 
 T['info float animation can use mini open helpers'] = function()

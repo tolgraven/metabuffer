@@ -62,7 +62,7 @@ local function diff_hunks(old_lines, new_lines)
 end
 local function place_hunk_signs_21(buf, line_count, id_start, h)
   local _let_5_ = hunk_indices(h)
-  local a_start = _let_5_[1]
+  local _a_start = _let_5_[1]
   local a_count = _let_5_[2]
   local b_start = _let_5_[3]
   local b_count = _let_5_[4]

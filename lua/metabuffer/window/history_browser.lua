@@ -1,5 +1,6 @@
 -- [nfnl] fnl/metabuffer/window/history_browser.fnl
 local M = {}
+local util = require("metabuffer.util")
 local function ensure_window_21(floating_window_mod, session)
   if not (session["history-browser-win"] and vim.api.nvim_win_is_valid(session["history-browser-win"])) then
     local buf = vim.api.nvim_create_buf(false, true)
@@ -19,6 +20,7 @@ local function ensure_window_21(floating_window_mod, session)
       cfg = {relative = "editor", anchor = "NE", row = row, col = col, width = width, height = height}
     end
     local win = floating_window_mod.new(vim, buf, cfg)
+    util["disable-heavy-buffer-features!"](buf)
     session["history-browser-buf"] = buf
     session["history-browser-win"] = win.window
     local bo = vim.bo[buf]

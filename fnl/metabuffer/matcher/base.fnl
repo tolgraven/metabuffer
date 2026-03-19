@@ -36,7 +36,6 @@
 
   (fn matchadd-in-window
   [group pattern win]
-    (var id nil)
     (if (and win (vim.api.nvim_win_is_valid win))
         (let [[ok win-id] [(pcall vim.fn.matchadd group pattern M.default-match-priority -1 {:window win})]]
           (if ok

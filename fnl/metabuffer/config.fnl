@@ -112,6 +112,7 @@
     :scroll_sync_debounce_ms 20
     :ui_animations_enabled true
     :ui_animations_time_scale 1.5
+    :ui_animation_backend "native"
     :ui_animation_prompt_enabled true
     :ui_animation_prompt_ms 140
     :ui_animation_prompt_time_scale 1.0
@@ -289,6 +290,8 @@
                                                       (opt-value opts :ui_animate_enter :meta_ui_animate_enter (. defaults :ui_animations_enabled))))
       :ui_animations_time_scale (nested-value opts [:ui :animation :time_scale]
                                               (opt-value opts :ui_animations_time_scale :meta_ui_animations_time_scale (. defaults :ui_animations_time_scale)))
+      :ui_animation_backend (nested-value opts [:ui :animation :backend]
+                                            (opt-value opts :ui_animation_backend :meta_ui_animation_backend (. defaults :ui_animation_backend)))
       :ui_animation_prompt_enabled (nested-value opts [:ui :animation :prompt :enabled]
                                                    (opt-value opts :ui_animation_prompt_enabled :meta_ui_animation_prompt_enabled (. defaults :ui_animation_prompt_enabled)))
       :ui_animation_prompt_ms (. defaults :ui_animation_prompt_ms)
@@ -297,7 +300,9 @@
                                                                  (. defaults :ui_animation_prompt_time_scale)))
       :ui_animation_prompt_backend (nested-value opts [:ui :animation :prompt :backend]
                                                    (opt-value opts :ui_animation_prompt_backend :meta_ui_animation_prompt_backend
-                                                              (. defaults :ui_animation_prompt_backend)))
+                                                              (nested-value opts [:ui :animation :backend]
+                                                                            (opt-value opts :ui_animation_backend :meta_ui_animation_backend
+                                                                                       (. defaults :ui_animation_backend)))))
       :ui_animation_preview_enabled (nested-value opts [:ui :animation :preview :enabled]
                                                     (opt-value opts :ui_animation_preview_enabled :meta_ui_animation_preview_enabled (. defaults :ui_animation_preview_enabled)))
       :ui_animation_preview_ms (. defaults :ui_animation_preview_ms)
@@ -312,7 +317,9 @@
                                                                (. defaults :ui_animation_info_time_scale)))
       :ui_animation_info_backend (nested-value opts [:ui :animation :info :backend]
                                                  (opt-value opts :ui_animation_info_backend :meta_ui_animation_info_backend
-                                                            (. defaults :ui_animation_info_backend)))
+                                                            (nested-value opts [:ui :animation :backend]
+                                                                          (opt-value opts :ui_animation_backend :meta_ui_animation_backend
+                                                                                     (. defaults :ui_animation_backend)))))
       :ui_animation_loading_enabled (nested-value opts [:ui :animation :loading :enabled]
                                                     (opt-value opts :ui_animation_loading_enabled :meta_ui_animation_loading_enabled (. defaults :ui_animation_loading_enabled)))
       :ui_animation_loading_ms (. defaults :ui_animation_loading_ms)
@@ -329,7 +336,9 @@
                                                                  (. defaults :ui_animation_scroll_time_scale)))
       :ui_animation_scroll_backend (nested-value opts [:ui :animation :scroll :backend]
                                                    (opt-value opts :ui_animation_scroll_backend :meta_ui_animation_scroll_backend
-                                                              (. defaults :ui_animation_scroll_backend)))
+                                                              (nested-value opts [:ui :animation :backend]
+                                                                            (opt-value opts :ui_animation_backend :meta_ui_animation_backend
+                                                                                       (. defaults :ui_animation_backend)))))
       :window_local_layout (if (= (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)) nil)
                                true
                                (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)))
@@ -388,6 +397,7 @@
     (set router.scroll-sync-debounce-ms (. options :scroll_sync_debounce_ms))
     (set router.ui-animations-enabled (. options :ui_animations_enabled))
     (set router.ui-animations-time-scale (. options :ui_animations_time_scale))
+    (set router.ui-animation-backend (. options :ui_animation_backend))
     (set router.ui-animation-prompt-enabled (. options :ui_animation_prompt_enabled))
     (set router.ui-animation-prompt-ms (. options :ui_animation_prompt_ms))
     (set router.ui-animation-prompt-time-scale (. options :ui_animation_prompt_time_scale))

@@ -28,6 +28,48 @@ end
 M["buf-valid?"] = function(buf)
   return (buf and vim.api.nvim_buf_is_valid(buf))
 end
+M["disable-heavy-buffer-features!"] = function(buf)
+  if M["buf-valid?"](buf) then
+    pcall(vim.api.nvim_buf_set_var, buf, "conjure_disable", true)
+    pcall(vim.api.nvim_buf_set_var, buf, "lsp_disabled", 1)
+    pcall(vim.api.nvim_buf_set_var, buf, "gitgutter_enabled", 0)
+    pcall(vim.api.nvim_buf_set_var, buf, "gitsigns_disable", true)
+    pcall(vim.diagnostic.enable, false, {bufnr = buf})
+    if (1 == vim.fn.exists("*rainbow_parentheses#deactivate")) then
+      pcall(vim.api.nvim_buf_set_var, buf, "metabuffer_rainbow_parentheses_disabled", true)
+      local deactivate_21
+      local function _1_()
+        return vim.cmd("silent! call rainbow_parentheses#deactivate()")
+      end
+      deactivate_21 = _1_
+      return pcall(vim.api.nvim_buf_call, buf, deactivate_21)
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+M["restore-heavy-buffer-features!"] = function(buf)
+  if M["buf-valid?"](buf) then
+    local ok,disabled_3f = pcall(vim.api.nvim_buf_get_var, buf, "metabuffer_rainbow_parentheses_disabled")
+    if (ok and disabled_3f and (1 == vim.fn.exists("*rainbow_parentheses#activate"))) then
+      do
+        local activate_21
+        local function _4_()
+          return vim.cmd("silent! call rainbow_parentheses#activate()")
+        end
+        activate_21 = _4_
+        pcall(vim.api.nvim_buf_call, buf, activate_21)
+      end
+      return pcall(vim.api.nvim_buf_del_var, buf, "metabuffer_rainbow_parentheses_disabled")
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
 M["win-valid?"] = function(win)
   return (win and vim.api.nvim_win_is_valid(win))
 end
@@ -65,23 +107,23 @@ M["devicon-info"] = function(path, fallback_hl)
     else
       next_hl = fallback_hl
     end
-    local _3_
+    local _9_
     if (ok_i and (type(icon) == "string") and (icon ~= "")) then
-      _3_ = icon
+      _9_ = icon
     else
-      _3_ = ""
+      _9_ = ""
     end
-    return {icon = _3_, ["icon-hl"] = next_hl, ["ext-hl"] = next_hl, ["file-hl"] = fallback_hl}
+    return {icon = _9_, ["icon-hl"] = next_hl, ["ext-hl"] = next_hl, ["file-hl"] = fallback_hl}
   else
     if (1 == vim.fn.exists("*WebDevIconsGetFileTypeSymbol")) then
       local icon = vim.fn.WebDevIconsGetFileTypeSymbol(file)
-      local _5_
+      local _11_
       if ((type(icon) == "string") and (icon ~= "")) then
-        _5_ = icon
+        _11_ = icon
       else
-        _5_ = ""
+        _11_ = ""
       end
-      return {icon = _5_, ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
+      return {icon = _11_, ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
     else
       return {icon = "", ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
     end

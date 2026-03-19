@@ -3,6 +3,7 @@ local M = {}
 local source_mod = require("metabuffer.source")
 local lineno_mod = require("metabuffer.window.lineno")
 local statusline_mod = require("metabuffer.window.statusline")
+local util = require("metabuffer.util")
 local base_window_mod = require("metabuffer.window.base")
 local disable_airline_statusline_21 = base_window_mod["disable-airline-statusline!"]
 local metabuffer_winhighlight = base_window_mod["metabuffer-winhighlight"]
@@ -130,6 +131,7 @@ M.new = function(opts)
   local mark_preview_buffer_21
   local function _16_(buf)
     if (buf and vim.api.nvim_buf_is_valid(buf)) then
+      util["disable-heavy-buffer-features!"](buf)
       pcall(vim.api.nvim_buf_set_var, buf, "conjure_disable", true)
       pcall(vim.api.nvim_buf_set_var, buf, "lsp_disabled", 1)
       pcall(vim.api.nvim_buf_set_var, buf, "gitgutter_enabled", 0)

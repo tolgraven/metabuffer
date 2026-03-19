@@ -53,13 +53,16 @@ Animation setup options:
 \tui.animation.enabled
 \t\tMaster enable/disable switch for Meta animations.
 
+\tui.animation.backend
+\t\tGlobal animation backend. "native" keeps Meta's built-in behavior.
+\t\t"mini" uses mini.animate where supported.
+
 \tui.animation.time_scale
 \t\tMaster speed multiplier. 1.0 is normal speed, 0.5 is twice as
 \t\tfast, 2.0 is half speed.
 
 \tui.animation.prompt.enabled
 \tui.animation.prompt.time_scale
-\tui.animation.prompt.backend
 \t\tControls prompt split slide animation.
 
 \tui.animation.preview.enabled
@@ -68,7 +71,6 @@ Animation setup options:
 
 \tui.animation.info.enabled
 \tui.animation.info.time_scale
-\tui.animation.info.backend
 \t\tControls info window fade/slide animation.
 
 \tui.animation.loading.enabled
@@ -79,15 +81,8 @@ Animation setup options:
 \tui.animation.scroll.time_scale
 \t\tControls animated half/page scrolling in the results window.
 
-\tui.animation.scroll.backend
-\t\tScroll animation backend. "native" keeps Meta's built-in behavior.
-\t\t"mini" uses mini.animate helpers when available and otherwise falls
-\t\tback to "native".
-
-\tui.animation.prompt.backend / ui.animation.info.backend
-\t\tPer-animation backend override. "native" keeps Meta's built-in
-\t\tbehavior. "mini" uses mini.animate resize/fade helpers when
-\t\tavailable and otherwise falls back to "native".
+\tPer-animation backend keys are still accepted as compatibility
+\toverrides, but ui.animation.backend is the intended control surface.
 
 \tui.animation.loading_indicator
 \t\tIndependent toggle for showing the loading indicator at all.

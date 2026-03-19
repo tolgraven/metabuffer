@@ -667,7 +667,9 @@ M.new = function(opts)
     if (session and session["project-mode"] and not session["project-bootstrapped"]) then
       session["project-bootstrap-token"] = (1 + (session["project-bootstrap-token"] or 0))
       local token = session["project-bootstrap-token"]
+      local delay = math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"] or 0))
       session["project-bootstrap-pending"] = true
+      local run_bootstrap_21
       local function _84_()
         if (session and (token == session["project-bootstrap-token"])) then
           session["project-bootstrap-pending"] = false
@@ -701,15 +703,17 @@ M.new = function(opts)
                 return nil
               end
             end
-            return vim.defer_fn(_88_, 17)
+            vim.defer_fn(_88_, 17)
           else
-            return nil
           end
+          session["project-mode-starting?"] = false
+          return nil
         else
           return nil
         end
       end
-      return vim.defer_fn(_84_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
+      run_bootstrap_21 = _84_
+      return vim.defer_fn(run_bootstrap_21, delay)
     else
       return nil
     end

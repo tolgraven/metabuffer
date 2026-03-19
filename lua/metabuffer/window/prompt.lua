@@ -1,6 +1,7 @@
 -- [nfnl] fnl/metabuffer/window/prompt.fnl
 local base = require("metabuffer.window.base")
 local animation_mod = require("metabuffer.window.animation")
+local util = require("metabuffer.util")
 local M = {}
 local disable_airline_statusline_21 = base["disable-airline-statusline!"]
 local apply_metabuffer_window_highlights_21 = base["apply-metabuffer-window-highlights!"]
@@ -11,6 +12,7 @@ local function prompt_winhighlight()
 end
 local function prompt_buffer_21(win)
   local buf = vim.api.nvim_win_get_buf(win)
+  util["disable-heavy-buffer-features!"](buf)
   do
     local bo = vim.bo[buf]
     bo["buftype"] = "nofile"

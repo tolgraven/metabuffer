@@ -627,50 +627,51 @@
     "Defer full project source expansion until startup/input conditions allow."
     (when (and session session.project-mode (not session.project-bootstrapped))
       (set session.project-bootstrap-token (+ 1 (or session.project-bootstrap-token 0)))
-      (let [token session.project-bootstrap-token]
+      (let [token session.project-bootstrap-token
+            delay (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms 0))]
         (set session.project-bootstrap-pending true)
-        (vim.defer_fn
-          (fn []
-            (when (and session (= token session.project-bootstrap-token))
-              (set session.project-bootstrap-pending false))
-            (when (and session
-                       (= token session.project-bootstrap-token)
-                       session.project-mode
-                       session.prompt-buf
-                       (session-active? session)
-                       (not session.project-bootstrapped))
-              (let [has-query (prompt-has-active-query? session)]
-                (apply-source-set! session)
-                (set session.project-bootstrapped true)
-                ;; Avoid a bootstrap-triggered filter/view update for plain `:Meta!`
-                ;; with empty prompt; defer filtering until the user types.
-                (when has-query
-                  ;; If user typed while bootstrap was pending, force-path guards can
-                  ;; suppress the immediate refresh and leave results stale.
-                  ;; Drive the pending prompt apply directly through the trailing-edge
-                  ;; timer path so early keystrokes are always honored.
-                  (set session.prompt-update-dirty true)
-                  (let [now (now-ms)
-                        quiet-for (- now (or session.prompt-last-change-ms 0))
-                        need-quiet (math.max 0 (prompt-update-delay-ms session))]
-                    (if (< quiet-for need-quiet)
-                        (schedule-prompt-update! session (math.max 1 (- need-quiet quiet-for)))
-                        (schedule-prompt-update! session 0))))
-                ;; Keep selection/view stable even when no prompt filter is applied.
-                (when-not has-query
-                  (pcall session.meta.buf.render)
-                  (restore-meta-view! session.meta session.source-view session update-info-window)
-                  (pcall session.meta.refresh_statusline)
-                  (pcall update-info-window session true)
-                  (vim.defer_fn
-                    (fn []
-                      (when (and session
-                                 (session-active? session)
-                                 (not session.closing))
-                        (pcall update-info-window session true)))
-                    17)))
-                (set session.project-mode-starting? false))))
-          (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms 0)))))
+        (let [run-bootstrap!
+              (fn []
+                (when (and session (= token session.project-bootstrap-token))
+                  (set session.project-bootstrap-pending false))
+                (when (and session
+                           (= token session.project-bootstrap-token)
+                           session.project-mode
+                           session.prompt-buf
+                           (session-active? session)
+                           (not session.project-bootstrapped))
+                  (let [has-query (prompt-has-active-query? session)]
+                    (apply-source-set! session)
+                    (set session.project-bootstrapped true)
+                    ;; Avoid a bootstrap-triggered filter/view update for plain `:Meta!`
+                    ;; with empty prompt; defer filtering until the user types.
+                    (when has-query
+                      ;; If user typed while bootstrap was pending, force-path guards can
+                      ;; suppress the immediate refresh and leave results stale.
+                      ;; Drive the pending prompt apply directly through the trailing-edge
+                      ;; timer path so early keystrokes are always honored.
+                      (set session.prompt-update-dirty true)
+                      (let [now (now-ms)
+                            quiet-for (- now (or session.prompt-last-change-ms 0))
+                            need-quiet (math.max 0 (prompt-update-delay-ms session))]
+                        (if (< quiet-for need-quiet)
+                            (schedule-prompt-update! session (math.max 1 (- need-quiet quiet-for)))
+                            (schedule-prompt-update! session 0))))
+                    ;; Keep selection/view stable even when no prompt filter is applied.
+                    (when-not has-query
+                      (pcall session.meta.buf.render)
+                      (restore-meta-view! session.meta session.source-view session update-info-window)
+                      (pcall session.meta.refresh_statusline)
+                      (pcall update-info-window session true)
+                      (vim.defer_fn
+                        (fn []
+                          (when (and session
+                                     (session-active? session)
+                                     (not session.closing))
+                            (pcall update-info-window session true)))
+                        17))
+                    (set session.project-mode-starting? false))))]
+          (vim.defer_fn run-bootstrap! delay)))))
 
   {:schedule-lazy-refresh! schedule-lazy-refresh!
    :apply-source-set! apply-source-set!

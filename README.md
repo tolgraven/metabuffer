@@ -20,6 +20,7 @@ require("metabuffer").setup({
   ui = {
     animation = {
       enabled = true,
+      backend = "native",
       time_scale = 1.0,
       loading_indicator = true,
       prompt = { enabled = true, time_scale = 1.0 },
@@ -107,21 +108,20 @@ require("metabuffer").defaults
 Animation controls:
 
 - `ui.animation.enabled`: master on/off switch for Meta window animations
+- `ui.animation.backend`: global animation backend, `"native"` or `"mini"`
 - `ui.animation.time_scale`: master speed multiplier
   - `1.0` = normal
   - `0.5` = twice as fast
   - `2.0` = half speed
 - Per-animation toggles and speed scales:
-  - `ui.animation.prompt.enabled`, `ui.animation.prompt.time_scale`, `ui.animation.prompt.backend`
+  - `ui.animation.prompt.enabled`, `ui.animation.prompt.time_scale`
   - `ui.animation.preview.enabled`, `ui.animation.preview.time_scale`
-  - `ui.animation.info.enabled`, `ui.animation.info.time_scale`, `ui.animation.info.backend`
+  - `ui.animation.info.enabled`, `ui.animation.info.time_scale`
   - `ui.animation.loading.enabled`, `ui.animation.loading.time_scale`
-  - `ui.animation.scroll.enabled`, `ui.animation.scroll.time_scale`, `ui.animation.scroll.backend`
+  - `ui.animation.scroll.enabled`, `ui.animation.scroll.time_scale`
 - `ui.animation.loading_indicator` controls whether the animated prompt footer loading word is shown at all
 
-`ui.animation.scroll.backend` defaults to `"native"`. Set it to `"mini"` to use `mini.animate` timing and subscroll helpers for results scrolling when `mini.nvim` is available; Meta falls back to the native backend if it is not.
-
-`ui.animation.prompt.backend` and `ui.animation.info.backend` also default to `"native"`. Set them to `"mini"` to use `mini.animate` resize and fade helpers for those animations when `mini.nvim` is available; Meta falls back to the native backend if it is not.
+`ui.animation.backend` defaults to `"native"`. Set it to `"mini"` to let Meta use `mini.animate` where supported. Per-animation backend keys are still accepted as compatibility overrides, but the global backend is now the intended control surface.
 
 Durations are not part of the public setup surface. Meta keeps sensible base timings internally and applies the master/per-animation scales on top.
 

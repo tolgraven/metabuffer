@@ -263,6 +263,7 @@ M.new = function(opts)
         cfg = target
       end
       local win = floating_window_mod.new(vim, buf, cfg)
+      util["disable-heavy-buffer-features!"](buf)
       session["info-buf"] = buf
       session["info-win"] = win.window
       session["info-config-sig"] = info_config_signature(target)

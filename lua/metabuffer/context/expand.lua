@@ -1,5 +1,6 @@
 -- [nfnl] fnl/metabuffer/context/expand.fnl
 local M = {}
+local util = require("metabuffer.util")
 local function buf_for_ref(ref)
   if (ref and ref.buf and vim.api.nvim_buf_is_valid(ref.buf)) then
     return ref.buf
@@ -82,6 +83,7 @@ local function ensure_ts_buf(session, ref, read_file_lines_cached)
         local buf = vim.api.nvim_create_buf(false, true)
         local ft = filetype_for_ref(ref)
         local lines = lines_for_ref(session, ref, read_file_lines_cached)
+        util["disable-heavy-buffer-features!"](buf)
         do
           local bo = vim.bo[buf]
           bo["bufhidden"] = "hide"
@@ -164,7 +166,7 @@ local function ts_range_for_mode(session, ref, mode, read_file_lines_cached)
 end
 local function identifier_at_ref(session, ref, read_file_lines_cached)
   local lines = lines_for_ref(session, ref, read_file_lines_cached)
-  local line = (lines[(ref.lnum or 1)] or (ref.line or ""))
+  local line = (lines[(ref.lnum or 1)] or ref.line or "")
   return (string.match(line, "[%a_][%w_%.:]*") or "")
 end
 local function exact_word_find_3f(line, word)

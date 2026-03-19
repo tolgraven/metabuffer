@@ -24,8 +24,8 @@ M.new = function(nvim)
   local self = {nvim = nvim, text = "", prefix = "", ["insert-mode"] = M.INSERT_MODE_INSERT, ["highlight-prefix"] = "Question", ["highlight-text"] = "None", ["highlight-caret"] = "IncSearch", ["harvest-interval"] = M.DEFAULT_HARVEST_INTERVAL, ["is-macvim"] = ((1 == vim.fn.has("gui_running")) and (1 == vim.fn.has("mac")))}
   self.caret = caret_mod.new(self, 0)
   self.history = history_mod.new(self)
-  self.action = action_mod.DEFAULT_ACTION
-  self.keymap = keymap_mod.from_rules(nvim, keymap_mod.DEFAULT_KEYMAP_RULES)
+  self.action = action_mod["default-action"]()
+  self.keymap = keymap_mod.from_rules(nvim, keymap_mod["default-keymap-rules"]())
   self["insert-text"] = function(txt)
     local locus = self.caret["get-locus"]()
     self.text = (self.caret["get-backward-text"]() .. txt .. self.caret["get-selected-text"]() .. self.caret["get-forward-text"]())

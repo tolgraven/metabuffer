@@ -157,6 +157,7 @@ M["move-selection!"] = function(deps, prompt_buf, delta)
   if session then
     local runner
     local function _22_()
+      hide_scroll_cursor_21(session)
       local meta = session.meta
       local max = #meta.buf.indices
       if (max > 0) then

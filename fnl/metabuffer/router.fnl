@@ -505,6 +505,7 @@
              :context context-window}
    :ui {:loading-indicator M.ui-loading-indicator
         :animation {:enabled M.ui-animations-enabled
+                    :backend M.ui-animation-backend
                     :time-scale M.ui-animations-time-scale
                     :prompt {:enabled M.ui-animation-prompt-enabled
                              :ms M.ui-animation-prompt-ms

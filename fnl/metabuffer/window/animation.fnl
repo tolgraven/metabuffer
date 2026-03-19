@@ -4,6 +4,10 @@
 (local target-frame-ms 17)
 (var mini-animate-cache nil)
 (var mini-animate-tried? false)
+(var mini-animate-scoped? false)
+(var mark-mini-session! nil)
+(var unmark-mini-session! nil)
+(var execute-after! nil)
 
 (fn now-ms
   []
@@ -44,7 +48,8 @@
 
 (fn mini-animate-mod
   []
-  "Load `mini.animate` once. Expected output: module table or nil."
+  "Load `mini.animate` as a helper library, without calling global setup.
+Expected output: module table or nil."
   (when-not mini-animate-tried?
     (set mini-animate-tried? true)
     (let [[ok mod] [(pcall require :mini.animate)]]
@@ -88,7 +93,7 @@
   "Return configured backend for animation kind. Expected output: \"native\" or \"mini\"."
   (let [settings (or session.animation-settings {})
         entry (or (. settings kind) {})
-        backend (. entry :backend)]
+        backend (or (. entry :backend) (. settings :backend))]
     (if (= backend "mini") "mini" "native")))
 
 (fn supports-backend?
@@ -98,6 +103,55 @@
       (not (not (mini-animate-mod)))
       true))
 
+(fn mini-autocmds-present?
+  []
+  (let [[ok acs] [(pcall vim.api.nvim_get_autocmds {:group "MiniAnimate"})]]
+    (and ok (> (# (or acs [])) 0))))
+
+(fn mini-managed-buf?
+  [buf]
+  (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "metabuffer_minianimate_enable")]]
+    (and ok (not (not v)))))
+
+(fn apply-mini-scope!
+  [buf]
+  (when (and buf (vim.api.nvim_buf_is_valid buf))
+    (if (mini-managed-buf? buf)
+        (do
+          (pcall vim.api.nvim_buf_set_var buf "minianimate_disable" false)
+          (let [[ok cfg] [(pcall vim.api.nvim_buf_get_var buf "metabuffer_minianimate_config")]]
+            (when ok
+              (pcall vim.api.nvim_buf_set_var buf "minianimate_config" cfg))))
+        (pcall vim.api.nvim_buf_set_var buf "minianimate_disable" true))))
+
+(fn ensure-mini-scope!
+  []
+  (when-not mini-animate-scoped?
+    (set mini-animate-scoped? true)
+    (let [group (vim.api.nvim_create_augroup "MetabufferMiniAnimateScope" {:clear true})
+          apply! (fn [ev]
+                   (apply-mini-scope! (. ev :buf)))]
+      (vim.api.nvim_create_autocmd ["BufEnter" "BufWinEnter"]
+                                   {:group group
+                                    :callback apply!}))))
+
+(fn ensure-mini-global!
+  [session]
+  "Ensure `mini.animate` is set up once for Meta-scoped usage.
+Expected output: module table or nil."
+  (let [mini (mini-animate-mod)]
+    (when mini
+      (when-not (mini-autocmds-present?)
+        (mini.setup {:cursor {:enable false}
+                     :scroll {:enable true}
+                     :resize {:enable true}
+                     :open {:enable false}
+                     :close {:enable false}}))
+      (ensure-mini-scope!)
+      (when session
+        (mark-mini-session! session)))
+    mini))
+
 (fn mini-timing
   [mini duration-ms n-steps]
   (let [timing ((. (. mini :gen_timing) :cubic)
@@ -106,6 +160,82 @@
                  :unit "total"})]
     (fn [step]
       (timing step n-steps))))
+
+(fn mini-run!
+  [mini session key n-steps duration-ms active? step-action]
+  "Run `mini.animate` with Meta-owned cancellation/state handling.
+Expected output: nil."
+  (let [token (next-token! session key)
+        timing (mini-timing mini duration-ms n-steps)]
+    ((. mini :animate)
+     (fn [step]
+       (if (or (not (active-token? session key token))
+               (and active? (not (active?))))
+           false
+           (step-action step)))
+     timing
+     {:max_steps (+ n-steps 1)})))
+
+(fn mini-float-winblend-fn
+  [mini from-blend to-blend]
+  "Build float winblend interpolation from `mini.animate`.
+Expected output: function."
+  ((. (. mini :gen_winblend) :linear)
+   {:from from-blend
+    :to to-blend}))
+
+(fn mini-buffer-config
+  [session]
+  "Build buffer-local `mini.animate` config for Meta buffers.
+Expected output: config table."
+  (let [mini (mini-animate-mod)]
+    {:cursor {:enable false}
+     :scroll {:enable (enabled? session :scroll)
+              :timing ((. (. mini :gen_timing) :cubic)
+                       {:easing "in-out"
+                        :duration (duration-ms session :scroll 140)
+                        :unit "total"})
+              :subscroll ((. (. mini :gen_subscroll) :equal)
+                          {:predicate (fn [n] (> n 1))
+                           :max_output_steps 60})}
+     :resize {:enable (enabled? session :prompt)
+              :timing ((. (. mini :gen_timing) :cubic)
+                       {:easing "in-out"
+                        :duration (duration-ms session :prompt 140)
+                        :unit "total"})
+              :subresize ((. (. mini :gen_subresize) :equal))}
+     :open {:enable false}
+     :close {:enable false}}))
+
+(set mark-mini-session!
+  (fn [session]
+    (when (and session (supports-backend? "mini"))
+      (let [cfg (mini-buffer-config session)]
+        (each [_ buf (ipairs [(and session.meta session.meta.buf session.meta.buf.buffer)
+                              session.prompt-buf
+                              session.info-buf])]
+          (when (and buf (vim.api.nvim_buf_is_valid buf))
+            (pcall vim.api.nvim_buf_set_var buf "metabuffer_minianimate_enable" true)
+            (pcall vim.api.nvim_buf_set_var buf "metabuffer_minianimate_config" cfg)
+            (apply-mini-scope! buf)))))))
+
+(set unmark-mini-session!
+  (fn [session]
+    (when session
+      (each [_ buf (ipairs [(and session.meta session.meta.buf session.meta.buf.buffer)
+                            session.prompt-buf
+                            session.info-buf])]
+        (when (and buf (vim.api.nvim_buf_is_valid buf))
+          (pcall vim.api.nvim_buf_del_var buf "metabuffer_minianimate_enable")
+          (pcall vim.api.nvim_buf_del_var buf "metabuffer_minianimate_config")
+          (pcall vim.api.nvim_buf_set_var buf "minianimate_disable" true))))))
+
+(set execute-after!
+  (fn [animation-type action]
+    (let [mini (mini-animate-mod)]
+      (if mini
+          (mini.execute_after animation-type action)
+          (action)))))
 
 (fn set-win-height!
   [win height]
@@ -206,47 +336,16 @@
         opts (or opts {})]
     (if (and (= (animation-backend session :prompt) "mini")
              (supports-backend? "mini"))
-        (let [mini (mini-animate-mod)
-              subresize-fn ((. (. mini :gen_subresize) :equal)
-                            {:predicate (fn [sizes-from sizes-to]
-                                          (~= (. (. sizes-from :prompt) :height)
-                                              (. (. sizes-to :prompt) :height)))})
-              step-sizes (subresize-fn {:prompt {:height start :width 1}}
-                                       {:prompt {:height stop :width 1}})
-              n-steps (# step-sizes)]
+        (do
+          (ensure-mini-global! session)
           (with-split-mins
             (fn []
-              (if (or (<= delta 0) (<= n-steps 0))
-                  (do
-                    (set-win-height! win stop)
-                    (when-let [done! (. opts :done!)]
-                      (done! stop)))
-                  (let [token (next-token! session key)
-                        timing (mini-timing mini duration-ms n-steps)]
-                    ((. mini :animate)
-                     (fn [step]
-                       (if (or (not (active-token? session key token))
-                               (not (vim.api.nvim_win_is_valid win)))
-                           false
-                           (do
-                             (let [step-size (. step-sizes step)
-                                   prompt-size (and step-size (. step-size :prompt))
-                                   height (if (= step 0)
-                                              start
-                                              (or (and prompt-size (. prompt-size :height))
-                                                  stop))]
-                               (set-win-height! win height)
-                               (when-let [tick! (. opts :tick!)]
-                                 (tick! height step)))
-                             (if (< step n-steps)
-                                 true
-                                 (do
-                                   (set-win-height! win stop)
-                                   (when-let [done! (. opts :done!)]
-                                     (done! stop))
-                                   false)))))
-                     timing
-                     {:max_steps (+ n-steps 1)})))))
+              (set-win-height! win stop)
+              (execute-after!
+                "resize"
+                (fn []
+                  (when-let [done! (. opts :done!)]
+                    (done! stop)))))))
         (with-split-mins
           (fn []
             (run! session key
@@ -266,7 +365,7 @@
                    :done! (fn []
                             (set-win-height! win stop)
                             (when-let [done! (. opts :done!)]
-                              (done! stop)))})))))))
+                              (done! stop)))}))))))
 
 (set animate-win-width!
   (fn [session key win from to duration-ms opts]
@@ -297,29 +396,26 @@
                (supports-backend? "mini"))
           (let [mini (mini-animate-mod)
                 n-steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
-                timing (mini-timing mini duration-ms n-steps)
-                blend-fn ((. (. mini :gen_winblend) :linear)
-                          {:from from-blend
-                           :to to-blend})
-                token (next-token! session key)]
-            ((. mini :animate)
-             (fn [step]
-               (if (or (not (active-token? session key token))
-                       (not (vim.api.nvim_win_is_valid win)))
-                   false
-                   (let [t (/ step n-steps)
-                         cfg (float-step-config from-cfg to-cfg t)
-                         blend (math.max 0 (math.min 100 (blend-fn step n-steps)))]
-                     (apply-float-step! win cfg blend opts t)
-                     (if (< step n-steps)
-                         true
-                         (do
-                           (apply-float-step! win to-cfg to-blend opts 1.0)
-                           (when-let [done! (. opts :done!)]
-                             (done! to-cfg))
-                           false)))))
-             timing
-             {:max_steps (+ n-steps 1)}))
+                blend-fn (mini-float-winblend-fn mini from-blend to-blend)]
+            (mini-run!
+              mini
+              session
+              key
+              n-steps
+              duration-ms
+              (fn [] (vim.api.nvim_win_is_valid win))
+              (fn [step]
+                (let [t (/ step n-steps)
+                      cfg (float-step-config from-cfg to-cfg t)
+                      blend (math.max 0 (math.min 100 (blend-fn step n-steps)))]
+                  (apply-float-step! win cfg blend opts t)
+                  (if (< step n-steps)
+                      true
+                      (do
+                        (apply-float-step! win to-cfg to-blend opts 1.0)
+                        (when-let [done! (. opts :done!)]
+                          (done! to-cfg))
+                        false))))))
           (run! session key
                 {:duration-ms duration-ms
                  :steps (math.max 2 (math.floor (/ duration-ms target-frame-ms)))
@@ -366,62 +462,18 @@
                       (done! to-view)))}))))
 
 (set animate-scroll-view-mini!
-  (fn [session key win from-view to-view duration-ms opts]
-    "Animate vertical results scrolling with `mini.animate` timing/subscroll helpers."
-    (let [opts (or opts {})
-          mini (mini-animate-mod)
-          from-top (or (. from-view :topline) 1)
-          to-top (or (. to-view :topline) from-top)
-          total-scroll (math.abs (- to-top from-top))
-          subscroll-fn ((. (. mini :gen_subscroll) :equal)
-                        {:predicate (fn [n] (> n 1))
-                         :max_output_steps 60})
-          win-restore (fn [target]
-                        (vim.api.nvim_win_call
-                          win
-                          (fn []
-                            (pcall vim.fn.winrestview target))))
-          step-scrolls (subscroll-fn total-scroll)
-          n-steps (# step-scrolls)]
-      (if (or (<= total-scroll 0) (<= n-steps 0))
-          (do
-            (win-restore to-view)
-            (when-let [done! (. opts :done!)]
-              (done! to-view)))
-          (let [token (next-token! session key)
-                timing ((. (. mini :gen_timing) :cubic)
-                        {:easing "in-out"
-                         :duration duration-ms
-                         :unit "total"})
-                dir (if (< from-top to-top) 1 -1)
-                from-lnum (or (. from-view :lnum) from-top)
-                to-lnum (or (. to-view :lnum) to-top)
-                scrolled0 0]
-            (var scrolled scrolled0)
-            ((. mini :animate)
-             (fn [step]
-               (if (or (not (active-token? session key token))
-                       (not (vim.api.nvim_win_is_valid win)))
-                   false
-                   (do
-                     (when (> step 0)
-                       (set scrolled (+ scrolled (or (. step-scrolls step) 0)))
-                       (let [coef (/ step n-steps)
-                             target {:topline (+ from-top (* dir scrolled))
-                                     :lnum (math.max 1 (math.floor (+ 0.5 (lerp from-lnum to-lnum coef))))
-                                     :leftcol (or (. to-view :leftcol) (. from-view :leftcol) 0)
-                                     :col (or (. to-view :col) (. from-view :col) 0)}]
-                         (win-restore target)))
-                     (if (< step n-steps)
-                         true
-                         (do
-                           (win-restore to-view)
-                           (when-let [done! (. opts :done!)]
-                             (done! to-view))
-                           false)))))
-             (fn [step]
-               (timing step n-steps))
-             {:max_steps (+ n-steps 1)}))))))
+  (fn [session _key win _from-view to-view _duration-ms opts]
+    "Delegate scrolling to `mini.animate` itself and run callback on done."
+    (ensure-mini-global! session)
+    (vim.api.nvim_win_call
+      win
+      (fn []
+        (pcall vim.fn.winrestview to-view)))
+    (execute-after!
+      "scroll"
+      (fn []
+        (when-let [done! (. (or opts {}) :done!)]
+          (done! to-view))))))
 
 (set animate-scroll-view!
   (fn [session key win from-view to-view duration-ms opts]
@@ -443,6 +495,9 @@
 (set M.scroll-backend (fn [session] (animation-backend session :scroll)))
 (set M.supports-backend? supports-backend?)
 (set M.supports-scroll-backend? supports-backend?)
+(set M.ensure-mini-global! ensure-mini-global!)
+(set M.mark-mini-session! mark-mini-session!)
+(set M.unmark-mini-session! unmark-mini-session!)
 (set M.with-split-mins with-split-mins)
 (set M.run! run!)
 (set M.animate-win-height! animate-win-height!)
