@@ -112,6 +112,16 @@
               (= ft "man")
               (= bt "help")))))
 
+    (fn first-window-for-buffer
+      [buf]
+      (when (and buf (= (type buf) "number") (vim.api.nvim_buf_is_valid buf))
+        (let [wins (vim.fn.win_findbuf buf)]
+          (var found nil)
+          (each [_ win (ipairs (or wins []))]
+            (when (and (not found) (vim.api.nvim_win_is_valid win))
+              (set found win)))
+          found)))
+
     (fn control-token-style
       [tok]
       (let [token (or tok "")
@@ -726,15 +736,18 @@
                          20))})
         (vim.api.nvim_create_autocmd "BufWinEnter"
           {:group aug
-           :callback (fn [_]
+           :callback (fn [ev]
                        (vim.defer_fn
                          (fn []
                            (when (and hide-visible-ui!
                                       (not session.ui-hidden)
                                       session.prompt-buf
                                       (= (. active-by-prompt session.prompt-buf) session))
-                             (let [buf (vim.api.nvim_get_current_buf)]
-                               (when (transient-overlay-buffer? buf)
+                             (let [buf (or ev.buf (vim.api.nvim_get_current_buf))
+                                   win (or (first-window-for-buffer buf)
+                                           (vim.api.nvim_get_current_win))]
+                               (when (or (transient-overlay-buffer? buf)
+                                         (covered-by-new-window? session win))
                                  (pcall hide-visible-ui! session)))))
                          20))})
         (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]

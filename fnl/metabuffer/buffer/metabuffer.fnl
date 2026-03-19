@@ -3,30 +3,10 @@
 (local ui (require :metabuffer.buffer.ui))
 (local query-mod (require :metabuffer.query))
 (local source-mod (require :metabuffer.source))
-(local util (require :metabuffer.util))
 
 (local M {})
 
 (set M.default-opts {:buflisted false :bufhidden "hide" :buftype "nofile"})
-
-;;
-;; This should really be two synced-up buffers:
-;; hits, and metadata (some of which goes in info window).
-(fn icon-field
-  [icon]
-  (if (and (= (type icon) "string") (~= icon ""))
-      (let [text (.. icon " ")]
-        {:text text :width (vim.fn.strdisplaywidth text)})
-      {:text "" :width 0}))
-
-(fn split-source-path
-  [path]
-  (let [p (or path "")
-        rel (if (~= p "") (vim.fn.fnamemodify p ":~:.") "[Current Buffer]")
-        dir (vim.fn.fnamemodify rel ":h")
-        file (vim.fn.fnamemodify rel ":t")
-        dir-part (if (and dir (~= dir ".") (~= dir "")) (.. dir "/") "")]
-    {:dir dir-part :file file}))
 
 (fn source-prefix
   [ref]
@@ -85,13 +65,6 @@
              session.lazy-refresh-dirty
              session.project-bootstrap-pending
              (and session.project-mode (not session.project-bootstrapped))))))
-
-(fn session_has_active_query
-  [self]
-  (let [session self.session
-        parsed (and session session.last-parsed-query)]
-    (and parsed
-         (query-mod.query-lines-has-active? (or (. parsed :lines) [])))))
 
 (fn any-non-empty-line?
   [lines]
@@ -278,12 +251,8 @@
               self.source-alt-ns
               (- i 1)
               0
-              {:end_row i
-               :end_col 0
-               :hl_group "MetaSourceAltBg"
-               :hl_eol true
-               :hl_mode "combine"
-               :priority 1}))))
+              {:line_hl_group "MetaSourceAltBg"
+               :priority 90}))))
       (for [i 1 (- n 1)]
         (let [cur-idx (. self.indices i)
               next-idx (. self.indices (+ i 1))

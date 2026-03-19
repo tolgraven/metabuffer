@@ -22,15 +22,23 @@
   (when (and buf (vim.api.nvim_buf_is_valid buf))
     (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})))
 
+(fn destroy-window-wrapper!
+  [wrapper]
+  (when (and wrapper
+             wrapper.window
+             (vim.api.nvim_win_is_valid wrapper.window)
+             wrapper.destroy)
+    (pcall wrapper.destroy)))
+
 (fn restore-main-window-opts!
   [session]
-  "Restore the original local options for the main results/origin window."
-  (let [win (and session session.meta session.meta.win)]
-    (when (and win
-               win.window
-               (vim.api.nvim_win_is_valid win.window)
-               win.destroy)
-      (pcall win.destroy))))
+  "Restore the original local options for Meta-managed windows."
+  (let [main-win (and session session.meta session.meta.win)
+        status-win (and session session.meta session.meta.status-win)]
+    (destroy-window-wrapper! main-win)
+    (when (and status-win
+               (~= status-win main-win))
+      (destroy-window-wrapper! status-win))))
 
 (fn remove-session!
   [deps session]
