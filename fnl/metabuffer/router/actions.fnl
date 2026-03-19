@@ -599,22 +599,53 @@
     (set (. r :line) (or text ""))
     r))
 
+(fn consecutive-same-source?
+  [prev-row next-row]
+  (and (valid-row? prev-row)
+       (valid-row? next-row)
+       (= (. prev-row :path) (. next-row :path))
+       (= (+ (. prev-row :lnum) 1) (. next-row :lnum))))
+
 (fn inserted-row
-  [prev-row next-row text rel-index]
+  [session prev-row next-row text rel-index]
   (let [base (or prev-row next-row {})
         out (vim.deepcopy base)
         prev-lnum (or (and prev-row (. prev-row :lnum)) (. base :lnum) 1)
         next-lnum (or (and next-row (. next-row :lnum)) (. base :lnum) (+ prev-lnum 1))
         lnum (if prev-row
                  (+ prev-lnum rel-index)
-                 (math.max 1 (- next-lnum 1)))]
+                 (math.max 1 (- next-lnum 1)))
+        pending (or session.pending-structural-edit {})
+        pending-side (. pending :side)
+        pending-path (. pending :path)
+        pending-lnum (. pending :lnum)]
     (set (. out :lnum) (math.max 1 (or lnum 1)))
     (set (. out :text) (or text ""))
     (set (. out :line) (or text ""))
+    (if (consecutive-same-source? prev-row next-row)
+        (do
+          (set (. out :insert-path) (. prev-row :path))
+          (set (. out :insert-lnum) (. prev-row :lnum))
+          (set (. out :insert-side) "after"))
+        (do
+          (when (and (= pending-side "after")
+                     (valid-row? prev-row)
+                     (= pending-path (. prev-row :path))
+                     (= pending-lnum (. prev-row :lnum)))
+            (set (. out :insert-path) (. prev-row :path))
+            (set (. out :insert-lnum) (. prev-row :lnum))
+            (set (. out :insert-side) "after"))
+          (when (and (= pending-side "before")
+                     (valid-row? next-row)
+                     (= pending-path (. next-row :path))
+                     (= pending-lnum (. next-row :lnum)))
+            (set (. out :insert-path) (. next-row :path))
+            (set (. out :insert-lnum) (. next-row :lnum))
+            (set (. out :insert-side) "before"))))
     out))
 
 (fn projected-rows-from-edits
-  [baseline-rows baseline-lines current-lines]
+  [session baseline-rows baseline-lines current-lines]
   (let [hunks (diff-hunks baseline-lines current-lines)
         out []
         idx {:old 1 :new 1}]
@@ -640,7 +671,7 @@
                 next-row (. baseline-rows (+ a-start common))]
             (for [k 1 extra]
               (let [txt (or (. current-lines (+ b-start common k -1)) "")]
-                (table.insert out (inserted-row prev-row next-row txt k))))))
+                (table.insert out (inserted-row session prev-row next-row txt k))))))
         ;; deletions are omitted from output
         (set (. idx :old) (+ a-start a-count))
         (set (. idx :new) (+ b-start b-count))))
@@ -657,10 +688,12 @@
   (let [meta session.meta
         baseline-lines (or session.edit-baseline-lines [])
         baseline-rows (or session.edit-baseline-rows [])
-        rows (projected-rows-from-edits baseline-rows baseline-lines current-lines)
+        rows (projected-rows-from-edits session baseline-rows baseline-lines current-lines)
         refs []
         content []
         idxs []]
+    (set session.live-edit-rows rows)
+    (set session.pending-structural-edit nil)
     (for [i 1 (# rows)]
       (let [row (or (. rows i) {})]
         (set (. refs i) {:kind (or (. row :kind) "")
@@ -692,6 +725,33 @@
     (table.insert per-file op)
     (set (. ops path) per-file)))
 
+(fn structural-edit?
+  [a-count b-count]
+  (~= a-count b-count))
+
+(fn structural-op-from-current-rows
+  [current-rows start count]
+  (let [rows (slice-lines current-rows start count)
+        first-row (. rows 1)]
+    (if (and first-row
+             (. first-row :insert-path)
+             (. first-row :insert-lnum)
+             (. first-row :insert-side))
+        (let [path (. first-row :insert-path)
+              lnum (. first-row :insert-lnum)
+              side (. first-row :insert-side)
+              lines []
+              consistent? true]
+          (each [_ row (ipairs rows)]
+            (when (or (~= (. row :insert-path) path)
+                      (~= (. row :insert-lnum) lnum)
+                      (~= (. row :insert-side) side))
+              (set consistent? false))
+            (table.insert lines (or (. row :text) (. row :line) "")))
+          (when consistent?
+            {:path path :lnum lnum :side side :lines lines}))
+        nil)))
+
 (fn collect-file-ops
   [session]
   (let [meta session.meta
@@ -699,13 +759,17 @@
         baseline-lines (or session.edit-baseline-lines (vim.api.nvim_buf_get_lines buf 0 -1 false))
         baseline-rows (or session.edit-baseline-rows [])
         current-lines (vim.api.nvim_buf_get_lines buf 0 -1 false)
+        current-rows (or session.live-edit-rows [])
         hunks (diff-hunks baseline-lines current-lines)
-        ops {}]
+        ops {}
+        state {:unsafe-structural? false}]
     (each [_ h (ipairs hunks)]
       (let [[a-start a-count b-start b-count] (hunk-indices h)
             common (math.min a-count b-count)
             old-rows (slice-lines baseline-rows a-start a-count)
             new-lines (slice-lines current-lines b-start b-count)]
+        (when (structural-edit? a-count b-count)
+          (set (. state :unsafe-structural?) true))
         (if (> a-count 0)
             (do
               (for [i 1 common]
@@ -716,29 +780,19 @@
               (when (> a-count b-count)
                 (for [i (+ common 1) a-count]
                   (let [row (. old-rows i)]
-                    (when (valid-row? row)
-                      (append-op! ops (. row :path) {:kind :delete :lnum (. row :lnum)})))))
+                    (if (valid-row? row)
+                        (append-op! ops (. row :path) {:kind :delete :lnum (. row :lnum)})
+                        (set (. state :unsafe-structural?) true)))))
               (when (> b-count a-count)
-                (let [extra (slice-lines new-lines (+ common 1) (- b-count common))
-                      anchor-row (. old-rows a-count)]
-                  (when (and (valid-row? anchor-row) (> (# extra) 0))
-                    (append-op! ops (. anchor-row :path)
-                      {:kind :insert-after :lnum (. anchor-row :lnum) :lines extra}))))
-              )
-            (let [extra (slice-lines new-lines 1 b-count)
-                  ;; For pure insertion hunks (a_count == 0), vim.diff's a_start
-                  ;; points at the next old row. So insertion is between old
-                  ;; rows [a_start-1] and [a_start].
-                  prev-row (. baseline-rows (- a-start 1))
-                  next-row (. baseline-rows a-start)]
-              (when (> (# extra) 0)
-                (if (valid-row? prev-row)
-                    (append-op! ops (. prev-row :path)
-                      {:kind :insert-after :lnum (. prev-row :lnum) :lines extra})
-                    (when (valid-row? next-row)
-                      (append-op! ops (. next-row :path)
-                        {:kind :insert-before :lnum (. next-row :lnum) :lines extra}))))))))
-    {:ops ops :current-lines current-lines}))
+                (let [insert-op (structural-op-from-current-rows current-rows (+ b-start common) (- b-count common))]
+                  (if insert-op
+                      (append-op! ops (. insert-op :path)
+                        {:kind (if (= (. insert-op :side) "before") :insert-before :insert-after)
+                         :lnum (. insert-op :lnum)
+                         :lines (. insert-op :lines)})
+                      (set (. state :unsafe-structural?) true)))))
+            nil)))
+    {:ops ops :current-lines current-lines :unsafe-structural? (. state :unsafe-structural?)}))
 
 (fn apply-file-ops!
   [ops]
@@ -944,33 +998,42 @@
     (when session
       (let [collected (collect-file-ops session)
             ops (. collected :ops)
-            result (apply-file-ops! ops)
             buf session.meta.buf.buffer]
-        (update-session-refs-after-ops! session ops (. result :post-lines))
-        (invalidate-caches-for-paths! deps session (. result :paths))
-        (when (> result.changed 0)
-          (pcall session.meta.on-update 0))
-        (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
-        (pcall vim.api.nvim_buf_set_var buf "meta_manual_edit_active" false)
-        (pcall session.meta.refresh_statusline)
-        (pcall update-info-window session true)
-        (pcall preview-window.maybe-update-for-selection! session)
-        (when (and context-window context-window.update!)
-          (pcall context-window.update! session))
-        (when sign-mod
-          (pcall sign-mod.capture-baseline! session)
-          (pcall sign-mod.refresh-change-signs! session))
-        (vim.notify
-          (if (> result.changed 0)
-              (.. "metabuffer: wrote " (tostring result.changed) " change(s)")
-              "metabuffer: no changes")
-          vim.log.levels.INFO)))))
+        (if (. collected :unsafe-structural?)
+            (do
+              (vim.notify
+                "metabuffer: only in-place line replacements are writable from results; open the real file for insert/delete edits"
+                vim.log.levels.ERROR)
+              (pcall session.meta.refresh_statusline)
+              (when sign-mod
+                (pcall sign-mod.refresh-change-signs! session)))
+            (let [result (apply-file-ops! ops)]
+              (update-session-refs-after-ops! session ops (. result :post-lines))
+              (invalidate-caches-for-paths! deps session (. result :paths))
+              (when (> result.changed 0)
+                (pcall session.meta.on-update 0))
+              (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
+              (pcall vim.api.nvim_buf_set_var buf "meta_manual_edit_active" false)
+              (pcall session.meta.refresh_statusline)
+              (pcall update-info-window session true)
+              (pcall preview-window.maybe-update-for-selection! session)
+              (when (and context-window context-window.update!)
+                (pcall context-window.update! session))
+              (when sign-mod
+                (pcall sign-mod.capture-baseline! session)
+                (pcall sign-mod.refresh-change-signs! session))
+              (vim.notify
+                (if (> result.changed 0)
+                    (.. "metabuffer: wrote " (tostring result.changed) " change(s)")
+                    "metabuffer: no changes")
+                vim.log.levels.INFO)))))))
 
 (fn M.enter-edit-mode!
   [deps prompt-buf]
   (let [{: router : mods : history : refresh} deps
         session (session-by-prompt (. router :active-by-prompt) prompt-buf)
         router-util-mod (. mods :router-util)
+        sign-mod (. mods :sign)
         history-api (. history :api)
         apply-prompt-lines (. refresh :apply-prompt-lines!)]
     (when session
@@ -984,6 +1047,8 @@
       (when (and session.meta session.meta.win (vim.api.nvim_win_is_valid session.meta.win.window))
         (pcall vim.api.nvim_set_current_win session.meta.win.window)
         (pcall vim.api.nvim_win_set_buf session.meta.win.window session.meta.buf.buffer))
+      (when sign-mod
+        (pcall sign-mod.capture-baseline! session))
       ;; Enter editing context in Normal mode; prompt starts in Insert mode.
       (pcall vim.cmd "stopinsert"))))
 

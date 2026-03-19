@@ -14,9 +14,6 @@ end
 local function prompt_delay_ms(settings, query_mod, session)
   return router_prompt_mod["prompt-update-delay-ms"](settings, query_mod, router_util_mod["prompt-lines"], session)
 end
-local function prompt_has_active_query_3f(query_mod, session)
-  return router_prompt_mod["prompt-has-active-query?"](query_mod, router_util_mod["prompt-lines"], session)
-end
 local function schedule_update_21(prompt_scheduler_ctx, session, delay)
   return router_prompt_mod["schedule-prompt-update!"](prompt_scheduler_ctx, session, delay)
 end

@@ -865,6 +865,9 @@ local function append_op_21(ops, path, op)
   ops[path] = per_file
   return nil
 end
+local function structural_edit_3f(a_count, b_count)
+  return (a_count ~= b_count)
+end
 local function collect_file_ops(session)
   local meta = session.meta
   local buf = meta.buf.buffer
@@ -873,6 +876,7 @@ local function collect_file_ops(session)
   local current_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local hunks = diff_hunks(baseline_lines, current_lines)
   local ops = {}
+  local state = {["unsafe-structural?"] = false}
   for _, h in ipairs(hunks) do
     local _let_95_ = hunk_indices(h)
     local a_start = _let_95_[1]
@@ -882,6 +886,10 @@ local function collect_file_ops(session)
     local common = math.min(a_count, b_count)
     local old_rows = slice_lines(baseline_rows, a_start, a_count)
     local new_lines = slice_lines(current_lines, b_start, b_count)
+    if structural_edit_3f(a_count, b_count) then
+      state["unsafe-structural?"] = true
+    else
+    end
     if (a_count > 0) then
       for i = 1, common do
         local row = old_rows[i]
@@ -891,43 +899,10 @@ local function collect_file_ops(session)
         else
         end
       end
-      if (a_count > b_count) then
-        for i = (common + 1), a_count do
-          local row = old_rows[i]
-          if valid_row_3f(row) then
-            append_op_21(ops, row.path, {kind = "delete", lnum = row.lnum})
-          else
-          end
-        end
-      else
-      end
-      if (b_count > a_count) then
-        local extra = slice_lines(new_lines, (common + 1), (b_count - common))
-        local anchor_row = old_rows[a_count]
-        if (valid_row_3f(anchor_row) and (#extra > 0)) then
-          append_op_21(ops, anchor_row.path, {kind = "insert-after", lnum = anchor_row.lnum, lines = extra})
-        else
-        end
-      else
-      end
     else
-      local extra = slice_lines(new_lines, 1, b_count)
-      local prev_row = baseline_rows[(a_start - 1)]
-      local next_row = baseline_rows[a_start]
-      if (#extra > 0) then
-        if valid_row_3f(prev_row) then
-          append_op_21(ops, prev_row.path, {kind = "insert-after", lnum = prev_row.lnum, lines = extra})
-        else
-          if valid_row_3f(next_row) then
-            append_op_21(ops, next_row.path, {kind = "insert-before", lnum = next_row.lnum, lines = extra})
-          else
-          end
-        end
-      else
-      end
     end
   end
-  return {ops = ops, ["current-lines"] = current_lines}
+  return {ops = ops, ["current-lines"] = current_lines, ["unsafe-structural?"] = state["unsafe-structural?"]}
 end
 local function apply_file_ops_21(ops)
   local post_lines = {}
@@ -1035,19 +1010,19 @@ local function apply_file_ops_21(ops)
       local delta = 0
       local changed = 0
       for _, op in ipairs((per_file or {})) do
-        local _let_116_ = apply_op_to_loaded_buffer_21(bufnr, op, delta)
-        local next_delta = _let_116_[1]
-        local bump = _let_116_[2]
+        local _let_110_ = apply_op_to_loaded_buffer_21(bufnr, op, delta)
+        local next_delta = _let_110_[1]
+        local bump = _let_110_[2]
         delta = next_delta
         changed = (changed + bump)
       end
       bo["modifiable"] = old_mod
       bo["readonly"] = old_ro
       if (changed > 0) then
-        local function _117_()
+        local function _111_()
           return vim.cmd("silent keepalt noautocmd write")
         end
-        local ok_write = pcall(vim.api.nvim_buf_call, bufnr, _117_)
+        local ok_write = pcall(vim.api.nvim_buf_call, bufnr, _111_)
         if ok_write then
           any_write = true
           total = (total + changed)
@@ -1076,9 +1051,9 @@ local function apply_file_ops_21(ops)
         local delta = 0
         local changed = 0
         for _, op in ipairs((per_file or {})) do
-          local _let_122_ = apply_op_to_lines_21(lines, op, delta)
-          local next_delta = _let_122_[1]
-          local bump = _let_122_[2]
+          local _let_116_ = apply_op_to_lines_21(lines, op, delta)
+          local next_delta = _let_116_[1]
+          local bump = _let_116_[2]
           delta = next_delta
           changed = (changed + bump)
         end
@@ -1187,35 +1162,45 @@ M["write-results!"] = function(deps, prompt_buf)
   if session then
     local collected = collect_file_ops(session)
     local ops = collected.ops
-    local result = apply_file_ops_21(ops)
     local buf = session.meta.buf.buffer
-    update_session_refs_after_ops_21(session, ops, result["post-lines"])
-    invalidate_caches_for_paths_21(deps, session, result.paths)
-    if (result.changed > 0) then
-      pcall(session.meta["on-update"], 0)
+    if collected["unsafe-structural?"] then
+      vim.notify("metabuffer: only in-place line replacements are writable from results; open the real file for insert/delete edits", vim.log.levels.ERROR)
+      pcall(session.meta.refresh_statusline)
+      if sign_mod then
+        return pcall(sign_mod["refresh-change-signs!"], session)
+      else
+        return nil
+      end
     else
+      local result = apply_file_ops_21(ops)
+      update_session_refs_after_ops_21(session, ops, result["post-lines"])
+      invalidate_caches_for_paths_21(deps, session, result.paths)
+      if (result.changed > 0) then
+        pcall(session.meta["on-update"], 0)
+      else
+      end
+      pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
+      pcall(vim.api.nvim_buf_set_var, buf, "meta_manual_edit_active", false)
+      pcall(session.meta.refresh_statusline)
+      pcall(update_info_window, session, true)
+      pcall(preview_window["maybe-update-for-selection!"], session)
+      if (context_window and context_window["update!"]) then
+        pcall(context_window["update!"], session)
+      else
+      end
+      if sign_mod then
+        pcall(sign_mod["capture-baseline!"], session)
+        pcall(sign_mod["refresh-change-signs!"], session)
+      else
+      end
+      local _135_
+      if (result.changed > 0) then
+        _135_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+      else
+        _135_ = "metabuffer: no changes"
+      end
+      return vim.notify(_135_, vim.log.levels.INFO)
     end
-    pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
-    pcall(vim.api.nvim_buf_set_var, buf, "meta_manual_edit_active", false)
-    pcall(session.meta.refresh_statusline)
-    pcall(update_info_window, session, true)
-    pcall(preview_window["maybe-update-for-selection!"], session)
-    if (context_window and context_window["update!"]) then
-      pcall(context_window["update!"], session)
-    else
-    end
-    if sign_mod then
-      pcall(sign_mod["capture-baseline!"], session)
-      pcall(sign_mod["refresh-change-signs!"], session)
-    else
-    end
-    local _140_
-    if (result.changed > 0) then
-      _140_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
-    else
-      _140_ = "metabuffer: no changes"
-    end
-    return vim.notify(_140_, vim.log.levels.INFO)
   else
     return nil
   end
@@ -1227,6 +1212,7 @@ M["enter-edit-mode!"] = function(deps, prompt_buf)
   local refresh = deps.refresh
   local session = session_by_prompt(router["active-by-prompt"], prompt_buf)
   local router_util_mod = mods["router-util"]
+  local sign_mod = mods.sign
   local history_api = history.api
   local apply_prompt_lines = refresh["apply-prompt-lines!"]
   if session then
@@ -1240,6 +1226,10 @@ M["enter-edit-mode!"] = function(deps, prompt_buf)
     if (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
       pcall(vim.api.nvim_set_current_win, session.meta.win.window)
       pcall(vim.api.nvim_win_set_buf, session.meta.win.window, session.meta.buf.buffer)
+    else
+    end
+    if sign_mod then
+      pcall(sign_mod["capture-baseline!"], session)
     else
     end
     return pcall(vim.cmd, "stopinsert")
