@@ -1,20 +1,17 @@
 -- [nfnl] fnl/metabuffer/window/metawindow.fnl
 local base = require("metabuffer.window.base")
-local statusline_mod = require("metabuffer.window.statusline")
 local metabuffer_winhighlight = base["metabuffer-winhighlight"]
 local M = {}
 local function main_winhighlight()
   return (metabuffer_winhighlight() .. ",StatusLine:MetaStatuslineMiddle,StatusLineNC:MetaStatuslineMiddle")
 end
-M["default-opts"] = {cursorline = true, scrolloff = 0, sidescrolloff = 0, signcolumn = "yes:1", winhighlight = main_winhighlight(), cursorcolumn = false, foldenable = false, spell = false}
-M["opts-to-stash"] = {"foldcolumn", "number", "relativenumber", "wrap", "conceallevel", "signcolumn", "scrolloff", "sidescrolloff", "statusline", "cursorline", "winhighlight"}
-M.statusline = "%%#MetaStatuslineMode%s# %s%%#MetaStatuslineIndicator# %d/%d%s%%#MetaStatuslineMiddle#%%=%%#MetaStatuslineFile# %s %%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s "
+M["default-opts"] = {number = true, cursorline = true, scrolloff = 0, sidescrolloff = 0, signcolumn = "yes:1", winhighlight = main_winhighlight(), cursorcolumn = false, foldenable = false, relativenumber = false, spell = false}
+M["opts-to-stash"] = {"foldcolumn", "number", "numberwidth", "relativenumber", "statuscolumn", "wrap", "conceallevel", "signcolumn", "scrolloff", "sidescrolloff", "statusline", "cursorline", "winhighlight"}
+M.statusline = "%s%%#MetaStatuslineMiddle#%%=%s "
 M.new = function(nvim, win)
   local self = base.new(nvim, (win or vim.api.nvim_get_current_win()), M["opts-to-stash"], M["default-opts"])
-  self["set-statusline-state"] = function(mode_group, mode_label, _name, num_hits, num_lines, _line_nr, debug_out, preview_file, matcher, case_mode, hl_prefix, syntax)
-    local matcher_suffix = statusline_mod["title-case"](matcher)
-    local case_suffix = statusline_mod["title-case"](case_mode)
-    local text = string.format(M.statusline, mode_group, mode_label, num_hits, num_lines, (debug_out or ""), (preview_file or ""), matcher_suffix, matcher, "C^", case_suffix, case_mode, "C-o", hl_prefix, syntax, "Cs")
+  self["set-statusline-state"] = function(_mode_group, _mode_label, _name, _num_hits, _num_lines, _line_nr, left_extra, right_extra, _matcher, _case_mode, _hl_prefix, _syntax)
+    local text = string.format(M.statusline, (left_extra or ""), (right_extra or ""))
     return self["set-statusline"](text)
   end
   return self

@@ -3,7 +3,6 @@ local M = {}
 local lineno_mod = require("metabuffer.window.lineno")
 local source_mod = require("metabuffer.source")
 local path_hl = require("metabuffer.path_highlight")
-local query_mod = require("metabuffer.query")
 local util = require("metabuffer.util")
 local base_window_mod = require("metabuffer.window.base")
 local file_info = require("metabuffer.source.file_info")
@@ -929,7 +928,7 @@ M.new = function(opts)
     local pending = (session and session["project-mode"] and (initializing or animating))
     return pending
   end
-  local function project_loading_pending_3f(session, has_query)
+  local function project_loading_pending_3f(session)
     local startup = startup_layout_pending_3f(session)
     local bootstrap_pending = (session["project-bootstrap-pending"] or false)
     local bootstrapped = (session["project-bootstrapped"] or false)
@@ -937,7 +936,7 @@ M.new = function(opts)
     local refresh_dirty = (session["lazy-refresh-dirty"] or false)
     local stream_done = (session["lazy-stream-done"] or false)
     local pending = (session and session["project-mode"] and (startup or bootstrap_pending or not bootstrapped or refresh_pending or refresh_dirty or not stream_done))
-    return (pending and not has_query)
+    return pending
   end
   local function render_project_loading_21(session)
     local hits = #(session.meta.buf.indices or {})
@@ -948,15 +947,15 @@ M.new = function(opts)
     local stream_done = (session["lazy-stream-done"] or false)
     local stage
     if (session["project-bootstrap-pending"] or not bootstrapped) then
-      stage = "bootstrapping project"
+      stage = "bootstrapping"
     else
       if session["prompt-animating?"] then
-        stage = "opening layout"
+        stage = "opening"
       else
         if stream_done then
-          stage = "finalizing results"
+          stage = "finalizing"
         else
-          stage = "streaming project sources"
+          stage = "streaming"
         end
       end
     end
@@ -966,7 +965,7 @@ M.new = function(opts)
     else
       progress = "scanning files"
     end
-    local lines = {("Project Mode  " .. stage), "", ("Progress  " .. progress), ("Hits      " .. hits), ("Lines     " .. total_lines)}
+    local lines = {("Project  " .. stage), "", ("Files    " .. progress), ("Hits     " .. hits), ("Lines    " .. total_lines)}
     local ns = info_content_ns
     session["info-start-index"] = 1
     session["info-stop-index"] = #lines
@@ -1004,9 +1003,7 @@ M.new = function(opts)
     end
   end
   local function update_project_21(session, refresh_lines)
-    local query_lines = (session.meta["query-lines"] or {})
-    local has_query = query_mod["query-lines-has-active?"](query_lines)
-    if project_loading_pending_3f(session, has_query) then
+    if project_loading_pending_3f(session) then
       return update_project_startup_21(session)
     else
       ensure_info_window(session)

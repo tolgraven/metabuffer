@@ -502,13 +502,15 @@ function M.session_debug_out()
 end
 
 function M.session_statusline()
+  return M.session_prompt_statusline()
+end
+
+function M.session_prompt_statusline()
   return M.child.lua_get([[
     (function()
       local router = require('metabuffer.router')
       local s = router['active-by-source'][_G.__meta_source_buf]
-      if not s or not s.meta or not s.meta['status-win'] then return '' end
-      local win_obj = s.meta['status-win']
-      local win = win_obj and win_obj.window
+      local win = s and s['prompt-win'] or nil
       if not (win and vim.api.nvim_win_is_valid(win)) then return '' end
       local ok, val = pcall(vim.api.nvim_get_option_value, 'statusline', { win = win })
       if not ok then return '' end
@@ -720,6 +722,17 @@ function M.session_preview_contains(needle)
       return false
     end)()
   ]], needle or ''))
+end
+
+function M.session_preview_visible()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      local win = s and s['preview-win'] or nil
+      return win and vim.api.nvim_win_is_valid(win) or false
+    end)()
+  ]])
 end
 
 function M.session_prompt_win_height()

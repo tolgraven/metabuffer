@@ -286,7 +286,7 @@ local function alt_bg_from(group)
   return opts
 end
 local function _40_()
-  return (brighten_rgb(darker_bg(hl_bg("StatusLine"), (hl_bg("Normal") or hl_bg("NormalNC"))), 0.08) or hl_bg("StatusLine") or hl_bg("StatusLineNC") or hl_bg("Normal") or 2763306)
+  return (brighten_rgb(darker_bg(hl_bg("StatusLine"), (hl_bg("Normal") or hl_bg("NormalNC"))), 0.09) or hl_bg("StatusLine") or hl_bg("StatusLineNC") or hl_bg("Normal") or 2763306)
 end
 meta_statusline_bg = _40_
 local function meta_statusline_middle_hl()

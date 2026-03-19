@@ -143,7 +143,6 @@
 (fn restore-session-ui!
   [deps session opts]
   (let [{: mods : windows : refresh} deps
-        meta-window-mod (. mods :meta-window)
         update-preview-window (. refresh :preview!)
         sync-prompt-buffer-name! (. refresh :sync-prompt-buffer-name!)
         router-util-mod (. mods :router-util)
@@ -179,7 +178,7 @@
           (set (. bo :filetype) "metabufferprompt"))
         (apply-prompt-window-opts! prompt-win)
         (sync-prompt-buffer-name! session)
-        (set curr.status-win (meta-window-mod.new vim prompt-win))
+        (set curr.status-win curr.win)
         (set session.ui-hidden false)
         (when (and curr curr.buf curr.buf.buffer (vim.api.nvim_buf_is_valid curr.buf.buffer))
           (let [bo (. vim.bo curr.buf.buffer)]

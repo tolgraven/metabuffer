@@ -23,6 +23,15 @@ T['info window updates automatically when typing in prompt during project mode']
   eq(initial_snap.count > 0, true, "Info window should contain rendered lines immediately after :Meta! launch")
   eq(initial_snap.line ~= '', true, "Info window should not stay empty until a later resize")
 
+  H.wait_for(function()
+    local snap = H.session_info_snapshot()
+    return snap and snap.count > 0 and snap.line ~= '' and not H.str_contains(snap.line, 'bootstrapping')
+  end, 5000)
+
+  local settled_snap = H.session_info_snapshot()
+  eq(settled_snap.count > 0, true, "Info window should still be populated after project loading finishes")
+  eq(settled_snap.line ~= '', true, "Info window should not go blank after the loading phase")
+
   -- Now type a query that filters the list. 
   -- We expect info window to update its content.
   -- In this fixture, 'lua/mod.lua' has 'metabuffer'

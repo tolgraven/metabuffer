@@ -3,7 +3,6 @@
 (local lineno-mod (require :metabuffer.window.lineno))
 (local source-mod (require :metabuffer.source))
 (local path-hl (require :metabuffer.path_highlight))
-(local query-mod (require :metabuffer.query))
 (local util (require :metabuffer.util))
 (local base-window-mod (require :metabuffer.window.base))
 (local file-info (require :metabuffer.source.file_info))
@@ -777,7 +776,7 @@
       pending))
 
   (fn project-loading-pending?
-    [session has-query]
+    [session]
     (let [startup (startup-layout-pending? session)
           bootstrap-pending (or session.project-bootstrap-pending false)
           bootstrapped (or session.project-bootstrapped false)
@@ -792,7 +791,7 @@
                            refresh-pending
                            refresh-dirty
                            (not stream-done)))]
-      (and pending (not has-query))))
+      pending))
 
   (fn render-project-loading!
     [session]
@@ -803,20 +802,20 @@
           bootstrapped (or session.project-bootstrapped false)
           stream-done (or session.lazy-stream-done false)
           stage (if (or session.project-bootstrap-pending (not bootstrapped))
-                    "bootstrapping project"
+                    "bootstrapping"
                     (if session.prompt-animating?
-                        "opening layout"
+                        "opening"
                         (if stream-done
-                            "finalizing results"
-                            "streaming project sources")))
+                            "finalizing"
+                            "streaming")))
           progress (if (> total-files 0)
                        (.. streamed "/" total-files " files")
                        "scanning files")
-          lines [(.. "Project Mode  " stage)
+          lines [(.. "Project  " stage)
                  ""
-                 (.. "Progress  " progress)
-                 (.. "Hits      " hits)
-                 (.. "Lines     " total-lines)]
+                 (.. "Files    " progress)
+                 (.. "Hits     " hits)
+                 (.. "Lines    " total-lines)]
           ns info-content-ns]
       (set session.info-start-index 1)
       (set session.info-stop-index (# lines))
@@ -852,9 +851,7 @@
 
   (fn update-project!
     [session refresh-lines]
-    (let [query-lines (or session.meta.query-lines [])
-          has-query (query-mod.query-lines-has-active? query-lines)]
-      (if (project-loading-pending? session has-query)
+    (if (project-loading-pending? session)
           (update-project-startup! session)
           (do
             (ensure_info_window session)
@@ -919,7 +916,7 @@
                         wanted-stop
                         wanted-start
                         wanted-stop))))
-                (sync-info-selection! session meta)))))))
+                (sync-info-selection! session meta))))))
 
   (set update!
        (fn [session refresh-lines]

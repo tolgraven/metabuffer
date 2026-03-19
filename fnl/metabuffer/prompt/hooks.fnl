@@ -85,17 +85,28 @@
            (<= (. a :left) (. b :right))
            (<= (. b :left) (. a :right))))
 
+    (fn meta-owned-window?
+      [session win]
+      (let [meta-win (and session.meta session.meta.win session.meta.win.window)
+            prompt-win session.prompt-win
+            info-win session.info-win
+            preview-win session.preview-win
+            history-win session.history-browser-win]
+        (or (= win meta-win)
+            (= win prompt-win)
+            (= win info-win)
+            (= win preview-win)
+            (= win history-win))))
+
     (fn covered-by-new-window?
       [session win]
       (let [target (window-rect win)
-            meta-win (and session.meta session.meta.win session.meta.win.window)
             prompt-win session.prompt-win
             info-win session.info-win
             preview-win session.preview-win
             history-win session.history-browser-win]
         (and target
-             (not (= win meta-win))
-             (not (= win prompt-win))
+             (not (meta-owned-window? session win))
              (or (rect-overlap? target (window-rect info-win))
                  (rect-overlap? target (window-rect preview-win))
                  (rect-overlap? target (window-rect history-win))
@@ -153,49 +164,6 @@
                               (if off? "MetaPromptFlagTextOff" "MetaPromptFlagTextOn"))}
                 nil))))
 
-    (fn project-flag-token
-      [name on?]
-      [(if on?
-           (.. "#" name)
-           (.. "#-" name))
-       (control-token-style (if on? (.. "#" name) (.. "#-" name)))])
-
-    (fn wrap-flag-pieces
-      [pieces max-cols]
-      (let [width (math.max 12 (or max-cols 12))
-            lines []
-            current0 {}
-            line-w0 0]
-        (var current current0)
-        (var line-w line-w0)
-        (fn flush-line!
-          []
-          (when (> (# current) 0)
-            (table.insert lines current)
-            (set current {})
-            (set line-w 0)))
-        (each [_ p (ipairs pieces)]
-          (let [chunks (or (. p :chunks) [[(or (. p :text) "") (or (. p :hl) "MetaPromptText")]])
-                w (or (. p :width)
-                      (let [sum0 0]
-                        (var sum sum0)
-                        (each [_ c (ipairs chunks)]
-                          (set sum (+ sum (vim.fn.strdisplaywidth (or (. c 1) "")))))
-                        sum))]
-            (if (and (> line-w 0) (> (+ line-w w) width))
-                (flush-line!))
-            (each [_ c (ipairs chunks)]
-              (table.insert current [(or (. c 1) "") (or (. c 2) "MetaPromptText")]))
-            (set line-w (+ line-w w))))
-        (flush-line!)
-        (if (> (# lines) 0) lines [[["" "MetaPromptText"]]])))
-
-    (fn line-display-rows
-      [line width]
-      (let [w (math.max 1 (or width 1))
-            n (vim.fn.strdisplaywidth (or line ""))]
-        (math.max 1 (math.ceil (/ n w)))))
-
     (fn session-busy?
       [session]
       (and session
@@ -209,28 +177,6 @@
 
     (var refresh-prompt-highlights! nil)
 
-    (fn loading-pieces
-      [session]
-      (let [word "Working"
-            phase (or session.loading-anim-phase 0)
-            pieces []
-            center (+ 1 (% phase (# word)))]
-        (for [i 1 (# word)]
-          (let [dist (math.abs (- i center))
-                hl (if (= dist 0)
-                       "MetaLoading6"
-                       (= dist 1)
-                       "MetaLoading5"
-                       (= dist 2)
-                       "MetaLoading4"
-                       (= dist 3)
-                       "MetaLoading3"
-                       (= dist 4)
-                       "MetaLoading2"
-                       "MetaLoading1")]
-            (table.insert pieces [(string.sub word i i) hl])))
-        [{:chunks pieces :width (# word)}]))
-
     (fn schedule-loading-indicator!
       [session]
       (when (and session
@@ -243,100 +189,27 @@
         (vim.defer_fn
           (fn []
             (set session.loading-anim-pending false)
-            (when (and (session-prompt-valid? session)
-                       (session-busy? session)
+            (when (session-prompt-valid? session)
+              (if (and (session-busy? session)
                        animation-enabled?
                        (animation-enabled? session :loading))
-              (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
-              (refresh-prompt-highlights! session)))
+                  (do
+                    (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
+                    (pcall session.meta.refresh_statusline)
+                    (refresh-prompt-highlights! session))
+                  (when (~= session.loading-anim-phase nil)
+                    (set session.loading-anim-phase nil)
+                    (pcall session.meta.refresh_statusline)))))
           (animation-duration-ms session :loading 90))))
-
-    (fn prompt-content-display-rows
-      [session width]
-      (let [rows0 0]
-        (var rows rows0)
-        (each [_ line (ipairs (or (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false) []))]
-          (set rows (+ rows (line-display-rows line width))))
-        (math.max 1 rows)))
 
     (fn render-project-flags-footer!
       [session]
       (when (and session.prompt-buf
                  (session-prompt-valid? session))
         (let [ns (or session.prompt-footer-ns (vim.api.nvim_create_namespace "metabuffer.prompt.footer"))
-              row (math.max 0 (- (vim.api.nvim_buf_line_count session.prompt-buf) 1))
-              last-line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf row (+ row 1) false) 1) "")
-              [hidden-token hidden-style] (project-flag-token "hidden" (not (not session.effective-include-hidden)))
-              [ignored-token ignored-style] (project-flag-token "ignored" (not (not session.effective-include-ignored)))
-              [deps-token deps-style] (project-flag-token "deps" (not (not session.effective-include-deps)))
-              [file-token file-style] (project-flag-token "file" (not (not session.effective-include-files)))
-              [binary-token binary-style] (project-flag-token "binary" (not (not session.effective-include-binary)))
-              [hex-token hex-style] (project-flag-token "hex" (not (not session.effective-include-hex)))
-              [prefilter-token prefilter-style] (project-flag-token "prefilter" (not (not session.prefilter-mode)))
-              [lazy-token lazy-style] (project-flag-token "lazy" (not (not session.lazy-mode)))
-              tokens [[hidden-token hidden-style]
-                      [ignored-token ignored-style]
-                      [deps-token deps-style]
-                      [file-token file-style]
-                      [binary-token binary-style]
-                      [hex-token hex-style]
-                      [prefilter-token prefilter-style]
-                      [lazy-token lazy-style]]
-              loading0 (if (session-busy? session) (loading-pieces session) [])
-              pieces0 []
-              _ (each [_ p (ipairs loading0)]
-                  (table.insert pieces0 p))
-              _ (when (> (# loading0) 0)
-                  (table.insert pieces0 {:chunks [["  " "MetaPromptText"]] :width 2}))
-              _ (each [i pair (ipairs tokens)]
-                  (let [tok (or (. pair 1) "")
-                        style (. pair 2)
-                        sign-hl (or (and style (. style :hash-hl)) "MetaPromptText")
-                        text-hl (or (and style (. style :text-hl)) "MetaPromptText")]
-                    (when (> (# tok) 0)
-                      (if (vim.startswith tok "#-")
-                          (let [suffix (if (> (# tok) 2) (string.sub tok 3) "")
-                                chunks [["-" sign-hl] [suffix text-hl]]
-                                w (+ 1 (vim.fn.strdisplaywidth suffix))]
-                            (table.insert pieces0 {:chunks chunks :width w}))
-                          (if (vim.startswith tok "#")
-                              (let [suffix (if (> (# tok) 1) (string.sub tok 2) "")
-                                    chunks [["+" sign-hl] [suffix text-hl]]
-                                    w (+ 1 (vim.fn.strdisplaywidth suffix))]
-                                (table.insert pieces0 {:chunks chunks :width w}))
-                              (table.insert pieces0 {:chunks [[tok text-hl]]
-                                                     :width (vim.fn.strdisplaywidth tok)}))))
-                    (when (< i (# tokens))
-                      (table.insert pieces0 {:chunks [[" " "MetaPromptText"]] :width 1}))))
-              pieces pieces0
-              max-cols (if (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
-                           (vim.api.nvim_win_get_width session.prompt-win)
-                           80)
-              win-height (if (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
-                             (vim.api.nvim_win_get_height session.prompt-win)
-                             1)
-              last-line-rows (line-display-rows last-line max-cols)
-              anchor-row (math.max 0 (- row (math.max 0 (- last-line-rows 1))))
-              flag-lines (wrap-flag-pieces pieces max-cols)
-              content-rows (prompt-content-display-rows session max-cols)
-              spacer-count (math.max 0 (- win-height content-rows (# flag-lines)))
-              virt-lines0 []
-              _ (each [_ _i (ipairs (vim.fn.range 1 spacer-count))]
-                  (table.insert virt-lines0 [["" "MetaPromptText"]]))
-              _ (each [_ vl (ipairs flag-lines)]
-                  (table.insert virt-lines0 vl))
-              virt-lines virt-lines0]
+              _ (set session.prompt-footer-ns ns)]
           (set session.prompt-footer-ns ns)
           (vim.api.nvim_buf_clear_namespace session.prompt-buf ns 0 -1)
-          (when session.project-mode
-            (vim.api.nvim_buf_set_extmark
-              session.prompt-buf
-              ns
-              anchor-row
-              0
-              {:virt_lines virt-lines
-               :virt_lines_above false
-               :hl_mode "combine"}))
           (schedule-loading-indicator! session))))
 
     (set refresh-prompt-highlights!
@@ -756,8 +629,7 @@
            :callback (fn [_]
                        (schedule-when-valid session
                          (fn []
-                           (when (and session.meta session.meta.win session.meta.win.set-statusline)
-                             (pcall session.meta.win.set-statusline " ")))))} )
+                           (pcall session.meta.refresh_statusline))))} )
         (vim.api.nvim_create_autocmd "BufLeave"
           {:group aug
            :buffer session.meta.buf.buffer

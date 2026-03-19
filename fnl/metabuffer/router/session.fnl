@@ -176,9 +176,7 @@
                   (set session.prompt-window split)
                   (set session.prompt-win split.window)
                   (set session.prompt-floating? false)
-                  (when (and session.meta session.meta.status-win)
-                    (set (. session.meta.status-win :window) session.prompt-win)
-                    (pcall session.meta.refresh_statusline))))
+                  (pcall session.meta.refresh_statusline)))
               (when (and preview-window preview-window.update!)
                 (pcall preview-window.update! session))
               (pcall update-info-window session)
@@ -227,7 +225,6 @@
 (fn finish-session-startup!
   [deps curr session initial-query-active]
   (let [project-source (. deps :project-source)
-        meta-window-mod (. (. deps :mods) :meta-window)
         sign-mod (. deps :sign-mod)
         session-view (. deps :session-view)
         apply-prompt-lines (. deps :apply-prompt-lines)
@@ -260,9 +257,9 @@
     (if session.project-mode
         (project-source.apply-minimal-source-set! session)
         (project-source.apply-source-set! session))
-    (set curr.status-win (meta-window-mod.new vim session.prompt-win))
+    (set curr.status-win curr.win)
     (pcall vim.api.nvim_win_set_var curr.win.window "airline_disable_statusline" 1)
-    (curr.win.set-statusline "")
+    (pcall curr.refresh_statusline)
     (curr.on-init)
     (when sign-mod
       (pcall sign-mod.capture-baseline! session))

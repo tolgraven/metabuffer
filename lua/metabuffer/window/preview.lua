@@ -28,7 +28,7 @@ local function leading_indent_width(line)
   return vim.fn.strdisplaywidth(ws)
 end
 local function preview_statusline_text_for_path(path)
-  return statusline_mod["render-path"](path, {["default-text"] = "Preview", ["base-group"] = "MetaPreviewStatusline", ["seg-prefix"] = "MetaPreviewStatuslinePathSeg", ["sep-group"] = "MetaPreviewStatuslinePathSep", ["file-group"] = "MetaPreviewStatuslinePathFile"})
+  return statusline_mod["render-path"](path, {["default-text"] = "Preview", ["base-group"] = "MetaPreviewStatusline", ["left-pad"] = "   ", ["seg-prefix"] = "MetaPreviewStatuslinePathSeg", ["sep-group"] = "MetaPreviewStatuslinePathSep", ["file-group"] = "MetaPreviewStatuslinePathFile"})
 end
 local function apply_ft_buffer_vars_21(buf, ft)
   if (buf and vim.api.nvim_buf_is_valid(buf) and (ft == "fennel")) then

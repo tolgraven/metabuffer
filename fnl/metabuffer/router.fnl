@@ -484,10 +484,16 @@
                         (M.on-prompt-changed prompt-buf force event-tick))
    :maybe-sync-from-main! maybe-sync-from-main!
    :schedule-scroll-sync! schedule-scroll-sync!
-   :maybe-restore-hidden-ui! (fn [session force]
-                               (M.maybe-restore-hidden-ui session.prompt-buf force))
-   :hide-visible-ui! (fn [session]
-                       (M.hide-visible-ui session.prompt-buf))
+   :maybe-restore-hidden-ui! (fn [session-or-prompt-buf force]
+                               (let [prompt-buf (if (= (type session-or-prompt-buf) "table")
+                                                    session-or-prompt-buf.prompt-buf
+                                                    session-or-prompt-buf)]
+                                 (M.maybe-restore-hidden-ui prompt-buf force)))
+   :hide-visible-ui! (fn [session-or-prompt-buf]
+                       (let [prompt-buf (if (= (type session-or-prompt-buf) "table")
+                                            session-or-prompt-buf.prompt-buf
+                                            session-or-prompt-buf)]
+                         (M.hide-visible-ui prompt-buf)))
    :mods {:meta meta_mod
           :router-util router_util_mod
           :prompt-window prompt_window_mod

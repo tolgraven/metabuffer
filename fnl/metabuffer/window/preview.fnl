@@ -32,6 +32,7 @@
   [path]
   (statusline-mod.render-path path {:default-text "Preview"
                                     :base-group "MetaPreviewStatusline"
+                                    :left-pad "   "
                                     :seg-prefix "MetaPreviewStatuslinePathSeg"
                                     :sep-group "MetaPreviewStatuslinePathSep"
                                     :file-group "MetaPreviewStatuslinePathFile"}))

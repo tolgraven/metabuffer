@@ -11,7 +11,7 @@ T['project bootstrap prefers lazy streaming on startup even below estimate thres
 
   local project_source = project_source_mod.new({
     settings = {
-      ['project-max-total-lines'] = 200000,
+      ['project-max-total-lines'] = 500000,
       ['project-lazy-min-estimated-lines'] = 10000,
       ['project-lazy-chunk-size'] = 8,
       ['project-lazy-refresh-debounce-ms'] = 0,

@@ -264,7 +264,7 @@
     (or (brighten-rgb (darker-bg (hl-bg "StatusLine")
                                  (or (hl-bg "Normal")
                                      (hl-bg "NormalNC")))
-                      0.08)
+                      0.09)
         (hl-bg "StatusLine")
         (hl-bg "StatusLineNC")
         (hl-bg "Normal")

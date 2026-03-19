@@ -71,7 +71,7 @@
   {:options
    {:history_max 100
     :project_max_file_bytes (* 1024 1024)
-    :project_max_total_lines 200000
+    :project_max_total_lines 500000
     :default_include_hidden false
     :default_include_ignored false
     :default_include_deps false

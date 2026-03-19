@@ -34,6 +34,8 @@ M["render-path"] = function(path, opts)
   local default_text = ((opts or {})["default-text"] or "Preview")
   local file_group = ((opts or {})["file-group"] or "MetaStatuslinePathFile")
   local base_group = ((opts or {})["base-group"] or file_group)
+  local left_pad = ((opts or {})["left-pad"] or " ")
+  local right_pad = ((opts or {})["right-pad"] or " ")
   if ((type(path) == "string") and (path ~= "")) then
     local short = vim.fn.fnamemodify(path, ":~:.")
     local file = vim.fn.fnamemodify(short, ":t")
@@ -51,7 +53,7 @@ M["render-path"] = function(path, opts)
       dirtxt = (dir .. "/")
     end
     local ranges = path_highlight["ranges-for-dir"](dirtxt, 0)
-    local out = {(M.reset(base_group) .. " ")}
+    local out = {(M.reset(base_group) .. left_pad)}
     for _, dr in ipairs(ranges) do
       local seg = string.sub(dirtxt, (dr.start + 1), dr["end"])
       table.insert(out, ("%#" .. path_hl(dr.hl, opts) .. "#" .. M.escape(seg)))
@@ -60,10 +62,10 @@ M["render-path"] = function(path, opts)
       table.insert(out, ("%#" .. file_group .. "#" .. M.escape(file)))
     else
     end
-    table.insert(out, (M.reset(base_group) .. " "))
+    table.insert(out, (M.reset(base_group) .. right_pad))
     return table.concat(out, "")
   else
-    return (M.reset(base_group) .. " " .. default_text .. " ")
+    return (M.reset(base_group) .. left_pad .. default_text .. right_pad)
   end
 end
 return M

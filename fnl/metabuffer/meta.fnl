@@ -7,10 +7,100 @@
 (local regex_matcher (require :metabuffer.matcher.regex))
 (local meta_buffer_mod (require :metabuffer.buffer.metabuffer))
 (local meta_window_mod (require :metabuffer.window.metawindow))
+(local statusline_mod (require :metabuffer.window.statusline))
 (local expand_mod (require :metabuffer.context.expand))
-(local util (require :metabuffer.util))
 
 (local M {})
+(local STATUS_PROGRESS (. prompt_mod :STATUS_PROGRESS))
+(local state-cases (. state :cases))
+(local state-syntax-types (. state :syntax-types))
+
+(fn session-busy?
+  [session]
+  (and session
+       (or session.prompt-update-pending
+           session.prompt-update-dirty
+           session.lazy-refresh-pending
+           session.lazy-refresh-dirty
+           session.project-bootstrap-pending
+           (and session.project-mode
+                (not session.project-bootstrapped)))))
+
+(fn status-fragment
+  [group text]
+  (if (or (= (type text) "nil") (= text ""))
+      ""
+      (.. "%#" group "#" (string.gsub text "%%" "%%%%"))))
+
+(fn project-flag-fragment
+  [name on?]
+  (.. (status-fragment "MetaStatuslineKey" (if on? "+" "-"))
+      (status-fragment (if on? "MetaStatuslineFlagOn" "MetaStatuslineFlagOff") name)))
+
+(fn loading-fragment
+  [session]
+  (if (and session
+           session.loading-indicator?
+           (session-busy? session))
+      (let [word "Working"
+            phase (or session.loading-anim-phase 0)
+            center (+ 1 (% phase (# word)))
+            out []]
+        (for [i 1 (# word)]
+          (let [dist (math.abs (- i center))
+                hl (if (= dist 0)
+                       "MetaLoading6"
+                       (= dist 1)
+                       "MetaLoading5"
+                       (= dist 2)
+                       "MetaLoading4"
+                       (= dist 3)
+                       "MetaLoading3"
+                       (= dist 4)
+                       "MetaLoading2"
+                       "MetaLoading1")]
+            (table.insert out (status-fragment hl (string.sub word i i)))))
+        (table.concat out ""))
+      ""))
+
+(fn project-flags-fragment
+  [session]
+  (if (and session session.project-mode)
+      (let [parts []
+            flags [(project-flag-fragment "hidden" (not (not session.effective-include-hidden)))
+                   (project-flag-fragment "ignored" (not (not session.effective-include-ignored)))
+                   (project-flag-fragment "deps" (not (not session.effective-include-deps)))
+                   (project-flag-fragment "file" (not (not session.effective-include-files)))
+                   (project-flag-fragment "binary" (not (not session.effective-include-binary)))
+                   (project-flag-fragment "hex" (not (not session.effective-include-hex)))
+                   (project-flag-fragment "prefilter" (not (not session.prefilter-mode)))
+                   (project-flag-fragment "lazy" (not (not session.lazy-mode)))]]
+        (each [_ frag (ipairs flags)]
+          (when (> (# frag) 0)
+            (table.insert parts frag)))
+        (table.concat parts (status-fragment "MetaStatuslineMiddle" "  ")))
+      ""))
+
+(fn results-statusline-left
+  [self]
+  (let [session self.session
+        loading (loading-fragment session)
+        debug (or self.debug_out "")
+        parts []]
+    (when (> (# loading) 0)
+      (table.insert parts loading))
+    (when (> (# debug) 0)
+      (table.insert parts (status-fragment "MetaStatuslineIndicator" debug)))
+    (if (= (# parts) 0)
+        ""
+        (.. " " (table.concat parts (status-fragment "MetaStatuslineMiddle" "  "))))))
+
+(fn results-statusline-right
+  [self]
+  (let [flags (project-flags-fragment self.session)]
+    (if (> (# flags) 0)
+        (.. " " flags)
+        "")))
 
 (fn line_of_index
   [buf idx]
@@ -31,7 +121,7 @@
         (not (not (string.find probe query 1 true))))))
 
 (fn apply-file-entry-filter
-  [indices refs file-query-lines regular-queries ignorecase include-files regular-query-active?]
+  [indices refs file-query-lines ignorecase include-files regular-query-active?]
   (if (not include-files)
       indices
   (let [queries0 []]
@@ -111,6 +201,24 @@
         (vim.startswith m "i")
         {:group "Insert" :label (if (nerd-font-enabled?) "𝐈" "Insert")}
         {:group "Normal" :label (if (nerd-font-enabled?) "𝗡" "Normal")})))
+
+(fn prompt-statusline-text
+  [self]
+  (let [mode-state (statusline-mode-state)
+        matcher (. (self.matcher) :name)
+        matcher-suffix (statusline_mod.title-case matcher)
+        case-mode (self.case)
+        case-suffix (statusline_mod.title-case case-mode)
+        hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")]
+    (string.format
+      "%%#MetaStatuslineMode%s# %s %%#MetaStatuslineIndicator# %d/%d %%#MetaStatuslineMiddle#%%=%%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s "
+      (. mode-state :group)
+      (. mode-state :label)
+      (# self.buf.indices)
+      (self.buf.line-count)
+      matcher-suffix matcher "C^"
+      case-suffix case-mode "C-o"
+      hl-prefix (self.syntax) "Cs")))
 
 (fn highlight-pattern->vim-query
   [pat]
@@ -240,8 +348,8 @@
        {:matcher (modeindexer.new [(all_matcher.new) (fuzzy_matcher.new) (regex_matcher.new)]
                                   (or cond.matcher-index 1)
                                   {:on-leave "remove-highlight"})
-        :case (modeindexer.new state.cases (or cond.case-index 1) nil)
-        :syntax (modeindexer.new state.syntax-types (or cond.syntax-index 1)
+        :case (modeindexer.new state-cases (or cond.case-index 1) nil)
+        :syntax (modeindexer.new state-syntax-types (or cond.syntax-index 1)
                                  {:on-active (fn [idx]
                                                (self.buf.apply-syntax
                                                 (if (= (idx.current) "meta") "meta" "buffer")))})})
@@ -290,7 +398,7 @@
     (let [mode_obj (. self.mode which)]
       (mode_obj.next)
       (set self._prev_text "")
-      (self.on-update prompt_mod.STATUS_PROGRESS)))
+      (self.on-update STATUS_PROGRESS)))
 
   (fn self.vim_query
     []
@@ -317,12 +425,19 @@
             (# self.buf.indices)
             (self.buf.line-count)
             (self.selected_line)
-            self.debug_out
-            ""
+            (results-statusline-left self)
+            (results-statusline-right self)
             (. (self.matcher) :name)
             (self.case)
             hl-prefix
             (self.syntax))
+          (when (and self.session
+                     self.session.prompt-win
+                     (vim.api.nvim_win_is_valid self.session.prompt-win))
+            (pcall vim.api.nvim_set_option_value
+                   "statusline"
+                   (prompt-statusline-text self)
+                   {:win self.session.prompt-win}))
           (vim.cmd "redrawstatus")))
 
       (fn self.on-init
@@ -351,13 +466,13 @@
           (when (~= (. source-view :col) nil)
             (set (. view :col) (. source-view :col)))
           (vim.fn.winrestview view))))
-        prompt_mod.STATUS_PROGRESS)
+        STATUS_PROGRESS)
 
   (fn self.on-redraw
     []
     (self.refresh_statusline)
     (self.redraw-prompt)
-    prompt_mod.STATUS_PROGRESS)
+    STATUS_PROGRESS)
 
   (fn self.on-update
     [status]
@@ -438,8 +553,7 @@
                   (var cached-line-count cached-line-count0)
                   ;; Extend cached results incrementally when project streaming
                   ;; appended lines since this cache entry was materialized.
-                  (let [next0 (vim.deepcopy cached)]
-                    (var next next0)
+                  (let [next (vim.deepcopy cached)]
                   (when (< cached-line-count line-count)
                     (let [added0 []]
                       (var added added0)
@@ -472,7 +586,6 @@
                             self.buf.indices
                             refs
                             self.file-query-lines
-                            queries
                             ignorecase
                             self.include-files
                             (> (# queries) 0))

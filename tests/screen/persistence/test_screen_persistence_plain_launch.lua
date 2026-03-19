@@ -19,9 +19,15 @@ T['plain :Meta launches session with prompt and info window'] = H.timed_case(fun
     return type(H.session_info_snapshot()) == 'table'
   end, 3000)
 
+  H.wait_for(function()
+    return H.session_preview_visible()
+  end, 3000)
+
   eq(H.session_active(), true)
+  eq(H.session_ui_hidden(), false)
   eq(H.session_prompt_win_height() > 0, true)
   eq(type(H.session_info_snapshot()), 'table')
+  eq(H.session_preview_visible(), true)
 end)
 
 return T

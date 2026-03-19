@@ -7,9 +7,109 @@ local fuzzy_matcher = require("metabuffer.matcher.fuzzy")
 local regex_matcher = require("metabuffer.matcher.regex")
 local meta_buffer_mod = require("metabuffer.buffer.metabuffer")
 local meta_window_mod = require("metabuffer.window.metawindow")
+local statusline_mod = require("metabuffer.window.statusline")
 local expand_mod = require("metabuffer.context.expand")
-local util = require("metabuffer.util")
 local M = {}
+local STATUS_PROGRESS = prompt_mod.STATUS_PROGRESS
+local state_cases = state.cases
+local state_syntax_types = state["syntax-types"]
+local function session_busy_3f(session)
+  return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["lazy-refresh-pending"] or session["lazy-refresh-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["project-bootstrapped"])))
+end
+local function status_fragment(group, text)
+  if ((type(text) == "nil") or (text == "")) then
+    return ""
+  else
+    return ("%#" .. group .. "#" .. string.gsub(text, "%%", "%%%%"))
+  end
+end
+local function project_flag_fragment(name, on_3f)
+  local function _2_()
+    if on_3f then
+      return "+"
+    else
+      return "-"
+    end
+  end
+  local _3_
+  if on_3f then
+    _3_ = "MetaStatuslineFlagOn"
+  else
+    _3_ = "MetaStatuslineFlagOff"
+  end
+  return (status_fragment("MetaStatuslineKey", _2_()) .. status_fragment(_3_, name))
+end
+local function loading_fragment(session)
+  if (session and session["loading-indicator?"] and session_busy_3f(session)) then
+    local word = "Working"
+    local phase = (session["loading-anim-phase"] or 0)
+    local center = (1 + (phase % #word))
+    local out = {}
+    for i = 1, #word do
+      local dist = math.abs((i - center))
+      local hl
+      if (dist == 0) then
+        hl = "MetaLoading6"
+      elseif (dist == 1) then
+        hl = "MetaLoading5"
+      elseif (dist == 2) then
+        hl = "MetaLoading4"
+      elseif (dist == 3) then
+        hl = "MetaLoading3"
+      elseif (dist == 4) then
+        hl = "MetaLoading2"
+      else
+        hl = "MetaLoading1"
+      end
+      table.insert(out, status_fragment(hl, string.sub(word, i, i)))
+    end
+    return table.concat(out, "")
+  else
+    return ""
+  end
+end
+local function project_flags_fragment(session)
+  if (session and session["project-mode"]) then
+    local parts = {}
+    local flags = {project_flag_fragment("hidden", not not session["effective-include-hidden"]), project_flag_fragment("ignored", not not session["effective-include-ignored"]), project_flag_fragment("deps", not not session["effective-include-deps"]), project_flag_fragment("file", not not session["effective-include-files"]), project_flag_fragment("binary", not not session["effective-include-binary"]), project_flag_fragment("hex", not not session["effective-include-hex"]), project_flag_fragment("prefilter", not not session["prefilter-mode"]), project_flag_fragment("lazy", not not session["lazy-mode"])}
+    for _, frag in ipairs(flags) do
+      if (#frag > 0) then
+        table.insert(parts, frag)
+      else
+      end
+    end
+    return table.concat(parts, status_fragment("MetaStatuslineMiddle", "  "))
+  else
+    return ""
+  end
+end
+local function results_statusline_left(self)
+  local session = self.session
+  local loading = loading_fragment(session)
+  local debug = (self.debug_out or "")
+  local parts = {}
+  if (#loading > 0) then
+    table.insert(parts, loading)
+  else
+  end
+  if (#debug > 0) then
+    table.insert(parts, status_fragment("MetaStatuslineIndicator", debug))
+  else
+  end
+  if (#parts == 0) then
+    return ""
+  else
+    return (" " .. table.concat(parts, status_fragment("MetaStatuslineMiddle", "  ")))
+  end
+end
+local function results_statusline_right(self)
+  local flags = project_flags_fragment(self.session)
+  if (#flags > 0) then
+    return (" " .. flags)
+  else
+    return ""
+  end
+end
 local function line_of_index(buf, idx)
   return (buf.indices[(idx + 1)] or 1)
 end
@@ -37,7 +137,7 @@ local function file_query_matches_3f(path, q, ignorecase)
     return not not string.find(probe, query, 1, true)
   end
 end
-local function apply_file_entry_filter(indices, refs, file_query_lines, regular_queries, ignorecase, include_files, regular_query_active_3f)
+local function apply_file_entry_filter(indices, refs, file_query_lines, ignorecase, include_files, regular_query_active_3f)
   if not include_files then
     return indices
   else
@@ -51,7 +151,7 @@ local function apply_file_entry_filter(indices, refs, file_query_lines, regular_
     end
     local queries = queries0
     local matches_all_queries_3f
-    local function _5_(path)
+    local function _17_(path)
       if (#queries == 0) then
         return true
       else
@@ -79,7 +179,7 @@ local function apply_file_entry_filter(indices, refs, file_query_lines, regular_
         return ok
       end
     end
-    matches_all_queries_3f = _5_
+    matches_all_queries_3f = _17_
     local regular_set = {}
     local file_set = {}
     local regular_allowed_3f = (regular_query_active_3f or (#queries == 0))
@@ -148,30 +248,44 @@ end
 local function statusline_mode_state()
   local m = (vim.api.nvim_get_mode().mode or "")
   if vim.startswith(m, "R") then
-    local _20_
+    local _32_
     if nerd_font_enabled_3f() then
-      _20_ = "R"
+      _32_ = "R"
     else
-      _20_ = "Replace"
+      _32_ = "Replace"
     end
-    return {group = "Replace", label = _20_}
+    return {group = "Replace", label = _32_}
   elseif vim.startswith(m, "i") then
-    local _22_
+    local _34_
     if nerd_font_enabled_3f() then
-      _22_ = "\240\157\144\136"
+      _34_ = "\240\157\144\136"
     else
-      _22_ = "Insert"
+      _34_ = "Insert"
     end
-    return {group = "Insert", label = _22_}
+    return {group = "Insert", label = _34_}
   else
-    local _24_
+    local _36_
     if nerd_font_enabled_3f() then
-      _24_ = "\240\157\151\161"
+      _36_ = "\240\157\151\161"
     else
-      _24_ = "Normal"
+      _36_ = "Normal"
     end
-    return {group = "Normal", label = _24_}
+    return {group = "Normal", label = _36_}
   end
+end
+local function prompt_statusline_text(self)
+  local mode_state = statusline_mode_state()
+  local matcher = self.matcher().name
+  local matcher_suffix = statusline_mod["title-case"](matcher)
+  local case_mode = self.case()
+  local case_suffix = statusline_mod["title-case"](case_mode)
+  local hl_prefix
+  if (self.buf["syntax-type"] == "meta") then
+    hl_prefix = "Meta"
+  else
+    hl_prefix = "Buffer"
+  end
+  return string.format("%%#MetaStatuslineMode%s# %s %%#MetaStatuslineIndicator# %d/%d %%#MetaStatuslineMiddle#%%=%%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s ", mode_state.group, mode_state.label, #self.buf.indices, self.buf["line-count"](), matcher_suffix, matcher, "C^", case_suffix, case_mode, "C-o", hl_prefix, self.syntax(), "Cs")
 end
 local function highlight_pattern__3evim_query(pat)
   if (type(pat) == "string") then
@@ -199,21 +313,21 @@ local function bang_token_completed_3f(prev, next)
   local next0 = (next or "")
   local prev_n = #prev0
   local next_n = #next0
-  local and_30_ = (prev_n > 0) and (next_n > prev_n) and vim.startswith(next0, prev0) and (string.sub(prev0, prev_n, prev_n) == "!")
-  if and_30_ then
+  local and_43_ = (prev_n > 0) and (next_n > prev_n) and vim.startswith(next0, prev0) and (string.sub(prev0, prev_n, prev_n) == "!")
+  if and_43_ then
     local before
     if (prev_n > 1) then
       before = string.sub(prev0, (prev_n - 1), (prev_n - 1))
     else
       before = ""
     end
-    and_30_ = ((before ~= "\\") and ((prev_n == 1) or not not string.find(before, "%s")))
+    and_43_ = ((before ~= "\\") and ((prev_n == 1) or not not string.find(before, "%s")))
   end
-  if and_30_ then
+  if and_43_ then
     local added = string.sub(next0, (prev_n + 1), (prev_n + 1))
-    and_30_ = not not string.find(added, "%S")
+    and_43_ = not not string.find(added, "%S")
   end
-  return and_30_
+  return and_43_
 end
 local function ends_with_space_3f(s)
   local txt = (s or "")
@@ -293,17 +407,17 @@ M.new = function(nvim, condition)
       return nil
     end
   end
-  local function _39_(idx)
-    local function _40_()
+  local function _52_(idx)
+    local function _53_()
       if (idx.current() == "meta") then
         return "meta"
       else
         return "buffer"
       end
     end
-    return self.buf["apply-syntax"](_40_())
+    return self.buf["apply-syntax"](_53_())
   end
-  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state.cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state["syntax-types"], (cond["syntax-index"] or 1), {["on-active"] = _39_})}
+  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state_cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state_syntax_types, (cond["syntax-index"] or 1), {["on-active"] = _52_})}
   self.text = (cond.text or "")
   if (self.text ~= "") then
     self["query-lines"] = {self.text}
@@ -345,7 +459,7 @@ M.new = function(nvim, condition)
     local mode_obj = self.mode[which]
     mode_obj.next()
     self._prev_text = ""
-    return self["on-update"](prompt_mod.STATUS_PROGRESS)
+    return self["on-update"](STATUS_PROGRESS)
   end
   self.vim_query = function()
     local active = self["active-queries"]()
@@ -377,28 +491,32 @@ M.new = function(nvim, condition)
     else
       hl_prefix = "Buffer"
     end
-    self["status-win"]["set-statusline-state"](mode_state.group, mode_state.label, self.buf.name, #self.buf.indices, self.buf["line-count"](), self.selected_line(), self.debug_out, "", self.matcher().name, self.case(), hl_prefix, self.syntax())
+    self["status-win"]["set-statusline-state"](mode_state.group, mode_state.label, self.buf.name, #self.buf.indices, self.buf["line-count"](), self.selected_line(), results_statusline_left(self), results_statusline_right(self), self.matcher().name, self.case(), hl_prefix, self.syntax())
+    if (self.session and self.session["prompt-win"] and vim.api.nvim_win_is_valid(self.session["prompt-win"])) then
+      pcall(vim.api.nvim_set_option_value, "statusline", prompt_statusline_text(self), {win = self.session["prompt-win"]})
+    else
+    end
     return vim.cmd("redrawstatus")
   end
   self["on-init"] = function()
-    local function _47_()
+    local function _61_()
       if self["project-mode"] then
         return project_display_name()
       else
         return metabuffer_display_name(self.buf.model)
       end
     end
-    self.buf["set-name"](_47_())
+    self.buf["set-name"](_61_())
     do
       local init_syntax = (vim.g["meta#syntax_on_init"] or "buffer")
-      local function _48_()
+      local function _62_()
         if (init_syntax == "meta") then
           return "meta"
         else
           return "buffer"
         end
       end
-      self.buf["apply-syntax"](_48_())
+      self.buf["apply-syntax"](_62_())
     end
     self.buf["visible-source-syntax-only"] = not not cond["project-mode"]
     clear_all_highlights()
@@ -427,12 +545,12 @@ M.new = function(nvim, condition)
       else
       end
     end
-    return prompt_mod.STATUS_PROGRESS
+    return STATUS_PROGRESS
   end
   self["on-redraw"] = function()
     self.refresh_statusline()
     self["redraw-prompt"]()
-    return prompt_mod.STATUS_PROGRESS
+    return STATUS_PROGRESS
   end
   self["on-update"] = function(status)
     do
@@ -451,25 +569,25 @@ M.new = function(nvim, condition)
       end
       local prev_matcher_name = (self["_prev-matcher"] or matcher_name)
       local prev_cache_key
-      local _53_
+      local _67_
       if prev_ignorecase then
-        _53_ = "1"
+        _67_ = "1"
       else
-        _53_ = "0"
+        _67_ = "0"
       end
-      prev_cache_key = (prev_matcher_name .. "|" .. _53_ .. "|" .. (prev_text or ""))
+      prev_cache_key = (prev_matcher_name .. "|" .. _67_ .. "|" .. (prev_text or ""))
       local line_count = #self.buf.content
       local cache_grew_3f = (line_count > self["_filter-cache-line-count"])
       local cache_shrank_3f = (line_count < self["_filter-cache-line-count"])
       local cache_reset_3f = cache_shrank_3f
       local cache_key
-      local _55_
+      local _69_
       if ignorecase then
-        _55_ = "1"
+        _69_ = "1"
       else
-        _55_ = "0"
+        _69_ = "0"
       end
-      cache_key = (matcher_name .. "|" .. _55_ .. "|" .. effective_query)
+      cache_key = (matcher_name .. "|" .. _69_ .. "|" .. effective_query)
       local reset0_3f = ((prev_text == "") or not vim.startswith(self.text, prev_text) or bang_token_completed_3f(prev_text, self.text) or cache_grew_3f or cache_reset_3f or (self["_prev-ignorecase"] ~= ignorecase) or (self["_prev-matcher"] ~= matcher_name))
       local narrow_reuse_threshold = (vim.g.meta_narrow_reuse_threshold or 400)
       local narrow_reuse_3f = (reset0_3f and vim.startswith(self.text, prev_text) and (matcher_name == "all") and not negation_growth_broadens_3f(prev_text, self.text) and (#prev_text > 0) and (#self.text > #prev_text) and (#prev_hits <= narrow_reuse_threshold))
@@ -520,8 +638,7 @@ M.new = function(nvim, condition)
         local matcher = self.matcher()
         if cached then
           local cached_line_count = cached_line_count0
-          local next0 = vim.deepcopy(cached)
-          local next = next0
+          local next = vim.deepcopy(cached)
           if (cached_line_count < line_count) then
             local added0 = {}
             local added = added0
@@ -552,16 +669,16 @@ M.new = function(nvim, condition)
         end
       end
       local refs = (self.buf["source-refs"] or {})
-      local file_filtered = apply_file_entry_filter(self.buf.indices, refs, self["file-query-lines"], queries, ignorecase, self["include-files"], (#queries > 0))
+      local file_filtered = apply_file_entry_filter(self.buf.indices, refs, self["file-query-lines"], ignorecase, self["include-files"], (#queries > 0))
       local expanded
-      local or_67_ = (self.session and self.session["read-file-lines-cached"])
-      if not or_67_ then
-        local function _68_(path, _opts)
+      local or_81_ = (self.session and self.session["read-file-lines-cached"])
+      if not or_81_ then
+        local function _82_(path, _opts)
           return vim.fn.readfile(path)
         end
-        or_67_ = _68_
+        or_81_ = _82_
       end
-      expanded = expand_mod["expanded-indices"](self.session, file_filtered, refs, {mode = ((self.session and self.session["expansion-mode"]) or "none"), ["read-file-lines-cached"] = or_67_, ["around-lines"] = (vim.g.meta_context_around_lines or 3), ["max-blocks"] = (vim.g.meta_context_max_blocks or 24)})
+      expanded = expand_mod["expanded-indices"](self.session, file_filtered, refs, {mode = ((self.session and self.session["expansion-mode"]) or "none"), ["read-file-lines-cached"] = or_81_, ["around-lines"] = (vim.g.meta_context_around_lines or 3), ["max-blocks"] = (vim.g.meta_context_max_blocks or 24)})
       local _
       self.buf.indices = expanded
       _ = nil

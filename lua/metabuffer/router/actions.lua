@@ -191,7 +191,6 @@ local function restore_session_ui_21(deps, session, opts)
   local mods = deps.mods
   local windows = deps.windows
   local refresh = deps.refresh
-  local meta_window_mod = mods["meta-window"]
   local update_preview_window = refresh["preview!"]
   local sync_prompt_buffer_name_21 = refresh["sync-prompt-buffer-name!"]
   local router_util_mod = mods["router-util"]
@@ -231,7 +230,7 @@ local function restore_session_ui_21(deps, session, opts)
     end
     apply_prompt_window_opts_21(prompt_win)
     sync_prompt_buffer_name_21(session)
-    curr["status-win"] = meta_window_mod.new(vim, prompt_win)
+    curr["status-win"] = curr.win
     session["ui-hidden"] = false
     if (curr and curr.buf and curr.buf.buffer and vim.api.nvim_buf_is_valid(curr.buf.buffer)) then
       do
