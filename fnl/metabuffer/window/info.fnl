@@ -238,6 +238,7 @@
                         start)
                       target)
               win (floating_window_mod.new vim buf cfg)]
+          (util.disable-heavy-buffer-features! buf)
           (set session.info-buf buf)
           (set session.info-win win.window)
           (set session.info-config-sig (info-config-signature target))

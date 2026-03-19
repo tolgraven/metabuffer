@@ -668,8 +668,9 @@
                                  (session-active? session)
                                  (not session.closing))
                         (pcall update-info-window session true)))
-                    17)))))
-          (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms))))))
+                    17)))
+                (set session.project-mode-starting? false))))
+          (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms 0)))))
 
   {:schedule-lazy-refresh! schedule-lazy-refresh!
    :apply-source-set! apply-source-set!

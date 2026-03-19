@@ -126,6 +126,7 @@
         session (. active-by-prompt prompt-buf)]
     (when session
       (let [runner (fn []
+                    (hide-scroll-cursor! session)
                      (let [meta session.meta
                            max (# meta.buf.indices)]
                        (when (> max 0)

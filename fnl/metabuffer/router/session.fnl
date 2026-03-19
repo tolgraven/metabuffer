@@ -136,6 +136,10 @@
     (register-prompt-hooks! deps session)
     (set (. active-by-source session.source-buf) session)
     (set (. active-by-prompt prompt-buf) session)
+    (when (and animation-mod
+               (= (animation-mod.animation-backend session :scroll) "mini")
+               (animation-mod.supports-backend? "mini"))
+      (animation-mod.ensure-mini-global! session))
     (when (and session.animate-enter?
                animation-mod
                prompt-win
@@ -219,7 +223,8 @@
           (when-not vim.g.meta_test_no_startinsert
             (vim.api.nvim_set_current_win session.prompt-win)
             (vim.cmd "startinsert!")))
-        (restore-main-view!))
+        (when-not session.prompt-animated?
+          (restore-main-view!)))
       (prompt-enter-duration-ms))))
 
 (fn finish-session-startup!
@@ -232,7 +237,8 @@
         update-info-window (. deps :update-info-window)
         context-window (. (. deps :windows) :context)
         active-by-prompt (. (. deps :router) :active-by-prompt)
-        instances (. (. deps :router) :instances)]
+        instances (. (. deps :router) :instances)
+        startup-layout-unsettled? (not (not session.prompt-animating?))]
     (fn schedule-aux-ui-refresh!
       []
       (vim.schedule
@@ -263,13 +269,13 @@
     (curr.on-init)
     (when sign-mod
       (pcall sign-mod.capture-baseline! session))
-    (when session.project-mode
+    (when (and session.project-mode (not startup-layout-unsettled?))
       (session-view.restore-meta-view! curr session.source-view session update-info-window))
     (when-not (and session.project-mode (not initial-query-active))
       (apply-prompt-lines session))
-    (when-not session.project-mode
+    (when (and (not session.project-mode) (not startup-layout-unsettled?))
       (session-view.restore-meta-view! curr session.source-view session update-info-window))
-    (when update-preview-window
+    (when (and update-preview-window (not startup-layout-unsettled?))
       (pcall update-preview-window session))
     (pcall update-info-window session true)
     (when session.project-mode
@@ -284,7 +290,8 @@
     (vim.schedule
       (fn []
         (set session.startup-initializing false)
-        (set session.project-mode-starting? false)
+        (when-not session.project-mode
+          (set session.project-mode-starting? false))
         (pcall update-info-window session)
         (vim.defer_fn
           (fn []
@@ -414,6 +421,7 @@
                       prompt-animates? (and (. ui-animation :enabled)
                                             (not (= false (. ui-animation-prompt :enabled))))
                       animation-settings {:enabled (not (= false (. ui-animation :enabled)))
+                                          :backend (or (. ui-animation :backend) "native")
                                           :time-scale (or (. ui-animation :time-scale) 1.0)
                                           :prompt {:enabled (not (= false (. ui-animation-prompt :enabled)))
                                                    :ms (. ui-animation-prompt :ms)
@@ -431,7 +439,8 @@
                                                     :time-scale (or (. ui-animation-loading :time-scale) 1.0)}
                                           :scroll {:enabled (not (= false (. ui-animation-scroll :enabled)))
                                                    :ms (. ui-animation-scroll :ms)
-                                                   :time-scale (or (. ui-animation-scroll :time-scale) 1.0)}}
+                                                   :time-scale (or (. ui-animation-scroll :time-scale) 1.0)
+                                                   :backend (or (. ui-animation-scroll :backend) "native")}}
                       prompt-win (prompt-window-mod.new
                                    vim
                                    {:height (router-util-mod.prompt-height)

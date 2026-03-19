@@ -3,6 +3,7 @@
 (local source-mod (require :metabuffer.source))
 (local lineno-mod (require :metabuffer.window.lineno))
 (local statusline-mod (require :metabuffer.window.statusline))
+(local util (require :metabuffer.util))
 (local base-window-mod (require :metabuffer.window.base))
 (local disable-airline-statusline! (. base-window-mod :disable-airline-statusline!))
 (local metabuffer-winhighlight (. base-window-mod :metabuffer-winhighlight))
@@ -127,6 +128,7 @@
   (local mark-preview-buffer!
     (fn [buf]
       (when (and buf (vim.api.nvim_buf_is_valid buf))
+        (util.disable-heavy-buffer-features! buf)
         ;; Keep syntax/filetype, but hint heavy tooling to skip preview-only buffers.
         (pcall vim.api.nvim_buf_set_var buf "conjure_disable" true)
         (pcall vim.api.nvim_buf_set_var buf "lsp_disabled" 1)

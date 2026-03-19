@@ -1,6 +1,7 @@
 (import-macros {: when-let : when-not} :io.gitlab.andreyorst.cljlib.core)
 
 (local M {})
+(local util (require :metabuffer.util))
 
 (fn session-by-prompt
   [active-by-prompt prompt-buf]
@@ -40,6 +41,18 @@
                (~= status-win main-win))
       (destroy-window-wrapper! status-win))))
 
+(fn restore-managed-buffer-effects!
+  [session]
+  (when session
+    (each [_ buf (ipairs [(and session.meta session.meta.buf session.meta.buf.buffer)
+                          session.prompt-buf
+                          session.info-buf
+                          session.preview-buf
+                          session.history-browser-buf])]
+      (util.restore-heavy-buffer-features! buf))
+    (each [_ buf (pairs (or session.ts-expand-bufs {}))]
+      (util.restore-heavy-buffer-features! buf))))
+
 (fn remove-session!
   [deps session]
   (let [{: router
@@ -49,6 +62,7 @@
         deps
         history-api (. history :api)
         sign-mod (. mods :sign)
+        animation-mod (. mods :animation)
         router-util-mod (. mods :router-util)
         info-window (. windows :info)
         preview-window (. windows :preview)
@@ -58,6 +72,9 @@
         instances (. router :instances)]
     (when session
       (set session.closing true)
+      (when (and animation-mod animation-mod.unmark-mini-session!)
+        (animation-mod.unmark-mini-session! session))
+      (restore-managed-buffer-effects! session)
       (restore-main-window-opts! session)
       (history-api.push-history-entry!
         session

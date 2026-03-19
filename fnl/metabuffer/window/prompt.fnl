@@ -1,6 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local base (require :metabuffer.window.base))
 (local animation-mod (require :metabuffer.window.animation))
+(local util (require :metabuffer.util))
 (local M {})
 (local disable-airline-statusline! (. base :disable-airline-statusline!))
 (local apply-metabuffer-window-highlights! (. base :apply-metabuffer-window-highlights!))
@@ -15,6 +16,7 @@
 (fn prompt-buffer!
   [win]
   (let [buf (vim.api.nvim_win_get_buf win)]
+    (util.disable-heavy-buffer-features! buf)
     (let [bo (. vim.bo buf)]
       (set (. bo :buftype) "nofile")
       (set (. bo :bufhidden) "wipe")

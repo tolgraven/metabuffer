@@ -1,5 +1,6 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local state (require :metabuffer.core.state))
+(local util (require :metabuffer.util))
 
 (local M {})
 
@@ -11,8 +12,10 @@
           model-buf meta.buf.model
           index-buf (and meta.buf.indexbuf meta.buf.indexbuf.buffer)]
       (when (and index-buf (not (= index-buf model-buf)) (vim.api.nvim_buf_is_valid index-buf))
+        (util.restore-heavy-buffer-features! index-buf)
         (pcall vim.api.nvim_buf_delete index-buf {:force true}))
       (when (and main-buf (not (= main-buf model-buf)) (vim.api.nvim_buf_is_valid main-buf))
+        (util.restore-heavy-buffer-features! main-buf)
         (pcall vim.api.nvim_buf_delete main-buf {:force true})))))
 
 (fn M.setup-state

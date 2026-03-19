@@ -1,5 +1,6 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
+(local util (require :metabuffer.util))
 
 (fn ensure-window!
   [floating-window-mod session]
@@ -30,6 +31,7 @@
                      :width width
                      :height height}))
           win (floating-window-mod.new vim buf cfg)]
+      (util.disable-heavy-buffer-features! buf)
       (set session.history-browser-buf buf)
       (set session.history-browser-win win.window)
       (let [bo (. vim.bo buf)]
