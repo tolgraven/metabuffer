@@ -81,7 +81,7 @@ do
     return router_util_mod["read-file-lines-cached"](M, path)
   end
   candidate = info_window_mod.new({["floating-window-mod"] = floating_window_mod, ["info-min-width"] = M["info-min-width"], ["info-max-width"] = M["info-max-width"], ["info-max-lines"] = M["info-max-lines"], ["info-height"] = router_util_mod["info-height"], ["debug-log"] = debug_log, ["animation-mod"] = animation_mod, ["animate-enter?"] = _7_, ["info-fade-ms"] = M["ui-animation-info-ms"], ["read-file-lines-cached"] = _8_})
-  if false then
+  if (type(candidate) == "function") then
     local function _9_(_)
       return nil
     end
@@ -104,13 +104,13 @@ history_api = router_history_mod.new({["history-store"] = history_store, ["route
 local function _13_(session, refresh_lines)
   if session then
     if session["ui-hidden"] then
-      if (info_window and info_window["close-window!"]) then
+      if ((type(info_window) == "table") and info_window["close-window!"]) then
         return info_window["close-window!"](session)
       else
         return nil
       end
     else
-      if (info_window and info_window["update!"]) then
+      if ((type(info_window) == "table") and info_window["update!"]) then
         return info_window["update!"](session, refresh_lines)
       else
         return nil
@@ -188,7 +188,7 @@ local function _33_(session)
   return router_query_flow_mod["apply-prompt-lines!"](query_flow_deps, session)
 end
 apply_prompt_lines = _33_
-actions_deps = {router = M, mods = {sign = sign_mod, ["prompt-window"] = prompt_window_mod, ["meta-window"] = meta_window_mod, ["router-util"] = router_util_mod, ["router-prompt"] = router_prompt_mod, ["session-view"] = session_view, ["base-buffer"] = base_buffer}, windows = {info = info_window, preview = preview_window, context = context_window}, history = {api = history_api, store = history_store}, project = {source = project_source}, refresh = {["info!"] = update_info_window, ["sync-prompt-buffer-name!"] = sync_prompt_buffer_name_21, ["apply-prompt-lines!"] = apply_prompt_lines, wrapup = M._wrapup}}
+actions_deps = {router = M, mods = {sign = sign_mod, ["prompt-window"] = prompt_window_mod, ["meta-window"] = meta_window_mod, ["router-util"] = router_util_mod, ["router-prompt"] = router_prompt_mod, ["session-view"] = session_view, ["base-buffer"] = base_buffer}, windows = {info = info_window, preview = preview_window, context = context_window}, history = {api = history_api, store = history_store}, project = {source = project_source}, refresh = {["preview!"] = update_preview_window, ["info!"] = update_info_window, ["sync-prompt-buffer-name!"] = sync_prompt_buffer_name_21, ["apply-prompt-lines!"] = apply_prompt_lines, wrapup = M._wrapup}}
 local next_instance_id_21
 local function _34_()
   M["_instance-seq"] = ((M["_instance-seq"] or 0) + 1)
@@ -457,7 +457,7 @@ M["fail-safe-teardown!"] = function(where, err)
           maybe_delete_buf_21(session.meta.buf.buffer)
         else
         end
-        if (info_window and info_window["close-window!"]) then
+        if ((type(info_window) == "table") and info_window["close-window!"]) then
           pcall(info_window["close-window!"], session)
         else
         end
@@ -465,7 +465,7 @@ M["fail-safe-teardown!"] = function(where, err)
           pcall(preview_window["close-window!"], session)
         else
         end
-        if (context_window and context_window["close-window!"]) then
+        if ((type(context_window) == "table") and context_window["close-window!"]) then
           pcall(context_window["close-window!"], session)
         else
         end

@@ -10,6 +10,9 @@ T['project <CR> hides Meta UI but restores full state when returning to results 
   H.type_prompt_text('meta')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
   H.type_prompt('<C-n>')
+  H.wait_for(function()
+    return H.session_preview_contains('contains meta token')
+  end, 4000)
 
   local state_before = child.lua_get([[
     (function()
@@ -28,6 +31,8 @@ T['project <CR> hides Meta UI but restores full state when returning to results 
 
   child.cmd('stopinsert')
   H.type_prompt('<CR>')
+  local accepted_buf = child.lua_get('vim.api.nvim_get_current_buf()')
+  eq(type(accepted_buf), 'number')
 
   H.wait_for(function()
     return child.lua_get([[
@@ -74,6 +79,38 @@ T['project <CR> hides Meta UI but restores full state when returning to results 
   ]])
   eq(state_after.prompt, state_before.prompt)
   eq(state_after.selected, state_before.selected)
+  H.wait_for(function()
+    return H.session_preview_contains('contains meta token')
+  end, 4000)
+
+  child.cmd('normal! <C-i>')
+
+  H.wait_for(function()
+    return child.lua_get(string.format('vim.api.nvim_get_current_buf() == %d', accepted_buf))
+  end)
+  H.wait_for(function()
+    return H.session_ui_hidden()
+  end, 4000)
+
+  child.cmd('normal! <C-o>')
+
+  H.wait_for(function()
+    return child.lua_get(string.format('vim.api.nvim_get_current_buf() == %d', state_before.results_buf))
+  end)
+  H.wait_for(function()
+    return child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not s then return false end
+        local pwin = s['prompt-win']
+        return pwin and vim.api.nvim_win_is_valid(pwin)
+      end)()
+    ]])
+  end)
+  H.wait_for(function()
+    return H.session_preview_contains('contains meta token')
+  end, 4000)
 end)
 
 return T

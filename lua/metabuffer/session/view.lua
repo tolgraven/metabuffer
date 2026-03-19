@@ -148,11 +148,15 @@ M["schedule-scroll-sync!"] = function(session, opts)
   local _let_25_ = (opts or {})
   local maybe_sync_from_main_21 = _let_25_["maybe-sync-from-main!"]
   local scroll_sync_debounce_ms = _let_25_["scroll-sync-debounce-ms"]
-  if (session and not session["scroll-sync-pending"]) then
+  if (session and not session["scroll-sync-pending"] and not session["scroll-animating?"] and not session["scroll-command-view"]) then
     session["scroll-sync-pending"] = true
     local function _26_()
       session["scroll-sync-pending"] = false
-      return maybe_sync_from_main_21(session, true)
+      if (not session["scroll-animating?"] and not session["scroll-command-view"]) then
+        return maybe_sync_from_main_21(session, true)
+      else
+        return nil
+      end
     end
     return vim.defer_fn(_26_, scroll_sync_debounce_ms)
   else

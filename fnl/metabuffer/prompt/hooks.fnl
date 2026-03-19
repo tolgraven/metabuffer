@@ -750,7 +750,9 @@
            :buffer session.meta.buf.buffer
            :callback (fn [_]
                        ;; When leaving the results buffer, check if the window it
-                       ;; was in is now showing something else. If so, close Meta.
+                       ;; was in is now showing something else. Project-mode
+                       ;; sessions should hide auxiliary UI and remain resumable;
+                       ;; regular sessions can close entirely.
                        (vim.schedule
                          (fn []
                            (when (and (not session.ui-hidden)
@@ -762,7 +764,9 @@
                                    (router.cancel session.prompt-buf)
                                    (let [buf (vim.api.nvim_win_get_buf win)]
                                      (when (not= buf session.meta.buf.buffer)
-                                       (router.cancel session.prompt-buf)))))))))})
+                                       (if (and session.project-mode hide-visible-ui!)
+                                           (hide-visible-ui! session.prompt-buf)
+                                           (router.cancel session.prompt-buf))))))))))})
         (apply-main-keymaps router session)
         (vim.api.nvim_create_autocmd "WinScrolled"
           {:group aug

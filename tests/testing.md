@@ -132,6 +132,12 @@ Key helper coverage:
 ### `tests/screen/persistence/test_screen_persistence_statusline_restore.lua`
 - Closing Meta restores the original window-local `statusline` and `winhighlight`.
 
+### `tests/screen/persistence/test_screen_persistence_cursor_word.lua`
+- `:MetaCursorWord` seeds the prompt and leaves insert at the end so new typing appends after the current word.
+
+### `tests/screen/persistence/test_screen_persistence_plain_launch.lua`
+- Plain `:Meta` launch opens a live session with prompt and info window on a normal buffer.
+
 ### `tests/screen/persistence/test_screen_persistence_external_split_pause.lua`
 - Opening unrelated windows like `:help` hides Meta auxiliary UI instead of floating over the new split.
 

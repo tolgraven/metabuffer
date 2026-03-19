@@ -33,11 +33,11 @@ check-lua:
 	lua-language-server --check $(LUA_CHECK_ARGS)
 
 # Run tests. Use 'make test' for all tests or 'make test tests/some_test.lua' for specific ones.
-test:
+test: compile
 	@echo "[make] running tests..."
 	$(NVIM_ENV) ./scripts/test-mini.sh $(FILE_ARGS)
 
-test-profile:
+test-profile: compile
 	@echo "[make] running tests with profiling..."
 	TEST_FILE_TIMEOUT_MS="$${TEST_FILE_TIMEOUT_MS:-120000}" $(NVIM_ENV) ./scripts/test-mini.sh --profile $(FILE_ARGS)
 

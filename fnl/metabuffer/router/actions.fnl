@@ -136,6 +136,7 @@
   [deps session opts]
   (let [{: mods : windows : refresh} deps
         meta-window-mod (. mods :meta-window)
+        update-preview-window (. refresh :preview!)
         sync-prompt-buffer-name! (. refresh :sync-prompt-buffer-name!)
         router-util-mod (. mods :router-util)
         update-info-window (. refresh :info!)
@@ -190,6 +191,8 @@
               col* (math.min col (# line))]
           (pcall vim.api.nvim_win_set_cursor prompt-win [row* col*]))
         (pcall curr.refresh_statusline)
+        (when update-preview-window
+          (pcall update-preview-window session))
         (pcall update-info-window session true)
         (when (and context-window context-window.update!)
           (pcall context-window.update! session))

@@ -537,6 +537,35 @@ function M.session_info_snapshot()
   return vim.json.decode(encoded)
 end
 
+function M.session_info_view()
+  local encoded = M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta and s.meta.buf) then
+        return nil
+      end
+      local info_win, info_buf = s['info-win'], s['info-buf']
+      if not (info_win and vim.api.nvim_win_is_valid(info_win) and info_buf and vim.api.nvim_buf_is_valid(info_buf)) then
+        return nil
+      end
+      local view = vim.api.nvim_win_call(info_win, function()
+        return vim.fn.winsaveview()
+      end)
+      local selected = (s.meta.selected_index or 0) + 1
+      local row = selected - (view.topline or 1) + 1
+      return vim.json.encode({
+        topline = view.topline or 0,
+        lnum = view.lnum or 0,
+        selected_row = row,
+        height = vim.api.nvim_win_get_height(info_win),
+      })
+    end)()
+  ]])
+  if encoded == nil or encoded == vim.NIL then return nil end
+  return vim.json.decode(encoded)
+end
+
 function M.session_selected_ref()
   return M.child.lua_get([[
     (function()
@@ -659,9 +688,8 @@ function M.scroll_main_and_wait(action, timeout_ms)
         local view = vim.fn.winsaveview()
         local old_top = view.topline
         local old_lnum = view.lnum
-        local row_off = math.max(0, old_lnum - old_top)
         local new_top = math.max(1, math.min(old_top + (dir * step), max_top))
-        local new_lnum = (new_top == 1) and 1 or math.max(1, math.min(new_top + row_off, line_count))
+        local new_lnum = math.max(1, math.min(old_lnum + (dir * step), line_count))
         return { topline = new_top, lnum = new_lnum }
       end)
       router['scroll-main'](s.prompt_buf, %q)

@@ -220,7 +220,7 @@
             (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col]))
           (when-not vim.g.meta_test_no_startinsert
             (vim.api.nvim_set_current_win session.prompt-win)
-            (vim.cmd "startinsert")))
+            (vim.cmd "startinsert!")))
         (restore-main-view!))
       (prompt-enter-duration-ms))))
 

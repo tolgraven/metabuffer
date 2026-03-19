@@ -112,12 +112,17 @@
   (let [{: maybe-sync-from-main!
          : scroll-sync-debounce-ms}
         (or opts {})]
-    (when (and session (not session.scroll-sync-pending))
+    (when (and session
+               (not session.scroll-sync-pending)
+               (not session.scroll-animating?)
+               (not session.scroll-command-view))
       (set session.scroll-sync-pending true)
       (vim.defer_fn
         (fn []
           (set session.scroll-sync-pending false)
-          (maybe-sync-from-main! session true))
+          (when (and (not session.scroll-animating?)
+                     (not session.scroll-command-view))
+            (maybe-sync-from-main! session true)))
         scroll-sync-debounce-ms))))
 
 M

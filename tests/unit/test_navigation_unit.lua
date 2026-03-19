@@ -267,6 +267,65 @@ T['scroll-main uses Neovim effective final view when paging changes cursor row']
   vim.cmd('only')
 end
 
+T['scroll-main keeps advancing selection after viewport reaches bottom'] = function()
+  vim.cmd('enew')
+  local meta_buf = vim.api.nvim_get_current_buf()
+  local lines = {}
+  for i = 1, 120 do
+    lines[i] = ('line %03d'):format(i)
+  end
+  vim.api.nvim_buf_set_lines(meta_buf, 0, -1, false, lines)
+
+  local meta_win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_height(meta_win, 10)
+  vim.api.nvim_win_call(meta_win, function()
+    vim.fn.winrestview({ topline = 111, lnum = 114, col = 0, leftcol = 0 })
+  end)
+
+  vim.cmd('belowright split')
+  local prompt_buf = vim.api.nvim_get_current_buf()
+
+  local status_calls = 0
+  local deps = {
+    router = { ['active-by-prompt'] = {} },
+    refresh = {},
+    windows = {},
+    mods = {},
+  }
+  local session = {
+    ['prompt-buf'] = prompt_buf,
+    meta = {
+      ['selected_index'] = 113,
+      win = { window = meta_win },
+      buf = {
+        buffer = meta_buf,
+        indices = lines,
+      },
+      ['refresh_statusline'] = function()
+        status_calls = status_calls + 1
+      end,
+    },
+  }
+  deps.router['active-by-prompt'][prompt_buf] = session
+
+  navigation['scroll-main!'](deps, prompt_buf, 'half-down')
+
+  local view = vim.api.nvim_win_call(meta_win, function()
+    return vim.fn.winsaveview()
+  end)
+  local cursor = vim.api.nvim_win_get_cursor(meta_win)
+  wait_for_refresh(function()
+    return status_calls
+  end, 1)
+
+  eq(view.topline, 111)
+  eq(cursor[1], 119)
+  eq(session.meta['selected_index'], 118)
+
+  vim.api.nvim_set_current_win(meta_win)
+  vim.cmd('only')
+end
+
 T['move-selection coalesces refresh work to the latest selection'] = function()
   vim.cmd('enew')
   local meta_buf = vim.api.nvim_get_current_buf()

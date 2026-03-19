@@ -111,7 +111,7 @@
            :info-fade-ms M.ui-animation-info-ms
            :read-file-lines-cached (fn [path]
                                      (router_util_mod.read-file-lines-cached M path))})]
-    (if false ;(= (type candidate) "function")
+    (if (= (type candidate) "function")
         {:update! candidate
          :close-window! (fn [_] nil)}
         candidate)))
@@ -139,9 +139,11 @@
   (fn [session refresh-lines]
     (when session
       (if session.ui-hidden
-          (when (and info-window info-window.close-window!)
+          (when (and (= (type info-window) "table")
+                     info-window.close-window!)
             (info-window.close-window! session))
-          (when (and info-window info-window.update!)
+          (when (and (= (type info-window) "table")
+                     info-window.update!)
             (info-window.update! session refresh-lines))))))
 
 (set context-window
@@ -253,7 +255,8 @@
    :history {:api history-api
              :store history_store}
    :project {:source project-source}
-   :refresh {:info! update-info-window
+   :refresh {:preview! update-preview-window
+             :info! update-info-window
              :sync-prompt-buffer-name! sync-prompt-buffer-name!
              :apply-prompt-lines! apply-prompt-lines
              :wrapup M._wrapup}})
@@ -639,12 +642,14 @@
           (maybe-close-win! session.meta.win.window))
         (when (and session.meta session.meta.buf)
           (maybe-delete-buf! session.meta.buf.buffer))
-        (when (and info-window info-window.close-window!)
+        (when (and (= (type info-window) "table")
+                   info-window.close-window!)
           (pcall info-window.close-window! session))
         (when (and (= (type preview-window) "table")
                    preview-window.close-window!)
           (pcall preview-window.close-window! session))
-        (when (and context-window context-window.close-window!)
+        (when (and (= (type context-window) "table")
+                   context-window.close-window!)
           (pcall context-window.close-window! session))
         (when history-api
           (pcall history-api.close-history-browser! session))))

@@ -180,6 +180,26 @@
         info_fade_ms (. deps :info-fade-ms)]
   (var update! nil)
   (var info_window_config nil)
+  (fn info-config-signature
+    [cfg]
+    (join-str "|"
+              [(or (. cfg :relative) "")
+               (or (. cfg :win) 0)
+               (or (. cfg :anchor) "")
+               (or (. cfg :row) 0)
+               (or (. cfg :col) 0)
+               (or (. cfg :width) 0)
+               (or (. cfg :height) 0)
+               (str (not (not (. cfg :focusable))))]))
+
+  (fn apply-info-config-if-changed!
+    [session cfg]
+    (when (valid-info-win? session)
+      (let [sig (info-config-signature cfg)]
+        (when (~= sig session.info-config-sig)
+          (set session.info-config-sig sig)
+          (pcall vim.api.nvim_win_set_config session.info-win cfg)))))
+
   (set info_window_config
     (fn [session width height]
       (let [host-win (or (session-host-win session) (vim.api.nvim_get_current_win))]
@@ -221,6 +241,7 @@
               win (floating_window_mod.new vim buf cfg)]
           (set session.info-buf buf)
           (set session.info-win win.window)
+          (set session.info-config-sig (info-config-signature target))
           (disable-airline-statusline! session.info-win)
           (apply-metabuffer-window-highlights! session.info-win)
           (let [bo (. vim.bo buf)]
@@ -271,7 +292,7 @@
       (let [width (vim.api.nvim_win_get_width session.info-win)
             height (info_height session)
             cfg (info_window_config session width height)]
-        (pcall vim.api.nvim_win_set_config session.info-win cfg))))
+        (apply-info-config-if-changed! session cfg))))
 
   (fn close-info-window!
     [session]
@@ -279,10 +300,12 @@
       (pcall vim.api.nvim_win_close session.info-win true))
     (set session.info-win nil)
     (set session.info-buf nil)
+    (set session.info-config-sig nil)
     (set session.info-post-fade-refresh? nil)
     (set session.info-render-suspended? nil)
     (set session.info-highlight-fill-pending? nil)
     (set session.info-highlight-fill-token nil)
+    (set session.info-line-meta-refresh-pending nil)
     (set session.info-fixed-width nil))
 
   (fn apply-info-highlights!
@@ -296,10 +319,10 @@
                session.info-buf
                (vim.api.nvim_buf_is_valid session.info-buf))
         (let [info-lines (vim.api.nvim_buf_line_count session.info-buf)
-            start-index (or session.info-start-index 1)
             selected1 (+ meta.selected_index 1)
-            row0 (if (> info-lines 0)
-                     (math.max 0 (math.min (- selected1 start-index) (- info-lines 1)))
+            row0 (if (and (> info-lines 0)
+                          (> selected1 0))
+                     (math.max 0 (math.min (- selected1 1) (- info-lines 1)))
                      nil)]
         (vim.api.nvim_buf_clear_namespace session.info-buf info-selection-ns 0 -1)
         (when (and row0 (>= row0 0) (< row0 info-lines))
@@ -416,6 +439,8 @@
                          (= token session.info-highlight-fill-token)
                          session.info-buf
                          (vim.api.nvim_buf_is_valid session.info-buf))
+                (let [bo (. vim.bo session.info-buf)]
+                  (set (. bo :modifiable) true))
                 (let [stop (math.min (# pending) (+ next-index batch-size -1))]
                   (for [i next-index stop]
                     (let [spec (. pending i)
@@ -433,8 +458,44 @@
                       (do
                         (set next-index (+ stop 1))
                         (vim.defer_fn run-batch 17))
-                      (set session.info-highlight-fill-pending? false)))))
+                      (set session.info-highlight-fill-pending? false)))
+                (let [bo (. vim.bo session.info-buf)]
+                  (set (. bo :modifiable) false))))
             (vim.defer_fn run-batch 17)))))
+
+  (fn set-info-topline!
+    [session top]
+    (when (valid-info-win? session)
+      (vim.api.nvim_win_call
+        session.info-win
+        (fn []
+          (let [line-count (math.max 1 (vim.api.nvim_buf_line_count session.info-buf))
+                top* (math.max 1 (math.min top line-count))
+                selected1 (math.max 1 (math.min (+ session.meta.selected_index 1) line-count))
+                view (vim.fn.winsaveview)]
+            (set (. view :topline) top*)
+            (set (. view :lnum) selected1)
+            (set (. view :col) 0)
+            (set (. view :leftcol) 0)
+            (pcall vim.fn.winrestview view))))))
+
+  (fn ensure-regular-info-buffer-shape!
+    [session total]
+    (when (and session.info-buf
+               (vim.api.nvim_buf_is_valid session.info-buf))
+      (let [needed (math.max 1 total)
+            current (vim.api.nvim_buf_line_count session.info-buf)]
+        (when (~= current needed)
+          (let [bo (. vim.bo session.info-buf)]
+            (set (. bo :modifiable) true))
+          (vim.api.nvim_buf_set_lines
+            session.info-buf
+            0
+            -1
+            false
+            (vim.tbl_map (fn [_] "") (vim.fn.range 1 needed)))
+          (let [bo (. vim.bo session.info-buf)]
+            (set (. bo :modifiable) false))))))
 
   (fn fit-info-width!
     [session lines]
@@ -458,7 +519,7 @@
         (when (and (not session.project-mode)
                    (not frozen-width))
           (set session.info-fixed-width (math.max info_min_width fit-target)))
-        (pcall vim.api.nvim_win_set_config session.info-win cfg))))
+        (apply-info-config-if-changed! session cfg))))
 
   (fn info-max-width-now
     [session]
@@ -491,7 +552,7 @@
             (info-range meta.selected_index total cap))))
 
   (fn build-info-lines
-    [session refs idxs target-width start-index stop-index visible-rows read_file_lines_cached]
+    [session refs idxs target-width start-index stop-index visible-start visible-stop read_file_lines_cached]
     (let [lnum-digit-width (let [limit (math.min (# idxs) info_max_lines)
                            max-lnum-len (if (> limit 0)
                                             (let [lens []]
@@ -511,7 +572,7 @@
           (for [i start-index stop-index]
               (let [src-idx (. idxs i)
                     ref (. refs src-idx)
-                    row0 (# lines)
+                    row0 (- i 1)
                     built (build-info-row
                             session
                             ref
@@ -519,23 +580,23 @@
                             target-width
                             lnum-digit-width
                             read_file_lines_cached
-                            (>= row0 visible-rows))]
+                            (or (< i visible-start) (> i visible-stop)))]
                 (table.insert lines (. built :line))
-                (if (< row0 visible-rows)
+                (if (and (>= i visible-start) (<= i visible-stop))
                     (each [_ h (ipairs (or (. built :highlights) []))]
                       (table.insert highlights [row0 (. h 1) (. h 2) (. h 3)]))
                     (table.insert deferred-rows [row0 src-idx])))))
       {:lines lines :highlights highlights :deferred-rows deferred-rows :lnum-digit-width lnum-digit-width}))
 
   (fn render-info-lines!
-    [session meta start-index stop-index]
+    [session meta render-start render-stop visible-start visible-stop]
     (let [refs (or meta.buf.source-refs [])
           idxs (or meta.buf.indices [])
-          _ (set session.info-start-index start-index)
-          _ (set session.info-stop-index stop-index)
-          visible-rows (math.max 1 (math.min (math.max 1 (info_height session))
-                                             (math.max 1 (+ (- stop-index start-index) 1))))
-          built (build-info-lines session refs idxs (info-max-width-now session) start-index stop-index visible-rows read_file_lines_cached)
+          _ (set session.info-start-index visible-start)
+          _ (set session.info-stop-index visible-stop)
+          _ (set session.info-render-start render-start)
+          _ (set session.info-render-stop render-stop)
+          built (build-info-lines session refs idxs (info-max-width-now session) render-start render-stop visible-start visible-stop read_file_lines_cached)
           raw-lines (. built :lines)
           lines (if (= (type raw-lines) "table")
                     (vim.tbl_map str raw-lines)
@@ -552,14 +613,16 @@
       (let [bo (. vim.bo session.info-buf)]
         (set (. bo :modifiable) true))
       (fit-info-width! session lines)
-      (let [[ok-set err-set] [(pcall vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)]]
+      (ensure-regular-info-buffer-shape! session (# idxs))
+      (let [[ok-set err-set] [(pcall vim.api.nvim_buf_set_lines session.info-buf (- render-start 1) render-stop false lines)]]
         (when-not ok-set
           (debug_log (.. "info set_lines failed: " (tostring err-set)))))
-      (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
+      (vim.api.nvim_buf_clear_namespace session.info-buf ns (- render-start 1) render-stop)
       (apply-info-highlights! session ns highlights)
       (schedule-info-highlight-fill! session ns refs (info-max-width-now session) lnum-digit-width deferred-rows)
       (let [bo (. vim.bo session.info-buf)]
-        (set (. bo :modifiable) false))))
+        (set (. bo :modifiable) false))
+      (set-info-topline! session visible-start)))
 
   (fn sync-info-selection!
       [session meta]
@@ -568,8 +631,11 @@
   (fn render-current-range!
     [session meta]
     (let [total (# (or meta.buf.indices []))
-          [start-index stop-index] (info-visible-range session meta total info_max_lines)]
-      (render-info-lines! session meta start-index stop-index)
+          [start-index stop-index] (info-visible-range session meta total info_max_lines)
+          overscan (math.max 1 (info_height session))
+          render-start (math.max 1 (- start-index overscan))
+          render-stop (math.min total (+ stop-index overscan))]
+      (render-info-lines! session meta render-start render-stop start-index stop-index)
       (sync-info-selection! session meta)
       [start-index stop-index]))
 
@@ -579,16 +645,29 @@
           idxs (or meta.buf.indices [])
           first-row (and (> (# idxs) 0) (. idxs start-index))
           first-ref (and first-row (. refs first-row))
-          path (ref-path session first-ref)
-          rerender! (fn []
-                      (when (and session
-                                 session.info-buf
-                                 (vim.api.nvim_buf_is_valid session.info-buf)
-                                 (not session.project-mode)
-                                 session.single-file-info-ready)
-                        (let [[start1 stop1] (render-current-range! session meta)]
-                          (set session.info-start-index start1)
-                          (set session.info-stop-index stop1))))]
+          path (ref-path session first-ref)]
+      (var rerender! nil)
+      (set rerender!
+           (fn []
+             (when (and session
+                        session.info-buf
+                        (vim.api.nvim_buf_is_valid session.info-buf)
+                        (not session.project-mode)
+                        session.single-file-info-ready)
+               (if (or session.scroll-animating?
+                       session.scroll-command-view
+                       session.scroll-sync-pending
+                       session.selection-refresh-pending)
+                   (when-not session.info-line-meta-refresh-pending
+                     (set session.info-line-meta-refresh-pending true)
+                     (vim.defer_fn
+                       (fn []
+                         (set session.info-line-meta-refresh-pending false)
+                         (rerender!))
+                       90))
+                   (let [[start1 stop1] (render-current-range! session meta)]
+                     (set session.info-start-index start1)
+                     (set session.info-stop-index stop1))))))
       (when (and session.single-file-info-fetch-ready
                  (~= path "")
                  (= 1 (vim.fn.filereadable path)))
@@ -640,22 +719,35 @@
                                (= session.info-stop-index nil))
             selected1 (+ meta.selected_index 1)
             idxs (or meta.buf.indices [])
+            overscan (math.max 1 (info_height session))
             [wanted-start wanted-stop] (info-visible-range
                                          session
                                          meta
                                          (# idxs)
                                          info_max_lines)
+            render-start (if (> (# idxs) 0)
+                             (math.max 1 (- wanted-start overscan))
+                             1)
+            render-stop (if (> (# idxs) 0)
+                            (math.min (# idxs) (+ wanted-stop overscan))
+                            0)
             start-index (or session.info-start-index 1)
             stop-index (or session.info-stop-index 0)
+            rendered-start (or session.info-render-start 1)
+            rendered-stop (or session.info-render-stop 0)
             out-of-range (or (< selected1 start-index) (> selected1 stop-index))
             range-changed (or (~= wanted-start start-index)
                               (~= wanted-stop stop-index))
+            rendered-range-changed (or (< wanted-start rendered-start)
+                                      (> wanted-stop rendered-stop)
+                                      (~= render-start rendered-start)
+                                      (~= render-stop rendered-stop))
             sig (join-str
                   "|"
                   [idxs
                    (# idxs)
-                   wanted-start
-                   wanted-stop
+                   render-start
+                   render-stop
                    (info-max-width-now session)
                    (info_height session)
                    vim.o.columns
@@ -665,15 +757,18 @@
                 refresh-lines
                 out-of-range
                 range-changed
+                rendered-range-changed
                 (~= session.info-render-sig sig))
             (do
               (set session.info-render-sig sig)
-              (render-info-lines! session meta wanted-start wanted-stop)
+              (render-info-lines! session meta render-start render-stop wanted-start wanted-stop)
               (set session.info-start-index wanted-start)
               (set session.info-stop-index wanted-stop)
               (sync-info-selection! session meta)
               (schedule-regular-line-meta-refresh! session meta wanted-start wanted-stop))
-            (sync-info-selection! session meta)))))
+            (do
+              (set-info-topline! session wanted-start)
+              (sync-info-selection! session meta))))))
   (fn startup-layout-pending?
     [session]
     (let [initializing (or session.startup-initializing false)
@@ -757,13 +852,13 @@
 
   (fn update-project!
     [session refresh-lines]
-      (let [query-lines (or session.meta.query-lines [])
-            has-query (query-mod.query-lines-has-active? query-lines)]
-        (if (project-loading-pending? session has-query)
-            (update-project-startup! session)
-            (do
-              (ensure_info_window session)
-              (when (and session.info-render-suspended?
+    (let [query-lines (or session.meta.query-lines [])
+          has-query (query-mod.query-lines-has-active? query-lines)]
+      (if (project-loading-pending? session has-query)
+          (update-project-startup! session)
+          (do
+            (ensure_info_window session)
+            (when (and session.info-render-suspended?
                        (not session.prompt-animating?)
                        (not session.startup-initializing))
               (set session.info-post-fade-refresh? nil)
@@ -777,7 +872,6 @@
                  (.. "selected=" session.meta.selected_index)
                  (.. "info-win=" session.info-win)
                  (.. "info-buf=" session.info-buf)]))
-
             (when (valid-info-win? session)
               (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
               (pcall vim.api.nvim_set_option_value "winbar" "" {:win session.info-win}))
@@ -800,7 +894,7 @@
                     out-of-range (or (< selected1 start-index) (> selected1 stop-index))
                     range-changed (or (~= wanted-start start-index)
                                       (~= wanted-stop stop-index))]
-                (when (or force-refresh? refresh-lines out-of-range range-changed)
+                    (when (or force-refresh? refresh-lines out-of-range range-changed)
                   (let [idxs (or meta.buf.indices [])
                         sig (join-str
                               "|"
@@ -812,21 +906,29 @@
                                (info_height session)
                                vim.o.columns])]
                     (when (or force-refresh?
+                              refresh-lines
                               out-of-range
                               range-changed
                               (~= session.info-render-sig sig))
                       (set session.info-render-sig sig)
                       (set session.info-showing-project-loading? false)
-                      (render-info-lines! session meta wanted-start wanted-stop))))
-                      (sync-info-selection! session meta)))))))
+                      (render-info-lines!
+                        session
+                        meta
+                        wanted-start
+                        wanted-stop
+                        wanted-start
+                        wanted-stop))))
+                (sync-info-selection! session meta)))))))
 
-  (set update! (fn [session refresh-lines]
-  (let [refresh-lines (if (= refresh-lines nil) true refresh-lines)]
-  (if session.project-mode
-  (update-project! session refresh-lines)
-  (update-regular! session refresh-lines)))))
+  (set update!
+       (fn [session refresh-lines]
+         (let [refresh-lines (if (= refresh-lines nil) true refresh-lines)]
+           (if session.project-mode
+               (update-project! session refresh-lines)
+               (update-regular! session refresh-lines)))))
 
   {:close-window! close-info-window!
-  :update! update!}))
+   :update! update!}))
 
-  M
+M

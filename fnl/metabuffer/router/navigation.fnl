@@ -150,21 +150,20 @@
 	                                     old-top (. logical-view :topline)
 	                                     old-lnum (. logical-view :lnum)
 	                                     old-col (or (. logical-view :col) 0)
-	                                     row-off (math.max 0 (- old-lnum old-top))
 	                                     new-top (math.max 1 (math.min (+ old-top (* dir step)) max-top))
-	                                     new-lnum (if (= 1 new-top)
-                                                    1
-                                                    (math.max 1 (math.min (+ new-top row-off) line-count)))
+	                                     new-lnum (math.max 1 (math.min (+ old-lnum (* dir step)) line-count))
 	                                     target0 {:topline new-top :lnum new-lnum :col old-col :leftcol (or (. logical-view :leftcol) 0)}
                                        target (effective-scroll-target session.meta.win.window view target0)
-                                       animate? (and animation-mod
+                                     animate? (and animation-mod
                                                      (animation-mod.enabled? session :scroll)
                                                      (> (animation-mod.duration-ms session :scroll 140) 0)
                                                      (not (= step 1)))]
                                      (set session.scroll-command-view target)
                                      (if (and animation-mod
                                               animate?)
-                                         (animation-mod.animate-scroll-view!
+                                         (do
+                                           (set session.scroll-animating? true)
+                                           (animation-mod.animate-scroll-view!
 	                                       session
 	                                       "smooth-scroll"
 	                                       session.meta.win.window
@@ -175,10 +174,12 @@
                                                    (when (and session
                                                               session.prompt-buf
                                                               (= (. active-by-prompt session.prompt-buf) session))
+                                                     (set session.scroll-animating? false)
                                                      (set session.scroll-command-view nil)
-                                                     (M.maybe-sync-from-main! deps session true)))})
+                                                     (M.maybe-sync-from-main! deps session true)))}))
 	                                     (do
                                          (vim.fn.winrestview target)
+                                         (set session.scroll-animating? false)
                                          (set session.scroll-command-view nil)))
 		                                 {:row (or (. target :lnum) new-lnum) :animated animate?})))]
                          ;; Scroll commands derive an absolute target row.

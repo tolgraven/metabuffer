@@ -132,7 +132,7 @@
                           :preview-lnum 1})))
 
   (fn all-project-file-paths
-    [session include-hidden include-ignored include-deps include-binary]
+    [_session include-hidden include-ignored include-deps include-binary]
     (let [root (vim.fn.getcwd)
           seen {}
           out []]
@@ -293,11 +293,29 @@
                     (table.insert meta.buf.all-indices i)))
                 added)))))
 
+  (fn current-project-prefilter
+    [session]
+    (if (and session
+             session.project-mode
+             session.prefilter-mode
+             session.meta
+             session.meta.ignorecase)
+        (let [query-lines (or (and session.last-parsed-query session.last-parsed-query.lines)
+                              (and session.meta session.meta.query-lines)
+                              [])
+              ignorecase (not (not (session.meta.ignorecase)))
+              groups (parse-prefilter-terms query-lines ignorecase)]
+          (when (> (# groups) 0)
+            {:groups groups
+             :ignorecase ignorecase}))
+        nil))
+
   (fn open-project-buffer-paths
     [session root include-hidden include-deps]
     (let [out []
           seen {}
-          current (canonical-path (current-buffer-path session.source-buf))]
+          current (canonical-path (current-buffer-path session.source-buf))
+          include-binary session.effective-include-binary]
       (each [_ buf (ipairs (vim.api.nvim_list_bufs))]
         (when (and (vim.api.nvim_buf_is_valid buf)
                    (= (. (. vim.bo buf) :buftype) "")
@@ -307,6 +325,7 @@
                        (or (not current) (~= name current))
                        (not (. seen name))
                        (= 1 (vim.fn.filereadable name))
+                       (or include-binary (not (binary-file? name)))
                        (path-under-root? name root))
               (let [rel (vim.fn.fnamemodify name ":.")]
                 (when (allow-project-path? rel include-hidden include-deps)
@@ -324,65 +343,64 @@
     (math.floor (/ bytes 80)))
 
   (fn collect-project-sources
-    [session include-hidden include-ignored include-deps include-binary include-hex include-files]
+    [session include-hidden include-ignored include-deps include-binary include-hex include-files prefilter]
     (let [root (vim.fn.getcwd)
           current-path (current-buffer-path session.source-buf)
           file-cache (or session.preview-file-cache {})
           _ (set session.preview-file-cache file-cache)
           content []
           refs []]
-      (when (file-only-mode? session)
-        (let [meta session.meta]
-          (each [_ path (ipairs (all-project-file-paths
-                                  session
-                                  include-hidden
-                                  include-ignored
-                                  include-deps
-                                  include-binary))]
-            (table.insert content "")
-            (table.insert refs {:path path
-                                :lnum 1
-                                :line (let [rel (vim.fn.fnamemodify path ":.")]
-                                        (if (and (= (type rel) "string") (~= rel ""))
-                                            rel
-                                            path))
-                                :kind "file-entry"
-                                :open-lnum 1
-                                :preview-lnum 1}))
-          {:content content :refs refs}))
-      (var total-lines 0)
-      (let [push-line! (fn [path lnum line]
-                         (table.insert content line)
-                         (table.insert refs {:path path :lnum lnum :line line})
-                         (set total-lines (+ total-lines 1)))]
-      ;; Include current buffer first.
-      (each [i line (ipairs (or session.single-content []))]
-        (push-line! (or current-path "[Current Buffer]") i line))
-      (when (and current-path (= (type session.single-content) "table"))
-        (set (. file-cache current-path) (vim.deepcopy session.single-content)))
-      (when include-files
-        (each [_ path (ipairs (all-project-file-paths
-                                session
-                                include-hidden
-                                include-ignored
-                                include-deps
-                                include-binary))]
-          (push-file-entry-into-pool! session path)))
-      (each [_ path (ipairs (project-file-list root include-hidden include-ignored include-deps))]
-        (let [rel (vim.fn.fnamemodify path ":.")]
-          (when (and (< total-lines settings.project-max-total-lines)
-                     (allow-project-path? rel include-hidden include-deps)
-                     (or (not current-path) (~= (vim.fn.fnamemodify path ":p") (vim.fn.fnamemodify current-path ":p")))
-                     (= 1 (vim.fn.filereadable path)))
-            (let [size (vim.fn.getfsize path)]
-              (when (and (>= size 0) (<= size settings.project-max-file-bytes))
-                (let [lines (read-file-lines-cached path {:include-binary include-binary :hex-view include-hex})]
-                  (when (= (type lines) "table")
-                    (set (. file-cache path) lines)
-                    (each [lnum line (ipairs lines)]
-                      (when (< total-lines settings.project-max-total-lines)
-                        (push-line! path lnum line))))))))))
-        {:content content :refs refs})))
+      (if (file-only-mode? session)
+          (do
+            (each [_ path (ipairs (all-project-file-paths
+                                    session
+                                    include-hidden
+                                    include-ignored
+                                    include-deps
+                                    include-binary))]
+              (table.insert content "")
+              (table.insert refs {:path path
+                                  :lnum 1
+                                  :line (let [rel (vim.fn.fnamemodify path ":.")]
+                                          (if (and (= (type rel) "string") (~= rel ""))
+                                              rel
+                                              path))
+                                  :kind "file-entry"
+                                  :open-lnum 1
+                                  :preview-lnum 1}))
+            {:content content :refs refs})
+          (let [pool-session {:meta {:buf {:content content
+                                           :source-refs refs
+                                           :all-indices []}}}]
+            ;; Include current buffer first.
+            (push-file-into-pool!
+              pool-session
+              (or current-path "[Current Buffer]")
+              (or session.single-content [])
+              prefilter)
+            (when (and current-path (= (type session.single-content) "table"))
+              (set (. file-cache current-path) (vim.deepcopy session.single-content)))
+            (when include-files
+              (each [_ path (ipairs (all-project-file-paths
+                                      session
+                                      include-hidden
+                                      include-ignored
+                                      include-deps
+                                      include-binary))]
+                (push-file-entry-into-pool! session path)))
+            (each [_ path (ipairs (project-file-list root include-hidden include-ignored include-deps))]
+              (let [rel (vim.fn.fnamemodify path ":.")]
+                (when (and (< (# content) settings.project-max-total-lines)
+                           (allow-project-path? rel include-hidden include-deps)
+                           (or (not current-path) (~= (vim.fn.fnamemodify path ":p") (vim.fn.fnamemodify current-path ":p")))
+                           (= 1 (vim.fn.filereadable path)))
+                  (let [size (vim.fn.getfsize path)]
+                    (when (and (>= size 0) (<= size settings.project-max-file-bytes))
+                      (let [lines (read-file-lines-cached path {:include-binary include-binary :hex-view include-hex})]
+                        (when (= (type lines) "table")
+                          (set (. file-cache path) lines)
+                          (push-file-into-pool! pool-session path lines prefilter)))))))
+            {:content content :refs refs})))))
 
   (fn init-project-pool!
     [session prefilter]
@@ -514,22 +532,24 @@
     "Apply full single/project source set based on current session flags."
     (let [meta session.meta
           old-ref (and session.project-mode (selected-ref meta))
+          prefilter (current-project-prefilter session)
           old-line (if (and meta.selected_index
                             (>= meta.selected_index 0)
                             (<= (+ meta.selected_index 1) (# meta.buf.indices)))
                        (math.max 1 (meta.selected_line))
                        (math.max 1 (or session.initial-source-line 1)))]
     (if session.project-mode
-        (let [init (init-project-pool! session nil)]
+        (let [init (init-project-pool! session prefilter)]
           (if (lazy-preferred? session (or (. init :estimated-lines) 0))
-              (start-project-stream! session nil init)
+              (start-project-stream! session prefilter init)
               (let [pool (collect-project-sources session
                                                   session.effective-include-hidden
                                                   session.effective-include-ignored
                                                   session.effective-include-deps
                                                   session.effective-include-binary
                                                   session.effective-include-hex
-                                                  session.effective-include-files)]
+                                                  session.effective-include-files
+                                                  prefilter)]
                 (set meta.buf.content pool.content)
                 (set meta.buf.source-refs pool.refs)
                 (set session.lazy-stream-done true)
@@ -639,7 +659,14 @@
                   (pcall session.meta.buf.render)
                   (restore-meta-view! session.meta session.source-view session update-info-window)
                   (pcall session.meta.refresh_statusline)
-                  (pcall update-info-window session)))))
+                  (pcall update-info-window session true)
+                  (vim.defer_fn
+                    (fn []
+                      (when (and session
+                                 (session-active? session)
+                                 (not session.closing))
+                        (pcall update-info-window session true)))
+                    17)))))
           (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms))))))
 
   {:schedule-lazy-refresh! schedule-lazy-refresh!
