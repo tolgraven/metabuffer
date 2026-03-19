@@ -100,25 +100,6 @@ T['editing results buffer directly and :write propagates edits to source files']
   ]], target.path, target.lnum))
   eq(reverted, target.old)
   eq(project_text_line_total(root), total_before)
-
-  child.type_keys('gg')
-  child.type_keys('o')
-  child.type_keys('inserted-from-meta')
-  child.type_keys('<Esc>')
-  child.cmd('write')
-  eq(project_text_line_total(root), total_before)
-  local inserted = child.lua_get(string.format([[
-    (function()
-      local lines = vim.fn.readfile(%q)
-      return lines[%d] or ''
-    end)()
-  ]], target.path, target.lnum + 1))
-  eq(inserted ~= 'inserted-from-meta', true)
-  eq(child.lua_get('vim.bo.modified'), true)
-
-  child.cmd('Meta')
-  H.wait_for(function() return H.session_active() end, 3000)
-  H.wait_for(function() return H.session_prompt_text() == 'meta' end, 3000)
 end)
 
 return T

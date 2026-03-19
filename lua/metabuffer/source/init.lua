@@ -49,4 +49,54 @@ M["preview-lines"] = function(session, ref, height, read_file_lines_cached)
   local provider = M["provider-for-ref"](ref)
   return provider["preview-lines"](session, ref, height, read_file_lines_cached)
 end
+M["provider-for-op"] = function(op)
+  if (((op and op["ref-kind"]) or "") == "file-entry") then
+    return file
+  else
+    return text
+  end
+end
+M["apply-write-ops!"] = function(ops)
+  local grouped = {}
+  for _, op in ipairs((ops or {})) do
+    local provider = M["provider-for-op"](op)
+    local key = (provider["provider-key"] or "text")
+    local bucket = (grouped[key] or {provider = provider, ops = {}})
+    local bucket_ops = bucket.ops
+    local path = (op.path or "")
+    local per_path = (bucket_ops[path] or {})
+    table.insert(per_path, op)
+    bucket_ops[path] = per_path
+    grouped[key] = bucket
+  end
+  local result = {changed = 0, ["post-lines"] = {}, paths = {}, renames = {}, wrote = false}
+  local post_lines = result["post-lines"]
+  local paths = result.paths
+  local renames = result.renames
+  for _, bucket in pairs(grouped) do
+    local provider = bucket.provider
+    local f = provider["apply-write-ops!"]
+    local part
+    if (type(f) == "function") then
+      part = f(bucket.ops)
+    else
+      part = {changed = 0, ["post-lines"] = {}, paths = {}, renames = {}, wrote = false}
+    end
+    if part.wrote then
+      result["wrote"] = true
+    else
+    end
+    result["changed"] = (result.changed + (part.changed or 0))
+    for path, lines in pairs((part["post-lines"] or {})) do
+      post_lines[path] = lines
+    end
+    for path, v in pairs((part.paths or {})) do
+      paths[path] = v
+    end
+    for old_path, new_path in pairs((part.renames or {})) do
+      renames[old_path] = new_path
+    end
+  end
+  return result
+end
 return M

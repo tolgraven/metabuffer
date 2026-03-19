@@ -465,6 +465,48 @@
                   (.. "metabuffer: unknown main keymap action '" (tostring action) "' for " (tostring lhs))
                   vim.log.levels.WARN))))))
 
+    (fn feed-results-normal-key!
+      [key]
+      (vim.api.nvim_feedkeys
+        (vim.api.nvim_replace_termcodes key true false true)
+        "n"
+        false))
+
+    (fn set-pending-structural-edit!
+      [session side]
+      (when (and session.results-edit-mode session.meta session.meta.win
+                 (vim.api.nvim_win_is_valid session.meta.win.window))
+        (let [row (. (vim.api.nvim_win_get_cursor session.meta.win.window) 1)
+              idx (. (or session.meta.buf.indices []) row)
+              ref (and idx (. (or session.meta.buf.source-refs []) idx))]
+          (when (and ref ref.path ref.lnum)
+            (set session.pending-structural-edit
+                 {:path ref.path :lnum ref.lnum :side side})))))
+
+    (fn apply-results-edit-keymaps
+      [session]
+      (let [opts {:buffer session.meta.buf.buffer :silent true :noremap true :nowait true}]
+        (vim.keymap.set "n" "o"
+          (fn []
+            (set-pending-structural-edit! session "after")
+            (feed-results-normal-key! "o"))
+          opts)
+        (vim.keymap.set "n" "O"
+          (fn []
+            (set-pending-structural-edit! session "before")
+            (feed-results-normal-key! "O"))
+          opts)
+        (vim.keymap.set "n" "p"
+          (fn []
+            (set-pending-structural-edit! session "after")
+            (feed-results-normal-key! "p"))
+          opts)
+        (vim.keymap.set "n" "P"
+          (fn []
+            (set-pending-structural-edit! session "before")
+            (feed-results-normal-key! "P"))
+          opts)))
+
     (fn register!
   [router session]
       (let [aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true})]
@@ -653,6 +695,7 @@
                                            (hide-visible-ui! session.prompt-buf)
                                            (router.cancel session.prompt-buf))))))))))})
         (apply-main-keymaps router session)
+        (apply-results-edit-keymaps session)
         (vim.api.nvim_create_autocmd "WinScrolled"
           {:group aug
            :callback (fn [_]

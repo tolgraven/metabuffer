@@ -94,6 +94,17 @@ Key helper coverage:
 ### `tests/screen/project/test_screen_project_file_mode_file_entries.lua`
 - `#file <token>` file-entry activation and file-only result sets.
 
+### `tests/screen/project/test_screen_project_file_mode_rename.lua`
+- Straight edits on file-entry rows rename only the targeted file path.
+
+### `tests/screen/edit/test_screen_edit_propagation.lua`
+- In-place line replacements from results edit mode write back to the owned source line only.
+- Replacement writeback preserves overall project line totals.
+
+### `tests/screen/edit/test_screen_edit_structural_writeback.lua`
+- Contiguous plain-buffer edits patch the real file region in place.
+- Sparse project inserts from `o`/`O`/`p`/`P` anchor to exactly one owned source line and leave other files untouched.
+
 ### `tests/screen/project/test_screen_project_file_mode_binary.lua`
 - `-binary` exclusion from file-entry mode.
 
@@ -127,7 +138,7 @@ Key helper coverage:
 - Accept + `MetaResume` restores query/modes.
 
 ### `tests/screen/persistence/test_screen_persistence_statusline_prompt_only.lua`
-- Prompt statusline stays visible while the main results window stays blank.
+- Prompt statusline keeps mode/count/key-hint content while the main results statusline only shows runtime state.
 
 ### `tests/screen/persistence/test_screen_persistence_statusline_restore.lua`
 - Closing Meta restores the original window-local `statusline` and `winhighlight`.

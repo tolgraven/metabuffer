@@ -2,6 +2,7 @@
 (local file-info (require :metabuffer.source.file_info))
 
 (local M {})
+(set M.provider-key "file-entry")
 
 (fn M.hit-prefix
   [ref]
@@ -66,5 +67,37 @@
     (if (not r.preview-lnum)
         (set r.preview-lnum 1))
     (text.preview-lines session r height read-file-lines-cached)))
+
+(fn normalize-target-path
+  [old-path text]
+  (let [trimmed (vim.trim (or text ""))]
+    (if (or (= trimmed "") (= trimmed old-path))
+        old-path
+        (let [cwd (vim.fn.getcwd)
+              candidate (vim.fn.fnamemodify trimmed ":p")]
+          (if (vim.startswith candidate cwd)
+              candidate
+              (vim.fn.fnamemodify (.. cwd "/" trimmed) ":p"))))))
+
+(fn M.apply-write-ops!
+  [ops]
+  (let [renames {}
+        touched-paths {}]
+    (var total 0)
+    (var any-write false)
+    (each [path per-file (pairs (or ops {}))]
+      (when (and (= (# (or per-file [])) 1)
+                 (= (or (and (. per-file 1) (. (. per-file 1) :kind)) "") :replace))
+        (let [op (. per-file 1)
+              target (normalize-target-path path (. op :text))]
+          (when (~= target path)
+            (when (= (vim.fn.mkdir (vim.fn.fnamemodify target ":h") "p") 1) true)
+            (let [[ok] [(pcall vim.loop.fs_rename path target)]]
+              (when ok
+                (set any-write true)
+                (set total (+ total 1))
+                (set (. touched-paths path) true)
+                (set (. renames path) target)))))))
+    {:wrote any-write :changed total :post-lines {} :paths touched-paths :renames renames}))
 
 M
