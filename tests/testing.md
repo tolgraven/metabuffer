@@ -27,6 +27,12 @@ This repo now has two parallelized suites:
   - `TEST_MAX_JOBS=16 ./scripts/test-mini.sh`
 - Rerun a single file:
   - `./scripts/test-mini.sh tests/unit/test_query_unit.lua`
+- Run a whole category/directory:
+  - `./scripts/test-mini.sh edit`
+  - `./scripts/test-mini.sh persistence`
+  - `./scripts/test-mini.sh project`
+  - `./scripts/test-mini.sh screen`
+  - `./scripts/test-mini.sh unit`
 - Rerun only previously failing files:
   - `TEST_FAILED_ONLY=1 ./scripts/test-mini.sh`
 
@@ -101,10 +107,11 @@ Key helper coverage:
 - In-place line replacements from results edit mode write back to the owned source line only.
 - Replacement writeback preserves overall project line totals.
 
+### `tests/screen/edit/test_screen_edit_regular_writeback.lua`
+- Regular/plain Meta writeback coverage for contiguous edits, filtered regular inserts/replacements, and direct project-result inserts.
+
 ### `tests/screen/edit/test_screen_edit_structural_writeback.lua`
-- Contiguous plain-buffer edits patch the real file region in place.
 - Sparse project inserts from `o`/`O`/`p`/`P` anchor to exactly one owned source line and leave other files untouched.
-- Inserted sparse result rows accept to the new source line and survive jump-list return back into Meta.
 
 ### `tests/screen/project/test_screen_project_file_mode_binary.lua`
 - `-binary` exclusion from file-entry mode.

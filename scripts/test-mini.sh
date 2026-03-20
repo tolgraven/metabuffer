@@ -132,6 +132,18 @@ if [[ ${#FILTERS[@]} -gt 0 ]]; then
   for file in "${TEST_FILES[@]}"; do
     for f in "${FILTERS[@]}"; do
       [[ -z "$f" ]] && continue
+      if [[ -d "tests/$f" ]] && [[ "$file" == tests/$f/* ]]; then
+        FILTERED+=("$file")
+        break
+      fi
+      if [[ -d "tests/screen/$f" ]] && [[ "$file" == tests/screen/$f/* ]]; then
+        FILTERED+=("$file")
+        break
+      fi
+      if [[ -d "tests/unit/$f" ]] && [[ "$file" == tests/unit/$f/* ]]; then
+        FILTERED+=("$file")
+        break
+      fi
       if [[ "$file" == "$f" ]]; then
         FILTERED+=("$file")
         break
