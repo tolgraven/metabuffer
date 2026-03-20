@@ -425,29 +425,30 @@
 
       (fn self.refresh_statusline
         []
-        (let [mode-state (statusline-mode-state)
-              hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")]
-          (self.status-win.set-statusline-state
-            (. mode-state :group)
-            (. mode-state :label)
-            self.buf.name
-            (# self.buf.indices)
-            (self.buf.line-count)
-            (self.selected_line)
-            (results-statusline-left self)
-            (results-statusline-right self)
-            (. (self.matcher) :name)
-            (self.case)
-            hl-prefix
-            (self.syntax))
-          (when (and self.session
-                     self.session.prompt-win
-                     (vim.api.nvim_win_is_valid self.session.prompt-win))
-            (pcall vim.api.nvim_set_option_value
-                   "statusline"
-                   (prompt-statusline-text self)
-                   {:win self.session.prompt-win}))
-          (vim.cmd "redrawstatus")))
+        (when-not (and self.session self.session.ui-hidden)
+          (let [mode-state (statusline-mode-state)
+                hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")]
+            (self.status-win.set-statusline-state
+              (. mode-state :group)
+              (. mode-state :label)
+              self.buf.name
+              (# self.buf.indices)
+              (self.buf.line-count)
+              (self.selected_line)
+              (results-statusline-left self)
+              (results-statusline-right self)
+              (. (self.matcher) :name)
+              (self.case)
+              hl-prefix
+              (self.syntax))
+            (when (and self.session
+                       self.session.prompt-win
+                       (vim.api.nvim_win_is_valid self.session.prompt-win))
+              (pcall vim.api.nvim_set_option_value
+                     "statusline"
+                     (prompt-statusline-text self)
+                     {:win self.session.prompt-win}))
+            (vim.cmd "redrawstatus"))))
 
       (fn self.on-init
         []

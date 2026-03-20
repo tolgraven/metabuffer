@@ -496,39 +496,43 @@ M.new = function(nvim, condition)
     end
   end
   self.refresh_statusline = function()
-    local mode_state = statusline_mode_state()
-    local hl_prefix
-    if (self.buf["syntax-type"] == "meta") then
-      hl_prefix = "Meta"
+    if not (self.session and self.session["ui-hidden"]) then
+      local mode_state = statusline_mode_state()
+      local hl_prefix
+      if (self.buf["syntax-type"] == "meta") then
+        hl_prefix = "Meta"
+      else
+        hl_prefix = "Buffer"
+      end
+      self["status-win"]["set-statusline-state"](mode_state.group, mode_state.label, self.buf.name, #self.buf.indices, self.buf["line-count"](), self.selected_line(), results_statusline_left(self), results_statusline_right(self), self.matcher().name, self.case(), hl_prefix, self.syntax())
+      if (self.session and self.session["prompt-win"] and vim.api.nvim_win_is_valid(self.session["prompt-win"])) then
+        pcall(vim.api.nvim_set_option_value, "statusline", prompt_statusline_text(self), {win = self.session["prompt-win"]})
+      else
+      end
+      return vim.cmd("redrawstatus")
     else
-      hl_prefix = "Buffer"
+      return nil
     end
-    self["status-win"]["set-statusline-state"](mode_state.group, mode_state.label, self.buf.name, #self.buf.indices, self.buf["line-count"](), self.selected_line(), results_statusline_left(self), results_statusline_right(self), self.matcher().name, self.case(), hl_prefix, self.syntax())
-    if (self.session and self.session["prompt-win"] and vim.api.nvim_win_is_valid(self.session["prompt-win"])) then
-      pcall(vim.api.nvim_set_option_value, "statusline", prompt_statusline_text(self), {win = self.session["prompt-win"]})
-    else
-    end
-    return vim.cmd("redrawstatus")
   end
   self["on-init"] = function()
-    local function _63_()
+    local function _64_()
       if self["project-mode"] then
         return project_display_name()
       else
         return metabuffer_display_name(self.buf.model)
       end
     end
-    self.buf["set-name"](_63_())
+    self.buf["set-name"](_64_())
     do
       local init_syntax = (vim.g["meta#syntax_on_init"] or "buffer")
-      local function _64_()
+      local function _65_()
         if (init_syntax == "meta") then
           return "meta"
         else
           return "buffer"
         end
       end
-      self.buf["apply-syntax"](_64_())
+      self.buf["apply-syntax"](_65_())
     end
     self.buf["visible-source-syntax-only"] = not not cond["project-mode"]
     clear_all_highlights()
@@ -582,25 +586,25 @@ M.new = function(nvim, condition)
       end
       local prev_matcher_name = (self["_prev-matcher"] or matcher_name)
       local prev_cache_key
-      local _69_
+      local _70_
       if prev_ignorecase then
-        _69_ = "1"
+        _70_ = "1"
       else
-        _69_ = "0"
+        _70_ = "0"
       end
-      prev_cache_key = (prev_matcher_name .. "|" .. _69_ .. "|" .. (prev_text or ""))
+      prev_cache_key = (prev_matcher_name .. "|" .. _70_ .. "|" .. (prev_text or ""))
       local line_count = #self.buf.content
       local cache_grew_3f = (line_count > self["_filter-cache-line-count"])
       local cache_shrank_3f = (line_count < self["_filter-cache-line-count"])
       local cache_reset_3f = cache_shrank_3f
       local cache_key
-      local _71_
+      local _72_
       if ignorecase then
-        _71_ = "1"
+        _72_ = "1"
       else
-        _71_ = "0"
+        _72_ = "0"
       end
-      cache_key = (matcher_name .. "|" .. _71_ .. "|" .. effective_query)
+      cache_key = (matcher_name .. "|" .. _72_ .. "|" .. effective_query)
       local reset0_3f = ((prev_text == "") or not vim.startswith(self.text, prev_text) or bang_token_completed_3f(prev_text, self.text) or cache_grew_3f or cache_reset_3f or (self["_prev-ignorecase"] ~= ignorecase) or (self["_prev-matcher"] ~= matcher_name))
       local narrow_reuse_threshold = (vim.g.meta_narrow_reuse_threshold or 400)
       local narrow_reuse_3f = (reset0_3f and vim.startswith(self.text, prev_text) and (matcher_name == "all") and not negation_growth_broadens_3f(prev_text, self.text) and (#prev_text > 0) and (#self.text > #prev_text) and (#prev_hits <= narrow_reuse_threshold))
@@ -684,14 +688,14 @@ M.new = function(nvim, condition)
       local refs = (self.buf["source-refs"] or {})
       local file_filtered = apply_file_entry_filter(self.buf.indices, refs, self["file-query-lines"], ignorecase, self["include-files"], (#queries > 0))
       local expanded
-      local or_83_ = (self.session and self.session["read-file-lines-cached"])
-      if not or_83_ then
-        local function _84_(path, _opts)
+      local or_84_ = (self.session and self.session["read-file-lines-cached"])
+      if not or_84_ then
+        local function _85_(path, _opts)
           return vim.fn.readfile(path)
         end
-        or_83_ = _84_
+        or_84_ = _85_
       end
-      expanded = expand_mod["expanded-indices"](self.session, file_filtered, refs, {mode = ((self.session and self.session["expansion-mode"]) or "none"), ["read-file-lines-cached"] = or_83_, ["around-lines"] = (vim.g.meta_context_around_lines or 3), ["max-blocks"] = (vim.g.meta_context_max_blocks or 24)})
+      expanded = expand_mod["expanded-indices"](self.session, file_filtered, refs, {mode = ((self.session and self.session["expansion-mode"]) or "none"), ["read-file-lines-cached"] = or_84_, ["around-lines"] = (vim.g.meta_context_around_lines or 3), ["max-blocks"] = (vim.g.meta_context_max_blocks or 24)})
       local _
       self.buf.indices = expanded
       _ = nil

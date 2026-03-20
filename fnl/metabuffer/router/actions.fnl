@@ -32,6 +32,22 @@
              wrapper.destroy)
     (pcall wrapper.destroy)))
 
+(fn restore-window-wrapper-opts!
+  [wrapper]
+  (when (and wrapper
+             wrapper.window
+             (vim.api.nvim_win_is_valid wrapper.window)
+             wrapper.restore-opts)
+    (pcall wrapper.restore-opts)))
+
+(fn apply-window-wrapper-opts!
+  [wrapper opts]
+  (when (and wrapper
+             wrapper.window
+             (vim.api.nvim_win_is_valid wrapper.window)
+             wrapper.apply-opts)
+    (pcall wrapper.apply-opts opts)))
+
 (fn restore-main-window-opts!
   [session]
   "Restore the original local options for Meta-managed windows."
@@ -41,6 +57,36 @@
     (when (and status-win
                (~= status-win main-win))
       (destroy-window-wrapper! status-win))))
+
+(fn suspend-main-window-opts!
+  [session]
+  "Temporarily restore origin window-local options while keeping wrappers reusable."
+  (let [main-win (and session session.meta session.meta.win)
+        status-win (and session session.meta session.meta.status-win)]
+    (restore-window-wrapper-opts! main-win)
+    (when (and status-win
+               (~= status-win main-win))
+      (restore-window-wrapper-opts! status-win))
+    (each [_ win (ipairs [(and main-win main-win.window)
+                          (and status-win status-win.window)])]
+      (when (and win (vim.api.nvim_win_is_valid win))
+        (pcall vim.api.nvim_win_del_var win "airline_disable_statusline")))))
+
+(fn resume-main-window-opts!
+  [deps session]
+  "Reapply Meta window-local options after a hidden session becomes visible again."
+  (let [meta-window-mod (. (. deps :mods) :meta-window)
+        opts (or (and meta-window-mod (. meta-window-mod :default-opts)) {})
+        main-win (and session session.meta session.meta.win)
+        status-win (and session session.meta session.meta.status-win)]
+    (apply-window-wrapper-opts! main-win opts)
+    (when (and status-win
+               (~= status-win main-win))
+      (apply-window-wrapper-opts! status-win opts))
+    (each [_ win (ipairs [(and main-win main-win.window)
+                          (and status-win status-win.window)])]
+      (when (and win (vim.api.nvim_win_is_valid win))
+        (pcall vim.api.nvim_win_set_var win "airline_disable_statusline" 1)))))
 
 (fn restore-managed-buffer-effects!
   [session]
@@ -125,6 +171,23 @@
       (set (. wo :wrap) true)
       (set (. wo :linebreak) true))))
 
+(fn wipe-replaced-split-buffer!
+  [win next-buf]
+  "Delete the temporary unnamed split buffer created by :new before reattaching prompt."
+  (when (and win (vim.api.nvim_win_is_valid win))
+    (let [old-buf (vim.api.nvim_win_get_buf win)]
+      (when (and old-buf
+                 (~= old-buf next-buf)
+                 (vim.api.nvim_buf_is_valid old-buf))
+        (let [bo (. vim.bo old-buf)
+              listed? (. bo :buflisted)
+              lines (vim.api.nvim_buf_line_count old-buf)
+              name (vim.api.nvim_buf_get_name old-buf)]
+          (when (and (<= lines 1)
+                     (= (or name "") "")
+                     (not listed?))
+            (pcall vim.api.nvim_buf_delete old-buf {:force true})))))))
+
 (fn hide-session-ui!
   [deps session]
   (let [{: router : mods : windows : history} deps
@@ -150,6 +213,7 @@
     (set session.prompt-win nil)
     (when (and session.meta session.meta.buf session.meta.buf.buffer)
       (clear-buffer-modified! session.meta.buf.buffer))
+    (suspend-main-window-opts! session)
     (info-window.close-window! session)
     (preview-window.close-window! session)
     (when (and context-window context-window.close-window!)
@@ -186,6 +250,7 @@
                              (vim.cmd (.. "botright " (tostring height) "new"))
                              (vim.api.nvim_get_current_win)))]
         (set session.prompt-win prompt-win)
+        (wipe-replaced-split-buffer! prompt-win session.prompt-buf)
         (pcall vim.api.nvim_win_set_height prompt-win height)
         (pcall vim.api.nvim_win_set_buf prompt-win session.prompt-buf)
         (let [bo (. vim.bo session.prompt-buf)]
@@ -198,6 +263,7 @@
         (sync-prompt-buffer-name! session)
         (set curr.status-win curr.win)
         (set session.ui-hidden false)
+        (resume-main-window-opts! deps session)
         (when (and curr curr.buf curr.buf.buffer (vim.api.nvim_buf_is_valid curr.buf.buffer))
           (let [bo (. vim.bo curr.buf.buffer)]
             (set curr.buf.keep-modifiable true)

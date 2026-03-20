@@ -60,6 +60,26 @@ local function open_split_win_21(origin_win, local_layout_3f, start_height)
   open_21 = _1_
   return with_split_mins(open_21)
 end
+local function wipe_replaced_split_buffer_21(win, next_buf)
+  if (win and vim.api.nvim_win_is_valid(win)) then
+    local old_buf = vim.api.nvim_win_get_buf(win)
+    if (old_buf and (old_buf ~= next_buf) and vim.api.nvim_buf_is_valid(old_buf)) then
+      local bo = vim.bo[old_buf]
+      local listed_3f = bo.buflisted
+      local lines = vim.api.nvim_buf_line_count(old_buf)
+      local name = vim.api.nvim_buf_get_name(old_buf)
+      if ((lines <= 1) and ((name or "") == "") and not listed_3f) then
+        return pcall(vim.api.nvim_buf_delete, old_buf, {force = true})
+      else
+        return nil
+      end
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
 local function float_config(origin_win, start_height)
   local host
   if (origin_win and vim.api.nvim_win_is_valid(origin_win)) then
@@ -118,23 +138,24 @@ M["handoff-to-split!"] = function(nvim, prompt_win, opts)
   local old_win = prompt_win.window
   local buf = prompt_win.buffer
   local saved_view
-  local and_9_ = origin_win and vim.api.nvim_win_is_valid(origin_win)
-  if and_9_ then
-    local function _10_()
+  local and_12_ = origin_win and vim.api.nvim_win_is_valid(origin_win)
+  if and_12_ then
+    local function _13_()
       return vim.fn.winsaveview()
     end
-    and_9_ = vim.api.nvim_win_call(origin_win, _10_)
+    and_12_ = vim.api.nvim_win_call(origin_win, _13_)
   end
-  saved_view = and_9_
+  saved_view = and_12_
   local split_win = open_split_win_21(origin_win, local_layout_3f, height)
+  wipe_replaced_split_buffer_21(split_win, buf)
   pcall(vim.api.nvim_win_set_buf, split_win, buf)
   pcall(vim.api.nvim_win_set_height, split_win, height)
   prompt_window_opts_21(split_win)
   if (origin_win and saved_view and vim.api.nvim_win_is_valid(origin_win)) then
-    local function _11_()
+    local function _14_()
       return pcall(vim.fn.winrestview, saved_view)
     end
-    vim.api.nvim_win_call(origin_win, _11_)
+    vim.api.nvim_win_call(origin_win, _14_)
   else
   end
   if (old_win and vim.api.nvim_win_is_valid(old_win)) then

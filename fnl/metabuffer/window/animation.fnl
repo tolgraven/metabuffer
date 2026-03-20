@@ -68,10 +68,7 @@ Expected output: module table or nil."
       (set vim.o.winminheight old-height)
       (set vim.o.winminwidth old-width)
       (set vim.o.equalalways old-equalalways)
-      (cond-> res (not ok) error)
-      (if ok
-          res
-          (error res)))))
+      (cond-> res (not ok) error))))
 
 (fn enabled?
   [session kind]

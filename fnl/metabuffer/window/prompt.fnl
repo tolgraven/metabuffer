@@ -61,6 +61,23 @@
                       (vim.api.nvim_get_current_win))))]
     (with-split-mins open!)))
 
+(fn wipe-replaced-split-buffer!
+  [win next-buf]
+  "Delete the temporary [No Name] split buffer once a real prompt buffer is attached."
+  (when (and win (vim.api.nvim_win_is_valid win))
+    (let [old-buf (vim.api.nvim_win_get_buf win)]
+      (when (and old-buf
+                 (~= old-buf next-buf)
+                 (vim.api.nvim_buf_is_valid old-buf))
+        (let [bo (. vim.bo old-buf)
+              listed? (. bo :buflisted)
+              lines (vim.api.nvim_buf_line_count old-buf)
+              name (vim.api.nvim_buf_get_name old-buf)]
+          (when (and (<= lines 1)
+                     (= (or name "") "")
+                     (not listed?))
+            (pcall vim.api.nvim_buf_delete old-buf {:force true})))))))
+
 (fn float-config
   [origin-win start-height]
   (let [host (if (and origin-win (vim.api.nvim_win_is_valid origin-win))
@@ -114,6 +131,7 @@
                         (vim.api.nvim_win_is_valid origin-win)
                         (vim.api.nvim_win_call origin-win (fn [] (vim.fn.winsaveview))))
         split-win (open-split-win! origin-win local-layout? height)]
+    (wipe-replaced-split-buffer! split-win buf)
     (pcall vim.api.nvim_win_set_buf split-win buf)
     (pcall vim.api.nvim_win_set_height split-win height)
     (prompt-window-opts! split-win)
