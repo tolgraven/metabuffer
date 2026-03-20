@@ -456,6 +456,11 @@
   "Handle manual results-buffer wipe by cleaning hidden/resting session state."
   (router_actions_mod.on-results-buffer-wipe! actions-deps results-buf))
 
+(fn M.remove-session
+  [session]
+  "Remove a session immediately."
+  (remove-session session))
+
 (fn M.maybe-restore-hidden-ui
   [prompt-buf force]
   "Restore hidden prompt/info UI when revisiting a preserved results buffer."

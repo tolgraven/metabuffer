@@ -137,6 +137,8 @@ Key helper coverage:
 - `:Meta <query>` immediate application.
 - Prompt height persistence across invocations.
 - Accept + `MetaResume` restores query/modes.
+- Hidden regular sessions restore on `<C-o>` back to the results buffer.
+- Hidden sessions are pruned once their results buffer falls out of the jumplist.
 
 ### `tests/screen/persistence/test_screen_persistence_statusline_prompt_only.lua`
 - Prompt statusline keeps mode/count/key-hint content while the main results statusline only shows runtime state.

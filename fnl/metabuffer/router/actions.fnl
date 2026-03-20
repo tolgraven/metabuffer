@@ -229,16 +229,11 @@
 
 (fn finish-accept
   [deps session]
-  (let [{: router : mods : history : refresh} deps
-        active-by-prompt (. router :active-by-prompt)
-        router-prompt-mod (. mods :router-prompt)
-        sign-mod (. mods :sign)
+  (let [{: mods : history : refresh} deps
         router-util-mod (. mods :router-util)
-        session-view (. mods :session-view)
         base-buffer (. mods :base-buffer)
         history-api (. history :api)
         apply-prompt-lines (. refresh :apply-prompt-lines!)
-        wrapup (. refresh :wrapup)
         curr session.meta]
     (set session.last-prompt-text (router-util-mod.prompt-text session))
     (history-api.push-history-entry! session session.last-prompt-text)
@@ -276,27 +271,13 @@
       (when (~= vq "")
         (vim.fn.setreg "/" vq)
         (set vim.o.hlsearch true)))
-    (if session.project-mode
-        (do
-          ;; Accept should exit visible Meta UI, but keep resumable state so
-          ;; returning to the results buffer restores prompt/info/selection.
-          (pcall vim.cmd "stopinsert")
-          (clear-hit-highlight! curr)
-          (set session.results-edit-mode false)
-          (hide-session-ui! deps session))
-        (vim.schedule
-          (fn []
-            (when (= (. active-by-prompt session.prompt-buf) session)
-              (router-prompt-mod.begin-session-close!
-                session
-                router-prompt-mod.cancel-prompt-update!)
-              (pcall vim.cmd "stopinsert")
-              (clear-hit-highlight! curr)
-              (when sign-mod
-                (sign-mod.clear-change-signs! curr.buf.buffer))
-              (session-view.wipe-temp-buffers curr)
-              (remove-session! deps session)
-              (wrapup curr)))))
+    (do
+      ;; Accept should exit visible Meta UI, but keep resumable state so
+      ;; returning to the results buffer restores prompt/info/selection.
+      (pcall vim.cmd "stopinsert")
+      (clear-hit-highlight! curr)
+      (set session.results-edit-mode false)
+      (hide-session-ui! deps session))
     curr))
 
 (fn finish-cancel

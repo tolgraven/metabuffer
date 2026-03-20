@@ -133,6 +133,24 @@
               (set found win)))
           found)))
 
+    (fn hidden-session-reachable?
+      [session]
+      (let [results-buf (and session session.meta session.meta.buf session.meta.buf.buffer)]
+        (if (not (and results-buf (vim.api.nvim_buf_is_valid results-buf)))
+            false
+            (if (= (vim.api.nvim_get_current_buf) results-buf)
+                true
+                (let [raw (vim.fn.getjumplist)
+                      jumps (if (and (= (type raw) "table") (= (type (. raw 1)) "table"))
+                                (. raw 1)
+                                [])]
+                  (let [hit0 false]
+                    (var hit hit0)
+                    (each [_ item (ipairs (or jumps []))]
+                      (when (= (or (. item :bufnr) (. item "bufnr")) results-buf)
+                        (set hit true)))
+                    hit))))))
+
     (fn control-token-style
       [tok]
       (let [token (or tok "")
@@ -675,6 +693,16 @@
                        (schedule-when-valid session
                          (fn []
                            (pcall session.meta.refresh_statusline))))} )
+        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
+          {:group aug
+           :callback (fn [_]
+                       (vim.schedule
+                         (fn []
+                           (when (and session.ui-hidden
+                                      session.prompt-buf
+                                      (= (. active-by-prompt session.prompt-buf) session)
+                                      (not (hidden-session-reachable? session)))
+                             (pcall router.remove-session session)))))} )
         (vim.api.nvim_create_autocmd "BufLeave"
           {:group aug
            :buffer session.meta.buf.buffer

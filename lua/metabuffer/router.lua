@@ -304,6 +304,9 @@ end
 M["results-buffer-wiped"] = function(results_buf)
   return router_actions_mod["on-results-buffer-wipe!"](actions_deps, results_buf)
 end
+M["remove-session"] = function(session)
+  return remove_session(session)
+end
 M["maybe-restore-hidden-ui"] = function(prompt_buf, force)
   local function _36_()
     if (force == nil) then

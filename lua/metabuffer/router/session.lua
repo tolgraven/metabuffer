@@ -474,7 +474,7 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
   local query1 = query0
   local source_buf = vim.api.nvim_get_current_buf()
   local existing = active_by_source[source_buf]
-  if (existing and existing["ui-hidden"] and maybe_restore_hidden_ui_21 and existing.meta and existing.meta.buf and (source_buf == existing.meta.buf.buffer)) then
+  if (existing and existing["ui-hidden"] and maybe_restore_hidden_ui_21 and existing.meta and existing.meta.buf and ((source_buf == existing.meta.buf.buffer) or (source_buf == existing["origin-buf"]))) then
     maybe_restore_hidden_ui_21(existing, true)
     return existing.meta
   else

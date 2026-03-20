@@ -388,7 +388,8 @@
                  maybe-restore-hidden-ui!
                  existing.meta
                  existing.meta.buf
-                 (= source-buf existing.meta.buf.buffer))
+                 (or (= source-buf existing.meta.buf.buffer)
+                     (= source-buf existing.origin-buf)))
             (do
               (maybe-restore-hidden-ui! existing true)
               existing.meta)
