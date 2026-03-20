@@ -491,6 +491,8 @@
           prev-hits (vim.deepcopy (or self.buf.indices []))
           prev-rank (math.max 1 (+ self.selected_index 1))
           prev-line (line_of_index self.buf self.selected_index)
+          anchor-line (or (and (= (# prev-hits) 0) self._no-hits-anchor-line)
+                          prev-line)
           effective-query (table.concat queries "\n")
           matcher-name (. (self.matcher) :name)
           ignorecase (self.ignorecase)
@@ -530,7 +532,7 @@
                       (not narrow-reuse?)
                       (or (not shortened?)
                           broaden-on-delete?))]
-      (set (. self._selection-cache prev-cache-key) prev-line)
+      (set (. self._selection-cache prev-cache-key) anchor-line)
       (when cache-reset?
         (set self._filter-cache {})
         (set self._filter-cache-line-count line-count))
@@ -611,6 +613,9 @@
                         :around-lines (or vim.g.meta_context_around_lines 3)
                         :max-blocks (or vim.g.meta_context_max_blocks 24)})
             _ (set self.buf.indices expanded)
+            _ (if (= (# self.buf.indices) 0)
+                  (set self._no-hits-anchor-line anchor-line)
+                  (set self._no-hits-anchor-line nil))
             hits-changed (if (= prev-hits self.buf.indices)
                              false
                              (if (~= (# prev-hits) (# self.buf.indices))
@@ -620,7 +625,7 @@
       (when needs-render?
         (self.buf.render))
       (when needs-render?
-        (let [preferred-line (or (. self._selection-cache cache-key) prev-line)
+        (let [preferred-line (or (. self._selection-cache cache-key) anchor-line)
               preferred-rank (math.max 1 (math.min prev-rank (# self.buf.indices)))]
         (var idx nil)
         (if broaden-on-delete?

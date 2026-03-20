@@ -40,6 +40,7 @@
   (when (and meta (vim.api.nvim_win_is_valid meta.win.window))
     (let [line-count (vim.api.nvim_buf_line_count meta.buf.buffer)
           line (math.max 1 (math.min (meta.selected_line) line-count))
+          win-height (math.max 1 (vim.api.nvim_win_get_height meta.win.window))
           current-view (vim.api.nvim_win_call meta.win.window (fn [] (vim.fn.winsaveview)))
           src-view (or source-view {})
           ;; Only use source-view for topline/scroll-offset if we are not in project-mode
@@ -53,7 +54,12 @@
           base-lnum (or (. base-view :lnum) line)
           base-topline (or (. base-view :topline) base-lnum)
           offset (math.max 0 (- base-lnum base-topline))
-          topline (math.max 1 (math.min (- line offset) line-count))]
+          unclamped-topline (math.max 1 (math.min (- line offset) line-count))
+          topline (if (<= line-count win-height)
+                      1
+                      (math.max 1
+                                (math.min unclamped-topline
+                                          (math.max 1 (+ (- line-count win-height) 1)))))]
       (vim.api.nvim_win_call meta.win.window
         (fn []
           (let [view (vim.fn.winsaveview)]

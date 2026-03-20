@@ -575,6 +575,7 @@ M.new = function(nvim, condition)
       local prev_hits = vim.deepcopy((self.buf.indices or {}))
       local prev_rank = math.max(1, (self.selected_index + 1))
       local prev_line = line_of_index(self.buf, self.selected_index)
+      local anchor_line = (((#prev_hits == 0) and self["_no-hits-anchor-line"]) or prev_line)
       local effective_query = table.concat(queries, "\n")
       local matcher_name = self.matcher().name
       local ignorecase = self.ignorecase()
@@ -611,7 +612,7 @@ M.new = function(nvim, condition)
       local shortened_3f = (#self.text < #prev_text)
       local broaden_on_delete_3f = (shortened_3f and deletion_broadens_3f(prev_text, self.text))
       local reset_3f = (reset0_3f and not narrow_reuse_3f and (not shortened_3f or broaden_on_delete_3f))
-      self["_selection-cache"][prev_cache_key] = prev_line
+      self["_selection-cache"][prev_cache_key] = anchor_line
       if cache_reset_3f then
         self["_filter-cache"] = {}
         self["_filter-cache-line-count"] = line_count
@@ -699,6 +700,14 @@ M.new = function(nvim, condition)
       local _
       self.buf.indices = expanded
       _ = nil
+      local _0
+      if (#self.buf.indices == 0) then
+        self["_no-hits-anchor-line"] = anchor_line
+        _0 = nil
+      else
+        self["_no-hits-anchor-line"] = nil
+        _0 = nil
+      end
       local hits_changed
       if (prev_hits == self.buf.indices) then
         hits_changed = false
@@ -715,7 +724,7 @@ M.new = function(nvim, condition)
       else
       end
       if needs_render_3f then
-        local preferred_line = (self["_selection-cache"][cache_key] or prev_line)
+        local preferred_line = (self["_selection-cache"][cache_key] or anchor_line)
         local preferred_rank = math.max(1, math.min(prev_rank, #self.buf.indices))
         local idx = nil
         if broaden_on_delete_3f then
@@ -744,7 +753,7 @@ M.new = function(nvim, condition)
       else
       end
       local matcher = self.matcher()
-      for _0, m in ipairs(self.mode.matcher.candidates) do
+      for _1, m in ipairs(self.mode.matcher.candidates) do
         if (m and (m ~= matcher)) then
           m["remove-highlight"](m)
         else
