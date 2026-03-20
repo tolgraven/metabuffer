@@ -481,7 +481,10 @@
               ref (and idx (. (or session.meta.buf.source-refs []) idx))]
           (when (and ref ref.path ref.lnum)
             (set session.pending-structural-edit
-                 {:path ref.path :lnum ref.lnum :side side})))))
+                 {:path ref.path
+                  :lnum ref.lnum
+                  :side side
+                  :kind (or ref.kind "")})))))
 
     (fn apply-results-edit-keymaps
       [session]

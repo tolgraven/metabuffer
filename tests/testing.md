@@ -104,6 +104,7 @@ Key helper coverage:
 ### `tests/screen/edit/test_screen_edit_structural_writeback.lua`
 - Contiguous plain-buffer edits patch the real file region in place.
 - Sparse project inserts from `o`/`O`/`p`/`P` anchor to exactly one owned source line and leave other files untouched.
+- Inserted sparse result rows accept to the new source line and survive jump-list return back into Meta.
 
 ### `tests/screen/project/test_screen_project_file_mode_binary.lua`
 - `-binary` exclusion from file-entry mode.

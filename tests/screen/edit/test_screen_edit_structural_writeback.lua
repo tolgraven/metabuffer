@@ -91,6 +91,87 @@ T['sparse project edits anchor inserts to one source line only'] = H.timed_case(
   ]], root .. '/lua/mod.lua')), lua_before)
 end)
 
+T['sparse project lowercase o inserts after the owned line only'] = H.timed_case(function()
+  local root = H.make_temp_project()
+  local main_before = child.lua_get(string.format([[
+    return vim.fn.readfile(%q)
+  ]], root .. '/main.txt'))
+
+  H.open_project_meta_in_dir(root, 'main.txt')
+  H.type_prompt_text('other')
+  H.wait_for(function()
+    return H.session_hit_count() == 1
+  end, 6000)
+
+  child.cmd('stopinsert')
+  enter_results_edit_mode()
+  child.type_keys('o')
+  child.type_keys('insert-after-other')
+  child.type_keys('<Esc>')
+  child.cmd('write')
+
+  eq(child.lua_get(string.format([[
+    return vim.fn.readfile(%q)
+  ]], root .. '/doc/readme.md')), { 'meta docs', 'metam docs', 'other', 'insert-after-other' })
+  eq(child.lua_get(string.format([[
+    return vim.fn.readfile(%q)
+  ]], root .. '/main.txt')), main_before)
+end)
+
+T['inserted sparse result opens inserted source line and restores Meta on jump back'] = H.timed_case(function()
+  local root = H.make_temp_project()
+
+  H.open_project_meta_in_dir(root, 'main.txt')
+  H.type_prompt_text('other')
+  H.wait_for(function()
+    return H.session_hit_count() == 1
+  end, 6000)
+
+  child.cmd('stopinsert')
+  enter_results_edit_mode()
+  child.type_keys('o')
+  child.type_keys('insert-after-other')
+  child.type_keys('<Esc>')
+  child.cmd('write')
+
+  H.wait_for(function()
+    return child.lua_get(string.format([[
+      (function()
+        local lines = vim.fn.readfile(%q)
+        return lines[4] == 'insert-after-other'
+      end)()
+    ]], root .. '/doc/readme.md'))
+  end, 3000)
+
+  child.type_keys('j')
+  child.type_keys('<CR>')
+
+  H.wait_for(function()
+    return child.lua_get(string.format([[
+      (function()
+        return vim.api.nvim_buf_get_name(0) == %q and vim.fn.line('.') == 4
+      end)()
+    ]], root .. '/doc/readme.md'))
+  end, 4000)
+
+  child.cmd('normal! <C-o>')
+
+  H.wait_for(function()
+    return H.session_active()
+  end, 4000)
+  H.wait_for(function()
+    return child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not s then return false end
+        local pwin = s['prompt-win']
+        return pwin and vim.api.nvim_win_is_valid(pwin)
+      end)()
+    ]])
+  end, 4000)
+end)
+
 T['sparse project paste uses the owned line as after-anchor only'] = H.timed_case(function()
   local root = H.make_temp_project()
   local doc_before = child.lua_get(string.format([[

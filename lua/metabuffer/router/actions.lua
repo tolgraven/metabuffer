@@ -781,16 +781,28 @@ local function inserted_row(session, prev_row, next_row, text, rel_index)
   local out = vim.deepcopy(base)
   local prev_lnum = ((prev_row and prev_row.lnum) or base.lnum or 1)
   local next_lnum = ((next_row and next_row.lnum) or base.lnum or (prev_lnum + 1))
-  local lnum
-  if prev_row then
-    lnum = (prev_lnum + rel_index)
-  else
-    lnum = math.max(1, (next_lnum - 1))
-  end
   local pending = (session["pending-structural-edit"] or {})
   local pending_side = pending.side
   local pending_path = pending.path
   local pending_lnum = pending.lnum
+  local lnum
+  if consecutive_same_source_3f(prev_row, next_row) then
+    lnum = (prev_lnum + rel_index)
+  else
+    if ((pending_side == "after") and prev_row and (pending_path == prev_row.path) and (pending_lnum == prev_row.lnum)) then
+      lnum = (pending_lnum + rel_index)
+    else
+      if ((pending_side == "before") and next_row and (pending_path == next_row.path) and (pending_lnum == next_row.lnum)) then
+        lnum = (pending_lnum + rel_index + -1)
+      else
+        if prev_row then
+          lnum = (prev_lnum + rel_index)
+        else
+          lnum = math.max(1, (next_lnum - 1))
+        end
+      end
+    end
+  end
   out["lnum"] = math.max(1, (lnum or 1))
   out["text"] = (text or "")
   out["line"] = (text or "")
@@ -819,11 +831,11 @@ local function projected_rows_from_edits(session, baseline_rows, baseline_lines,
   local out = {}
   local idx = {old = 1, new = 1}
   for _, h in ipairs(hunks) do
-    local _let_95_ = hunk_indices(h)
-    local a_start = _let_95_[1]
-    local a_count = _let_95_[2]
-    local b_start = _let_95_[3]
-    local b_count = _let_95_[4]
+    local _let_98_ = hunk_indices(h)
+    local a_start = _let_98_[1]
+    local a_count = _let_98_[2]
+    local b_start = _let_98_[3]
+    local b_count = _let_98_[4]
     local common = math.min(a_count, b_count)
     while (idx.old < a_start) do
       local txt = (current_lines[idx.new] or "")
@@ -870,7 +882,6 @@ local function apply_live_edits_to_meta_21(session, current_lines)
   local content = {}
   local idxs = {}
   session["live-edit-rows"] = rows
-  session["pending-structural-edit"] = nil
   for i = 1, #rows do
     local row = (rows[i] or {})
     refs[i] = {kind = (row.kind or ""), path = (row.path or ""), lnum = (row.lnum or 1), ["open-lnum"] = (row["open-lnum"] or row.lnum or 1), line = (row.text or row.line or "")}
@@ -919,22 +930,35 @@ local function structural_op_from_current_rows(current_rows, start, count)
     return nil
   end
 end
+local function pending_structural_op(session, start, count, current_lines, fallback_kind)
+  local pending = (session["pending-structural-edit"] or {})
+  local path = pending.path
+  local lnum = pending.lnum
+  local side = pending.side
+  local ref_kind = (pending.kind or fallback_kind or "")
+  if ((type(path) == "string") and (path ~= "") and (type(lnum) == "number") and (lnum > 0) and ((side == "before") or (side == "after")) and (count > 0) and (ref_kind ~= "file-entry")) then
+    return {path = path, lnum = lnum, side = side, lines = slice_lines(current_lines, start, count), ["ref-kind"] = ref_kind}
+  else
+    return nil
+  end
+end
 local function collect_file_ops(session)
   local meta = session.meta
   local buf = meta.buf.buffer
   local baseline_lines = (session["edit-baseline-lines"] or vim.api.nvim_buf_get_lines(buf, 0, -1, false))
   local baseline_rows = (session["edit-baseline-rows"] or {})
   local current_lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  local current_rows = (session["live-edit-rows"] or {})
+  local current_rows = projected_rows_from_edits(session, baseline_rows, baseline_lines, current_lines)
   local hunks = diff_hunks(baseline_lines, current_lines)
   local ops = {}
   local state = {["unsafe-structural?"] = false}
+  session["live-edit-rows"] = current_rows
   for _, h in ipairs(hunks) do
-    local _let_101_ = hunk_indices(h)
-    local a_start = _let_101_[1]
-    local a_count = _let_101_[2]
-    local b_start = _let_101_[3]
-    local b_count = _let_101_[4]
+    local _let_105_ = hunk_indices(h)
+    local a_start = _let_105_[1]
+    local a_count = _let_105_[2]
+    local b_start = _let_105_[3]
+    local b_count = _let_105_[4]
     local common = math.min(a_count, b_count)
     local old_rows = slice_lines(baseline_rows, a_start, a_count)
     local new_lines = slice_lines(current_lines, b_start, b_count)
@@ -959,23 +983,7 @@ local function collect_file_ops(session)
       else
       end
       if (b_count > a_count) then
-        local insert_op = structural_op_from_current_rows(current_rows, (b_start + common), (b_count - common))
-        if insert_op then
-          local _105_
-          if (insert_op.side == "before") then
-            _105_ = "insert-before"
-          else
-            _105_ = "insert-after"
-          end
-          append_op_21(ops, insert_op.path, {kind = _105_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
-        else
-          state["unsafe-structural?"] = true
-        end
-      else
-      end
-    else
-      if (b_count > 0) then
-        local insert_op = structural_op_from_current_rows(current_rows, b_start, b_count)
+        local insert_op = (structural_op_from_current_rows(current_rows, (b_start + common), (b_count - common)) or pending_structural_op(session, (b_start + common), (b_count - common), current_lines, ((old_rows[common] and old_rows[common].kind) or (old_rows[(common + 1)] and old_rows[(common + 1)].kind) or "")))
         if insert_op then
           local _109_
           if (insert_op.side == "before") then
@@ -984,6 +992,22 @@ local function collect_file_ops(session)
             _109_ = "insert-after"
           end
           append_op_21(ops, insert_op.path, {kind = _109_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
+        else
+          state["unsafe-structural?"] = true
+        end
+      else
+      end
+    else
+      if (b_count > 0) then
+        local insert_op = (structural_op_from_current_rows(current_rows, b_start, b_count) or pending_structural_op(session, b_start, b_count, current_lines, ""))
+        if insert_op then
+          local _113_
+          if (insert_op.side == "before") then
+            _113_ = "insert-before"
+          else
+            _113_ = "insert-after"
+          end
+          append_op_21(ops, insert_op.path, {kind = _113_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
         else
           state["unsafe-structural?"] = true
         end
@@ -1123,6 +1147,7 @@ M["write-results!"] = function(deps, prompt_buf)
       end
     else
       local result = apply_file_ops_21(ops)
+      session["pending-structural-edit"] = nil
       update_session_refs_after_ops_21(session, ops, result["post-lines"], result.renames)
       invalidate_caches_for_paths_21(deps, session, result.paths)
       if (result.changed > 0) then
@@ -1143,13 +1168,13 @@ M["write-results!"] = function(deps, prompt_buf)
         pcall(sign_mod["refresh-change-signs!"], session)
       else
       end
-      local _130_
+      local _134_
       if (result.changed > 0) then
-        _130_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+        _134_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
       else
-        _130_ = "metabuffer: no changes"
+        _134_ = "metabuffer: no changes"
       end
-      return vim.notify(_130_, vim.log.levels.INFO)
+      return vim.notify(_134_, vim.log.levels.INFO)
     end
   else
     return nil
@@ -1221,7 +1246,7 @@ end
 M["maybe-restore-ui!"] = function(deps, prompt_buf, force)
   local router = deps.router
   local session = session_by_prompt(router["active-by-prompt"], prompt_buf)
-  if (session and session["ui-hidden"] and (force or not session["results-edit-mode"]) and session.meta and session.meta.buf and (vim.api.nvim_get_current_buf() == session.meta.buf.buffer)) then
+  if (session and session["ui-hidden"] and session.meta and session.meta.buf and (vim.api.nvim_get_current_buf() == session.meta.buf.buffer)) then
     session.meta.win.window = vim.api.nvim_get_current_win()
     return restore_session_ui_21(deps, session, {["preserve-focus"] = not force})
   else

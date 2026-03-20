@@ -589,12 +589,15 @@
   []
   "Public API: M.entry_push."
   (let [key (vim.api.nvim_get_current_buf)]
-    (let [session (. M.active-by-source key)
-          inst (. M.instances key)
-          meta (or (and session session.meta)
-                   (and inst inst.meta)
-                   inst)]
-      (M.push meta))))
+    (let [session (. M.active-by-source key)]
+      (if (and session session.prompt-buf session.meta session.meta.buf
+               (= key session.meta.buf.buffer))
+          (M.write-results session.prompt-buf)
+          (let [inst (. M.instances key)
+                meta (or (and session session.meta)
+                         (and inst inst.meta)
+                         inst)]
+            (M.push meta))))))
 
 (fn M.entry_cursor_word
   [resume]

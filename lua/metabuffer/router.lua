@@ -400,9 +400,13 @@ end
 M.entry_push = function()
   local key = vim.api.nvim_get_current_buf()
   local session = M["active-by-source"][key]
-  local inst = M.instances[key]
-  local meta = ((session and session.meta) or (inst and inst.meta) or inst)
-  return M.push(meta)
+  if (session and session["prompt-buf"] and session.meta and session.meta.buf and (key == session.meta.buf.buffer)) then
+    return M["write-results"](session["prompt-buf"])
+  else
+    local inst = M.instances[key]
+    local meta = ((session and session.meta) or (inst and inst.meta) or inst)
+    return M.push(meta)
+  end
 end
 M.entry_cursor_word = function(resume)
   local w = vim.fn.expand("<cword>")
@@ -493,16 +497,16 @@ M["fail-safe-teardown!"] = function(where, err)
     M["_teardown-in-progress"] = false
   else
   end
-  local function _58_()
+  local function _59_()
     return vim.notify(("metabuffer: torn down after error in " .. tostring(where) .. "\n" .. tostring(err)), vim.log.levels.ERROR)
   end
-  return vim.schedule(_58_)
+  return vim.schedule(_59_)
 end
 local function wrap_public_api_with_failsafe_21()
   if not M["_failsafe-wrapped"] then
     for k, v in pairs(M) do
       if ((type(k) == "string") and (type(v) == "function") and not vim.startswith(k, "_") and (k ~= "configure") and (k ~= "fail-safe-teardown!")) then
-        local function _59_(...)
+        local function _60_(...)
           local res = {pcall(v, ...)}
           local ok = res[1]
           local result = res[2]
@@ -513,7 +517,7 @@ local function wrap_public_api_with_failsafe_21()
             return error(result)
           end
         end
-        M[k] = _59_
+        M[k] = _60_
       else
       end
     end

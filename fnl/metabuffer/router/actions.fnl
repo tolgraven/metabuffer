@@ -619,13 +619,25 @@
         out (vim.deepcopy base)
         prev-lnum (or (and prev-row (. prev-row :lnum)) (. base :lnum) 1)
         next-lnum (or (and next-row (. next-row :lnum)) (. base :lnum) (+ prev-lnum 1))
-        lnum (if prev-row
-                 (+ prev-lnum rel-index)
-                 (math.max 1 (- next-lnum 1)))
         pending (or session.pending-structural-edit {})
         pending-side (. pending :side)
         pending-path (. pending :path)
-        pending-lnum (. pending :lnum)]
+        pending-lnum (. pending :lnum)
+        lnum (if (consecutive-same-source? prev-row next-row)
+                 (+ prev-lnum rel-index)
+                 (if (and (= pending-side "after")
+                          prev-row
+                          (= pending-path (. prev-row :path))
+                          (= pending-lnum (. prev-row :lnum)))
+                     (+ pending-lnum rel-index)
+                     (if (and (= pending-side "before")
+                              next-row
+                              (= pending-path (. next-row :path))
+                              (= pending-lnum (. next-row :lnum)))
+                         (+ pending-lnum rel-index -1)
+                         (if prev-row
+                             (+ prev-lnum rel-index)
+                             (math.max 1 (- next-lnum 1))))))]
     (set (. out :lnum) (math.max 1 (or lnum 1)))
     (set (. out :text) (or text ""))
     (set (. out :line) (or text ""))
@@ -706,7 +718,6 @@
         content []
         idxs []]
     (set session.live-edit-rows rows)
-    (set session.pending-structural-edit nil)
     (for [i 1 (# rows)]
       (let [row (or (. rows i) {})]
         (set (. refs i) {:kind (or (. row :kind) "")
@@ -761,6 +772,26 @@
             {:path path :lnum lnum :side side :lines lines :ref-kind ref-kind}))
         nil)))
 
+(fn pending-structural-op
+  [session start count current-lines fallback-kind]
+  (let [pending (or session.pending-structural-edit {})
+        path (. pending :path)
+        lnum (. pending :lnum)
+        side (. pending :side)
+        ref-kind (or (. pending :kind) fallback-kind "")]
+    (when (and (= (type path) "string")
+               (~= path "")
+               (= (type lnum) "number")
+               (> lnum 0)
+               (or (= side "before") (= side "after"))
+               (> count 0)
+               (~= ref-kind "file-entry"))
+      {:path path
+       :lnum lnum
+       :side side
+       :lines (slice-lines current-lines start count)
+       :ref-kind ref-kind})))
+
 (fn collect-file-ops
   [session]
   (let [meta session.meta
@@ -768,10 +799,11 @@
         baseline-lines (or session.edit-baseline-lines (vim.api.nvim_buf_get_lines buf 0 -1 false))
         baseline-rows (or session.edit-baseline-rows [])
         current-lines (vim.api.nvim_buf_get_lines buf 0 -1 false)
-        current-rows (or session.live-edit-rows [])
+        current-rows (projected-rows-from-edits session baseline-rows baseline-lines current-lines)
         hunks (diff-hunks baseline-lines current-lines)
         ops {}
         state {:unsafe-structural? false}]
+    (set session.live-edit-rows current-rows)
     (each [_ h (ipairs hunks)]
       (let [[a-start a-count b-start b-count] (hunk-indices h)
             common (math.min a-count b-count)
@@ -795,7 +827,11 @@
                         (append-op! ops (. row :path) {:kind :delete :lnum (. row :lnum) :ref-kind (or (. row :kind) "")})
                         (set (. state :unsafe-structural?) true)))))
               (when (> b-count a-count)
-                (let [insert-op (structural-op-from-current-rows current-rows (+ b-start common) (- b-count common))]
+                (let [insert-op (or (structural-op-from-current-rows current-rows (+ b-start common) (- b-count common))
+                                    (pending-structural-op session (+ b-start common) (- b-count common) current-lines
+                                      (or (and (. old-rows common) (. (. old-rows common) :kind))
+                                          (and (. old-rows (+ common 1)) (. (. old-rows (+ common 1)) :kind))
+                                          "")))]
                   (if insert-op
                       (append-op! ops (. insert-op :path)
                         {:kind (if (= (. insert-op :side) "before") :insert-before :insert-after)
@@ -804,7 +840,8 @@
                          :ref-kind (or (. insert-op :ref-kind) "")})
                       (set (. state :unsafe-structural?) true)))))
             (when (> b-count 0)
-              (let [insert-op (structural-op-from-current-rows current-rows b-start b-count)]
+              (let [insert-op (or (structural-op-from-current-rows current-rows b-start b-count)
+                                  (pending-structural-op session b-start b-count current-lines ""))]
                 (if insert-op
                     (append-op! ops (. insert-op :path)
                       {:kind (if (= (. insert-op :side) "before") :insert-before :insert-after)
@@ -912,6 +949,7 @@
               (when sign-mod
                 (pcall sign-mod.refresh-change-signs! session)))
             (let [result (apply-file-ops! ops)]
+              (set session.pending-structural-edit nil)
               (update-session-refs-after-ops! session ops (. result :post-lines) (. result :renames))
               (invalidate-caches-for-paths! deps session (. result :paths))
               (when (> result.changed 0)
@@ -985,7 +1023,6 @@
         session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when (and session
                session.ui-hidden
-               (or force (not session.results-edit-mode))
                session.meta
                session.meta.buf
                (= (vim.api.nvim_get_current_buf) session.meta.buf.buffer))

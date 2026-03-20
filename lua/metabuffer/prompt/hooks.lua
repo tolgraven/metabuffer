@@ -636,7 +636,7 @@ M.new = function(opts)
       local idx = (session.meta.buf.indices or {})[row]
       local ref = (idx and (session.meta.buf["source-refs"] or {})[idx])
       if (ref and ref.path and ref.lnum) then
-        session["pending-structural-edit"] = {path = ref.path, lnum = ref.lnum, side = side}
+        session["pending-structural-edit"] = {path = ref.path, lnum = ref.lnum, side = side, kind = (ref.kind or "")}
         return nil
       else
         return nil
