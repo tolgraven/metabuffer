@@ -162,6 +162,16 @@ Expected output: module table or nil."
     (fn [step]
       (timing step n-steps))))
 
+(fn once
+  [f]
+  "Wrap callback so it can only run once. Expected output: function."
+  (let [called0 false]
+    (var called called0)
+    (fn [...]
+      (when-not called
+        (set called true)
+        (f ...)))))
+
 (fn mini-run!
   [mini session key n-steps duration-ms active? step-action]
   "Run `mini.animate` with Meta-owned cancellation/state handling.
@@ -184,6 +194,13 @@ Expected output: function."
   ((. (. mini :gen_winblend) :linear)
    {:from from-blend
     :to to-blend}))
+
+(fn mini-after!
+  [animation-type delay-ms action]
+  "Run action after Mini animation finishes, with time fallback. Expected output: nil."
+  (let [run! (once action)]
+    (execute-after! animation-type run!)
+    (vim.defer_fn run! (math.max 0 (+ (or delay-ms 0) 24)))))
 
 (fn mini-buffer-config
   [session]
@@ -342,8 +359,9 @@ Expected output: config table."
           (with-split-mins
             (fn []
               (set-win-height! win stop)
-              (execute-after!
+              (mini-after!
                 "resize"
+                duration-ms
                 (fn []
                   (when-let [done! (. opts :done!)]
                     (done! stop)))))))
@@ -470,8 +488,9 @@ Expected output: config table."
       win
       (fn []
         (pcall vim.fn.winrestview to-view)))
-    (execute-after!
+    (mini-after!
       "scroll"
+      duration-ms
       (fn []
         (when-let [done! (. (or opts {}) :done!)]
           (done! to-view))))))

@@ -528,6 +528,20 @@
             (feed-results-normal-key! "P"))
           opts)))
 
+    (fn begin-direct-results-edit!
+      [session]
+      (when (and sign-mod session.meta session.meta.buf
+                 (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+        (let [buf session.meta.buf.buffer
+              internal? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_internal_render")]]
+                          (and ok v))
+              manual? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_manual_edit_active")]]
+                        (and ok v))]
+          (when-not (or internal? manual?)
+            (set session.results-edit-mode true)
+            (pcall sign-mod.capture-baseline! session)
+            (pcall vim.api.nvim_buf_set_var buf "meta_manual_edit_active" true)))))
+
     (fn register!
   [router session]
       (let [aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true})]
@@ -620,6 +634,11 @@
                        (schedule-when-valid session
                          (fn []
                            (maybe-sync-from-main! session))))})
+        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       (begin-direct-results-edit! session))})
         (vim.api.nvim_create_autocmd ["TextChanged" "TextChangedI"]
           {:group aug
            :buffer session.meta.buf.buffer
@@ -629,7 +648,7 @@
                                internal? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_internal_render")]]
                                            (and ok v))]
                            (when-not internal?
-                             (pcall vim.api.nvim_buf_set_var buf "meta_manual_edit_active" true))
+                             (begin-direct-results-edit! session))
                            (vim.schedule
                              (fn []
                                (when (and session.prompt-buf
@@ -638,7 +657,7 @@
                                  (pcall maybe-sync-from-main! session true)
                                  (pcall update-info-window session true)
                                  (pcall sign-mod.refresh-change-signs! session)))))))})
-        (vim.api.nvim_create_autocmd "BufEnter"
+        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
           {:group aug
            :buffer session.meta.buf.buffer
            :callback (fn [_]
