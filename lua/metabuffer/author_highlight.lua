@@ -2,25 +2,24 @@
 local M = {}
 local util = require("metabuffer.util")
 M["author-groups"] = util["build-group-names"]("MetaAuthor", 24)
-M["author->group"] = {}
-M["next-group-idx"] = 1
 local function normalize_author(name)
   return string.lower(vim.trim(tostring((name or ""))))
 end
-M["group-for-author"] = function(author)
+local function bucket_for_author(author)
   local key = normalize_author(author)
-  local existing = M["author->group"][key]
-  if existing then
-    return M["author-groups"][existing]
+  local n = math.max(1, #M["author-groups"])
+  if (key == "") then
+    return 1
   else
-    local idx = math.max(1, math.min((M["next-group-idx"] or 1), #M["author-groups"]))
-    M["author->group"][key] = idx
-    if (idx < #M["author-groups"]) then
-      M["next-group-idx"] = (idx + 1)
-    else
-      M["next-group-idx"] = 1
+    local acc0 = 5381
+    local acc = acc0
+    for i = 1, #key do
+      acc = (((acc * 33) + string.byte(key, i)) % 2147483647)
     end
-    return M["author-groups"][idx]
+    return ((acc % n) + 1)
   end
+end
+M["group-for-author"] = function(author)
+  return M["author-groups"][bucket_for_author(author)]
 end
 return M

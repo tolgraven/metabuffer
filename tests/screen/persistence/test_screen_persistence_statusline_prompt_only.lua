@@ -1,5 +1,5 @@
 local H = require('tests.screen.support.screen_helpers')
-local eq = H.eq
+local child, eq = H.child, H.eq
 
 local T = MiniTest.new_set({ hooks = H.case_hooks() })
 
@@ -30,6 +30,22 @@ T['prompt keeps count and key hints while results carries its own statusline'] =
   eq(H.str_contains(main_sl, 'C^'), false)
   eq(H.str_contains(main_sl, 'C-o'), false)
   eq(H.str_contains(main_sl, 'Cs'), false)
+
+  child.cmd('stopinsert')
+  child.lua([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      assert(s and s['prompt-buf'], 'missing metabuffer session')
+      router['enter-edit-mode'](s['prompt-buf'])
+      local buf = s.meta.buf.buffer
+      vim.api.nvim_buf_set_lines(buf, 0, 1, false, { 'meta one changed' })
+    end)()
+  ]])
+
+  H.wait_for(function()
+    return H.str_contains(H.session_main_statusline(), '[+]')
+  end, 3000)
 end)
 
 return T

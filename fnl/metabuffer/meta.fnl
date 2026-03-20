@@ -84,9 +84,18 @@
 (fn results-statusline-left
   [self]
   (let [session self.session
+        buf self.buf.buffer
+        modified? (and buf
+                       (vim.api.nvim_buf_is_valid buf)
+                       (. vim.bo buf :modified))
+        modified-fragment (if modified?
+                              (status-fragment "MetaStatuslineIndicator" "[+]")
+                              "")
         loading (loading-fragment session)
         debug (or self.debug_out "")
         parts []]
+    (when (> (# modified-fragment) 0)
+      (table.insert parts modified-fragment))
     (when (> (# loading) 0)
       (table.insert parts loading))
     (when (> (# debug) 0)
