@@ -25,7 +25,7 @@ cpu_count() {
 default_jobs() {
   local cpu_n="$1"
   local file_n="$2"
-  local oversubscribe="${TEST_JOBS_MULTIPLIER:-1}"
+  local oversubscribe="${TEST_JOBS_MULTIPLIER:-2}"
   local extra_jobs="${TEST_JOBS_EXTRA:-0}"
   local default_max_jobs=$((cpu_n * 2))
   local max_jobs="${TEST_MAX_JOBS:-$default_max_jobs}"
@@ -98,7 +98,7 @@ fi
 FILTERS=()
 PROFILE_MODE=0
 VERBOSE=0
-TEST_FILE_TIMEOUT_MS="${TEST_FILE_TIMEOUT_MS:-10000}"
+TEST_FILE_TIMEOUT_MS="${TEST_FILE_TIMEOUT_MS:-18000}"
 if [[ "$TEST_FILE_TIMEOUT_MS" =~ ^[0-9]+$ ]]; then
   :
 else

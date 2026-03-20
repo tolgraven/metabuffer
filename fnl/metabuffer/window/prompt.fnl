@@ -17,6 +17,7 @@
   [win]
   (let [buf (vim.api.nvim_win_get_buf win)]
     (util.disable-heavy-buffer-features! buf)
+    (util.set-buffer-name! buf "[Metabuffer Prompt]")
     (let [bo (. vim.bo buf)]
       (set (. bo :buftype) "nofile")
       (set (. bo :bufhidden) "wipe")

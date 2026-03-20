@@ -84,6 +84,7 @@ local function ensure_ts_buf(session, ref, read_file_lines_cached)
         local ft = filetype_for_ref(ref)
         local lines = lines_for_ref(session, ref, read_file_lines_cached)
         util["disable-heavy-buffer-features!"](buf)
+        util["set-buffer-name!"](buf, "[Metabuffer Context]")
         do
           local bo = vim.bo[buf]
           bo["bufhidden"] = "hide"

@@ -182,6 +182,7 @@
         (set session.preview-float? float-start?)
         (set session.preview-layout nil)
         (set session.preview-last-path nil)
+        (util.set-buffer-name! buf "[Metabuffer Preview]")
         (pcall vim.api.nvim_win_set_buf win-id buf)
         (when-not float-start?
           (pcall vim.api.nvim_win_set_width win-id width))
@@ -193,7 +194,7 @@
            :buftype "nofile"
            :swapfile false
            :modifiable false
-           :filetype "text"})
+           :filetype ""})
         (mark-preview-buffer! buf)
         (ensure-preview-statusline-autocmds! session)
         (apply-preview-window-opts! session session.preview-win)
@@ -227,13 +228,14 @@
     [session]
     (when (or (not session.preview-buf) (not (vim.api.nvim_buf_is_valid session.preview-buf)))
       (set session.preview-buf (vim.api.nvim_create_buf false true))
+      (util.set-buffer-name! session.preview-buf "[Metabuffer Preview]")
       (set-buffer-options!
         session.preview-buf
         {:bufhidden "hide"
          :buftype "nofile"
          :swapfile false
          :modifiable false
-         :filetype "text"})
+         :filetype ""})
       (mark-preview-buffer! session.preview-buf)))
 
   (fn preview-context
@@ -312,13 +314,13 @@
     (let [bo (. vim.bo session.preview-buf)
           ft (. ctx :ft)]
       (set (. bo :modifiable) false)
-      (let [next-ft (if (and (= (type ft) "string") (~= ft ""))
-                        ft
-                        "text")]
-        (apply-ft-buffer-vars! session.preview-buf next-ft)
+      (let [next-ft (if (and (= (type ft) "string") (~= ft "")) ft "")]
+        (when (~= next-ft "")
+          (apply-ft-buffer-vars! session.preview-buf next-ft))
         (pcall vim.api.nvim_set_option_value "syntax" "" {:buf session.preview-buf})
         (set (. bo :filetype) next-ft)
-        (pcall vim.api.nvim_set_option_value "syntax" next-ft {:buf session.preview-buf}))))
+        (when (~= next-ft "")
+          (pcall vim.api.nvim_set_option_value "syntax" next-ft {:buf session.preview-buf})))))
 
   (fn render-preview-placeholder!
     [session]
@@ -330,9 +332,8 @@
         (set (. bo :modifiable) true)
         (vim.api.nvim_buf_set_lines session.preview-buf 0 -1 false [""])
         (set (. bo :modifiable) false)
-        (apply-ft-buffer-vars! session.preview-buf "text")
         (pcall vim.api.nvim_set_option_value "syntax" "" {:buf session.preview-buf})
-        (set (. bo :filetype) "text")))
+        (set (. bo :filetype) "")))
     (set session.preview-last-path nil))
 
   (fn update-preview-window!

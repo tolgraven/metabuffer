@@ -37,6 +37,22 @@
     (pcall vim.api.nvim_buf_set_var buf "fennel_lua_version" "5.1")
     (pcall vim.api.nvim_buf_set_var buf "fennel_use_luajit" (if jit 1 0))))
 
+(fn stop-buffer-treesitter!
+  [buf]
+  (when (and buf (vim.api.nvim_buf_is_valid buf) vim.treesitter)
+    (pcall vim.treesitter.stop buf)))
+
+(fn start-buffer-treesitter!
+  [buf ft]
+  (when (and buf
+             (vim.api.nvim_buf_is_valid buf)
+             vim.treesitter
+             (= (type ft) "string")
+             (~= ft "")
+             (~= ft "metabuffer")
+             (~= ft "text"))
+    (pcall vim.treesitter.start buf ft)))
+
 (fn normalize-render-line
   [line]
   (let [txt (tostring (or line ""))]
@@ -340,6 +356,7 @@
   []
     (set self.source-syntax-fill-token (+ 1 (or self.source-syntax-fill-token 0)))
     (set self.source-syntax-fill-pending false)
+    (stop-buffer-treesitter! self.buffer)
     (when (and self.source-syntax-groups (> (# self.source-syntax-groups) 0))
       (vim.api.nvim_buf_call self.buffer
         (fn []
@@ -511,11 +528,14 @@
                   (set (. bo :filetype) ft))
                 (if (and syn (~= syn ""))
                     (set (. bo :syntax) syn)
-                    (set (. bo :syntax) "")))
+                    (set (. bo :syntax) ""))
+                (start-buffer-treesitter! self.buffer ft))
               (do
+                (stop-buffer-treesitter! self.buffer)
                 (set (. bo :filetype) "metabuffer")
                 (set (. bo :syntax) "metabuffer")))
           (do
+            (stop-buffer-treesitter! self.buffer)
             (set (. bo :filetype) "metabuffer")
             (set (. bo :syntax) "metabuffer")))))
 

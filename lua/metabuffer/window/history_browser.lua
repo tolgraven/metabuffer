@@ -21,6 +21,7 @@ local function ensure_window_21(floating_window_mod, session)
     end
     local win = floating_window_mod.new(vim, buf, cfg)
     util["disable-heavy-buffer-features!"](buf)
+    util["set-buffer-name!"](buf, "[Metabuffer History]")
     session["history-browser-buf"] = buf
     session["history-browser-win"] = win.window
     local bo = vim.bo[buf]

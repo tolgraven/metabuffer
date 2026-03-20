@@ -152,6 +152,15 @@ Key helper coverage:
 ### `tests/screen/persistence/test_screen_persistence_plain_launch.lua`
 - Plain `:Meta` launch opens a live session with prompt and info window on a normal buffer.
 
+### `tests/screen/persistence/test_screen_persistence_named_buffers.lua`
+- Meta-owned prompt/preview/info/results buffers use stable names instead of showing up as unnamed scratch buffers.
+
+### `tests/screen/persistence/test_screen_persistence_treesitter_regular.lua`
+- Regular file-backed `:Meta` keeps Tree-sitter highlighting active on the results buffer when a parser is available.
+
+### `tests/screen/persistence/test_screen_persistence_treesitter_autocmd_safe.lua`
+- Global `FileType` autocmds that call `vim.treesitter.start()` do not crash Meta startup on preview/info scratch buffers.
+
 ### `tests/screen/persistence/test_screen_persistence_external_split_pause.lua`
 - Opening unrelated windows like `:help` hides Meta auxiliary UI instead of floating over the new split.
 

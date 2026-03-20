@@ -49,6 +49,7 @@
                 ft (filetype-for-ref ref)
                 lines (lines-for-ref session ref read-file-lines-cached)]
             (util.disable-heavy-buffer-features! buf)
+            (util.set-buffer-name! buf "[Metabuffer Context]")
             (let [bo (. vim.bo buf)]
               (set (. bo :bufhidden) "hide")
               (set (. bo :buftype) "nofile")

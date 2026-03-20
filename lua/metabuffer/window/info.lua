@@ -264,6 +264,7 @@ M.new = function(opts)
       end
       local win = floating_window_mod.new(vim, buf, cfg)
       util["disable-heavy-buffer-features!"](buf)
+      util["set-buffer-name!"](buf, "[Metabuffer Info]")
       session["info-buf"] = buf
       session["info-win"] = win.window
       session["info-config-sig"] = info_config_signature(target)
@@ -275,7 +276,7 @@ M.new = function(opts)
         bo["bufhidden"] = "wipe"
         bo["swapfile"] = false
         bo["modifiable"] = false
-        bo["filetype"] = "metabuffer"
+        bo["filetype"] = ""
       end
       do
         local wo = vim.wo[win.window]

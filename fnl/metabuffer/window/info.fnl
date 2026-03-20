@@ -239,6 +239,7 @@
                       target)
               win (floating_window_mod.new vim buf cfg)]
           (util.disable-heavy-buffer-features! buf)
+          (util.set-buffer-name! buf "[Metabuffer Info]")
           (set session.info-buf buf)
           (set session.info-win win.window)
           (set session.info-config-sig (info-config-signature target))
@@ -249,7 +250,7 @@
             (set (. bo :bufhidden) "wipe")
             (set (. bo :swapfile) false)
             (set (. bo :modifiable) false)
-            (set (. bo :filetype) "metabuffer"))
+            (set (. bo :filetype) ""))
           (let [wo (. vim.wo win.window)]
             (set (. wo :statusline) "")
             (set (. wo :winbar) "")

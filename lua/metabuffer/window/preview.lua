@@ -193,12 +193,13 @@ M.new = function(opts)
       session["preview-float?"] = float_start_3f
       session["preview-layout"] = nil
       session["preview-last-path"] = nil
+      util["set-buffer-name!"](buf, "[Metabuffer Preview]")
       pcall(vim.api.nvim_win_set_buf, win_id, buf)
       if not float_start_3f then
         pcall(vim.api.nvim_win_set_width, win_id, width)
       else
       end
-      set_buffer_options_21(buf, {bufhidden = "hide", buftype = "nofile", filetype = "text", modifiable = false, swapfile = false})
+      set_buffer_options_21(buf, {bufhidden = "hide", buftype = "nofile", filetype = "", modifiable = false, swapfile = false})
       mark_preview_buffer_21(buf)
       ensure_preview_statusline_autocmds_21(session)
       apply_preview_window_opts_21(session, session["preview-win"])
@@ -245,7 +246,8 @@ M.new = function(opts)
   local function ensure_preview_scratch_buf_21(session)
     if (not session["preview-buf"] or not vim.api.nvim_buf_is_valid(session["preview-buf"])) then
       session["preview-buf"] = vim.api.nvim_create_buf(false, true)
-      set_buffer_options_21(session["preview-buf"], {bufhidden = "hide", buftype = "nofile", filetype = "text", modifiable = false, swapfile = false})
+      util["set-buffer-name!"](session["preview-buf"], "[Metabuffer Preview]")
+      set_buffer_options_21(session["preview-buf"], {bufhidden = "hide", buftype = "nofile", filetype = "", modifiable = false, swapfile = false})
       return mark_preview_buffer_21(session["preview-buf"])
     else
       return nil
@@ -343,12 +345,19 @@ M.new = function(opts)
     if ((type(ft) == "string") and (ft ~= "")) then
       next_ft = ft
     else
-      next_ft = "text"
+      next_ft = ""
     end
-    apply_ft_buffer_vars_21(session["preview-buf"], next_ft)
+    if (next_ft ~= "") then
+      apply_ft_buffer_vars_21(session["preview-buf"], next_ft)
+    else
+    end
     pcall(vim.api.nvim_set_option_value, "syntax", "", {buf = session["preview-buf"]})
     bo["filetype"] = next_ft
-    return pcall(vim.api.nvim_set_option_value, "syntax", next_ft, {buf = session["preview-buf"]})
+    if (next_ft ~= "") then
+      return pcall(vim.api.nvim_set_option_value, "syntax", next_ft, {buf = session["preview-buf"]})
+    else
+      return nil
+    end
   end
   local function render_preview_placeholder_21(session)
     ensure_preview_scratch_buf_21(session)
@@ -361,9 +370,8 @@ M.new = function(opts)
       bo["modifiable"] = true
       vim.api.nvim_buf_set_lines(session["preview-buf"], 0, -1, false, {""})
       bo["modifiable"] = false
-      apply_ft_buffer_vars_21(session["preview-buf"], "text")
       pcall(vim.api.nvim_set_option_value, "syntax", "", {buf = session["preview-buf"]})
-      bo["filetype"] = "text"
+      bo["filetype"] = ""
     else
     end
     session["preview-last-path"] = nil
@@ -432,7 +440,7 @@ M.new = function(opts)
       local target_path = selected_preview_path(session)
       local timer = vim.loop.new_timer()
       session["preview-update-timer"] = timer
-      local function _53_()
+      local function _55_()
         if (session["preview-update-timer"] and (session["preview-update-timer"] == timer)) then
           local stopf = timer.stop
           local closef = timer.close
@@ -454,7 +462,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return timer.start(timer, math.max(0, (wait_ms or 0)), 0, vim.schedule_wrap(_53_))
+      return timer.start(timer, math.max(0, (wait_ms or 0)), 0, vim.schedule_wrap(_55_))
     else
       return nil
     end

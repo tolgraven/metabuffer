@@ -42,6 +42,24 @@
   "Public API: M.buf-valid?."
   (and buf (vim.api.nvim_buf_is_valid buf)))
 
+(fn M.set-buffer-name!
+  [buf base-name]
+  "Best-effort unique buffer naming. Expected output: assigned name or fallback."
+  (if (not (M.buf-valid? buf))
+      (or base-name "")
+      (let [base (or base-name "metabuffer")
+            name0 base]
+        (var name name0)
+        (var n 1)
+        (while (and (> (vim.fn.bufnr name) 0)
+                    (~= (vim.fn.bufnr name) buf))
+          (set n (+ n 1))
+          (set name (.. base " [" n "]")))
+        (let [[ok] [(pcall vim.api.nvim_buf_set_name buf name)]]
+          (if ok
+              name
+              (.. base " [" buf "]"))))))
+
 (fn M.disable-heavy-buffer-features!
   [buf]
   "Best-effort opt-out of heavy buffer-local helpers on Meta-owned buffers."

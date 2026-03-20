@@ -13,6 +13,7 @@ end
 local function prompt_buffer_21(win)
   local buf = vim.api.nvim_win_get_buf(win)
   util["disable-heavy-buffer-features!"](buf)
+  util["set-buffer-name!"](buf, "[Metabuffer Prompt]")
   do
     local bo = vim.bo[buf]
     bo["buftype"] = "nofile"

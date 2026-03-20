@@ -44,6 +44,20 @@ local function apply_ft_buffer_vars_21(buf, ft)
     return nil
   end
 end
+local function stop_buffer_treesitter_21(buf)
+  if (buf and vim.api.nvim_buf_is_valid(buf) and vim.treesitter) then
+    return pcall(vim.treesitter.stop, buf)
+  else
+    return nil
+  end
+end
+local function start_buffer_treesitter_21(buf, ft)
+  if (buf and vim.api.nvim_buf_is_valid(buf) and vim.treesitter and (type(ft) == "string") and (ft ~= "") and (ft ~= "metabuffer") and (ft ~= "text")) then
+    return pcall(vim.treesitter.start, buf, ft)
+  else
+    return nil
+  end
+end
 local function normalize_render_line(line)
   local txt = tostring((line or ""))
   local s1 = string.gsub(txt, "\r\n", " ")
@@ -93,10 +107,10 @@ local function save_window_views(self)
   local views = {}
   for _, win in ipairs(vim.fn.win_findbuf(self.buffer)) do
     if vim.api.nvim_win_is_valid(win) then
-      local function _7_()
+      local function _9_()
         return vim.fn.winsaveview()
       end
-      views[win] = vim.api.nvim_win_call(win, _7_)
+      views[win] = vim.api.nvim_win_call(win, _9_)
     else
     end
   end
@@ -105,10 +119,10 @@ end
 local function restore_window_views(views)
   for win, view in pairs(views) do
     if vim.api.nvim_win_is_valid(win) then
-      local function _9_()
+      local function _11_()
         return pcall(vim.fn.winrestview, view)
       end
-      vim.api.nvim_win_call(win, _9_)
+      vim.api.nvim_win_call(win, _11_)
     else
     end
   end
@@ -119,17 +133,17 @@ local function rendered_line(self, idx)
   if (self["show-source-prefix"] and self["source-refs"] and self["source-refs"][idx]) then
     local ref = self["source-refs"][idx]
     local pfx = source_prefix(ref)
-    local _11_
+    local _13_
     if ((pfx.text or "") == "") then
-      _11_ = normalize_render_line(line)
+      _13_ = normalize_render_line(line)
     else
       if ((line or "") == "") then
-        _11_ = normalize_render_line(pfx.text)
+        _13_ = normalize_render_line(pfx.text)
       else
-        _11_ = normalize_render_line((pfx.text .. "  " .. line))
+        _13_ = normalize_render_line((pfx.text .. "  " .. line))
       end
     end
-    return {text = _11_, range = {["lnum-end"] = pfx["lnum-end"], ["icon-start"] = pfx["icon-start"], ["icon-end"] = pfx["icon-end"], ["icon-hl"] = pfx["icon-hl"], ["dir-ranges"] = (pfx["dir-ranges"] or {}), ["file-start"] = pfx["file-start"], ["file-end"] = pfx["file-end"], ["file-hl"] = pfx["file-hl"], ["ext-start"] = pfx["ext-start"], ["ext-end"] = pfx["ext-end"], ["ext-hl"] = pfx["ext-hl"]}}
+    return {text = _13_, range = {["lnum-end"] = pfx["lnum-end"], ["icon-start"] = pfx["icon-start"], ["icon-end"] = pfx["icon-end"], ["icon-hl"] = pfx["icon-hl"], ["dir-ranges"] = (pfx["dir-ranges"] or {}), ["file-start"] = pfx["file-start"], ["file-end"] = pfx["file-end"], ["file-hl"] = pfx["file-hl"], ["ext-start"] = pfx["ext-start"], ["ext-end"] = pfx["ext-end"], ["ext-hl"] = pfx["ext-hl"]}}
   else
     return {text = normalize_render_line(line)}
   end
@@ -330,14 +344,15 @@ M.new = function(nvim, model)
   self["clear-source-syntax"] = function()
     self["source-syntax-fill-token"] = (1 + (self["source-syntax-fill-token"] or 0))
     self["source-syntax-fill-pending"] = false
+    stop_buffer_treesitter_21(self.buffer)
     if (self["source-syntax-groups"] and (#self["source-syntax-groups"] > 0)) then
-      local function _34_()
+      local function _36_()
         for _, g in ipairs(self["source-syntax-groups"]) do
           vim.cmd(("silent! syntax clear " .. g))
         end
         return nil
       end
-      vim.api.nvim_buf_call(self.buffer, _34_)
+      vim.api.nvim_buf_call(self.buffer, _36_)
     else
     end
     self["source-syntax-groups"] = {}
@@ -350,7 +365,7 @@ M.new = function(nvim, model)
     if (self["source-refs"] and (#self.indices > 0) and (syntax_start <= syntax_stop)) then
       local included = self["source-syntax-included"]
       local groups = self["source-syntax-groups"]
-      local function _36_()
+      local function _38_()
         local function add_block(start, stop, ft)
           if (ft and (ft ~= "") and (start <= stop)) then
             local synfiles = syntax_files_for_ft(ft)
@@ -408,7 +423,7 @@ M.new = function(nvim, model)
           return nil
         end
       end
-      return vim.api.nvim_buf_call(self.buffer, _36_)
+      return vim.api.nvim_buf_call(self.buffer, _38_)
     else
       return nil
     end
@@ -433,16 +448,16 @@ M.new = function(nvim, model)
       else
       end
       if ((self["source-syntax-next-after"] <= total_lines) or (self["source-syntax-next-before"] >= 1)) then
-        local function _47_()
+        local function _49_()
           return self["run-source-syntax-fill-step"](total_lines)
         end
-        return vim.defer_fn(_47_, 17)
+        return vim.defer_fn(_49_, 17)
       else
         self["source-syntax-fill-pending"] = false
-        local function _48_()
+        local function _50_()
           return vim.cmd("silent! syntax sync fromstart")
         end
-        return vim.api.nvim_buf_call(self.buffer, _48_)
+        return vim.api.nvim_buf_call(self.buffer, _50_)
       end
     else
       return nil
@@ -453,10 +468,10 @@ M.new = function(nvim, model)
     self["source-syntax-fill-pending"] = true
     self["source-syntax-next-after"] = (syntax_stop + 1)
     self["source-syntax-next-before"] = (syntax_start - 1)
-    local function _51_()
+    local function _53_()
       return self["run-source-syntax-fill-step"](total_lines)
     end
-    return vim.defer_fn(_51_, 17)
+    return vim.defer_fn(_53_, 17)
   end
   self["apply-source-syntax-regions"] = function()
     if not (self["show-source-separators"] and (self["syntax-type"] == "buffer") and self["source-refs"] and (#self.indices > 0)) then
@@ -478,10 +493,10 @@ M.new = function(nvim, model)
         end
         if win then
           local view
-          local function _53_()
+          local function _55_()
             return vim.fn.winsaveview()
           end
-          view = vim.api.nvim_win_call(win, _53_)
+          view = vim.api.nvim_win_call(win, _55_)
           local height = math.max(1, vim.api.nvim_win_get_height(win))
           visible_start = math.max(1, math.min((view.topline or 1), n))
           visible_stop = math.max(visible_start, math.min((visible_start + height + -1), n))
@@ -504,10 +519,10 @@ M.new = function(nvim, model)
       self["clear-source-syntax"]()
       self["add-source-syntax-range"](syntax_start, syntax_stop)
       if not (self["visible-source-syntax-only"] or incremental_fill_3f) then
-        local function _57_()
+        local function _59_()
           return vim.cmd("silent! syntax sync fromstart")
         end
-        vim.api.nvim_buf_call(self.buffer, _57_)
+        vim.api.nvim_buf_call(self.buffer, _59_)
       else
       end
       if incremental_fill_3f then
@@ -541,17 +556,18 @@ M.new = function(nvim, model)
         end
         if (syn and (syn ~= "")) then
           bo["syntax"] = syn
-          return nil
         else
           bo["syntax"] = ""
-          return nil
         end
+        return start_buffer_treesitter_21(self.buffer, ft)
       else
+        stop_buffer_treesitter_21(self.buffer)
         bo["filetype"] = "metabuffer"
         bo["syntax"] = "metabuffer"
         return nil
       end
     else
+      stop_buffer_treesitter_21(self.buffer)
       bo["filetype"] = "metabuffer"
       bo["syntax"] = "metabuffer"
       return nil
