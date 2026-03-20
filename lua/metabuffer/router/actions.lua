@@ -1015,7 +1015,7 @@ local function collect_file_ops(session)
       end
     end
   end
-  return {ops = ops, ["current-lines"] = current_lines, ["unsafe-structural?"] = state["unsafe-structural?"]}
+  return {ops = ops, ["current-lines"] = current_lines, ["current-rows"] = current_rows, ["unsafe-structural?"] = state["unsafe-structural?"]}
 end
 local function grouped_path_ops__3eflat_ops(ops)
   local out = {}
@@ -1031,56 +1031,37 @@ end
 local function apply_file_ops_21(ops)
   return source_mod["apply-write-ops!"](grouped_path_ops__3eflat_ops(ops))
 end
-local function update_session_refs_after_ops_21(session, ops, post_lines, renames)
-  local meta = session.meta
-  local refs = (meta.buf["source-refs"] or {})
-  local content = (meta.buf.content or {})
-  for src_idx, ref in ipairs(refs) do
-    if (ref and (type(ref.path) == "string") and (ref.path ~= "")) then
-      local path0 = ref.path
-      local renamed_path = ((renames or {})[path0] or path0)
-      local _
-      ref["path"] = renamed_path
-      _ = nil
-      local path = renamed_path
-      local per_file = ops[path]
-      if per_file then
-        local lnum0
-        if ((type(ref.lnum) == "number") and (ref.lnum > 0)) then
-          lnum0 = ref.lnum
-        else
-          lnum0 = 1
-        end
-        local lnum = lnum0
-        for _0, op in ipairs(per_file) do
-          if (op.kind == "insert-before") then
-            if (lnum >= op.lnum) then
-              lnum = (lnum + #(op.lines or {}))
-            else
-            end
-          elseif (op.kind == "insert-after") then
-            if (lnum > op.lnum) then
-              lnum = (lnum + #(op.lines or {}))
-            else
-            end
-          elseif (op.kind == "delete") then
-            if (lnum > op.lnum) then
-              lnum = (lnum - 1)
-            else
-            end
-          else
-          end
-        end
-        if (lnum < 1) then
-          lnum = 1
+local function update_row_after_ops(row, ops, post_lines, renames)
+  local ref = vim.deepcopy((row or {}))
+  local path0 = (ref.path or "")
+  local path = ((renames or {})[path0] or path0)
+  local lnum0
+  if ((type(ref.lnum) == "number") and (ref.lnum > 0)) then
+    lnum0 = ref.lnum
+  else
+    lnum0 = 1
+  end
+  local generated_path = ref["insert-path"]
+  local generated_lnum = ref["insert-lnum"]
+  local generated_side = ref["insert-side"]
+  ref["path"] = path
+  local lnum = lnum0
+  for _, op in ipairs((ops[path] or {})) do
+    local same_generated_3f = ((generated_path == path) and (generated_lnum == op.lnum) and (((generated_side == "before") and (op.kind == "insert-before")) or ((generated_side == "after") and (op.kind == "insert-after"))))
+    if not same_generated_3f then
+      if (op.kind == "insert-before") then
+        if (lnum >= op.lnum) then
+          lnum = (lnum + #(op.lines or {}))
         else
         end
-        ref["lnum"] = lnum
-        local lines = post_lines[path]
-        local line = ((lines and (lnum >= 1) and (lnum <= #lines) and lines[lnum]) or ref.line or "")
-        ref["line"] = line
-        if src_idx then
-          content[src_idx] = line
+      elseif (op.kind == "insert-after") then
+        if (lnum > op.lnum) then
+          lnum = (lnum + #(op.lines or {}))
+        else
+        end
+      elseif (op.kind == "delete") then
+        if (lnum > op.lnum) then
+          lnum = (lnum - 1)
         else
         end
       else
@@ -1088,19 +1069,44 @@ local function update_session_refs_after_ops_21(session, ops, post_lines, rename
     else
     end
   end
-  for src_idx, ref in ipairs(refs) do
-    if (ref and ((ref.kind or "") == "file-entry") and src_idx) then
+  if (lnum < 1) then
+    lnum = 1
+  else
+  end
+  ref["lnum"] = lnum
+  do
+    local lines = post_lines[path]
+    local line = ((lines and (lnum >= 1) and (lnum <= #lines) and lines[lnum]) or ref.text or ref.line or "")
+    ref["line"] = line
+    ref["text"] = line
+  end
+  return ref
+end
+local function update_session_refs_after_ops_21(session, current_rows, ops, post_lines, renames)
+  local meta = session.meta
+  local refs = {}
+  local content = {}
+  local idxs = {}
+  for _, row in ipairs((current_rows or {})) do
+    local ref = update_row_after_ops(row, ops, post_lines, renames)
+    local idx = (#refs + 1)
+    if ((ref.kind or "") == "file-entry") then
       local rel = vim.fn.fnamemodify((ref.path or ""), ":.")
       if ((type(rel) == "string") and (rel ~= "")) then
         ref["line"] = rel
       else
         ref["line"] = (ref.path or "")
       end
-      content[src_idx] = (ref.line or "")
+      ref["text"] = ref.line
     else
     end
+    table.insert(refs, {kind = (ref.kind or ""), path = (ref.path or ""), lnum = (ref.lnum or 1), ["open-lnum"] = (ref["open-lnum"] or ref.lnum or 1), line = (ref.line or "")})
+    table.insert(content, (ref.line or ""))
+    table.insert(idxs, idx)
   end
+  meta.buf["source-refs"] = refs
   meta.buf.content = content
+  meta.buf.indices = idxs
   return nil
 end
 local function invalidate_caches_for_paths_21(deps, session, updates)
@@ -1148,7 +1154,7 @@ M["write-results!"] = function(deps, prompt_buf)
     else
       local result = apply_file_ops_21(ops)
       session["pending-structural-edit"] = nil
-      update_session_refs_after_ops_21(session, ops, result["post-lines"], result.renames)
+      update_session_refs_after_ops_21(session, collected["current-rows"], ops, result["post-lines"], result.renames)
       invalidate_caches_for_paths_21(deps, session, result.paths)
       if (result.changed > 0) then
         pcall(session.meta["on-update"], 0)
@@ -1168,13 +1174,13 @@ M["write-results!"] = function(deps, prompt_buf)
         pcall(sign_mod["refresh-change-signs!"], session)
       else
       end
-      local _134_
+      local _132_
       if (result.changed > 0) then
-        _134_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+        _132_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
       else
-        _134_ = "metabuffer: no changes"
+        _132_ = "metabuffer: no changes"
       end
-      return vim.notify(_134_, vim.log.levels.INFO)
+      return vim.notify(_132_, vim.log.levels.INFO)
     end
   else
     return nil

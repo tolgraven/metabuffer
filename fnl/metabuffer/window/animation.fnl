@@ -1,4 +1,4 @@
-(import-macros {: when-let : when-not} :io.gitlab.andreyorst.cljlib.core)
+(require-macros :io.gitlab.andreyorst.cljlib.core)
 
 (local M {})
 (local target-frame-ms 17)
@@ -68,6 +68,7 @@ Expected output: module table or nil."
       (set vim.o.winminheight old-height)
       (set vim.o.winminwidth old-width)
       (set vim.o.equalalways old-equalalways)
+      (cond-> res (not ok) error)
       (if ok
           res
           (error res)))))
@@ -280,7 +281,7 @@ Expected output: config table."
   (let [{: steps : tick! : done! : active?} opts
         token (next-token! session key)
         total (math.max 1 (or steps 1))
-        delay (math.max 8 target-frame-ms)
+        wait (math.max 8 target-frame-ms)
         last-frame-ms0 nil]
     (var last-frame-ms last-frame-ms0)
     (fn frame!
@@ -288,15 +289,15 @@ Expected output: config table."
       (when (and (active-token? session key token)
                  (or (not active?) (active?)))
         (let [now (now-ms)
-              elapsed (if last-frame-ms (- now last-frame-ms) delay)]
-          (if (< elapsed delay)
-              (vim.defer_fn (fn [] (frame! idx)) (- delay elapsed))
+              elapsed (if last-frame-ms (- now last-frame-ms) wait)]
+          (if (< elapsed wait)
+              (vim.defer_fn (fn [] (frame! idx)) (- wait elapsed))
               (do
                 (set last-frame-ms now)
                 (let [t (ease-in-out-cubic (/ idx total))]
                   (tick! t idx total)
                   (if (< idx total)
-                      (vim.defer_fn (fn [] (frame! (+ idx 1))) delay)
+                      (vim.defer_fn (fn [] (frame! (+ idx 1))) wait)
                       (when done!
                         (done!)))))))))
     (frame! 0)))

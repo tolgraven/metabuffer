@@ -849,7 +849,10 @@
                        :lines (. insert-op :lines)
                        :ref-kind (or (. insert-op :ref-kind) "")})
                     (set (. state :unsafe-structural?) true)))))))
-    {:ops ops :current-lines current-lines :unsafe-structural? (. state :unsafe-structural?)}))
+    {:ops ops
+     :current-lines current-lines
+     :current-rows current-rows
+     :unsafe-structural? (. state :unsafe-structural?)}))
 
 (fn grouped-path-ops->flat-ops
   [ops]
@@ -865,51 +868,71 @@
   [ops]
   (source-mod.apply-write-ops! (grouped-path-ops->flat-ops ops)))
 
+(fn update-row-after-ops
+  [row ops post-lines renames]
+  (let [ref (vim.deepcopy (or row {}))
+        path0 (or (. ref :path) "")
+        path (or (. (or renames {}) path0) path0)
+        lnum0 (if (and (= (type (. ref :lnum)) "number") (> (. ref :lnum) 0)) (. ref :lnum) 1)
+        generated-path (. ref :insert-path)
+        generated-lnum (. ref :insert-lnum)
+        generated-side (. ref :insert-side)]
+    (set (. ref :path) path)
+    (var lnum lnum0)
+    (each [_ op (ipairs (or (. ops path) []))]
+      (let [same-generated? (and (= generated-path path)
+                                 (= generated-lnum (. op :lnum))
+                                 (or (and (= generated-side "before") (= (. op :kind) :insert-before))
+                                     (and (= generated-side "after") (= (. op :kind) :insert-after))))]
+        (when-not same-generated?
+          (if (= (. op :kind) :insert-before)
+              (when (>= lnum (. op :lnum))
+                (set lnum (+ lnum (# (or (. op :lines) [])))))
+              (= (. op :kind) :insert-after)
+              (when (> lnum (. op :lnum))
+                (set lnum (+ lnum (# (or (. op :lines) [])))))
+              (= (. op :kind) :delete)
+              (when (> lnum (. op :lnum))
+                (set lnum (- lnum 1)))
+              nil))))
+    (when (< lnum 1)
+      (set lnum 1))
+    (set (. ref :lnum) lnum)
+    (let [lines (. post-lines path)
+          line (or (and lines
+                        (>= lnum 1)
+                        (<= lnum (# lines))
+                        (. lines lnum))
+                   (. ref :text)
+                   (. ref :line)
+                   "")]
+      (set (. ref :line) line)
+      (set (. ref :text) line))
+    ref))
+
 (fn update-session-refs-after-ops!
-  [session ops post-lines renames]
+  [session current-rows ops post-lines renames]
   (let [meta session.meta
-        refs (or meta.buf.source-refs [])
-        content (or meta.buf.content [])]
-    (each [src-idx ref (ipairs refs)]
-      (when (and ref (= (type ref.path) "string") (~= ref.path ""))
-        (let [path0 ref.path
-              renamed-path (or (. (or renames {}) path0) path0)
-              _ (set (. ref :path) renamed-path)
-              path renamed-path
-              per-file (. ops path)]
-          (when per-file
-            (let [lnum0 (if (and (= (type ref.lnum) "number") (> ref.lnum 0)) ref.lnum 1)]
-              (var lnum lnum0)
-              (each [_ op (ipairs per-file)]
-                (if (= (. op :kind) :insert-before)
-                    (when (>= lnum (. op :lnum))
-                      (set lnum (+ lnum (# (or (. op :lines) [])))))
-                    (= (. op :kind) :insert-after)
-                    (when (> lnum (. op :lnum))
-                      (set lnum (+ lnum (# (or (. op :lines) [])))))
-                    (= (. op :kind) :delete)
-                    (when (> lnum (. op :lnum))
-                      (set lnum (- lnum 1)))
-                    nil))
-              (when (< lnum 1)
-                (set lnum 1))
-              (set (. ref :lnum) lnum)
-              (let [lines (. post-lines path)
-                    line (or (and lines
-                                  (>= lnum 1)
-                                  (<= lnum (# lines))
-                                  (. lines lnum))
-                             ref.line
-                             "")]
-                (set (. ref :line) line)
-                (when src-idx
-                  (set (. content src-idx) line))))))))
-    (each [src-idx ref (ipairs refs)]
-      (when (and ref (= (or ref.kind "") "file-entry") src-idx)
-        (let [rel (vim.fn.fnamemodify (or ref.path "") ":.")]
-          (set (. ref :line) (if (and (= (type rel) "string") (~= rel "")) rel (or ref.path "")))
-          (set (. content src-idx) (or ref.line "")))))
-    (set meta.buf.content content)))
+        refs []
+        content []
+        idxs []]
+    (each [_ row (ipairs (or current-rows []))]
+      (let [ref (update-row-after-ops row ops post-lines renames)
+            idx (+ (# refs) 1)]
+        (when (= (or (. ref :kind) "") "file-entry")
+          (let [rel (vim.fn.fnamemodify (or (. ref :path) "") ":.")]
+            (set (. ref :line) (if (and (= (type rel) "string") (~= rel "")) rel (or (. ref :path) "")))
+            (set (. ref :text) (. ref :line))))
+        (table.insert refs {:kind (or (. ref :kind) "")
+                            :path (or (. ref :path) "")
+                            :lnum (or (. ref :lnum) 1)
+                            :open-lnum (or (. ref :open-lnum) (. ref :lnum) 1)
+                            :line (or (. ref :line) "")})
+        (table.insert content (or (. ref :line) ""))
+        (table.insert idxs idx)))
+    (set meta.buf.source-refs refs)
+    (set meta.buf.content content)
+    (set meta.buf.indices idxs)))
 
 (fn invalidate-caches-for-paths!
   [deps session updates]
@@ -950,7 +973,7 @@
                 (pcall sign-mod.refresh-change-signs! session)))
             (let [result (apply-file-ops! ops)]
               (set session.pending-structural-edit nil)
-              (update-session-refs-after-ops! session ops (. result :post-lines) (. result :renames))
+              (update-session-refs-after-ops! session (. collected :current-rows) ops (. result :post-lines) (. result :renames))
               (invalidate-caches-for-paths! deps session (. result :paths))
               (when (> result.changed 0)
                 (pcall session.meta.on-update 0))
