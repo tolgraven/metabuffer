@@ -16,6 +16,9 @@ local state_syntax_types = state["syntax-types"]
 local function session_busy_3f(session)
   return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["lazy-refresh-pending"] or session["lazy-refresh-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["project-bootstrapped"])))
 end
+local function loading_visible_3f(session)
+  return (session and session["loading-indicator?"] and (session_busy_3f(session) or (session["loading-anim-phase"] ~= nil) or session["loading-idle-pending"]))
+end
 local function status_fragment(group, text)
   if ((type(text) == "nil") or (text == "")) then
     return ""
@@ -40,7 +43,7 @@ local function project_flag_fragment(name, on_3f)
   return (status_fragment("MetaStatuslineKey", _2_()) .. status_fragment(_3_, name))
 end
 local function loading_fragment(session)
-  if (session and session["loading-indicator?"] and session_busy_3f(session)) then
+  if loading_visible_3f(session) then
     local word = "Working"
     local phase = (session["loading-anim-phase"] or 0)
     local center = (1 + (phase % #word))

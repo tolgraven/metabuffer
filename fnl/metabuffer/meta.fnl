@@ -26,6 +26,14 @@
            (and session.project-mode
                 (not session.project-bootstrapped)))))
 
+(fn loading-visible?
+  [session]
+  (and session
+       session.loading-indicator?
+       (or (session-busy? session)
+           (~= session.loading-anim-phase nil)
+           session.loading-idle-pending)))
+
 (fn status-fragment
   [group text]
   (if (or (= (type text) "nil") (= text ""))
@@ -39,9 +47,7 @@
 
 (fn loading-fragment
   [session]
-  (if (and session
-           session.loading-indicator?
-           (session-busy? session))
+  (if (loading-visible? session)
       (let [word "Working"
             phase (or session.loading-anim-phase 0)
             center (+ 1 (% phase (# word)))

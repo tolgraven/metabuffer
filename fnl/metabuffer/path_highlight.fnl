@@ -4,30 +4,21 @@
 (set M.sep-group "MetaPathSep")
 (set M.segment-groups (util.build-group-names "MetaPathSeg" 24))
 
-(set M.segment->group {})
-(set M.next-group-idx 1)
-
 (fn normalize-segment
   [s]
-  (let [txt (string.lower (tostring (or s "")))]
-    (if (= txt "")
-        ""
-        ;; Keep compacted and full path segments color-stable (`f` == `fnl`).
-        (string.sub txt 1 1))))
+  (string.lower (vim.trim (tostring (or s "")))))
 
 (fn M.group-for-segment
   [segment]
   (let [key (normalize-segment segment)
-        existing (. M.segment->group key)]
-    (if existing
-        (. M.segment-groups existing)
-        (let [idx (math.max 1 (math.min (or M.next-group-idx 1) (# M.segment-groups)))]
-          (set (. M.segment->group key) idx)
-          (set M.next-group-idx
-               (if (< idx (# M.segment-groups))
-                   (+ idx 1)
-                   1))
-          (. M.segment-groups idx)))))
+        n (math.max 1 (# M.segment-groups))]
+    (if (= key "")
+        (. M.segment-groups 1)
+        (let [acc0 5381]
+          (var acc acc0)
+          (for [i 1 (# key)]
+            (set acc (% (+ (* acc 33) (string.byte key i)) 2147483647)))
+          (. M.segment-groups (+ (% acc n) 1))))))
 
 (fn M.ranges-for-dir
   [dir start-col]

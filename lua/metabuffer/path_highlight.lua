@@ -3,30 +3,21 @@ local M = {}
 local util = require("metabuffer.util")
 M["sep-group"] = "MetaPathSep"
 M["segment-groups"] = util["build-group-names"]("MetaPathSeg", 24)
-M["segment->group"] = {}
-M["next-group-idx"] = 1
 local function normalize_segment(s)
-  local txt = string.lower(tostring((s or "")))
-  if (txt == "") then
-    return ""
-  else
-    return string.sub(txt, 1, 1)
-  end
+  return string.lower(vim.trim(tostring((s or ""))))
 end
 M["group-for-segment"] = function(segment)
   local key = normalize_segment(segment)
-  local existing = M["segment->group"][key]
-  if existing then
-    return M["segment-groups"][existing]
+  local n = math.max(1, #M["segment-groups"])
+  if (key == "") then
+    return M["segment-groups"][1]
   else
-    local idx = math.max(1, math.min((M["next-group-idx"] or 1), #M["segment-groups"]))
-    M["segment->group"][key] = idx
-    if (idx < #M["segment-groups"]) then
-      M["next-group-idx"] = (idx + 1)
-    else
-      M["next-group-idx"] = 1
+    local acc0 = 5381
+    local acc = acc0
+    for i = 1, #key do
+      acc = (((acc * 33) + string.byte(key, i)) % 2147483647)
     end
-    return M["segment-groups"][idx]
+    return M["segment-groups"][((acc % n) + 1)]
   end
 end
 M["ranges-for-dir"] = function(dir, start_col)

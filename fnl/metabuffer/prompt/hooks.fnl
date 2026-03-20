@@ -193,6 +193,13 @@
                (and session.project-mode
                     (not session.project-bootstrapped)))))
 
+    (fn session-actually-idle?
+      [session]
+      (and session
+           (not (session-busy? session))
+           (not session.prompt-update-dirty)
+           (not session.lazy-refresh-dirty)))
+
     (var refresh-prompt-highlights! nil)
 
     (fn schedule-loading-indicator!
@@ -202,23 +209,42 @@
                  session.prompt-buf
                  (session-prompt-valid? session)
                  session.loading-indicator?
-                 (session-busy? session))
+                 (or (session-busy? session)
+                     session.loading-anim-phase
+                     session.loading-idle-pending))
+        (when (and (session-busy? session)
+                   (= session.loading-anim-phase nil))
+          (set session.loading-idle-pending false)
+          (set session.loading-anim-phase 0)
+          (pcall session.meta.refresh_statusline))
         (set session.loading-anim-pending true)
-        (vim.defer_fn
-          (fn []
-            (set session.loading-anim-pending false)
-            (when (session-prompt-valid? session)
-              (if (and (session-busy? session)
-                       animation-enabled?
-                       (animation-enabled? session :loading))
-                  (do
-                    (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
-                    (pcall session.meta.refresh_statusline)
-                    (refresh-prompt-highlights! session))
-                  (when (~= session.loading-anim-phase nil)
-                    (set session.loading-anim-phase nil)
-                    (pcall session.meta.refresh_statusline)))))
-          (animation-duration-ms session :loading 90))))
+        (let [delay (if session.loading-idle-pending
+                        120
+                        (animation-duration-ms session :loading 90))]
+          (vim.defer_fn
+            (fn []
+              (set session.loading-anim-pending false)
+              (when (session-prompt-valid? session)
+                (if (and (session-busy? session)
+                         animation-enabled?
+                         (animation-enabled? session :loading))
+                    (do
+                      (set session.loading-idle-pending false)
+                      (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
+                      (pcall session.meta.refresh_statusline)
+                      (refresh-prompt-highlights! session)
+                      (schedule-loading-indicator! session))
+                    (if session.loading-anim-phase
+                        (if session.loading-idle-pending
+                            (when (session-actually-idle? session)
+                              (set session.loading-idle-pending false)
+                              (set session.loading-anim-phase nil)
+                              (pcall session.meta.refresh_statusline))
+                            (do
+                              (set session.loading-idle-pending true)
+                              (schedule-loading-indicator! session)))
+                        (set session.loading-idle-pending false)))))
+            delay))))
 
     (fn render-project-flags-footer!
       [session]
