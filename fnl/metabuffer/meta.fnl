@@ -34,6 +34,29 @@
            (~= session.loading-anim-phase nil)
            session.loading-idle-pending)))
 
+(fn results-middle-group
+  [session]
+  (or (and session session.results-statusline-middle-group)
+      "MetaStatuslineMiddle"))
+
+(fn results-group
+  [session group]
+  (or (and session
+           session.results-statusline-pulse-suffix
+           (.. group session.results-statusline-pulse-suffix))
+      group))
+
+(fn ping-pong-center
+  [phase width]
+  (let [w (math.max 1 (or width 1))]
+    (if (<= w 1)
+        1
+        (let [period (math.max 1 (- (* 2 w) 2))
+              step (% (or phase 0) period)]
+          (if (< step w)
+              (+ step 1)
+              (- period step -1))))))
+
 (fn status-fragment
   [group text]
   (if (or (= (type text) "nil") (= text ""))
@@ -41,16 +64,16 @@
       (.. "%#" group "#" (string.gsub text "%%" "%%%%"))))
 
 (fn project-flag-fragment
-  [name on?]
-  (.. (status-fragment "MetaStatuslineKey" (if on? "+" "-"))
-      (status-fragment (if on? "MetaStatuslineFlagOn" "MetaStatuslineFlagOff") name)))
+  [session name on?]
+  (.. (status-fragment (results-group session "MetaStatuslineKey") (if on? "+" "-"))
+      (status-fragment (results-group session (if on? "MetaStatuslineFlagOn" "MetaStatuslineFlagOff")) name)))
 
 (fn loading-fragment
   [session]
   (if (loading-visible? session)
       (let [word "Working"
             phase (or session.loading-anim-phase 0)
-            center (+ 1 (% phase (# word)))
+            center (ping-pong-center phase (# word))
             out []]
         (for [i 1 (# word)]
           (let [dist (math.abs (- i center))
@@ -73,18 +96,18 @@
   [session]
   (if (and session session.project-mode)
       (let [parts []
-            flags [(project-flag-fragment "hidden" (not (not session.effective-include-hidden)))
-                   (project-flag-fragment "ignored" (not (not session.effective-include-ignored)))
-                   (project-flag-fragment "deps" (not (not session.effective-include-deps)))
-                   (project-flag-fragment "file" (not (not session.effective-include-files)))
-                   (project-flag-fragment "binary" (not (not session.effective-include-binary)))
-                   (project-flag-fragment "hex" (not (not session.effective-include-hex)))
-                   (project-flag-fragment "prefilter" (not (not session.prefilter-mode)))
-                   (project-flag-fragment "lazy" (not (not session.lazy-mode)))]]
+            flags [(project-flag-fragment session "hidden" (not (not session.effective-include-hidden)))
+                   (project-flag-fragment session "ignored" (not (not session.effective-include-ignored)))
+                   (project-flag-fragment session "deps" (not (not session.effective-include-deps)))
+                   (project-flag-fragment session "file" (not (not session.effective-include-files)))
+                   (project-flag-fragment session "binary" (not (not session.effective-include-binary)))
+                   (project-flag-fragment session "hex" (not (not session.effective-include-hex)))
+                   (project-flag-fragment session "prefilter" (not (not session.prefilter-mode)))
+                   (project-flag-fragment session "lazy" (not (not session.lazy-mode)))]]
         (each [_ frag (ipairs flags)]
           (when (> (# frag) 0)
             (table.insert parts frag)))
-        (table.concat parts (status-fragment "MetaStatuslineMiddle" "  ")))
+        (table.concat parts (status-fragment (results-middle-group session) "  ")))
       ""))
 
 (fn results-statusline-left
@@ -95,7 +118,7 @@
                        (vim.api.nvim_buf_is_valid buf)
                        (. vim.bo buf :modified))
         modified-fragment (if modified?
-                              (status-fragment "MetaStatuslineIndicator" "[+]")
+                              (status-fragment (results-group session "MetaStatuslineIndicator") "[+]")
                               "")
         loading (loading-fragment session)
         debug (or self.debug_out "")
@@ -105,10 +128,10 @@
     (when (> (# loading) 0)
       (table.insert parts loading))
     (when (> (# debug) 0)
-      (table.insert parts (status-fragment "MetaStatuslineIndicator" debug)))
+      (table.insert parts (status-fragment (results-group session "MetaStatuslineIndicator") debug)))
     (if (= (# parts) 0)
         ""
-        (.. " " (table.concat parts (status-fragment "MetaStatuslineMiddle" "  "))))))
+        (.. " " (table.concat parts (status-fragment (results-middle-group session) "  "))))))
 
 (fn results-statusline-right
   [self]
@@ -446,7 +469,8 @@
               (. (self.matcher) :name)
               (self.case)
               hl-prefix
-              (self.syntax))
+              (self.syntax)
+              (results-middle-group self.session))
             (when (and self.session
                        self.session.prompt-win
                        (vim.api.nvim_win_is_valid self.session.prompt-win))

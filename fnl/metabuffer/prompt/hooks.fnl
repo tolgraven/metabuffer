@@ -200,6 +200,17 @@
            (not session.prompt-update-dirty)
            (not session.lazy-refresh-dirty)))
 
+    (fn set-results-loading-pulse!
+      [session]
+      (if (and session session.loading-anim-phase)
+          (let [step (+ (% (or session.loading-anim-phase 0) 8) 1)
+                suffix (.. "Pulse" (tostring step))]
+            (set session.results-statusline-pulse-suffix suffix)
+            (set session.results-statusline-middle-group (.. "MetaStatuslineMiddle" suffix)))
+          (do
+            (set session.results-statusline-pulse-suffix nil)
+            (set session.results-statusline-middle-group nil))))
+
     (var refresh-prompt-highlights! nil)
 
     (fn schedule-loading-indicator!
@@ -216,6 +227,7 @@
                    (= session.loading-anim-phase nil))
           (set session.loading-idle-pending false)
           (set session.loading-anim-phase 0)
+          (set-results-loading-pulse! session)
           (pcall session.meta.refresh_statusline))
         (set session.loading-anim-pending true)
         (let [delay (if session.loading-idle-pending
@@ -225,25 +237,30 @@
             (fn []
               (set session.loading-anim-pending false)
               (when (session-prompt-valid? session)
-                (if (and (session-busy? session)
-                         animation-enabled?
-                         (animation-enabled? session :loading))
-                    (do
-                      (set session.loading-idle-pending false)
-                      (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
-                      (pcall session.meta.refresh_statusline)
-                      (refresh-prompt-highlights! session)
-                      (schedule-loading-indicator! session))
-                    (if session.loading-anim-phase
-                        (if session.loading-idle-pending
-                            (when (session-actually-idle? session)
-                              (set session.loading-idle-pending false)
-                              (set session.loading-anim-phase nil)
-                              (pcall session.meta.refresh_statusline))
-                            (do
-                              (set session.loading-idle-pending true)
-                              (schedule-loading-indicator! session)))
-                        (set session.loading-idle-pending false)))))
+                (let [animating? (and (session-busy? session)
+                                      animation-enabled?
+                                      (animation-enabled? session :loading))]
+                  (if animating?
+                      (do
+                        (set session.loading-idle-pending false)
+                        (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
+                        (set-results-loading-pulse! session)
+                        (pcall session.meta.refresh_statusline)
+                        (refresh-prompt-highlights! session)
+                        (schedule-loading-indicator! session))
+                      (if session.loading-anim-phase
+                          (if session.loading-idle-pending
+                              (when (session-actually-idle? session)
+                                (set session.loading-idle-pending false)
+                                (set session.loading-anim-phase nil)
+                                (set-results-loading-pulse! session)
+                                (pcall session.meta.refresh_statusline))
+                              (do
+                                (set session.loading-idle-pending true)
+                                (schedule-loading-indicator! session)))
+                          (do
+                            (set session.loading-idle-pending false)
+                            (set-results-loading-pulse! session))))))
             delay))))
 
     (fn render-project-flags-footer!
@@ -803,6 +820,6 @@
         (apply-emacs-insert-fallbacks router session)))
 
     {:register! register!
-     :refresh! refresh-prompt-highlights!})))
+     :refresh! refresh-prompt-highlights!}))))
 
 M

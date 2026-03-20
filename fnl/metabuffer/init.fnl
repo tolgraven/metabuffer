@@ -69,6 +69,13 @@
                                  15)))
     opts))
 
+(fn statusline-color-from-with-bg
+  [group bg-fn]
+  (let [opts (statusline-color-from group)]
+    (set (. opts :default) true)
+    (set (. opts :bg) (bg-fn))
+    opts))
+
 (fn hit-hl
   [main-group curl-group]
   (let [opts {:default true :undercurl true}
@@ -277,6 +284,13 @@
     (set (. opts :bg) (meta-statusline-bg))
     opts))
 
+(fn meta-statusline-middle-hl-with-bg
+  [bg-fn]
+  (let [opts (plain-hl-from "StatusLine")]
+    (set (. opts :default) true)
+    (set (. opts :bg) (bg-fn))
+    opts))
+
 (fn meta-preview-statusline-hl
   []
   (let [opts (plain-hl-from "StatusLine")
@@ -288,6 +302,23 @@
 (set meta-preview-statusline-bg
   (fn []
     (meta-statusline-bg)))
+
+(fn results-pulse-bg
+  [step]
+  (let [base (meta-statusline-bg)]
+    (if (= step 2)
+        (or (brighten-rgb base 0.02) base)
+        (= step 3)
+        (or (brighten-rgb base 0.04) base)
+        (= step 4)
+        (or (brighten-rgb base 0.02) base)
+        (= step 6)
+        (or (darken-rgb base 0.02) base)
+        (= step 7)
+        (or (darken-rgb base 0.04) base)
+        (= step 8)
+        (or (darken-rgb base 0.02) base)
+        base)))
 
 (fn cterm-bg
   [group]
@@ -410,6 +441,14 @@
     (hi 0 "MetaStatuslineKey" (statusline-color-from "Comment"))
     (hi 0 "MetaStatuslineFlagOn" (statusline-color-from "String"))
     (hi 0 "MetaStatuslineFlagOff" (statusline-color-from "ErrorMsg"))
+    (for [i 1 8]
+      (let [bg-fn (fn [] (results-pulse-bg i))
+            suffix (tostring i)]
+        (hi 0 (.. "MetaStatuslineMiddlePulse" suffix) (meta-statusline-middle-hl-with-bg bg-fn))
+        (hi 0 (.. "MetaStatuslineIndicatorPulse" suffix) (statusline-color-from-with-bg "Tag" bg-fn))
+        (hi 0 (.. "MetaStatuslineKeyPulse" suffix) (statusline-color-from-with-bg "Comment" bg-fn))
+        (hi 0 (.. "MetaStatuslineFlagOnPulse" suffix) (statusline-color-from-with-bg "String" bg-fn))
+        (hi 0 (.. "MetaStatuslineFlagOffPulse" suffix) (statusline-color-from-with-bg "ErrorMsg" bg-fn))))
     (hi 0 "MetaSearchHitAll" (hit-hl "Statement" "Error"))
     (hi 0 "MetaSearchHitBuffer" (hit-hl "Statement" "Error"))
     (hi 0 "MetaSearchHitFuzzy" (hit-hl "Number" "WarningMsg"))
