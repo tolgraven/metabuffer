@@ -151,12 +151,35 @@ local function effective_scroll_target(win, restore_view, target)
   end
   return vim.api.nvim_win_call(win, _21_)
 end
+local function scroll_command_text(action)
+  if (action == "line-down") then
+    return "\5"
+  else
+    if (action == "line-up") then
+      return "\25"
+    else
+      if (action == "half-down") then
+        return "\4"
+      else
+        if (action == "half-up") then
+          return "\21"
+        else
+          if (action == "page-down") then
+            return "\6"
+          else
+            return "\2"
+          end
+        end
+      end
+    end
+  end
+end
 M["move-selection!"] = function(deps, prompt_buf, delta)
   local active_by_prompt = deps.router["active-by-prompt"]
   local session = active_by_prompt[prompt_buf]
   if session then
     local runner
-    local function _22_()
+    local function _27_()
       hide_scroll_cursor_21(session)
       local meta = session.meta
       local max = #meta.buf.indices
@@ -171,7 +194,7 @@ M["move-selection!"] = function(deps, prompt_buf, delta)
       end
       return refresh_windows_21(deps, session, false)
     end
-    runner = _22_
+    runner = _27_
     local mode = vim.api.nvim_get_mode().mode
     if ((type(mode) == "string") and vim.startswith(mode, "i")) then
       return vim.schedule(runner)
@@ -188,10 +211,12 @@ M["scroll-main!"] = function(deps, prompt_buf, action)
   local session = active_by_prompt[prompt_buf]
   if (session and vim.api.nvim_win_is_valid(session.meta.win.window)) then
     local runner
-    local function _27_()
+    local function _32_()
       hide_scroll_cursor_21(session)
+      local return_win = vim.api.nvim_get_current_win()
+      local return_mode = vim.api.nvim_get_mode().mode
       local result
-      local function _28_()
+      local function _33_()
         local line_count = vim.api.nvim_buf_line_count(session.meta.buf.buffer)
         local win_height = math.max(1, vim.api.nvim_win_get_height(session.meta.win.window))
         local half_step = math.max(1, math.floor((win_height / 2)))
@@ -199,10 +224,12 @@ M["scroll-main!"] = function(deps, prompt_buf, action)
         local step
         if ((action == "line-down") or (action == "line-up")) then
           step = 1
-        elseif ((action == "half-down") or (action == "half-up")) then
-          step = half_step
         else
-          step = page_step
+          if ((action == "half-down") or (action == "half-up")) then
+            step = half_step
+          else
+            step = page_step
+          end
         end
         local dir
         if ((action == "line-down") or (action == "half-down") or (action == "page-down")) then
@@ -221,40 +248,51 @@ M["scroll-main!"] = function(deps, prompt_buf, action)
         local target0 = {topline = new_top, lnum = new_lnum, col = old_col, leftcol = (logical_view.leftcol or 0)}
         local target = effective_scroll_target(session.meta.win.window, view, target0)
         local animate_3f = (animation_mod and animation_mod["enabled?"](session, "scroll") and (animation_mod["duration-ms"](session, "scroll", 140) > 0) and not (step == 1))
-        session["scroll-command-view"] = target
-        if (animation_mod and animate_3f) then
-          session["scroll-animating?"] = true
-          local function _31_()
-            if (session and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
-              session["scroll-animating?"] = false
-              session["scroll-command-view"] = nil
-              M["maybe-sync-from-main!"](deps, session, true)
-              return restore_scroll_cursor_21(session)
-            else
-              return nil
-            end
+        local mini_scroll_3f = (animate_3f and (animation_mod["animation-backend"](session, "scroll") == "mini") and animation_mod["supports-backend?"]("mini"))
+        local finish_21
+        local function _37_()
+          if (session and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
+            session["scroll-animating?"] = false
+            session["scroll-command-view"] = nil
+            M["maybe-sync-from-main!"](deps, session, true)
+            return restore_scroll_cursor_21(session)
+          else
+            return nil
           end
-          animation_mod["animate-scroll-view!"](session, "smooth-scroll", session.meta.win.window, view, target, animation_mod["duration-ms"](session, "scroll", 140), {["done!"] = _31_})
+        end
+        finish_21 = _37_
+        session["scroll-command-view"] = target
+        if mini_scroll_3f then
+          session["scroll-animating?"] = true
+          local function _39_()
+            return vim.cmd(("normal! " .. scroll_command_text(action)))
+          end
+          animation_mod["animate-scroll-action-mini!"](session, session.meta.win.window, animation_mod["duration-ms"](session, "scroll", 140), _39_, {["return-win"] = return_win, ["return-mode"] = return_mode, ["done!"] = finish_21})
           return {row = (target.lnum or new_lnum), animated = true}
         else
-          vim.fn.winrestview(target)
-          session["scroll-animating?"] = false
-          session["scroll-command-view"] = nil
-          return {row = (target.lnum or new_lnum), animated = false}
+          if animate_3f then
+            session["scroll-animating?"] = true
+            animation_mod["animate-scroll-view!"](session, "smooth-scroll", session.meta.win.window, view, target, animation_mod["duration-ms"](session, "scroll", 140), {["return-win"] = return_win, ["return-mode"] = return_mode, ["done!"] = finish_21})
+            return {row = (target.lnum or new_lnum), animated = true}
+          else
+            vim.fn.winrestview(target)
+            session["scroll-animating?"] = false
+            session["scroll-command-view"] = nil
+            return {row = (target.lnum or new_lnum), animated = false}
+          end
         end
       end
-      result = vim.api.nvim_win_call(session.meta.win.window, _28_)
+      result = vim.api.nvim_win_call(session.meta.win.window, _33_)
       local target_row = result.row
       local animated_3f = result.animated
       if animated_3f then
         set_selected_index_21(session, target_row)
-        pcall(session.meta.refresh_statusline)
-        return nil
+        return pcall(session.meta.refresh_statusline)
       else
         return sync_selection_to_row_21(deps, session, target_row)
       end
     end
-    runner = _27_
+    runner = _32_
     local mode = vim.api.nvim_get_mode().mode
     if ((type(mode) == "string") and vim.startswith(mode, "i")) then
       return vim.schedule(runner)
@@ -275,26 +313,26 @@ M["maybe-sync-from-main!"] = function(deps, session, force_refresh)
   local update_info_window = refresh["info!"]
   local context_window = windows.context
   local session_view = mods["session-view"]
-  local function _37_(s)
+  local function _45_(s)
     return schedule_source_syntax_refresh_21(deps, s)
   end
-  local function _38_(s)
+  local function _46_(s)
     if (context_window and context_window["update!"]) then
       return context_window["update!"](s)
     else
       return nil
     end
   end
-  return session_view["maybe-sync-from-main!"](session, force_refresh, {["active-by-prompt"] = active_by_prompt, ["schedule-source-syntax-refresh!"] = _37_, ["update-preview-window!"] = update_preview_window, ["update-info-window"] = update_info_window, ["update-context-window!"] = _38_})
+  return session_view["maybe-sync-from-main!"](session, force_refresh, {["active-by-prompt"] = active_by_prompt, ["schedule-source-syntax-refresh!"] = _45_, ["update-preview-window!"] = update_preview_window, ["update-info-window"] = update_info_window, ["update-context-window!"] = _46_})
 end
 M["schedule-scroll-sync!"] = function(deps, session)
   local timing = deps.timing
   local mods = deps.mods
   local scroll_sync_debounce_ms = timing["scroll-sync-debounce-ms"]
   local session_view = mods["session-view"]
-  local function _40_(s, force_refresh)
+  local function _48_(s, force_refresh)
     return M["maybe-sync-from-main!"](deps, s, force_refresh)
   end
-  return session_view["schedule-scroll-sync!"](session, {["scroll-sync-debounce-ms"] = scroll_sync_debounce_ms, ["maybe-sync-from-main!"] = _40_})
+  return session_view["schedule-scroll-sync!"](session, {["scroll-sync-debounce-ms"] = scroll_sync_debounce_ms, ["maybe-sync-from-main!"] = _48_})
 end
 return M

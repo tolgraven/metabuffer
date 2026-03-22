@@ -186,20 +186,13 @@ local function remove_session_21(deps, session)
     return nil
   end
 end
+local prompt_window_opts = {winfixwidth = true, winfixheight = true, signcolumn = "no", foldcolumn = "0", statusline = " ", wrap = true, linebreak = true, number = false, relativenumber = false, spell = false}
 local function apply_prompt_window_opts_21(win)
   if (win and vim.api.nvim_win_is_valid(win)) then
     pcall(vim.api.nvim_win_set_var, win, "airline_disable_statusline", 1)
-    local wo = vim.wo[win]
-    wo["winfixwidth"] = true
-    wo["winfixheight"] = true
-    wo["number"] = false
-    wo["relativenumber"] = false
-    wo["signcolumn"] = "no"
-    wo["foldcolumn"] = "0"
-    wo["statusline"] = " "
-    wo["spell"] = false
-    wo["wrap"] = true
-    wo["linebreak"] = true
+    for name, value in pairs(prompt_window_opts) do
+      pcall(vim.api.nvim_set_option_value, name, value, {win = win})
+    end
     return nil
   else
     return nil

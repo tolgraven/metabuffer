@@ -1,4 +1,4 @@
-(import-macros {: when-let : when-not} :io.gitlab.andreyorst.cljlib.core)
+(require-macros :io.gitlab.andreyorst.cljlib.core)
 
 (local M {})
 (local util (require :metabuffer.util))
@@ -155,21 +155,25 @@
       (when (and session.origin-win (vim.api.nvim_win_is_valid session.origin-win))
         (pcall vim.api.nvim_win_del_var session.origin-win "airline_disable_statusline")))))
 
+(local prompt-window-opts {
+  :winfixwidth true
+  :winfixheight true
+  :number false
+  :relativenumber false
+  :signcolumn "no"
+  :foldcolumn "0"
+  :statusline " "
+  :spell false
+  :wrap true
+  :linebreak true
+})
+
 (fn apply-prompt-window-opts!
   [win]
   (when (and win (vim.api.nvim_win_is_valid win))
     (pcall vim.api.nvim_win_set_var win "airline_disable_statusline" 1)
-    (let [wo (. vim.wo win)]
-      (set (. wo :winfixwidth) true)
-      (set (. wo :winfixheight) true)
-      (set (. wo :number) false)
-      (set (. wo :relativenumber) false)
-      (set (. wo :signcolumn) "no")
-      (set (. wo :foldcolumn) "0")
-      (set (. wo :statusline) " ")
-      (set (. wo :spell) false)
-      (set (. wo :wrap) true)
-      (set (. wo :linebreak) true))))
+    (each [name value (pairs prompt-window-opts)]
+      (pcall vim.api.nvim_set_option_value name value {:win win}))))
 
 (fn wipe-replaced-split-buffer!
   [win next-buf]

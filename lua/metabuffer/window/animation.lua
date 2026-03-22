@@ -151,7 +151,7 @@ local function ensure_mini_global_21(session)
   local mini = mini_animate_mod()
   if mini then
     if not mini_autocmds_present_3f() then
-      mini.setup({cursor = {enable = false}, scroll = {enable = true}, resize = {enable = true}, open = {enable = false}, close = {enable = false}})
+      mini.setup({cursor = {enable = true, timing = mini.gen_timing.cubic({easing = "in-out", duration = 100, unit = "total"})}, scroll = {enable = true}, resize = {enable = true}, open = {enable = false}, close = {enable = false}})
     else
     end
     ensure_mini_scope_21()
@@ -183,17 +183,29 @@ local function once(f)
   end
   return _19_
 end
+local function restore_window_focus_21(return_win, return_mode)
+  if (return_win and vim.api.nvim_win_is_valid(return_win)) then
+    pcall(vim.api.nvim_set_current_win, return_win)
+    if ((type(return_mode) == "string") and vim.startswith(return_mode, "i")) then
+      return pcall(vim.cmd, "startinsert")
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
 local function mini_run_21(mini, session, key, n_steps, duration_ms0, active_3f, step_action)
   local token = next_token_21(session, key)
   local timing = mini_timing(mini, duration_ms0, n_steps)
-  local function _21_(step)
+  local function _23_(step)
     if (not active_token_3f(session, key, token) or (active_3f and not active_3f())) then
       return false
     else
       return step_action(step)
     end
   end
-  return mini.animate(_21_, timing, {max_steps = (n_steps + 1)})
+  return mini.animate(_23_, timing, {max_steps = (n_steps + 1)})
 end
 local function mini_float_winblend_fn(mini, from_blend, to_blend)
   return mini.gen_winblend.linear({from = from_blend, to = to_blend})
@@ -205,12 +217,12 @@ local function mini_after_21(animation_type, delay_ms, action)
 end
 local function mini_buffer_config(session)
   local mini = mini_animate_mod()
-  local function _23_(n)
+  local function _25_(n)
     return (n > 1)
   end
-  return {cursor = {enable = false}, scroll = {enable = enabled_3f(session, "scroll"), timing = mini.gen_timing.cubic({easing = "in-out", duration = duration_ms(session, "scroll", 140), unit = "total"}), subscroll = mini.gen_subscroll.equal({predicate = _23_, max_output_steps = 60})}, resize = {enable = enabled_3f(session, "prompt"), timing = mini.gen_timing.cubic({easing = "in-out", duration = duration_ms(session, "prompt", 140), unit = "total"}), subresize = mini.gen_subresize.equal()}, open = {enable = false}, close = {enable = false}}
+  return {cursor = {enable = true, timing = mini.gen_timing.cubic({easing = "in-out", duration = 100, unit = "total"})}, scroll = {enable = enabled_3f(session, "scroll"), timing = mini.gen_timing.cubic({easing = "in-out", duration = duration_ms(session, "scroll", 100), unit = "total"}), subscroll = mini.gen_subscroll.equal({predicate = _25_, max_output_steps = 60})}, resize = {enable = enabled_3f(session, "prompt"), timing = mini.gen_timing.cubic({easing = "in-out", duration = duration_ms(session, "prompt", 140), unit = "total"}), subresize = mini.gen_subresize.equal()}, open = {enable = false}, close = {enable = false}}
 end
-local function _24_(session)
+local function _26_(session)
   if (session and supports_backend_3f("mini")) then
     local cfg = mini_buffer_config(session)
     for _, buf in ipairs({(session.meta and session.meta.buf and session.meta.buf.buffer), session["prompt-buf"], session["info-buf"]}) do
@@ -226,8 +238,8 @@ local function _24_(session)
     return nil
   end
 end
-mark_mini_session_21 = _24_
-local function _27_(session)
+mark_mini_session_21 = _26_
+local function _29_(session)
   if session then
     for _, buf in ipairs({(session.meta and session.meta.buf and session.meta.buf.buffer), session["prompt-buf"], session["info-buf"]}) do
       if (buf and vim.api.nvim_buf_is_valid(buf)) then
@@ -242,8 +254,8 @@ local function _27_(session)
     return nil
   end
 end
-unmark_mini_session_21 = _27_
-local function _30_(animation_type, action)
+unmark_mini_session_21 = _29_
+local function _32_(animation_type, action)
   local mini = mini_animate_mod()
   if mini then
     return mini.execute_after(animation_type, action)
@@ -251,7 +263,7 @@ local function _30_(animation_type, action)
     return action()
   end
 end
-execute_after_21 = _30_
+execute_after_21 = _32_
 local function set_win_height_21(win, height)
   return pcall(vim.api.nvim_win_set_height, win, math.max(1, height))
 end
@@ -281,6 +293,7 @@ end
 local animate_win_width_21 = nil
 local animate_float_21 = nil
 local animate_view_21 = nil
+local animate_scroll_action_mini_21 = nil
 local animate_scroll_view_mini_21 = nil
 local animate_scroll_view_21 = nil
 local function run_21(session, key, opts)
@@ -303,19 +316,19 @@ local function run_21(session, key, opts)
         elapsed = wait
       end
       if (elapsed < wait) then
-        local function _35_()
+        local function _37_()
           return frame_21(idx)
         end
-        return vim.defer_fn(_35_, (wait - elapsed))
+        return vim.defer_fn(_37_, (wait - elapsed))
       else
         last_frame_ms = now
         local t = ease_in_out_cubic((idx / total))
         tick_21(t, idx, total)
         if (idx < total) then
-          local function _36_()
+          local function _38_()
             return frame_21((idx + 1))
           end
-          return vim.defer_fn(_36_, wait)
+          return vim.defer_fn(_38_, wait)
         else
           if done_21 then
             return done_21()
@@ -340,20 +353,20 @@ local function animate_win_height_21(session, key, win, from, to, duration_ms0, 
     step = -1
   end
   local opts0 = (opts or {})
-  local function _42_()
-    local function _43_()
+  local function _44_()
+    local function _45_()
       return vim.api.nvim_win_is_valid(win)
     end
-    local function _44_(_, idx)
+    local function _46_(_, idx)
       local height
-      local function _45_()
+      local function _47_()
         if (idx == 0) then
           return start
         else
           return (start + (idx * step))
         end
       end
-      height = math.max(1, _45_())
+      height = math.max(1, _47_())
       pcall(vim.api.nvim_win_set_height, win, height)
       local val_110_auto = opts0["tick!"]
       if val_110_auto then
@@ -363,7 +376,7 @@ local function animate_win_height_21(session, key, win, from, to, duration_ms0, 
         return nil
       end
     end
-    local function _47_()
+    local function _49_()
       pcall(vim.api.nvim_win_set_height, win, stop)
       local val_110_auto = opts0["done!"]
       if val_110_auto then
@@ -373,9 +386,9 @@ local function animate_win_height_21(session, key, win, from, to, duration_ms0, 
         return nil
       end
     end
-    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(1, math.abs((stop - start))), ["active?"] = _43_, ["tick!"] = _44_, ["done!"] = _47_})
+    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(1, math.abs((stop - start))), ["active?"] = _45_, ["tick!"] = _46_, ["done!"] = _49_})
   end
-  return with_split_mins(_42_)
+  return with_split_mins(_44_)
 end
 local function animate_win_height_stepwise_21(session, key, win, from, to, duration_ms0, opts)
   local start = math.max(1, from)
@@ -392,9 +405,9 @@ local function animate_win_height_stepwise_21(session, key, win, from, to, durat
   local opts0 = (opts or {})
   if ((animation_backend(session, "prompt") == "mini") and supports_backend_3f("mini")) then
     ensure_mini_global_21(session)
-    local function _50_()
+    local function _52_()
       set_win_height_21(win, stop)
-      local function _51_()
+      local function _53_()
         local val_110_auto = opts0["done!"]
         if val_110_auto then
           local done_21 = val_110_auto
@@ -403,15 +416,15 @@ local function animate_win_height_stepwise_21(session, key, win, from, to, durat
           return nil
         end
       end
-      return mini_after_21("resize", duration_ms0, _51_)
+      return mini_after_21("resize", duration_ms0, _53_)
     end
-    return with_split_mins(_50_)
+    return with_split_mins(_52_)
   else
-    local function _53_()
-      local function _54_()
+    local function _55_()
+      local function _56_()
         return vim.api.nvim_win_is_valid(win)
       end
-      local function _55_(_, idx)
+      local function _57_(_, idx)
         local next_height
         if (idx == 0) then
           next_height = start
@@ -433,7 +446,7 @@ local function animate_win_height_stepwise_21(session, key, win, from, to, durat
           return nil
         end
       end
-      local function _59_()
+      local function _61_()
         set_win_height_21(win, stop)
         local val_110_auto = opts0["done!"]
         if val_110_auto then
@@ -443,20 +456,20 @@ local function animate_win_height_stepwise_21(session, key, win, from, to, durat
           return nil
         end
       end
-      return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(1, math.ceil((math.max(1, delta) / stride))), ["active?"] = _54_, ["tick!"] = _55_, ["done!"] = _59_})
+      return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(1, math.ceil((math.max(1, delta) / stride))), ["active?"] = _56_, ["tick!"] = _57_, ["done!"] = _61_})
     end
-    return with_split_mins(_53_)
+    return with_split_mins(_55_)
   end
 end
-local function _62_(session, key, win, from, to, duration_ms0, opts)
+local function _64_(session, key, win, from, to, duration_ms0, opts)
   local start = math.max(1, from)
   local stop = math.max(1, to)
   local opts0 = (opts or {})
-  local function _63_()
-    local function _64_()
+  local function _65_()
+    local function _66_()
       return vim.api.nvim_win_is_valid(win)
     end
-    local function _65_(t)
+    local function _67_(t)
       local width = math.max(1, math.floor((0.5 + lerp(start, stop, t))))
       pcall(vim.api.nvim_win_set_width, win, width)
       local val_110_auto = opts0["tick!"]
@@ -467,7 +480,7 @@ local function _62_(session, key, win, from, to, duration_ms0, opts)
         return nil
       end
     end
-    local function _67_()
+    local function _69_()
       pcall(vim.api.nvim_win_set_width, win, stop)
       local val_110_auto = opts0["done!"]
       if val_110_auto then
@@ -477,22 +490,22 @@ local function _62_(session, key, win, from, to, duration_ms0, opts)
         return nil
       end
     end
-    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _64_, ["tick!"] = _65_, ["done!"] = _67_})
+    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _66_, ["tick!"] = _67_, ["done!"] = _69_})
   end
-  return with_split_mins(_63_)
+  return with_split_mins(_65_)
 end
-animate_win_width_21 = _62_
-local function _69_(session, key, win, from_cfg, to_cfg, from_blend, to_blend, duration_ms0, opts)
+animate_win_width_21 = _64_
+local function _71_(session, key, win, from_cfg, to_cfg, from_blend, to_blend, duration_ms0, opts)
   local opts0 = (opts or {})
   local kind = (opts0.kind or "info")
   if ((animation_backend(session, kind) == "mini") and supports_backend_3f("mini")) then
     local mini = mini_animate_mod()
     local n_steps = math.max(2, math.floor((duration_ms0 / target_frame_ms)))
     local blend_fn = mini_float_winblend_fn(mini, from_blend, to_blend)
-    local function _70_()
+    local function _72_()
       return vim.api.nvim_win_is_valid(win)
     end
-    local function _71_(step)
+    local function _73_(step)
       local t = (step / n_steps)
       local cfg = float_step_config(from_cfg, to_cfg, t)
       local blend = math.max(0, math.min(100, blend_fn(step, n_steps)))
@@ -512,17 +525,17 @@ local function _69_(session, key, win, from_cfg, to_cfg, from_blend, to_blend, d
         return false
       end
     end
-    return mini_run_21(mini, session, key, n_steps, duration_ms0, _70_, _71_)
+    return mini_run_21(mini, session, key, n_steps, duration_ms0, _72_, _73_)
   else
-    local function _74_()
+    local function _76_()
       return vim.api.nvim_win_is_valid(win)
     end
-    local function _75_(t)
+    local function _77_(t)
       local cfg = float_step_config(from_cfg, to_cfg, t)
       local blend = math.max(0, math.min(100, math.floor((0.5 + lerp(from_blend, to_blend, t)))))
       return apply_float_step_21(win, cfg, blend, opts0, t)
     end
-    local function _76_()
+    local function _78_()
       apply_float_step_21(win, to_cfg, to_blend, opts0, 1)
       local val_110_auto = opts0["done!"]
       if val_110_auto then
@@ -532,26 +545,26 @@ local function _69_(session, key, win, from_cfg, to_cfg, from_blend, to_blend, d
         return nil
       end
     end
-    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _74_, ["tick!"] = _75_, ["done!"] = _76_})
+    return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _76_, ["tick!"] = _77_, ["done!"] = _78_})
   end
 end
-animate_float_21 = _69_
-local function _79_(session, key, win, from_view, to_view, duration_ms0, opts)
+animate_float_21 = _71_
+local function _81_(session, key, win, from_view, to_view, duration_ms0, opts)
   local opts0 = (opts or {})
-  local function _80_()
+  local function _82_()
     return vim.api.nvim_win_is_valid(win)
   end
-  local function _81_(t)
-    local function _82_()
+  local function _83_(t)
+    local function _84_()
       return pcall(vim.fn.winrestview, {topline = math.max(1, math.floor((0.5 + lerp((from_view.topline or 1), (to_view.topline or 1), t)))), lnum = math.max(1, math.floor((0.5 + lerp((from_view.lnum or 1), (to_view.lnum or 1), t)))), leftcol = math.max(0, math.floor((0.5 + lerp((from_view.leftcol or 0), (to_view.leftcol or 0), t)))), col = math.max(0, math.floor((0.5 + lerp((from_view.col or 0), (to_view.col or 0), t))))})
     end
-    return vim.api.nvim_win_call(win, _82_)
+    return vim.api.nvim_win_call(win, _84_)
   end
-  local function _83_()
-    local function _84_()
+  local function _85_()
+    local function _86_()
       return pcall(vim.fn.winrestview, to_view)
     end
-    vim.api.nvim_win_call(win, _84_)
+    vim.api.nvim_win_call(win, _86_)
     local val_110_auto = opts0["done!"]
     if val_110_auto then
       local done_21 = val_110_auto
@@ -560,35 +573,67 @@ local function _79_(session, key, win, from_view, to_view, duration_ms0, opts)
       return nil
     end
   end
-  return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _80_, ["tick!"] = _81_, ["done!"] = _83_})
+  return run_21(session, key, {["duration-ms"] = duration_ms0, steps = math.max(2, math.floor((duration_ms0 / target_frame_ms))), ["active?"] = _82_, ["tick!"] = _83_, ["done!"] = _85_})
 end
-animate_view_21 = _79_
-local function _86_(session, _key, win, _from_view, to_view, _duration_ms, opts)
-  ensure_mini_global_21(session)
-  local function _87_()
-    return pcall(vim.fn.winrestview, to_view)
+animate_view_21 = _81_
+local function _88_(session, win, duration_ms0, action, opts)
+  local opts0 = (opts or {})
+  local token = next_token_21(session, "mini-scroll-focus")
+  local return_win = opts0["return-win"]
+  local return_mode = opts0["return-mode"]
+  local done_21 = opts0["done!"]
+  local active_3f
+  local function _89_()
+    return active_token_3f(session, "mini-scroll-focus", token)
   end
-  vim.api.nvim_win_call(win, _87_)
-  local function _88_()
-    local val_110_auto = (opts or {})["done!"]
-    if val_110_auto then
-      local done_21 = val_110_auto
-      return done_21(to_view)
+  active_3f = _89_
+  local finish_21
+  local function _90_()
+    if active_3f() then
+      restore_window_focus_21(return_win, return_mode)
+      if done_21 then
+        return done_21()
+      else
+        return nil
+      end
     else
       return nil
     end
   end
-  return mini_after_21("scroll", duration_ms, _88_)
+  finish_21 = once(_90_)
+  ensure_mini_global_21(session)
+  if ((type(return_mode) == "string") and vim.startswith(return_mode, "i")) then
+    pcall(vim.cmd, "stopinsert")
+  else
+  end
+  pcall(vim.api.nvim_set_current_win, win)
+  local function _94_()
+    if (active_3f() and vim.api.nvim_win_is_valid(win)) then
+      pcall(vim.api.nvim_set_current_win, win)
+      action()
+      return mini_after_21("scroll", duration_ms0, finish_21)
+    else
+      return finish_21()
+    end
+  end
+  return vim.schedule(_94_)
 end
-animate_scroll_view_mini_21 = _86_
-local function _90_(session, key, win, from_view, to_view, duration_ms0, opts)
+animate_scroll_action_mini_21 = _88_
+local function _96_(session, _key, win, _from_view, to_view, duration_ms0, opts)
+  local function _97_()
+    return pcall(vim.fn.winrestview, to_view)
+  end
+  return animate_scroll_action_mini_21(session, win, duration_ms0, _97_, opts)
+end
+animate_scroll_view_mini_21 = _96_
+local function _98_(session, key, win, from_view, to_view, duration_ms0, opts)
   if ((animation_backend(session, "scroll") == "mini") and supports_backend_3f("mini")) then
     return animate_scroll_view_mini_21(session, key, win, from_view, to_view, duration_ms0, opts)
   else
     return animate_view_21(session, key, win, from_view, to_view, duration_ms0, opts)
   end
 end
-animate_scroll_view_21 = _90_
+animate_scroll_view_21 = _98_
 local function reset_mini_animate_cache_21()
   mini_animate_cache = nil
   mini_animate_tried_3f = false
@@ -597,10 +642,10 @@ end
 M["enabled?"] = enabled_3f
 M["duration-ms"] = duration_ms
 M["animation-backend"] = animation_backend
-local function _92_(session)
+local function _100_(session)
   return animation_backend(session, "scroll")
 end
-M["scroll-backend"] = _92_
+M["scroll-backend"] = _100_
 M["supports-backend?"] = supports_backend_3f
 M["supports-scroll-backend?"] = supports_backend_3f
 M["ensure-mini-global!"] = ensure_mini_global_21
@@ -614,5 +659,6 @@ M["animate-win-width!"] = animate_win_width_21
 M["animate-float!"] = animate_float_21
 M["animate-view!"] = animate_view_21
 M["animate-scroll-view!"] = animate_scroll_view_21
+M["animate-scroll-action-mini!"] = animate_scroll_action_mini_21
 M["reset-mini-animate-cache!"] = reset_mini_animate_cache_21
 return M

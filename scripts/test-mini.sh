@@ -72,7 +72,7 @@ default_jobs() {
 TEST_FILES=()
 while IFS= read -r file; do
   TEST_FILES+=("$file")
-done < <(rg --files tests | rg '^tests/.*/test_.*\.lua$' | sort)
+done < <(rg --files tests | rg '^tests/(screen|unit)(/.+)?/test_.*\.lua$' | sort)
 
 if [[ ${#TEST_FILES[@]} -eq 0 ]]; then
   echo "error: no test files matched tests/**/test_*.lua" >&2
@@ -119,6 +119,12 @@ if (( ${#POSITIONAL[@]} > 0 )); then
   FILTERS=("${POSITIONAL[@]}")
 fi
 
+SMOKE_TESTS=(
+  "tests/smoke/test_smoke_plugin_source.lua"
+  "tests/smoke/test_smoke_plain_launch.lua"
+  "tests/smoke/test_smoke_project_plain_launch.lua"
+)
+
 if [[ -n "${TEST_ONLY:-}" ]]; then
   echo "[mini-runner] note: TEST_ONLY is deprecated; pass selectors as script args instead"
   IFS=',' read -r -a LEGACY_FILTERS <<< "${TEST_ONLY}"
@@ -157,6 +163,24 @@ if [[ ${#FILTERS[@]} -gt 0 ]]; then
   TEST_FILES=("${FILTERED[@]}")
 fi
 
+ORDERED_TEST_FILES=()
+for smoke in "${SMOKE_TESTS[@]}"; do
+  ORDERED_TEST_FILES+=("$smoke")
+done
+for file in "${TEST_FILES[@]}"; do
+  skip=0
+  for smoke in "${SMOKE_TESTS[@]}"; do
+    if [[ "$file" == "$smoke" ]]; then
+      skip=1
+      break
+    fi
+  done
+  if (( skip == 0 )); then
+    ORDERED_TEST_FILES+=("$file")
+  fi
+done
+TEST_FILES=("${ORDERED_TEST_FILES[@]}")
+
 if [[ ${#TEST_FILES[@]} -eq 0 ]]; then
   echo "error: no tests selected after filtering" >&2
   exit 2
@@ -194,15 +218,11 @@ PY
 )
 
 echo "[mini-runner] running ${#TEST_FILES[@]} files with ${JOBS} parallel worker(s)"
+echo "[mini-runner] startup smoke tests first: ${SMOKE_TESTS[*]}"
 if (( PROFILE_MODE == 1 )); then
   echo "[mini-runner] profiling enabled"
   echo "[mini-runner] profile dir: $PROFILE_DIR"
 fi
-
-for i in "${!TEST_FILES[@]}"; do
-  idx=$((i + 1))
-  printf '%s\t%s\n' "$idx" "${TEST_FILES[$i]}" >> "$TMP_DIR/indexed.tsv"
-done
 
 run_worker() {
   local idx="$1"
@@ -219,6 +239,14 @@ run_worker() {
   local xdg_root="$tmp_dir/xdg-$idx"
   local timeout_flag="$tmp_dir/$idx.timeout"
   local timeout_s=$(((TEST_FILE_TIMEOUT_MS + 999) / 1000))
+  local worker_ui_animations="${TEST_UI_ANIMATIONS:-0}"
+
+  for smoke in "${SMOKE_TESTS[@]}"; do
+    if [[ "$file" == "$smoke" ]]; then
+      worker_ui_animations=1
+      break
+    fi
+  done
 
   local file_start_ms
   file_start_ms=$(python3 - <<'PY'
@@ -243,7 +271,7 @@ PY
     } >> "$log"
   fi
 
-  TEST_FILE="$file" TEST_PROFILE="$PROFILE_MODE" TEST_PROFILE_PATH="$profile" TEST_WORKER_INDEX="$idx" NVIM_APPNAME="$appname" \
+  TEST_FILE="$file" TEST_PROFILE="$PROFILE_MODE" TEST_PROFILE_PATH="$profile" TEST_WORKER_INDEX="$idx" TEST_UI_ANIMATIONS="$worker_ui_animations" NVIM_APPNAME="$appname" \
     TMPDIR="/tmp" \
     XDG_DATA_HOME="$xdg_root/data" \
     XDG_STATE_HOME="$xdg_root/state" \
@@ -310,9 +338,46 @@ export PROFILE_MODE
 export PROFILE_DIR
 export TEST_FILE_TIMEOUT_MS
 
-xargs -P "$JOBS" -n3 bash -c 'run_worker "$1" "$2" "$3"' _ < <(
-  awk -F '\t' '{print $1" "$2" '"$TMP_DIR"'"}' "$TMP_DIR/indexed.tsv"
+SMOKE_COUNT=${#SMOKE_TESTS[@]}
+for i in "${!SMOKE_TESTS[@]}"; do
+  idx=$((i + 1))
+  smoke="${SMOKE_TESTS[$i]}"
+  run_worker "$idx" "$smoke" "$TMP_DIR"
+  smoke_status_file="$TMP_DIR/$idx.status"
+  smoke_rc=99
+  if [[ -f "$smoke_status_file" ]]; then
+    smoke_rc=$(cat "$smoke_status_file")
+  fi
+  if [[ "$smoke_rc" != "0" ]]; then
+    : > "$FAIL_LIST_FILE"
+    echo "$smoke" >> "$FAIL_LIST_FILE"
+    TOTAL_END_MS=$(python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
 )
+    TOTAL_DT_MS=$((TOTAL_END_MS - TOTAL_START_MS))
+    echo "[mini-runner] FAIL file=$smoke rc=$smoke_rc"
+    echo "[mini-runner] TOTAL ${#TEST_FILES[@]} file(s) | failed=1 | elapsed=${TOTAL_DT_MS}ms"
+    echo "[mini-runner] aborted after startup smoke failure"
+    echo "[mini-runner] failed list path:  $FAIL_LIST_FILE"
+    exit 1
+  fi
+done
+
+if (( ${#TEST_FILES[@]} > SMOKE_COUNT )); then
+  : > "$TMP_DIR/indexed.tsv"
+  for i in "${!TEST_FILES[@]}"; do
+    idx=$((i + 1))
+    if (( idx > SMOKE_COUNT )); then
+      printf '%s\t%s\n' "$idx" "${TEST_FILES[$i]}" >> "$TMP_DIR/indexed.tsv"
+    fi
+  done
+
+  xargs -P "$JOBS" -n3 bash -c 'run_worker "$1" "$2" "$3"' _ < <(
+    awk -F '\t' '{print $1" "$2" '"$TMP_DIR"'"}' "$TMP_DIR/indexed.tsv"
+  )
+fi
 
 FAIL_FILES=0
 : > "$FAIL_LIST_FILE"

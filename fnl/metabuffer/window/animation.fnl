@@ -66,7 +66,7 @@ Expected output: module table or nil."
     (set vim.o.equalalways false)
     (let [[ok res] [(pcall f)]]
       (set vim.o.winminheight old-height)
-      (set vim.o.winminwidth old-width)
+      (set vim.o.winminwidth old-width) ; test
       (set vim.o.equalalways old-equalalways)
       (cond-> res (not ok) error))))
 
@@ -140,7 +140,11 @@ Expected output: module table or nil."
   (let [mini (mini-animate-mod)]
     (when mini
       (when-not (mini-autocmds-present?)
-        (mini.setup {:cursor {:enable false}
+        (mini.setup {:cursor {:enable true
+                              :timing ((. (. mini :gen_timing) :cubic)
+                                       {:easing "in-out"
+                                        :duration 100
+                                        :unit "total"})}
                      :scroll {:enable true}
                      :resize {:enable true}
                      :open {:enable false}
@@ -168,6 +172,15 @@ Expected output: module table or nil."
       (when-not called
         (set called true)
         (f ...)))))
+
+(fn restore-window-focus!
+  [return-win return-mode]
+  "Restore focus/mode after temporary Mini-owned window actions."
+  (when (and return-win (vim.api.nvim_win_is_valid return-win))
+    (pcall vim.api.nvim_set_current_win return-win)
+    (when (and (= (type return-mode) "string")
+               (vim.startswith return-mode "i"))
+      (pcall vim.cmd "startinsert"))))
 
 (fn mini-run!
   [mini session key n-steps duration-ms active? step-action]
@@ -204,11 +217,15 @@ Expected output: function."
   "Build buffer-local `mini.animate` config for Meta buffers.
 Expected output: config table."
   (let [mini (mini-animate-mod)]
-    {:cursor {:enable false}
+    {:cursor {:enable true
+              :timing ((. (. mini :gen_timing) :cubic)
+                       {:easing "in-out"
+                        :duration 100
+                        :unit "total"})}
      :scroll {:enable (enabled? session :scroll)
               :timing ((. (. mini :gen_timing) :cubic)
                        {:easing "in-out"
-                        :duration (duration-ms session :scroll 140)
+                        :duration (duration-ms session :scroll 100)
                         :unit "total"})
               :subscroll ((. (. mini :gen_subscroll) :equal)
                           {:predicate (fn [n] (> n 1))
@@ -287,6 +304,7 @@ Expected output: config table."
 (var animate-win-width! nil)
 (var animate-float! nil)
 (var animate-view! nil)
+(var animate-scroll-action-mini! nil)
 (var animate-scroll-view-mini! nil)
 (var animate-scroll-view! nil)
 
@@ -477,20 +495,45 @@ Expected output: config table."
                     (when-let [done! (. opts :done!)]
                       (done! to-view)))}))))
 
+(set animate-scroll-action-mini!
+  (fn [session win duration-ms action opts]
+    "Run a real scroll action inside window context and let Mini animate it."
+    (let [opts (or opts {})
+          token (next-token! session :mini-scroll-focus)
+          return-win (. opts :return-win)
+          return-mode (. opts :return-mode)
+          done! (. opts :done!)
+          active? (fn [] (active-token? session :mini-scroll-focus token))
+          finish! (once
+                    (fn []
+                      (when (active?)
+                        (restore-window-focus! return-win return-mode)
+                        (when done!
+                          (done!)))))]
+      (ensure-mini-global! session)
+      (when (and (= (type return-mode) "string")
+                 (vim.startswith return-mode "i"))
+        (pcall vim.cmd "stopinsert"))
+      (pcall vim.api.nvim_set_current_win win)
+      (vim.schedule
+        (fn []
+          (if (and (active?) (vim.api.nvim_win_is_valid win))
+              (do
+                (pcall vim.api.nvim_set_current_win win)
+                (action)
+                (mini-after! "scroll" duration-ms finish!))
+              (finish!)))))))
+
 (set animate-scroll-view-mini!
-  (fn [session _key win _from-view to-view _duration-ms opts]
-    "Delegate scrolling to `mini.animate` itself and run callback on done."
-    (ensure-mini-global! session)
-    (vim.api.nvim_win_call
+  (fn [session _key win _from-view to-view duration-ms opts]
+    "Fallback Mini path for externally supplied target view."
+    (animate-scroll-action-mini!
+      session
       win
-      (fn []
-        (pcall vim.fn.winrestview to-view)))
-    (mini-after!
-      "scroll"
       duration-ms
       (fn []
-        (when-let [done! (. (or opts {}) :done!)]
-          (done! to-view))))))
+        (pcall vim.fn.winrestview to-view))
+      opts)))
 
 (set animate-scroll-view!
   (fn [session key win from-view to-view duration-ms opts]
@@ -523,6 +566,7 @@ Expected output: config table."
 (set M.animate-float! animate-float!)
 (set M.animate-view! animate-view!)
 (set M.animate-scroll-view! animate-scroll-view!)
+(set M.animate-scroll-action-mini! animate-scroll-action-mini!)
 (set M.reset-mini-animate-cache! reset-mini-animate-cache!)
 
 M
