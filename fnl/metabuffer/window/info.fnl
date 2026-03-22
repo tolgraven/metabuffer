@@ -553,7 +553,7 @@
             (info-range meta.selected_index total cap))))
 
   (fn build-info-lines
-    [session refs idxs target-width start-index stop-index visible-start visible-stop read_file_lines_cached]
+    [session refs idxs target-width start-index stop-index _visible-start _visible-stop read_file_lines_cached]
     (let [lnum-digit-width (let [limit (math.min (# idxs) info_max_lines)
                            max-lnum-len (if (> limit 0)
                                             (let [lens []]
@@ -581,12 +581,10 @@
                             target-width
                             lnum-digit-width
                             read_file_lines_cached
-                            (or (< i visible-start) (> i visible-stop)))]
+                            false)]
                 (table.insert lines (. built :line))
-                (if (and (>= i visible-start) (<= i visible-stop))
-                    (each [_ h (ipairs (or (. built :highlights) []))]
-                      (table.insert highlights [row0 (. h 1) (. h 2) (. h 3)]))
-                    (table.insert deferred-rows [row0 src-idx])))))
+                (each [_ h (ipairs (or (. built :highlights) []))]
+                  (table.insert highlights [row0 (. h 1) (. h 2) (. h 3)])))))
       {:lines lines :highlights highlights :deferred-rows deferred-rows :lnum-digit-width lnum-digit-width}))
 
   (fn render-info-lines!

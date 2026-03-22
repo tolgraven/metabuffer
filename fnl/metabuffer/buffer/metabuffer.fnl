@@ -248,7 +248,7 @@
 
 (fn apply_frame_separators
   [self]
-  (when (and self.show-source-separators self.source-refs)
+  (when self.source-refs
     (let [n (# self.indices)]
       (var alt false)
       (var prev-path nil)
@@ -261,7 +261,7 @@
           (when (~= path prev-path)
             (set alt (not alt))
             (set prev-path path))
-          (when alt
+          (when (and self.show-source-alt-bg alt)
             (vim.api.nvim_buf_set_extmark
               self.buffer
               self.source-alt-ns
@@ -269,27 +269,28 @@
               0
               {:line_hl_group "MetaSourceAltBg"
                :priority 90}))))
-      (for [i 1 (- n 1)]
-        (let [cur-idx (. self.indices i)
-              next-idx (. self.indices (+ i 1))
-              cur-ref (and cur-idx (. self.source-refs cur-idx))
-              next-ref (and next-idx (. self.source-refs next-idx))
-              cur-path (and cur-ref cur-ref.path)
-              next-path (and next-ref next-ref.path)]
-          (when (and (~= (or cur-path "") (or next-path ""))
-                     (~= (and cur-ref cur-ref.kind) "file-entry")
-                     (~= (and next-ref next-ref.kind) "file-entry"))
-            (vim.api.nvim_buf_set_extmark
-              self.buffer
-              self.source-sep-ns
-              (- i 1)
-              0
-              {:end_row i
-               :end_col 0
-               :hl_group "MetaSourceBoundary"
-               :hl_eol true
-               :hl_mode "combine"
-               :priority 120})))))))
+      (when self.show-source-separators
+        (for [i 1 (- n 1)]
+          (let [cur-idx (. self.indices i)
+                next-idx (. self.indices (+ i 1))
+                cur-ref (and cur-idx (. self.source-refs cur-idx))
+                next-ref (and next-idx (. self.source-refs next-idx))
+                cur-path (and cur-ref cur-ref.path)
+                next-path (and next-ref next-ref.path)]
+            (when (and (~= (or cur-path "") (or next-path ""))
+                       (~= (and cur-ref cur-ref.kind) "file-entry")
+                       (~= (and next-ref next-ref.kind) "file-entry"))
+              (vim.api.nvim_buf_set_extmark
+                self.buffer
+                self.source-sep-ns
+                (- i 1)
+                0
+                {:end_row i
+                 :end_col 0
+                 :hl_group "MetaSourceBoundary"
+                 :hl_eol true
+                 :hl_mode "combine"
+                 :priority 120}))))))))
 
 (fn finalize_render
   [self views]
@@ -322,6 +323,7 @@
     (set self.indexbuf (ui.new nvim self "indexes"))
     (set self.show-source-prefix false)
     (set self.show-source-separators false)
+    (set self.show-source-alt-bg true)
     (set self.visible-source-syntax-only false)
     (set self.source-hl-ns (vim.api.nvim_create_namespace "metabuffer_source"))
     (set self.source-sep-ns (vim.api.nvim_create_namespace "metabuffer_source_separator"))
