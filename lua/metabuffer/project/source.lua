@@ -445,25 +445,22 @@ M.new = function(opts)
       else
       end
       for _0, path in ipairs(project_file_list(root, include_hidden, include_ignored, include_deps)) do
-        do
-          local rel = vim.fn.fnamemodify(path, ":.")
-          if ((#content < settings["project-max-total-lines"]) and allow_project_path_3f(rel, include_hidden, include_deps) and (not current_path or (vim.fn.fnamemodify(path, ":p") ~= vim.fn.fnamemodify(current_path, ":p"))) and (1 == vim.fn.filereadable(path))) then
-            local size = vim.fn.getfsize(path)
-            if ((size >= 0) and (size <= settings["project-max-file-bytes"])) then
-              local lines = read_file_lines_cached(path, {["include-binary"] = include_binary, ["hex-view"] = include_hex})
-              if (type(lines) == "table") then
-                file_cache[path] = lines
-                push_file_into_pool_21(pool_session, path, lines, prefilter)
-              else
-              end
+        local rel = vim.fn.fnamemodify(path, ":.")
+        if ((#content < settings["project-max-total-lines"]) and allow_project_path_3f(rel, include_hidden, include_deps) and (not current_path or (vim.fn.fnamemodify(path, ":p") ~= vim.fn.fnamemodify(current_path, ":p"))) and (1 == vim.fn.filereadable(path))) then
+          local size = vim.fn.getfsize(path)
+          if ((size >= 0) and (size <= settings["project-max-file-bytes"])) then
+            local lines = read_file_lines_cached(path, {["include-binary"] = include_binary, ["hex-view"] = include_hex})
+            if (type(lines) == "table") then
+              file_cache[path] = lines
+              push_file_into_pool_21(pool_session, path, lines, prefilter)
             else
             end
           else
           end
+        else
         end
-        do local _ = {content = content, refs = refs} end
       end
-      return nil
+      return {content = content, refs = refs}
     end
   end
   local function init_project_pool_21(session, prefilter)
@@ -718,6 +715,7 @@ M.new = function(opts)
       return nil
     end
   end
-  return {["schedule-lazy-refresh!"] = schedule_lazy_refresh_21, ["apply-source-set!"] = apply_source_set_21, ["schedule-source-set-rebuild!"] = schedule_source_set_rebuild_21, ["apply-minimal-source-set!"] = apply_minimal_source_set_21, ["schedule-project-bootstrap!"] = schedule_project_bootstrap_21}
+  local api = {["schedule-lazy-refresh!"] = schedule_lazy_refresh_21, ["apply-source-set!"] = apply_source_set_21, ["schedule-source-set-rebuild!"] = schedule_source_set_rebuild_21, ["apply-minimal-source-set!"] = apply_minimal_source_set_21, ["schedule-project-bootstrap!"] = schedule_project_bootstrap_21}
+  return api
 end
 return M

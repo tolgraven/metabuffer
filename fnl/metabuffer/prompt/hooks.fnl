@@ -7,7 +7,8 @@
   "Public API: M.new."
   (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
          : default-main-keymaps
-         : on-prompt-changed : update-info-window : maybe-sync-from-main!
+         : on-prompt-changed : update-info-window : update-preview-window
+         : maybe-sync-from-main!
          : schedule-scroll-sync! : maybe-restore-hidden-ui!
          : hide-visible-ui!
          : maybe-refresh-preview-statusline! : sign-mod} opts]
@@ -212,56 +213,60 @@
             (set session.results-statusline-middle-group nil))))
 
     (var refresh-prompt-highlights! nil)
+    (var schedule-loading-indicator! nil)
 
-    (fn schedule-loading-indicator!
+    (fn loading-indicator-tick!
       [session]
-      (when (and session
-                 (not session.loading-anim-pending)
-                 session.prompt-buf
-                 (session-prompt-valid? session)
-                 session.loading-indicator?
-                 (or (session-busy? session)
-                     session.loading-anim-phase
-                     session.loading-idle-pending))
-        (when (and (session-busy? session)
-                   (= session.loading-anim-phase nil))
-          (set session.loading-idle-pending false)
-          (set session.loading-anim-phase 0)
-          (set-results-loading-pulse! session)
-          (pcall session.meta.refresh_statusline))
-        (set session.loading-anim-pending true)
-        (let [delay (if session.loading-idle-pending
-                        120
-                        (animation-duration-ms session :loading 90))]
-          (vim.defer_fn
-            (fn []
-              (set session.loading-anim-pending false)
-              (when (session-prompt-valid? session)
-                (let [animating? (and (session-busy? session)
-                                      animation-enabled?
-                                      (animation-enabled? session :loading))]
-                  (if animating?
-                      (do
+      (set session.loading-anim-pending false)
+      (when (session-prompt-valid? session)
+        (let [animating? (and (session-busy? session)
+                              animation-enabled?
+                              (animation-enabled? session :loading))]
+          (if animating?
+              (do
+                (set session.loading-idle-pending false)
+                (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
+                (set-results-loading-pulse! session)
+                (pcall session.meta.refresh_statusline)
+                (refresh-prompt-highlights! session)
+                (schedule-loading-indicator! session))
+              (if session.loading-anim-phase
+                  (if session.loading-idle-pending
+                      (when (session-actually-idle? session)
                         (set session.loading-idle-pending false)
-                        (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
+                        (set session.loading-anim-phase nil)
                         (set-results-loading-pulse! session)
-                        (pcall session.meta.refresh_statusline)
-                        (refresh-prompt-highlights! session)
-                        (schedule-loading-indicator! session))
-                      (if session.loading-anim-phase
-                          (if session.loading-idle-pending
-                              (when (session-actually-idle? session)
-                                (set session.loading-idle-pending false)
-                                (set session.loading-anim-phase nil)
-                                (set-results-loading-pulse! session)
-                                (pcall session.meta.refresh_statusline))
-                              (do
-                                (set session.loading-idle-pending true)
-                                (schedule-loading-indicator! session)))
-                          (do
-                            (set session.loading-idle-pending false)
-                            (set-results-loading-pulse! session))))))
-            delay))))
+                        (pcall session.meta.refresh_statusline))
+                      (do
+                        (set session.loading-idle-pending true)
+                        (schedule-loading-indicator! session)))
+                  (do
+                    (set session.loading-idle-pending false)
+                    (set-results-loading-pulse! session)))))))
+
+    (set schedule-loading-indicator!
+      (fn [session]
+        (when (and session
+                   (not session.loading-anim-pending)
+                   session.prompt-buf
+                   (session-prompt-valid? session)
+                   session.loading-indicator?
+                   (or (session-busy? session)
+                       session.loading-anim-phase
+                       session.loading-idle-pending))
+          (when (and (session-busy? session)
+                     (= session.loading-anim-phase nil))
+            (set session.loading-idle-pending false)
+            (set session.loading-anim-phase 0)
+            (set-results-loading-pulse! session)
+            (pcall session.meta.refresh_statusline))
+          (set session.loading-anim-pending true)
+          (let [delay (if session.loading-idle-pending
+                          120
+                          (animation-duration-ms session :loading 90))]
+            (vim.defer_fn
+              (fn [] (loading-indicator-tick! session))
+              delay)))))
 
     (fn render-project-flags-footer!
       [session]
@@ -667,6 +672,8 @@
                          (fn []
                            (when-not session.prompt-animating?
                              (pcall refresh-prompt-highlights! session)
+                             (when update-preview-window
+                               (pcall update-preview-window session))
                              (pcall update-info-window session)))))} )
       ;; Keep selection/status/info synced when user scrolls or moves in the
       ;; main meta window with regular motions/mouse while prompt is open.
@@ -820,6 +827,6 @@
         (apply-emacs-insert-fallbacks router session)))
 
     {:register! register!
-     :refresh! refresh-prompt-highlights!}))))
+     :refresh! refresh-prompt-highlights!})))
 
 M

@@ -112,26 +112,26 @@
     :scroll_sync_debounce_ms 20
     :ui_animations_enabled true
     :ui_animations_time_scale 1.5
-    :ui_animation_backend "native"
+    :ui_animation_backend "mini"
     :ui_animation_prompt_enabled true
     :ui_animation_prompt_ms 140
     :ui_animation_prompt_time_scale 1.0
-    :ui_animation_prompt_backend "native"
+    :ui_animation_prompt_backend "mini"
     :ui_animation_preview_enabled true
     :ui_animation_preview_ms 180
     :ui_animation_preview_time_scale 1.0
     :ui_animation_info_enabled true
     :ui_animation_info_ms 220
     :ui_animation_info_time_scale 1.0
-    :ui_animation_info_backend "native"
+    :ui_animation_info_backend "mini"
     :ui_animation_loading_enabled true
     :ui_animation_loading_ms 90
     :ui_animation_loading_time_scale 1.0
     :ui_loading_indicator true
     :ui_animation_scroll_enabled true
-    :ui_animation_scroll_ms 140
+    :ui_animation_scroll_ms 100
     :ui_animation_scroll_time_scale 1.0
-    :ui_animation_scroll_backend "native"
+    :ui_animation_scroll_backend "mini"
     :window_local_layout true
     :dep_dir_names
     {"node_modules" true

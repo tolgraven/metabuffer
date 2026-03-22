@@ -39,6 +39,7 @@
         active-by-prompt router.active-by-prompt
         on-prompt-changed (. deps :on-prompt-changed)
         update-info-window (. deps :update-info-window)
+        update-preview-window (. deps :update-preview-window)
         maybe-sync-from-main! (. deps :maybe-sync-from-main!)
         schedule-scroll-sync! (. deps :schedule-scroll-sync!)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)
@@ -54,6 +55,7 @@
            :active-by-prompt active-by-prompt
            :on-prompt-changed on-prompt-changed
            :update-info-window update-info-window
+           :update-preview-window update-preview-window
            :maybe-sync-from-main! maybe-sync-from-main!
            :schedule-scroll-sync! schedule-scroll-sync!
            :maybe-restore-hidden-ui! maybe-restore-hidden-ui!

@@ -34,6 +34,11 @@ T['resolve preserves debounce defaults when options absent'] = function()
   local resolved = config.resolve({})
   eq(type(resolved.options.prompt_update_debounce_ms), 'number')
   eq(resolved.options.prompt_update_debounce_ms >= 0, true)
+  eq(resolved.options.ui_animation_backend, 'mini')
+  eq(resolved.options.ui_animation_prompt_backend, 'mini')
+  eq(resolved.options.ui_animation_info_backend, 'mini')
+  eq(resolved.options.ui_animation_scroll_backend, 'mini')
+  eq(resolved.options.ui_animation_scroll_ms, 100)
 end
 
 T['defaults treat deps directory as dependency content'] = function()

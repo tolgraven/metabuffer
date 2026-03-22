@@ -54,8 +54,9 @@ Animation setup options:
 \t\tMaster enable/disable switch for Meta animations.
 
 \tui.animation.backend
-\t\tGlobal animation backend. "native" keeps Meta's built-in behavior.
-\t\t"mini" uses mini.animate where supported.
+\t\tGlobal animation backend. "mini" is the default and uses
+\t\tmini.animate where supported. "native" keeps Meta's built-in
+\t\tfallback behavior.
 
 \tui.animation.time_scale
 \t\tMaster speed multiplier. 1.0 is normal speed, 0.5 is twice as
@@ -75,7 +76,7 @@ Animation setup options:
 
 \tui.animation.loading.enabled
 \tui.animation.loading.time_scale
-\t\tControls animated loading word cadence in prompt footer.
+\t\tControls animated loading word cadence in the results statusline.
 
 \tui.animation.scroll.enabled
 \tui.animation.scroll.time_scale

@@ -344,6 +344,7 @@
 
   (fn collect-project-sources
     [session include-hidden include-ignored include-deps include-binary include-hex include-files prefilter]
+    "Collect eager project-mode content/ref pools. Returns {:content [] :refs []}."
     (let [root (vim.fn.getcwd)
           current-path (current-buffer-path session.source-buf)
           file-cache (or session.preview-file-cache {})
@@ -399,8 +400,8 @@
                       (let [lines (read-file-lines-cached path {:include-binary include-binary :hex-view include-hex})]
                         (when (= (type lines) "table")
                           (set (. file-cache path) lines)
-                          (push-file-into-pool! pool-session path lines prefilter)))))))
-            {:content content :refs refs})))))
+                          (push-file-into-pool! pool-session path lines prefilter))))))))
+            {:content content :refs refs}))))
 
   (fn init-project-pool!
     [session prefilter]
@@ -673,10 +674,11 @@
                     (set session.project-mode-starting? false))))]
           (vim.defer_fn run-bootstrap! delay)))))
 
-  {:schedule-lazy-refresh! schedule-lazy-refresh!
-   :apply-source-set! apply-source-set!
-   :schedule-source-set-rebuild! schedule-source-set-rebuild!
-   :apply-minimal-source-set! apply-minimal-source-set!
-   :schedule-project-bootstrap! schedule-project-bootstrap!}))
+  (let [api {:schedule-lazy-refresh! schedule-lazy-refresh!
+             :apply-source-set! apply-source-set!
+             :schedule-source-set-rebuild! schedule-source-set-rebuild!
+             :apply-minimal-source-set! apply-minimal-source-set!
+             :schedule-project-bootstrap! schedule-project-bootstrap!}]
+    api)))
 
 M

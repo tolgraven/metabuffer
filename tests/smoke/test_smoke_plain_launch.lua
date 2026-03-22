@@ -23,6 +23,8 @@ T['plain :Meta launches session with prompt and info window'] = H.timed_case(fun
     return H.session_preview_visible()
   end, 3000)
 
+  vim.loop.sleep(800)
+
   eq(H.session_active(), true)
   eq(H.session_ui_hidden(), false)
   eq(H.session_prompt_win_height() > 0, true)

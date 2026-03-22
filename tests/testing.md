@@ -28,6 +28,7 @@ This repo now has two parallelized suites:
 - Rerun a single file:
   - `./scripts/test-mini.sh tests/unit/test_query_unit.lua`
 - Run a whole category/directory:
+  - `./scripts/test-mini.sh animation`
   - `./scripts/test-mini.sh edit`
   - `./scripts/test-mini.sh persistence`
   - `./scripts/test-mini.sh project`
@@ -37,7 +38,10 @@ This repo now has two parallelized suites:
   - `TEST_FAILED_ONLY=1 ./scripts/test-mini.sh`
 
 Runner behavior:
-- Discovers `tests/**/test_*.lua`.
+- Discovers regular suite files under `tests/screen/` and `tests/unit/`.
+- Always runs `tests/smoke/test_smoke_plain_launch.lua` and `tests/smoke/test_smoke_project_plain_launch.lua` first as startup smoke tests, even for single-file or category runs.
+- Those startup smoke tests force `TEST_UI_ANIMATIONS=1` so launch-time animation/timer failures are covered even though the rest of the screen suite defaults animations off for determinism.
+- Aborts the whole run immediately if either startup smoke test fails.
 - Executes files concurrently in separate headless Neovim instances.
 - Defaults to oversubscribing workers for these mostly wait-heavy screen tests:
   - default jobs = `min(test_files, TEST_MAX_JOBS or (cpu_count * 2), cpu_count * (TEST_JOBS_MULTIPLIER or 1) + (TEST_JOBS_EXTRA or 2))`
@@ -84,6 +88,9 @@ Key helper coverage:
 ### `tests/screen/project/test_screen_project_filtering_*.lua`
 - Project mode immediate typing during lazy stream.
 - Clear-query broadening while preserving source pool.
+
+### `tests/screen/animation/test_screen_animation_*.lua`
+- Dedicated animation-on coverage for regular and project launch/scroll paths with the mini backend.
 
 ### `tests/screen/project/test_screen_project_restore_view.lua`
 - Project bootstrap keeps the startup-selected result at the same viewport offset.
@@ -156,8 +163,13 @@ Key helper coverage:
 ### `tests/screen/persistence/test_screen_persistence_cursor_word.lua`
 - `:MetaCursorWord` seeds the prompt and leaves insert at the end so new typing appends after the current word.
 
-### `tests/screen/persistence/test_screen_persistence_plain_launch.lua`
+## Smoke Tests
+
+### `tests/smoke/test_smoke_plain_launch.lua`
 - Plain `:Meta` launch opens a live session with prompt and info window on a normal buffer.
+
+### `tests/smoke/test_smoke_project_plain_launch.lua`
+- Plain `:Meta!` launch opens a live project session with prompt and info window.
 
 ### `tests/screen/persistence/test_screen_persistence_named_buffers.lua`
 - Meta-owned prompt/preview/info/results buffers use stable names instead of showing up as unnamed scratch buffers.
@@ -218,6 +230,9 @@ Key helper coverage:
 ### `tests/unit/test_prompt_timing_unit.lua`
 - Debounce timing by query length (1/2/3+ chars).
 - Prompt delay scaling by result pool size thresholds.
+
+### `tests/unit/test_prompt_hooks_unit.lua`
+- `metabuffer.prompt.hooks.new()` returns the expected hook table shape.
 - Extra debounce while project lazy stream is still active.
 
 ### `tests/unit/test_query_flow_unit.lua`

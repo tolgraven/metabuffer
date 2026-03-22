@@ -47,6 +47,8 @@ function M.child_setup()
     _G.__meta_debug_dump_path = %q
     local ok = pcall(vim.fn.delete, _G.__meta_debug_dump_path)
     if not ok then end
+    vim.v.errmsg = ''
+    pcall(vim.cmd, 'messages clear')
   ]], debug_dump_path))
 end
 
@@ -79,6 +81,62 @@ local function ensure_prompt_insert()
   ]])
 end
 
+function M.focus_prompt(mode)
+  M.child.lua(string.format([[
+    (function()
+      local router = require('metabuffer.router')
+      local session = router['active-by-source'][_G.__meta_source_buf]
+      assert(session and session['prompt-win'], 'missing prompt window')
+      if vim.api.nvim_win_is_valid(session['prompt-win']) then
+        vim.api.nvim_set_current_win(session['prompt-win'])
+        local want = %q
+        local cur = vim.fn.mode(1)
+        if want == 'insert' then
+          if cur ~= 'i' and cur ~= 'ic' and cur ~= 'ix' then
+            vim.cmd('startinsert')
+          end
+        elseif cur ~= 'n' then
+          pcall(vim.cmd, 'stopinsert')
+        end
+      end
+    end)()
+  ]], mode or 'normal'))
+end
+
+function M.feed_prompt_key(key, mode)
+  M.child.lua(string.format([[
+    (function()
+      local router = require('metabuffer.router')
+      local session = router['active-by-source'][_G.__meta_source_buf]
+      assert(session and session['prompt-win'], 'missing prompt window')
+      if vim.api.nvim_win_is_valid(session['prompt-win']) then
+        vim.api.nvim_set_current_win(session['prompt-win'])
+        local want = %q
+        local cur = vim.fn.mode(1)
+        if want == 'insert' then
+          if cur ~= 'i' and cur ~= 'ic' and cur ~= 'ix' then
+            vim.cmd('startinsert')
+          end
+        elseif cur ~= 'n' then
+          pcall(vim.cmd, 'stopinsert')
+        end
+        local keys = vim.api.nvim_replace_termcodes(%q, true, false, true)
+        vim.api.nvim_feedkeys(keys, 'xt', false)
+      end
+    end)()
+  ]], mode or 'normal', key))
+end
+
+function M.session_prompt_focused()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      return not not (s and s['prompt-win'] and vim.api.nvim_get_current_win() == s['prompt-win'])
+    end)()
+  ]])
+end
+
 function M.case_name()
   local case = MiniTest.current and MiniTest.current.case or nil
   local desc = case and case.desc or {}
@@ -96,6 +154,34 @@ function M.case_hooks()
   return {
     pre_case = function()
       M.child_setup()
+    end,
+    post_case = function()
+      local errmsg = M.child.lua_get("return vim.v.errmsg or ''")
+      if type(errmsg) == 'string' then
+        errmsg = errmsg:gsub('^%s+', ''):gsub('%s+$', '')
+      end
+      M.eq(errmsg, '')
+
+      local messages = M.child.lua_get([[
+        local ok, out = pcall(function()
+          return vim.api.nvim_exec2('silent messages', { output = true }).output or ''
+        end)
+        return ok and out or ''
+      ]])
+      if type(messages) == 'string' then
+        local trimmed = messages:gsub('^%s+', ''):gsub('%s+$', '')
+        local bad =
+          trimmed:find('stack traceback', 1, true)
+          or trimmed:find('torn down after error', 1, true)
+          or trimmed:find('_core/editor.lua', 1, true)
+          or trimmed:find('expected', 1, true)
+          or trimmed:find('nil', 1, true)
+        if bad ~= nil then
+          io.stdout:write('[screen-helper] unexpected :messages output follows\n')
+          io.stdout:write(trimmed .. '\n')
+        end
+        M.eq(bad == nil, true)
+      end
     end,
     post_once = function()
       M.stop_child_once()
@@ -568,6 +654,39 @@ function M.session_info_view()
   return vim.json.decode(encoded)
 end
 
+function M.session_info_width()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      local info_win = s and s['info-win'] or nil
+      if not (info_win and vim.api.nvim_win_is_valid(info_win)) then
+        return 0
+      end
+      return vim.api.nvim_win_get_width(info_win)
+    end)()
+  ]])
+end
+
+function M.session_info_max_line_width()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      local info_buf = s and s['info-buf'] or nil
+      if not (info_buf and vim.api.nvim_buf_is_valid(info_buf)) then
+        return 0
+      end
+      local lines = vim.api.nvim_buf_get_lines(info_buf, 0, -1, false)
+      local maxw = 0
+      for _, line in ipairs(lines) do
+        maxw = math.max(maxw, vim.fn.strdisplaywidth(line or ''))
+      end
+      return maxw
+    end)()
+  ]])
+end
+
 function M.session_selected_ref()
   return M.child.lua_get([[
     (function()
@@ -705,6 +824,35 @@ function M.scroll_main_and_wait(action, timeout_ms)
   return target
 end
 
+function M.compute_main_scroll_target(action)
+  return M.child.lua_get(string.format([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta and s.meta.win and vim.api.nvim_win_is_valid(s.meta.win.window)) then
+        return nil
+      end
+      local win = s.meta.win.window
+      return vim.api.nvim_win_call(win, function()
+        local line_count = vim.api.nvim_buf_line_count(s.meta.buf.buffer)
+        local win_height = math.max(1, vim.api.nvim_win_get_height(win))
+        local half_step = math.max(1, math.floor(win_height / 2))
+        local page_step = math.max(1, win_height - 2)
+        local step = (%q == 'line-down' or %q == 'line-up') and 1
+          or ((%q == 'half-down' or %q == 'half-up') and half_step or page_step)
+        local dir = (%q == 'line-down' or %q == 'half-down' or %q == 'page-down') and 1 or -1
+        local max_top = math.max(1, (line_count - win_height) + 1)
+        local view = vim.fn.winsaveview()
+        local old_top = view.topline
+        local old_lnum = view.lnum
+        local new_top = math.max(1, math.min(old_top + (dir * step), max_top))
+        local new_lnum = math.max(1, math.min(old_lnum + (dir * step), line_count))
+        return { topline = new_top, lnum = new_lnum }
+      end)
+    end)()
+  ]], action, action, action, action, action, action))
+end
+
 function M.session_preview_contains(needle)
   return M.child.lua_get(string.format([[
     (function()
@@ -733,6 +881,48 @@ function M.session_preview_visible()
       return win and vim.api.nvim_win_is_valid(win) or false
     end)()
   ]])
+end
+
+function M.session_preview_width()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      local win = s and s['preview-win'] or nil
+      if not (win and vim.api.nvim_win_is_valid(win)) then
+        return 0
+      end
+      return vim.api.nvim_win_get_width(win)
+    end)()
+  ]])
+end
+
+function M.session_preview_screen_right()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      local win = s and s['preview-win'] or nil
+      if not (win and vim.api.nvim_win_is_valid(win)) then
+        return 0
+      end
+      local pos = vim.fn.win_screenpos(win)
+      local left = (pos and pos[2]) or 0
+      local width = vim.api.nvim_win_get_width(win)
+      return left + width - 1
+    end)()
+  ]])
+end
+
+function M.resize_editor_columns(columns)
+  M.child.lua(string.format([[
+    vim.o.columns = %d
+    vim.cmd('redraw')
+  ]], columns))
+end
+
+function M.editor_columns()
+  return M.child.lua_get('return vim.o.columns')
 end
 
 function M.session_prompt_win_height()

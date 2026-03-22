@@ -36,6 +36,7 @@ local function register_prompt_hooks_21(deps, session)
   local active_by_prompt = router["active-by-prompt"]
   local on_prompt_changed = deps["on-prompt-changed"]
   local update_info_window = deps["update-info-window"]
+  local update_preview_window = deps["update-preview-window"]
   local maybe_sync_from_main_21 = deps["maybe-sync-from-main!"]
   local schedule_scroll_sync_21 = deps["schedule-scroll-sync!"]
   local maybe_restore_hidden_ui_21 = deps["maybe-restore-hidden-ui!"]
@@ -58,7 +59,7 @@ local function register_prompt_hooks_21(deps, session)
       return nil
     end
   end
-  hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = router["prompt-keymaps"], ["default-main-keymaps"] = router["main-keymaps"], ["active-by-prompt"] = active_by_prompt, ["on-prompt-changed"] = on_prompt_changed, ["update-info-window"] = update_info_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21, ["maybe-restore-hidden-ui!"] = maybe_restore_hidden_ui_21, ["hide-visible-ui!"] = hide_visible_ui_21, ["maybe-refresh-preview-statusline!"] = _4_, ["update-context-window!"] = _6_, ["sign-mod"] = sign_mod})
+  hooks = prompt_hooks_mod.new({["mark-prompt-buffer!"] = router_util_mod["mark-prompt-buffer!"], ["default-prompt-keymaps"] = router["prompt-keymaps"], ["default-main-keymaps"] = router["main-keymaps"], ["active-by-prompt"] = active_by_prompt, ["on-prompt-changed"] = on_prompt_changed, ["update-info-window"] = update_info_window, ["update-preview-window"] = update_preview_window, ["maybe-sync-from-main!"] = maybe_sync_from_main_21, ["schedule-scroll-sync!"] = schedule_scroll_sync_21, ["maybe-restore-hidden-ui!"] = maybe_restore_hidden_ui_21, ["hide-visible-ui!"] = hide_visible_ui_21, ["maybe-refresh-preview-statusline!"] = _4_, ["update-context-window!"] = _6_, ["sign-mod"] = sign_mod})
   session["prompt-hooks"] = hooks
   return hooks["register!"](router, session)
 end

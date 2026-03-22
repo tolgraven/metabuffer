@@ -59,6 +59,23 @@
           result
           (error result)))))
 
+(fn wipe-replaced-split-buffer!
+  [win next-buf]
+  "Delete the temporary [No Name] split buffer created by :vsplit before reattaching preview."
+  (when (and win (vim.api.nvim_win_is_valid win))
+    (let [old-buf (vim.api.nvim_win_get_buf win)]
+      (when (and old-buf
+                 (~= old-buf next-buf)
+                 (vim.api.nvim_buf_is_valid old-buf))
+        (let [bo (. vim.bo old-buf)
+              listed? (. bo :buflisted)
+              lines (vim.api.nvim_buf_line_count old-buf)
+              name (vim.api.nvim_buf_get_name old-buf)]
+          (when (and (<= lines 1)
+                     (= (or name "") "")
+                     (not listed?))
+            (pcall vim.api.nvim_buf_delete old-buf {:force true})))))))
+
 (fn M.new
   [opts]
   "Create preview window manager for selected source refs."
@@ -212,6 +229,8 @@
         (set session.preview-real-buffer? false)
         (set session.preview-layout nil)
         (set session.preview-last-path nil)
+        (when-not float-start?
+          (wipe-replaced-split-buffer! win-id buf))
         (util.set-buffer-name! buf "[Metabuffer Preview]")
         (pcall vim.api.nvim_win_set_buf win-id buf)
         (when-not float-start?
@@ -306,7 +325,12 @@
       (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
         (when (~= width (or session.preview-width 0))
           (set session.preview-width width)
-          (pcall vim.api.nvim_win_set_width session.preview-win width)))))
+          (if session.preview-float?
+              (let [height (math.max 1 (vim.api.nvim_win_get_height session.preview-win))]
+                (pcall vim.api.nvim_win_set_config
+                       session.preview-win
+                       (preview-float-config session width height)))
+              (pcall vim.api.nvim_win_set_width session.preview-win width))))))
 
   (fn render-preview-scratch!
     [session ctx]
