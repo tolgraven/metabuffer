@@ -119,26 +119,27 @@
         budget (math.max 1 path-width)
         full (.. dir file)]
     (if (<= (# full) budget)
-        [dir file]
+        [dir file dir0]
         (let [kdir (compact-dir-keep-last dir0)
               keep-last (.. kdir file)]
           (if (<= (# keep-last) budget)
-              [kdir file]
+              [kdir file dir0]
               (let [cdir (compact-dir dir0)
                     compact (.. cdir file)]
                 (if (<= (# compact) budget)
-                    [cdir file]
+                    [cdir file dir0]
                     (if (> (# file) budget)
                         ["" (if (> budget 1)
                                 (.. "…" (string.sub file (+ (- (# file) budget) 2)))
-                                (string.sub file (+ (- (# file) budget) 1)))]
+                                (string.sub file (+ (- (# file) budget) 1)))
+                         dir0]
                         (let [dir-budget (math.max 0 (- budget (# file)))
                               short-dir (if (<= (# cdir) dir-budget)
                                             cdir
                                             (if (> dir-budget 1)
                                                 (.. "…" (string.sub cdir (+ (- (# cdir) dir-budget) 2)))
                                                 (string.sub cdir (+ (- (# cdir) dir-budget) 1))))]
-                          [short-dir file])))))))))
+                          [short-dir file dir0])))))))))
 
 (fn info-range
   [selected-index total cap]
@@ -385,7 +386,7 @@
           icon-prefix (if show-icon? (. iconf :text) "")
           icon-hl (or (. icon-info :icon-hl) file-hl)
           icon-width (if show-icon? (. iconf :width) 0)
-          [dir file0] (fit-path-into-width path (math.max 1 (- path-width icon-width)))
+          [dir file0 dir-original] (fit-path-into-width path (math.max 1 (- path-width icon-width)))
           this-file-hl (or (. icon-info :file-hl) file-hl)
           line (.. sign-prefix lnum-cell0 icon-prefix dir file0 suffix-prefix suffix0)
           sign-start 0
@@ -406,7 +407,7 @@
       (when (> (# icon-prefix) 0)
         (table.insert highlights [icon-hl icon-start icon-end]))
       (when (and highlight-dir? (> (# dir) 0))
-        (each [_ dr (ipairs (path-hl.ranges-for-dir dir dir-start))]
+        (each [_ dr (ipairs (path-hl.ranges-for-dir dir dir-start dir-original))]
           (table.insert highlights [dr.hl dr.start dr.end])))
       (when (and highlight-file? (> (# file0) 0))
         (table.insert highlights [this-file-hl file-start (+ file-start (# file0))]))
