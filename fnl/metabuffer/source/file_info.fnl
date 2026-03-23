@@ -389,12 +389,11 @@
         author-start (if (= right "") -1 (+ (# left) pad))
         author-end (if (= right "") -1 (+ author-start (# right)))
         age-token (or (string.match left "(%d+[a-z]+)$") "")
-        age-num-part (or (string.match age-token "^(%d+)") "")
         age-start (if (~= age-token "")
                       (let [age-pos (string.find left (.. " " age-token) 1 true)]
                         (if age-pos age-pos -1))
                       -1)
-        age-end (if (>= age-start 0) (+ age-start (# age-num-part)) -1)
+        age-end (if (>= age-start 0) (+ age-start (# age-token)) -1)
 
         suffix-highlights []]
     (when (>= age-start 0)

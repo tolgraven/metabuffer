@@ -507,7 +507,6 @@ M["aligned-meta-suffix"] = function(suffix, path_width)
     author_end = (author_start + #right)
   end
   local age_token = (string.match(left, "(%d+[a-z]+)$") or "")
-  local age_num_part = (string.match(age_token, "^(%d+)") or "")
   local age_start
   if (age_token ~= "") then
     local age_pos = string.find(left, (" " .. age_token), 1, true)
@@ -521,7 +520,7 @@ M["aligned-meta-suffix"] = function(suffix, path_width)
   end
   local age_end
   if (age_start >= 0) then
-    age_end = (age_start + #age_num_part)
+    age_end = (age_start + #age_token)
   else
     age_end = -1
   end
