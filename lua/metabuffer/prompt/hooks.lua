@@ -301,6 +301,9 @@ M.new = function(opts)
       return nil
     end
   end
+  local function prompt_line_primary_group(row)
+    return ("MetaPromptText" .. tostring(((math.max(0, (row - 1)) % 6) + 1)))
+  end
   local function _38_(session)
     if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
       local ns = (session["prompt-hl-ns"] or vim.api.nvim_create_namespace("metabuffer.prompt"))
@@ -310,6 +313,7 @@ M.new = function(opts)
       for row, line in ipairs((lines or {})) do
         local r = (row - 1)
         local txt = (line or "")
+        local primary_hl = prompt_line_primary_group(row)
         local pos = 1
         while (pos <= #txt) do
           local s,e = string.find(txt, "%S+", pos)
@@ -317,14 +321,14 @@ M.new = function(opts)
             local token = string.sub(txt, s, e)
             local s0 = (s - 1)
             local e0 = e
-            vim.api.nvim_buf_add_highlight(session["prompt-buf"], ns, "MetaPromptText", r, s0, e0)
+            vim.api.nvim_buf_add_highlight(session["prompt-buf"], ns, primary_hl, r, s0, e0)
             do
               local val_110_auto = control_token_style(token)
               if val_110_auto then
                 local style = val_110_auto
-                vim.api.nvim_buf_add_highlight(session["prompt-buf"], ns, (style["hash-hl"] or "MetaPromptText"), r, s0, (s0 + 1))
+                vim.api.nvim_buf_add_highlight(session["prompt-buf"], ns, (style["hash-hl"] or primary_hl), r, s0, (s0 + 1))
                 if (e0 > (s0 + 1)) then
-                  vim.api.nvim_buf_add_highlight(session["prompt-buf"], ns, (style["text-hl"] or "MetaPromptText"), r, (s0 + 1), e0)
+                  vim.api.nvim_buf_add_highlight(session["prompt-buf"], ns, (style["text-hl"] or primary_hl), r, (s0 + 1), e0)
                 else
                 end
               else

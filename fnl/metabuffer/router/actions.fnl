@@ -352,14 +352,12 @@
 
 (fn finish-cancel
   [deps session]
-  (let [{: mods : history : refresh} deps
+  (let [{: mods : history} deps
         router-prompt-mod (. mods :router-prompt)
         router-util-mod (. mods :router-util)
         sign-mod (. mods :sign)
-        session-view (. mods :session-view)
         base-buffer (. mods :base-buffer)
         history-api (. history :api)
-        wrapup (. refresh :wrapup)
         curr session.meta]
     (router-prompt-mod.begin-session-close!
       session
@@ -381,9 +379,8 @@
           (fn []
             (pcall vim.fn.winrestview session.source-view)))))
     (base-buffer.switch-buf curr.buf.model)
-    (session-view.wipe-temp-buffers curr)
-    (remove-session! deps session)
-    (wrapup curr)
+    (set session.results-edit-mode false)
+    (hide-session-ui! deps session)
     curr))
 
 (fn M.finish!

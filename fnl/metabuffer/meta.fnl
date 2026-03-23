@@ -144,6 +144,20 @@
   [buf idx]
   (or (. buf.indices (+ idx 1)) 1))
 
+(fn union-query-indices
+  [matcher queries candidates ignorecase]
+  "Return sorted union of per-line query matches. Expected output: ascending source indices."
+  (let [seen {}
+        out []]
+    (each [_ q (ipairs (or queries []))]
+      (let [hits (matcher.filter matcher q (vim.fn.range 1 (# candidates)) candidates ignorecase)]
+        (each [_ idx (ipairs hits)]
+          (when-not (. seen idx)
+            (set (. seen idx) true)
+            (table.insert out idx)))))
+    (table.sort out)
+    out))
+
 (fn ref-is-file-entry?
   [ref]
   (= (or (and ref ref.kind) "") "file-entry"))
@@ -425,7 +439,7 @@
         [lines]
         (set self.query-lines (or lines []))
         (let [active (self.active-queries)]
-          (set self.text (table.concat active " && "))))
+          (set self.text (table.concat active "\n"))))
 
   (fn self.selected_line
     []
@@ -576,7 +590,7 @@
         ;; Ensure broaden-on-delete always starts from full candidate set.
         ;; This avoids sticky narrowed indices when cache/reuse paths race.
         (self.buf.reset-filter))
-      (if (= (# queries) 0)
+          (if (= (# queries) 0)
           (do
             (self.buf.reset-filter)
             (clear-all-highlights))
@@ -596,29 +610,30 @@
                   (var cached-line-count cached-line-count0)
                   ;; Extend cached results incrementally when project streaming
                   ;; appended lines since this cache entry was materialized.
-                  (let [next (vim.deepcopy cached)]
-                  (when (< cached-line-count line-count)
-                    (let [added0 []]
-                      (var added added0)
-                      (for [i (+ cached-line-count 1) line-count]
-                        (table.insert added i))
-                      (each [_ q (ipairs queries)]
-                        (set added (matcher.filter matcher q added self.buf.content ignorecase)))
-                      (each [_ idx (ipairs added)]
-                        (table.insert next idx))
-                      (set cached-line-count line-count)))
-                  ;; Copy cached indices so future incremental updates cannot
-                  ;; accidentally mutate cache entries by reference.
-                  (set self.buf.indices (vim.deepcopy next))
-                  (set (. self._filter-cache cache-key)
-                       {:indices (vim.deepcopy next)
-                        :line-count line-count
-                        :full true})))
+                  (let [next (vim.deepcopy cached)
+                        seen {}]
+                    (each [_ idx (ipairs next)]
+                      (set (. seen idx) true))
+                    (when (< cached-line-count line-count)
+                      (let [added-candidates []]
+                        (for [i (+ cached-line-count 1) line-count]
+                          (table.insert added-candidates (. self.buf.content i)))
+                        (let [added-hits (union-query-indices matcher queries added-candidates ignorecase)]
+                          (each [_ rel-idx (ipairs added-hits)]
+                            (let [idx (+ cached-line-count rel-idx)]
+                              (when-not (. seen idx)
+                                (set (. seen idx) true)
+                                (table.insert next idx)))))
+                        (set cached-line-count line-count)))
+                    ;; Copy cached indices so future incremental updates cannot
+                    ;; accidentally mutate cache entries by reference.
+                    (set self.buf.indices (vim.deepcopy next))
+                    (set (. self._filter-cache cache-key)
+                         {:indices (vim.deepcopy next)
+                          :line-count line-count
+                          :full true})))
                 (do
-                  (var first reset?)
-                  (each [_ q (ipairs queries)]
-                    (self.buf.run-filter matcher q ignorecase first self.win.window)
-                    (set first false))
+                  (set self.buf.indices (union-query-indices matcher queries self.buf.content ignorecase))
                   (when reset?
                     (set (. self._filter-cache cache-key)
                          {:indices (vim.deepcopy self.buf.indices)
@@ -684,7 +699,7 @@
               (or vim.g.meta_highlight_max_hits 40000)]
         (if (or (= (# queries) 0) (>= (# self.buf.indices) highlight-max-hits))
             (matcher.remove-highlight matcher)
-            (matcher.highlight matcher effective-query ignorecase self.win.window))))))
+            (matcher.highlight matcher queries ignorecase self.win.window))))))
     status)
 
   (fn self.on-term

@@ -47,6 +47,12 @@
   (each [name value (pairs (or opts {}))]
     (set (. vim.bo buf name) value)))
 
+(fn delete-window-match!
+  [win id]
+  (when (and id win (vim.api.nvim_win_is_valid win))
+    (or (pcall vim.fn.matchdelete id win)
+        (pcall vim.api.nvim_win_call win (fn [] (vim.fn.matchdelete id))))))
+
 (fn with-file-messages-suppressed
   [f]
   "Run preview buffer attachment without file-read hit-enter messages."
@@ -204,6 +210,24 @@
                                         (or session.preview-statusline-text ""))}]
           (set-window-options! win win-opts)))))
 
+  (local clear-preview-focus-highlight!
+    (fn [session]
+      (when session.preview-focus-match-id
+        (delete-window-match! session.preview-win session.preview-focus-match-id)
+        (set session.preview-focus-match-id nil))))
+
+  (local apply-preview-focus-highlight!
+    (fn [session lnum]
+      (clear-preview-focus-highlight! session)
+      (when (and session.preview-win
+                 (vim.api.nvim_win_is_valid session.preview-win)
+                 lnum
+                 (>= lnum 1))
+        (let [pat (.. "\\%" (tostring lnum) "l.*")
+              [ok id] [(pcall vim.fn.matchadd "MetaWindowCursorLine" pat 18 -1 {:window session.preview-win})]]
+          (when ok
+            (set session.preview-focus-match-id id))))))
+
   (var close-preview-window! nil)
 
   (fn ensure-preview-window!
@@ -267,6 +291,7 @@
         (pcall vim.api.nvim_del_augroup_by_id session.preview-statusline-aug))
       (set session.preview-statusline-aug nil)
       (set session.preview-statusline-buf nil)
+      (clear-preview-focus-highlight! session)
         (when (and scratch-buf
                    (vim.api.nvim_buf_is_valid scratch-buf)
                    (= true (pcall vim.api.nvim_buf_get_var scratch-buf "meta_preview")))
@@ -345,7 +370,8 @@
       (each [_ line (ipairs (. ctx :lines))]
         (table.insert rendered (or line "")))
       (vim.api.nvim_buf_set_lines session.preview-buf 0 -1 false rendered)
-      (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0]))
+      (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0])
+      (apply-preview-focus-highlight! session (. ctx :focus-row)))
     (let [bo (. vim.bo session.preview-buf)
           ft (. ctx :ft)]
       (set (. bo :modifiable) false)
@@ -371,12 +397,16 @@
         (let [bo (. vim.bo buf)]
           (set (. bo :bufhidden) "hide"))
         (let [lnum (math.max 1 (or (and ref (or ref.preview-lnum ref.lnum)) 1))
-              height (math.max 1 (vim.api.nvim_win_get_height session.preview-win))
-              topline (math.max 1 (- lnum (math.floor (/ height 2))))]
+              topline (math.max 1 (- lnum 2))]
           (pcall vim.api.nvim_win_call
                  session.preview-win
                  (fn []
-                   (pcall vim.fn.winrestview {:lnum lnum :topline topline :col 0 :leftcol 0})))))))
+                   (pcall vim.fn.winrestview
+                          {:lnum lnum
+                           :topline topline
+                           :col 0
+                           :leftcol 0})))
+          (apply-preview-focus-highlight! session lnum)))))
 
   (fn render-preview-placeholder!
     [session]
@@ -392,6 +422,7 @@
         (set (. bo :modifiable) false)
         (pcall vim.api.nvim_set_option_value "syntax" "" {:buf session.preview-buf})
         (set (. bo :filetype) "")))
+    (clear-preview-focus-highlight! session)
     (set session.preview-last-path nil))
 
   (fn update-preview-window!

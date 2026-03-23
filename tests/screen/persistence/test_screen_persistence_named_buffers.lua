@@ -132,4 +132,53 @@ T['preview split creation does not leave unnamed listed buffers behind'] = H.tim
   eq(#unnamed, 0)
 end)
 
+T['plain Meta then Esc does not leave unnamed listed buffers behind'] = H.timed_case(function()
+  local path = child.lua_get([[
+    (function()
+      local path = vim.fn.tempname() .. '.txt'
+      vim.fn.writefile({
+        'alpha one',
+        'beta two',
+        'gamma three',
+      }, path)
+      return path
+    end)()
+  ]])
+
+  child.cmd('edit ' .. path)
+  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  child.type_keys(':', 'Meta', '<CR>')
+  H.wait_for(function()
+    return H.session_active() and H.session_preview_visible() and H.session_info_snapshot() ~= nil
+  end, 3000)
+
+  child.lua([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      assert(s and s['prompt-buf'], 'missing prompt buffer')
+      router.cancel(s['prompt-buf'])
+    end)()
+  ]])
+  H.wait_for(function()
+    return child.lua_get('vim.api.nvim_get_current_buf() == _G.__meta_source_buf')
+  end, 3000)
+
+  local unnamed = child.lua_get([[
+    (function()
+      local listed = vim.fn.getbufinfo({ buflisted = 1 })
+      local out = {}
+      for _, info in ipairs(listed) do
+        if (info.name or '') == '' then
+          out[#out + 1] = info.bufnr
+        end
+      end
+      return out
+    end)()
+  ]])
+
+  eq(type(unnamed), 'table')
+  eq(#unnamed, 0)
+end)
+
 return T

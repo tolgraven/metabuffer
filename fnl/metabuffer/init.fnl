@@ -1,6 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local router (require :metabuffer.router))
 (local config (require :metabuffer.config))
+(local PRIMARY_LINE_GROUPS ["Title" "String" "Number" "Special" "Type" "Identifier"])
 
 (local M {})
 (local PATH_SEG_GROUPS
@@ -90,6 +91,12 @@
       (if (. curl :sp)
           (set (. opts :sp) (. curl :sp))
           (when (. curl :fg) (set (. opts :sp) (. curl :fg)))))
+    opts))
+
+(fn hit-hl-primary
+  [main-group curl-group]
+  (let [opts (hit-hl main-group curl-group)]
+    (set (. opts :default) true)
     opts))
 
 (fn thin-underline-from
@@ -311,12 +318,20 @@
         (= step 3)
         (or (brighten-rgb base 0.04) base)
         (= step 4)
-        (or (brighten-rgb base 0.02) base)
+        (or (brighten-rgb base 0.06) base)
+        (= step 5)
+        (or (brighten-rgb base 0.04) base)
         (= step 6)
-        (or (darken-rgb base 0.02) base)
+        (or (brighten-rgb base 0.02) base)
         (= step 7)
-        (or (darken-rgb base 0.04) base)
+        (or (darken-rgb base 0.02) base)
         (= step 8)
+        (or (darken-rgb base 0.04) base)
+        (= step 9)
+        (or (brighten-rgb base 0.06) base)
+        (= step 10)
+        (or (brighten-rgb base 0.04) base)
+        (= step 11)
         (or (darken-rgb base 0.02) base)
         base)))
 
@@ -383,6 +398,17 @@
       (set (. opts :fg) fg))
     opts))
 
+(fn prompt-text-hl-from
+  [group]
+  (let [opts (prompt-text-hl)
+        [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]
+        fg (and ok (= (type hl) "table") (hl-rendered-fg hl))]
+    (when fg
+      (set (. opts :fg) fg))
+    (when (and ok (= (type hl) "table") (. hl :ctermfg))
+      (set (. opts :ctermfg) (. hl :ctermfg)))
+    opts))
+
 (fn loading-hl
   [group factor]
   (let [opts {:default true :bold true :cterm {:bold true}}
@@ -441,7 +467,7 @@
     (hi 0 "MetaStatuslineKey" (statusline-color-from "Comment"))
     (hi 0 "MetaStatuslineFlagOn" (statusline-color-from "String"))
     (hi 0 "MetaStatuslineFlagOff" (statusline-color-from "ErrorMsg"))
-    (for [i 1 8]
+    (for [i 1 11]
       (let [bg-fn (fn [] (results-pulse-bg i))
             suffix (tostring i)]
         (hi 0 (.. "MetaStatuslineMiddlePulse" suffix) (meta-statusline-middle-hl-with-bg bg-fn))
@@ -455,6 +481,12 @@
     (hi 0 "MetaSearchHitFuzzyBetween" (hit-hl "IncSearch" "Question"))
     (hi 0 "MetaSearchHitRegex" (hit-hl "Special" "Type"))
     (hi 0 "MetaPromptText" (prompt-text-hl))
+    (each [i src (ipairs PRIMARY_LINE_GROUPS)]
+      (let [suffix (tostring i)]
+        (hi 0 (.. "MetaPromptText" suffix) (prompt-text-hl-from src))
+        (hi 0 (.. "MetaSearchHitAll" suffix) (hit-hl-primary src "Error"))
+        (hi 0 (.. "MetaSearchHitFuzzy" suffix) (hit-hl-primary src "WarningMsg"))
+        (hi 0 (.. "MetaSearchHitRegex" suffix) (hit-hl-primary src "Type"))))
     (hi 0 "MetaPromptNeg" {:default true :link "ErrorMsg"})
     (hi 0 "MetaPromptAnchor" {:default true :link "SpecialChar"})
     (hi 0 "MetaPromptRegex" {:default true :link "MetaSearchHitRegex" :underline true})

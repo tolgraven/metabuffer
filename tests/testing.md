@@ -160,6 +160,9 @@ Key helper coverage:
 ### `tests/screen/persistence/test_screen_persistence_statusline_restore.lua`
 - Closing Meta restores the original window-local `statusline` and `winhighlight`.
 
+### `tests/screen/persistence/test_screen_persistence_cancel_restore_regular.lua`
+- Regular `Esc` hides Meta UI, returns to the origin buffer, and keeps the session resumable via jumplist forward.
+
 ### `tests/screen/persistence/test_screen_persistence_cursor_word.lua`
 - `:MetaCursorWord` seeds the prompt and leaves insert at the end so new typing appends after the current word.
 
@@ -173,6 +176,7 @@ Key helper coverage:
 
 ### `tests/screen/persistence/test_screen_persistence_named_buffers.lua`
 - Meta-owned prompt/preview/info/results buffers use stable names instead of showing up as unnamed scratch buffers.
+- Plain `:Meta` followed by cancel does not leave stray listed `[No Name]` buffers behind.
 
 ### `tests/screen/persistence/test_screen_persistence_treesitter_regular.lua`
 - Regular file-backed `:Meta` keeps Tree-sitter highlighting active on the results buffer when a parser is available.
@@ -188,6 +192,9 @@ Key helper coverage:
 
 ### `tests/screen/persistence/test_screen_persistence_history_commands_*.lua`
 - `:Meta !!` and `:Meta !$` history expansion.
+
+### `tests/screen/matchers/test_screen_matchers_multiline_or.lua`
+- Multiple prompt lines match as OR by default, including direct prompt-buffer multiline updates.
 - `<CR>` from results opens selected hit correctly.
 - Repeated `!!` insertion does not duplicate payload.
 

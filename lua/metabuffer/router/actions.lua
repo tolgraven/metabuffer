@@ -441,14 +441,11 @@ end
 local function finish_cancel(deps, session)
   local mods = deps.mods
   local history = deps.history
-  local refresh = deps.refresh
   local router_prompt_mod = mods["router-prompt"]
   local router_util_mod = mods["router-util"]
   local sign_mod = mods.sign
-  local session_view = mods["session-view"]
   local base_buffer = mods["base-buffer"]
   local history_api = history.api
-  local wrapup = refresh.wrapup
   local curr = session.meta
   router_prompt_mod["begin-session-close!"](session, router_prompt_mod["cancel-prompt-update!"])
   session["last-prompt-text"] = router_util_mod["prompt-text"](session)
@@ -473,9 +470,8 @@ local function finish_cancel(deps, session)
   else
   end
   base_buffer["switch-buf"](curr.buf.model)
-  session_view["wipe-temp-buffers"](curr)
-  remove_session_21(deps, session)
-  wrapup(curr)
+  session["results-edit-mode"] = false
+  hide_session_ui_21(deps, session)
   return curr
 end
 M["finish!"] = function(deps, kind, prompt_buf)

@@ -278,6 +278,10 @@
           (vim.api.nvim_buf_clear_namespace session.prompt-buf ns 0 -1)
           (schedule-loading-indicator! session))))
 
+    (fn prompt-line-primary-group
+      [row]
+      (.. "MetaPromptText" (tostring (+ (% (math.max 0 (- row 1)) 6) 1))))
+
     (set refresh-prompt-highlights!
       (fn [session]
       (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
@@ -287,7 +291,8 @@
           (vim.api.nvim_buf_clear_namespace session.prompt-buf ns 0 -1)
           (each [row line (ipairs (or lines []))]
             (let [r (- row 1)
-                  txt (or line "")]
+                  txt (or line "")
+                  primary-hl (prompt-line-primary-group row)]
               (var pos 1)
               (while (<= pos (# txt))
                 (let [[s e] [(string.find txt "%S+" pos)]]
@@ -295,12 +300,12 @@
                       (let [token (string.sub txt s e)
                             s0 (- s 1)
                             e0 e]
-                        (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptText" r s0 e0)
+                        (vim.api.nvim_buf_add_highlight session.prompt-buf ns primary-hl r s0 e0)
                         (when-let [style (control-token-style token)]
                           (vim.api.nvim_buf_add_highlight
                             session.prompt-buf
                             ns
-                            (or (. style :hash-hl) "MetaPromptText")
+                            (or (. style :hash-hl) primary-hl)
                             r
                             s0
                             (+ s0 1))
@@ -308,7 +313,7 @@
                             (vim.api.nvim_buf_add_highlight
                               session.prompt-buf
                               ns
-                              (or (. style :text-hl) "MetaPromptText")
+                              (or (. style :text-hl) primary-hl)
                               r
                               (+ s0 1)
                               e0)))

@@ -1,6 +1,7 @@
 -- [nfnl] fnl/metabuffer/init.fnl
 local router = require("metabuffer.router")
 local config = require("metabuffer.config")
+local PRIMARY_LINE_GROUPS = {"Title", "String", "Number", "Special", "Type", "Identifier"}
 local M = {}
 local PATH_SEG_GROUPS = {"Directory", "Identifier", "Type", "Special", "String", "Constant", "Function", "Statement", "PreProc", "Keyword", "Operator", "Character", "Tag", "Delimiter", "Number", "Boolean", "Macro", "Title", "Question", "Exception", "DiffAdd", "DiffChange", "DiffText", "DiagnosticInfo"}
 local AUTHOR_GROUPS = {"Identifier", "Type", "Special", "String", "Constant", "Function", "Statement", "PreProc", "Keyword", "Operator", "Character", "Tag", "Delimiter", "Number", "Boolean", "Macro", "Title", "Question", "Exception", "DiffAdd", "DiffChange", "DiffText", "DiagnosticInfo", "DiagnosticHint"}
@@ -114,6 +115,11 @@ local function hit_hl(main_group, curl_group)
     end
   else
   end
+  return opts
+end
+local function hit_hl_primary(main_group, curl_group)
+  local opts = hit_hl(main_group, curl_group)
+  opts["default"] = true
   return opts
 end
 local function thin_underline_from(group)
@@ -325,12 +331,20 @@ local function results_pulse_bg(step)
   elseif (step == 3) then
     return (brighten_rgb(base, 0.04) or base)
   elseif (step == 4) then
-    return (brighten_rgb(base, 0.02) or base)
+    return (brighten_rgb(base, 0.06) or base)
+  elseif (step == 5) then
+    return (brighten_rgb(base, 0.04) or base)
   elseif (step == 6) then
-    return (darken_rgb(base, 0.02) or base)
+    return (brighten_rgb(base, 0.02) or base)
   elseif (step == 7) then
-    return (darken_rgb(base, 0.04) or base)
+    return (darken_rgb(base, 0.02) or base)
   elseif (step == 8) then
+    return (darken_rgb(base, 0.04) or base)
+  elseif (step == 9) then
+    return (brighten_rgb(base, 0.06) or base)
+  elseif (step == 10) then
+    return (brighten_rgb(base, 0.04) or base)
+  elseif (step == 11) then
     return (darken_rgb(base, 0.02) or base)
   else
     return base
@@ -387,6 +401,20 @@ local function prompt_text_hl()
   end
   if fg then
     opts["fg"] = fg
+  else
+  end
+  return opts
+end
+local function prompt_text_hl_from(group)
+  local opts = prompt_text_hl()
+  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  local fg = (ok and (type(hl) == "table") and hl_rendered_fg(hl))
+  if fg then
+    opts["fg"] = fg
+  else
+  end
+  if (ok and (type(hl) == "table") and hl.ctermfg) then
+    opts["ctermfg"] = hl.ctermfg
   else
   end
   return opts
@@ -464,12 +492,12 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaStatuslineKey", statusline_color_from("Comment"))
   hi(0, "MetaStatuslineFlagOn", statusline_color_from("String"))
   hi(0, "MetaStatuslineFlagOff", statusline_color_from("ErrorMsg"))
-  for i = 1, 8 do
+  for i = 1, 11 do
     local bg_fn
-    local function _52_()
+    local function _54_()
       return results_pulse_bg(i)
     end
-    bg_fn = _52_
+    bg_fn = _54_
     local suffix = tostring(i)
     hi(0, ("MetaStatuslineMiddlePulse" .. suffix), meta_statusline_middle_hl_with_bg(bg_fn))
     hi(0, ("MetaStatuslineIndicatorPulse" .. suffix), statusline_color_from_with_bg("Tag", bg_fn))
@@ -483,6 +511,13 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaSearchHitFuzzyBetween", hit_hl("IncSearch", "Question"))
   hi(0, "MetaSearchHitRegex", hit_hl("Special", "Type"))
   hi(0, "MetaPromptText", prompt_text_hl())
+  for i, src in ipairs(PRIMARY_LINE_GROUPS) do
+    local suffix = tostring(i)
+    hi(0, ("MetaPromptText" .. suffix), prompt_text_hl_from(src))
+    hi(0, ("MetaSearchHitAll" .. suffix), hit_hl_primary(src, "Error"))
+    hi(0, ("MetaSearchHitFuzzy" .. suffix), hit_hl_primary(src, "WarningMsg"))
+    hi(0, ("MetaSearchHitRegex" .. suffix), hit_hl_primary(src, "Type"))
+  end
   hi(0, "MetaPromptNeg", {default = true, link = "ErrorMsg"})
   hi(0, "MetaPromptAnchor", {default = true, link = "SpecialChar"})
   hi(0, "MetaPromptRegex", {default = true, link = "MetaSearchHitRegex", underline = true})
@@ -546,7 +581,7 @@ local function ensure_highlight_refresh_autocmd_21()
   else
   end
   refresh_augroup = vim.api.nvim_create_augroup("MetabufferHighlights", {clear = true})
-  local function _55_(event)
+  local function _57_(event)
     if ((event.event == "ColorScheme") or (event.match == "background")) then
       ensure_defaults_and_highlights_21(last_setup_opts)
       return pcall(vim.cmd, "redrawstatus")
@@ -554,7 +589,7 @@ local function ensure_highlight_refresh_autocmd_21()
       return nil
     end
   end
-  return vim.api.nvim_create_autocmd({"ColorScheme", "OptionSet"}, {group = refresh_augroup, pattern = {"*", "background"}, callback = _55_})
+  return vim.api.nvim_create_autocmd({"ColorScheme", "OptionSet"}, {group = refresh_augroup, pattern = {"*", "background"}, callback = _57_})
 end
 local function ensure_command(name, callback, opts)
   pcall(vim.api.nvim_del_user_command, name)
@@ -617,13 +652,13 @@ M.reload = function(opts)
   clear_module_cache()
   clear_plugin_loaded_flags_21()
   source_plugin_bootstrap_21()
-  local _63_
+  local _65_
   if do_compile then
-    _63_ = "[metabuffer] reloaded (compiled)"
+    _65_ = "[metabuffer] reloaded (compiled)"
   else
-    _63_ = "[metabuffer] reloaded"
+    _65_ = "[metabuffer] reloaded"
   end
-  vim.notify(_63_, vim.log.levels.INFO)
+  vim.notify(_65_, vim.log.levels.INFO)
   return true
 end
 M.setup = function(opts)
@@ -631,31 +666,31 @@ M.setup = function(opts)
   router.configure(opts)
   ensure_defaults_and_highlights_21(opts)
   ensure_highlight_refresh_autocmd_21()
-  local function _65_(args)
+  local function _67_(args)
     return router.entry_start(args.args, args.bang)
   end
-  ensure_command("Meta", _65_, {nargs = "?", bang = true})
-  local function _66_(args)
+  ensure_command("Meta", _67_, {nargs = "?", bang = true})
+  local function _68_(args)
     return router.entry_resume(args.args)
   end
-  ensure_command("MetaResume", _66_, {nargs = "?"})
-  local function _67_()
+  ensure_command("MetaResume", _68_, {nargs = "?"})
+  local function _69_()
     return router.entry_cursor_word(false)
   end
-  ensure_command("MetaCursorWord", _67_, {nargs = 0})
-  local function _68_()
+  ensure_command("MetaCursorWord", _69_, {nargs = 0})
+  local function _70_()
     return router.entry_cursor_word(true)
   end
-  ensure_command("MetaResumeCursorWord", _68_, {nargs = 0})
-  local function _69_(args)
+  ensure_command("MetaResumeCursorWord", _70_, {nargs = 0})
+  local function _71_(args)
     return router.entry_sync(args.args)
   end
-  ensure_command("MetaSync", _69_, {nargs = "?"})
-  local function _70_()
+  ensure_command("MetaSync", _71_, {nargs = "?"})
+  local function _72_()
     return router.entry_push()
   end
-  ensure_command("MetaPush", _70_, {nargs = 0})
-  local function _71_(args)
+  ensure_command("MetaPush", _72_, {nargs = 0})
+  local function _73_(args)
     local ok,err = pcall(M.reload, {compile = args.bang})
     if not ok then
       return vim.notify(("[metabuffer] reload failed: " .. tostring(err)), vim.log.levels.ERROR)
@@ -663,7 +698,7 @@ M.setup = function(opts)
       return nil
     end
   end
-  ensure_command("MetaReload", _71_, {nargs = 0, bang = true})
+  ensure_command("MetaReload", _73_, {nargs = 0, bang = true})
   return true
 end
 M.defaults = config.defaults
