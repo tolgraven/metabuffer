@@ -70,13 +70,6 @@
                                  15)))
     opts))
 
-(fn statusline-color-from-with-bg
-  [group bg-fn]
-  (let [opts (statusline-color-from group)]
-    (set (. opts :default) true)
-    (set (. opts :bg) (bg-fn))
-    opts))
-
 (fn hit-hl
   [main-group curl-group]
   (let [opts {:default true :undercurl true}
@@ -152,23 +145,6 @@
                                0))
     (set (. opts :ctermfg) (or (and ok-hl (= (type hl) "table") (. hl :ctermfg))
                                (and ok-sl (= (type sl) "table") (. sl :ctermfg))
-                               15))
-    opts))
-
-(fn statusline-sep-hl
-  []
-  (let [opts {:reverse false :cterm {:reverse false}}
-        [ok-sl sl] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]
-        [ok-normal normal] [(pcall vim.api.nvim_get_hl 0 {:name "Normal" :link false})]]
-    (set (. opts :fg) (or (and ok-sl (= (type sl) "table") (hl-rendered-fg sl))
-                          (and ok-normal (= (type normal) "table") (hl-rendered-fg normal))
-                          0xFFFFFF))
-    (set (. opts :bg) (meta-statusline-bg))
-    (set (. opts :ctermbg) (or (and ok-sl (= (type sl) "table") (. sl :ctermbg))
-                               (and ok-normal (= (type normal) "table") (. normal :ctermbg))
-                               0))
-    (set (. opts :ctermfg) (or (and ok-sl (= (type sl) "table") (. sl :ctermfg))
-                               (and ok-normal (= (type normal) "table") (. normal :ctermfg))
                                15))
     opts))
 
@@ -467,14 +443,12 @@
     (hi 0 "MetaStatuslineKey" (statusline-color-from "Comment"))
     (hi 0 "MetaStatuslineFlagOn" (statusline-color-from "String"))
     (hi 0 "MetaStatuslineFlagOff" (statusline-color-from "ErrorMsg"))
-    (for [i 1 11]
-      (let [bg-fn (fn [] (results-pulse-bg i))
-            suffix (tostring i)]
-        (hi 0 (.. "MetaStatuslineMiddlePulse" suffix) (meta-statusline-middle-hl-with-bg bg-fn))
-        (hi 0 (.. "MetaStatuslineIndicatorPulse" suffix) (statusline-color-from-with-bg "Tag" bg-fn))
-        (hi 0 (.. "MetaStatuslineKeyPulse" suffix) (statusline-color-from-with-bg "Comment" bg-fn))
-        (hi 0 (.. "MetaStatuslineFlagOnPulse" suffix) (statusline-color-from-with-bg "String" bg-fn))
-        (hi 0 (.. "MetaStatuslineFlagOffPulse" suffix) (statusline-color-from-with-bg "ErrorMsg" bg-fn))))
+    (let [bg-fn (fn [] (results-pulse-bg 1))]
+      (hi 0 "MetaStatuslineMiddlePulse" (meta-statusline-middle-hl-with-bg bg-fn))
+      (hi 0 "MetaStatuslineIndicatorPulse" (statusline-fg-hl-with-bg "Tag" bg-fn))
+      (hi 0 "MetaStatuslineKeyPulse" (statusline-fg-hl-with-bg "Comment" bg-fn))
+      (hi 0 "MetaStatuslineFlagOnPulse" (statusline-fg-hl-with-bg "String" bg-fn))
+      (hi 0 "MetaStatuslineFlagOffPulse" (statusline-fg-hl-with-bg "ErrorMsg" bg-fn)))
     (hi 0 "MetaSearchHitAll" (hit-hl "Statement" "Error"))
     (hi 0 "MetaSearchHitBuffer" (hit-hl "Statement" "Error"))
     (hi 0 "MetaSearchHitFuzzy" (hit-hl "Number" "WarningMsg"))
@@ -512,10 +486,6 @@
     (each [i src (ipairs PATH_SEG_GROUPS)]
       (hi 0 (.. "MetaPathSeg" (tostring i)) {:default true :link src}))
     (hi 0 "MetaPathSep" {:default true :link "Normal"})
-    (each [i src (ipairs PATH_SEG_GROUPS)]
-      (hi 0 (.. "MetaStatuslinePathSeg" (tostring i)) (statusline-fg-hl-from src)))
-    (hi 0 "MetaStatuslinePathSep" (statusline-sep-hl))
-    (hi 0 "MetaStatuslinePathFile" (statusline-fg-hl-from "Comment"))
     (each [i src (ipairs PATH_SEG_GROUPS)]
       (hi 0 (.. "MetaPreviewStatuslinePathSeg" (tostring i))
           (statusline-fg-hl-with-bg src meta-preview-statusline-bg)))
@@ -652,6 +622,17 @@
     {:nargs 0 :bang true})
 
   true)
+
+(fn M.update-results-loading-pulse!
+  [step]
+  "Refresh the shared results statusline pulse highlights for one animation step."
+  (let [hi vim.api.nvim_set_hl
+        bg-fn (fn [] (results-pulse-bg step))]
+    (hi 0 "MetaStatuslineMiddlePulse" (meta-statusline-middle-hl-with-bg bg-fn))
+    (hi 0 "MetaStatuslineIndicatorPulse" (statusline-fg-hl-with-bg "Tag" bg-fn))
+    (hi 0 "MetaStatuslineKeyPulse" (statusline-fg-hl-with-bg "Comment" bg-fn))
+    (hi 0 "MetaStatuslineFlagOnPulse" (statusline-fg-hl-with-bg "String" bg-fn))
+    (hi 0 "MetaStatuslineFlagOffPulse" (statusline-fg-hl-with-bg "ErrorMsg" bg-fn))))
 
 (set M.defaults (. config :defaults))
 

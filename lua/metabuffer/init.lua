@@ -75,12 +75,6 @@ local function statusline_color_from(group)
   end
   return opts
 end
-local function statusline_color_from_with_bg(group, bg_fn)
-  local opts = statusline_color_from(group)
-  opts["default"] = true
-  opts["bg"] = bg_fn()
-  return opts
-end
 local function hit_hl(main_group, curl_group)
   local opts = {default = true, undercurl = true}
   local ok_main,main = pcall(vim.api.nvim_get_hl, 0, {name = main_group, link = false})
@@ -188,16 +182,6 @@ local function statusline_fg_hl_from(group)
   opts["bg"] = meta_statusline_bg()
   opts["ctermbg"] = ((ok_sl and (type(sl) == "table") and sl.ctermbg) or (ok_normal and (type(normal) == "table") and normal.ctermbg) or 0)
   opts["ctermfg"] = ((ok_hl and (type(hl) == "table") and hl.ctermfg) or (ok_sl and (type(sl) == "table") and sl.ctermfg) or 15)
-  return opts
-end
-local function statusline_sep_hl()
-  local opts = {cterm = {reverse = false}, reverse = false}
-  local ok_sl,sl = pcall(vim.api.nvim_get_hl, 0, {name = "StatusLine", link = false})
-  local ok_normal,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
-  opts["fg"] = ((ok_sl and (type(sl) == "table") and hl_rendered_fg(sl)) or (ok_normal and (type(normal) == "table") and hl_rendered_fg(normal)) or 16777215)
-  opts["bg"] = meta_statusline_bg()
-  opts["ctermbg"] = ((ok_sl and (type(sl) == "table") and sl.ctermbg) or (ok_normal and (type(normal) == "table") and normal.ctermbg) or 0)
-  opts["ctermfg"] = ((ok_sl and (type(sl) == "table") and sl.ctermfg) or (ok_normal and (type(normal) == "table") and normal.ctermfg) or 15)
   return opts
 end
 local function statusline_fg_hl_with_bg(group, bg_fn)
@@ -492,18 +476,17 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaStatuslineKey", statusline_color_from("Comment"))
   hi(0, "MetaStatuslineFlagOn", statusline_color_from("String"))
   hi(0, "MetaStatuslineFlagOff", statusline_color_from("ErrorMsg"))
-  for i = 1, 11 do
+  do
     local bg_fn
     local function _54_()
-      return results_pulse_bg(i)
+      return results_pulse_bg(1)
     end
     bg_fn = _54_
-    local suffix = tostring(i)
-    hi(0, ("MetaStatuslineMiddlePulse" .. suffix), meta_statusline_middle_hl_with_bg(bg_fn))
-    hi(0, ("MetaStatuslineIndicatorPulse" .. suffix), statusline_color_from_with_bg("Tag", bg_fn))
-    hi(0, ("MetaStatuslineKeyPulse" .. suffix), statusline_color_from_with_bg("Comment", bg_fn))
-    hi(0, ("MetaStatuslineFlagOnPulse" .. suffix), statusline_color_from_with_bg("String", bg_fn))
-    hi(0, ("MetaStatuslineFlagOffPulse" .. suffix), statusline_color_from_with_bg("ErrorMsg", bg_fn))
+    hi(0, "MetaStatuslineMiddlePulse", meta_statusline_middle_hl_with_bg(bg_fn))
+    hi(0, "MetaStatuslineIndicatorPulse", statusline_fg_hl_with_bg("Tag", bg_fn))
+    hi(0, "MetaStatuslineKeyPulse", statusline_fg_hl_with_bg("Comment", bg_fn))
+    hi(0, "MetaStatuslineFlagOnPulse", statusline_fg_hl_with_bg("String", bg_fn))
+    hi(0, "MetaStatuslineFlagOffPulse", statusline_fg_hl_with_bg("ErrorMsg", bg_fn))
   end
   hi(0, "MetaSearchHitAll", hit_hl("Statement", "Error"))
   hi(0, "MetaSearchHitBuffer", hit_hl("Statement", "Error"))
@@ -543,11 +526,6 @@ local function ensure_defaults_and_highlights_21(opts)
     hi(0, ("MetaPathSeg" .. tostring(i)), {default = true, link = src})
   end
   hi(0, "MetaPathSep", {default = true, link = "Normal"})
-  for i, src in ipairs(PATH_SEG_GROUPS) do
-    hi(0, ("MetaStatuslinePathSeg" .. tostring(i)), statusline_fg_hl_from(src))
-  end
-  hi(0, "MetaStatuslinePathSep", statusline_sep_hl())
-  hi(0, "MetaStatuslinePathFile", statusline_fg_hl_from("Comment"))
   for i, src in ipairs(PATH_SEG_GROUPS) do
     hi(0, ("MetaPreviewStatuslinePathSeg" .. tostring(i)), statusline_fg_hl_with_bg(src, meta_preview_statusline_bg))
   end
@@ -700,6 +678,19 @@ M.setup = function(opts)
   end
   ensure_command("MetaReload", _73_, {nargs = 0, bang = true})
   return true
+end
+M["update-results-loading-pulse!"] = function(step)
+  local hi = vim.api.nvim_set_hl
+  local bg_fn
+  local function _75_()
+    return results_pulse_bg(step)
+  end
+  bg_fn = _75_
+  hi(0, "MetaStatuslineMiddlePulse", meta_statusline_middle_hl_with_bg(bg_fn))
+  hi(0, "MetaStatuslineIndicatorPulse", statusline_fg_hl_with_bg("Tag", bg_fn))
+  hi(0, "MetaStatuslineKeyPulse", statusline_fg_hl_with_bg("Comment", bg_fn))
+  hi(0, "MetaStatuslineFlagOnPulse", statusline_fg_hl_with_bg("String", bg_fn))
+  return hi(0, "MetaStatuslineFlagOffPulse", statusline_fg_hl_with_bg("ErrorMsg", bg_fn))
 end
 M.defaults = config.defaults
 return M

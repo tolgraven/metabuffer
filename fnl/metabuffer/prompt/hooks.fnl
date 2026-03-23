@@ -201,16 +201,104 @@
            (not session.prompt-update-dirty)
            (not session.lazy-refresh-dirty)))
 
+    (fn hl-rendered-fg
+      [hl]
+      (if (and hl (. hl :reverse))
+          (or (. hl :bg) (. hl :fg))
+          (. hl :fg)))
+
+    (fn hl-rendered-bg
+      [hl]
+      (if (and hl (. hl :reverse))
+          (or (. hl :fg) (. hl :bg))
+          (. hl :bg)))
+
+    (fn darken-rgb
+      [n factor]
+      (if (not n)
+          nil
+          (let [r (math.floor (/ n 0x10000))
+                g (math.floor (% (/ n 0x100) 0x100))
+                b (% n 0x100)
+                f (math.max 0 (math.min factor 1))
+                dr (math.max 0 (math.min 255 (math.floor (* r (- 1 f)))))
+                dg (math.max 0 (math.min 255 (math.floor (* g (- 1 f)))))
+                db (math.max 0 (math.min 255 (math.floor (* b (- 1 f)))))]
+            (+ (* dr 0x10000) (* dg 0x100) db))))
+
+    (fn brighten-rgb
+      [n factor]
+      (if (not n)
+          nil
+          (let [r (math.floor (/ n 0x10000))
+                g (math.floor (% (/ n 0x100) 0x100))
+                b (% n 0x100)
+                f (math.max 0 (math.min factor 1))
+                br (math.max 0 (math.min 255 (math.floor (+ r (* (- 255 r) f)))))
+                bg (math.max 0 (math.min 255 (math.floor (+ g (* (- 255 g) f)))))
+                bb (math.max 0 (math.min 255 (math.floor (+ b (* (- 255 b) f)))))]
+            (+ (* br 0x10000) (* bg 0x100) bb))))
+
+    (fn results-pulse-bg
+      [step]
+      (let [[ok-middle middle] [(pcall vim.api.nvim_get_hl 0 {:name "MetaStatuslineMiddle" :link false})]
+            [ok-status status] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]
+            base (or (and ok-middle (= (type middle) "table") (hl-rendered-bg middle))
+                     (and ok-status (= (type status) "table") (hl-rendered-bg status))
+                     0x2a2a2a)]
+        (if (= step 2)
+            (or (brighten-rgb base 0.02) base)
+            (= step 3)
+            (or (brighten-rgb base 0.04) base)
+            (= step 4)
+            (or (brighten-rgb base 0.06) base)
+            (= step 5)
+            (or (brighten-rgb base 0.04) base)
+            (= step 6)
+            (or (brighten-rgb base 0.02) base)
+            (= step 7)
+            (or (darken-rgb base 0.02) base)
+            (= step 8)
+            (or (darken-rgb base 0.04) base)
+            (= step 9)
+            (or (brighten-rgb base 0.06) base)
+            (= step 10)
+            (or (brighten-rgb base 0.04) base)
+            (= step 11)
+            (or (darken-rgb base 0.02) base)
+            base)))
+
+    (fn pulse-hl-from
+      [group bg]
+      (let [opts {:default true :reverse false :cterm {:reverse false}}
+            [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
+        (when (and ok (= (type hl) "table"))
+          (when (hl-rendered-fg hl)
+            (set (. opts :fg) (hl-rendered-fg hl)))
+          (when (. hl :ctermfg)
+            (set (. opts :ctermfg) (. hl :ctermfg)))
+          (when (. hl :bold)
+            (set (. opts :bold) (. hl :bold))))
+        (set (. opts :bg) bg)
+        opts))
+
+    (fn update-results-loading-pulse-highlights!
+      [step]
+      (let [bg (results-pulse-bg step)
+            hi vim.api.nvim_set_hl]
+        (hi 0 "MetaStatuslineMiddlePulse" (pulse-hl-from "MetaStatuslineMiddle" bg))
+        (hi 0 "MetaStatuslineIndicatorPulse" (pulse-hl-from "MetaStatuslineIndicator" bg))
+        (hi 0 "MetaStatuslineKeyPulse" (pulse-hl-from "MetaStatuslineKey" bg))
+        (hi 0 "MetaStatuslineFlagOnPulse" (pulse-hl-from "MetaStatuslineFlagOn" bg))
+        (hi 0 "MetaStatuslineFlagOffPulse" (pulse-hl-from "MetaStatuslineFlagOff" bg))))
+
     (fn set-results-loading-pulse!
       [session]
       (if (and session session.loading-anim-phase)
-          (let [step (+ (% (or session.loading-anim-phase 0) 8) 1)
-                suffix (.. "Pulse" (tostring step))]
-            (set session.results-statusline-pulse-suffix suffix)
-            (set session.results-statusline-middle-group (.. "MetaStatuslineMiddle" suffix)))
-          (do
-            (set session.results-statusline-pulse-suffix nil)
-            (set session.results-statusline-middle-group nil))))
+          (let [step (+ (% (or session.loading-anim-phase 0) 8) 1)]
+            (set session.results-statusline-pulse-active? true)
+            (update-results-loading-pulse-highlights! step))
+          (set session.results-statusline-pulse-active? nil)))
 
     (var refresh-prompt-highlights! nil)
     (var schedule-loading-indicator! nil)

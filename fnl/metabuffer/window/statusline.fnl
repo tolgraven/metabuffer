@@ -25,16 +25,16 @@
     (if (= h "MetaPathSep")
         (or (. (or opts {}) :sep-group)
             (. (or opts {}) :file-group)
-            "MetaStatuslinePathFile")
+            "MetaPreviewStatuslinePathFile")
         (if (vim.startswith h "MetaPathSeg")
-            (.. (or (. (or opts {}) :seg-prefix) "MetaStatuslinePathSeg")
+            (.. (or (. (or opts {}) :seg-prefix) "MetaPreviewStatuslinePathSeg")
                 (string.sub h (+ (# "MetaPathSeg") 1)))
-            (or (. (or opts {}) :file-group) "MetaStatuslinePathFile")))))
+            (or (. (or opts {}) :file-group) "MetaPreviewStatuslinePathFile")))))
 
 (fn M.render-path
   [path opts]
   (let [default-text (or (. (or opts {}) :default-text) "Preview")
-        file-group (or (. (or opts {}) :file-group) "MetaStatuslinePathFile")
+        file-group (or (. (or opts {}) :file-group) "MetaPreviewStatuslinePathFile")
         base-group (or (. (or opts {}) :base-group) file-group)
         left-pad (or (. (or opts {}) :left-pad) " ")
         right-pad (or (. (or opts {}) :right-pad) " ")]

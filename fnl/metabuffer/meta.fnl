@@ -36,14 +36,16 @@
 
 (fn results-middle-group
   [session]
-  (or (and session session.results-statusline-middle-group)
+  (or (and session
+           session.results-statusline-pulse-active?
+           "MetaStatuslineMiddlePulse")
       "MetaStatuslineMiddle"))
 
 (fn results-group
   [session group]
   (or (and session
-           session.results-statusline-pulse-suffix
-           (.. group session.results-statusline-pulse-suffix))
+           session.results-statusline-pulse-active?
+           (.. group "Pulse"))
       group))
 
 (fn ping-pong-center

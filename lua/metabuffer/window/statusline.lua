@@ -21,18 +21,18 @@ end
 local function path_hl(hl, opts)
   local h = (hl or "")
   if (h == "MetaPathSep") then
-    return ((opts or {})["sep-group"] or (opts or {})["file-group"] or "MetaStatuslinePathFile")
+    return ((opts or {})["sep-group"] or (opts or {})["file-group"] or "MetaPreviewStatuslinePathFile")
   else
     if vim.startswith(h, "MetaPathSeg") then
-      return (((opts or {})["seg-prefix"] or "MetaStatuslinePathSeg") .. string.sub(h, (#"MetaPathSeg" + 1)))
+      return (((opts or {})["seg-prefix"] or "MetaPreviewStatuslinePathSeg") .. string.sub(h, (#"MetaPathSeg" + 1)))
     else
-      return ((opts or {})["file-group"] or "MetaStatuslinePathFile")
+      return ((opts or {})["file-group"] or "MetaPreviewStatuslinePathFile")
     end
   end
 end
 M["render-path"] = function(path, opts)
   local default_text = ((opts or {})["default-text"] or "Preview")
-  local file_group = ((opts or {})["file-group"] or "MetaStatuslinePathFile")
+  local file_group = ((opts or {})["file-group"] or "MetaPreviewStatuslinePathFile")
   local base_group = ((opts or {})["base-group"] or file_group)
   local left_pad = ((opts or {})["left-pad"] or " ")
   local right_pad = ((opts or {})["right-pad"] or " ")

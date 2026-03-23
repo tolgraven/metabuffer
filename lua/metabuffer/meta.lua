@@ -20,10 +20,10 @@ local function loading_visible_3f(session)
   return (session and session["loading-indicator?"] and (session_busy_3f(session) or (session["loading-anim-phase"] ~= nil) or session["loading-idle-pending"]))
 end
 local function results_middle_group(session)
-  return ((session and session["results-statusline-middle-group"]) or "MetaStatuslineMiddle")
+  return ((session and session["results-statusline-pulse-active?"] and "MetaStatuslineMiddlePulse") or "MetaStatuslineMiddle")
 end
 local function results_group(session, group)
-  return ((session and session["results-statusline-pulse-suffix"] and (group .. session["results-statusline-pulse-suffix"])) or group)
+  return ((session and session["results-statusline-pulse-active?"] and (group .. "Pulse")) or group)
 end
 local function ping_pong_center(phase, width)
   local w = math.max(1, (width or 1))
