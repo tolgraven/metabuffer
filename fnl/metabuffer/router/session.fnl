@@ -2,6 +2,44 @@
 
 (local M {})
 
+(fn silent-win-set-buf!
+  [win buf]
+  "Attach buffer to a window without emitting the normal file info message."
+  (when (and win buf
+             (vim.api.nvim_win_is_valid win)
+             (vim.api.nvim_buf_is_valid buf))
+    (or (pcall vim.api.nvim_win_call
+               win
+               (fn []
+                 (vim.cmd (.. "silent keepalt noautocmd buffer " buf))))
+        (pcall vim.api.nvim_win_set_buf win buf))))
+
+(fn launch-source-label
+  [session]
+  (if session.project-mode
+      (.. "Project mode in dir " (vim.fn.fnamemodify (vim.fn.getcwd) ":~"))
+      (let [path0 (and session.origin-buf
+                       (vim.api.nvim_buf_is_valid session.origin-buf)
+                       (vim.api.nvim_buf_get_name session.origin-buf))
+            path (or path0 "")]
+        (if (~= path "")
+            (vim.fn.fnamemodify path ":t")
+            "[No Name]"))))
+
+(fn show-launch-message!
+  [session]
+  (when session
+    (vim.schedule
+      (fn []
+        (vim.api.nvim_echo
+          [[(.. "Metabuffer • "
+                 (launch-source-label session)
+                 " • instance "
+                 (tostring (or session.instance-id "?")))
+            "ModeMsg"]]
+          true
+          {})))))
+
 (fn startup-ui-delay-ms
   [animate-enter? animation-settings]
   (let [settings (or animation-settings {})
@@ -390,6 +428,7 @@
                  maybe-restore-hidden-ui!
                  existing.meta
                  existing.meta.buf
+                 (= (not (not existing.project-mode)) (not (not project-mode)))
                  (or (= source-buf existing.meta.buf.buffer)
                      (= source-buf existing.origin-buf)))
             (do
@@ -531,7 +570,7 @@
                                :instance-id (next-instance-id!)
                                :meta curr}]
                   (when (vim.api.nvim_win_is_valid origin-win)
-                    (pcall vim.api.nvim_win_set_buf origin-win curr.buf.buffer))
+                    (silent-win-set-buf! origin-win curr.buf.buffer))
                   (when-not project-mode
                     (session-view.restore-meta-view! curr source-view session nil))
 
@@ -544,6 +583,7 @@
                       curr
                       session
                       initial-query-active)
+                    (show-launch-message! session)
                     curr)))))))))
 
 M

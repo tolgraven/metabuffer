@@ -1095,12 +1095,17 @@
     (when (and session
                session.ui-hidden
                session.meta
-               session.meta.buf
-               (= (vim.api.nvim_get_current_buf) session.meta.buf.buffer))
+               session.meta.buf)
+      (let [current-buf (vim.api.nvim_get_current_buf)
+            results-buf session.meta.buf.buffer
+            origin-buf session.origin-buf]
+      (when (or force
+                (= current-buf results-buf)
+                (= current-buf origin-buf))
       (set session.meta.win.window (vim.api.nvim_get_current_win))
       (restore-session-ui!
         deps
         session
-        {:preserve-focus (not force)}))))
+        {:preserve-focus (not force)}))))))
 
 M

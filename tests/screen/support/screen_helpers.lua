@@ -968,6 +968,16 @@ function M.session_ui_hidden()
   ]])
 end
 
+function M.session_project_mode()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      return s and s['project-mode'] == true or false
+    end)()
+  ]])
+end
+
 function M.session_history_browser_state()
   return M.child.lua_get([[
     (function()

@@ -1288,9 +1288,16 @@ end
 M["maybe-restore-ui!"] = function(deps, prompt_buf, force)
   local router = deps.router
   local session = session_by_prompt(router["active-by-prompt"], prompt_buf)
-  if (session and session["ui-hidden"] and session.meta and session.meta.buf and (vim.api.nvim_get_current_buf() == session.meta.buf.buffer)) then
-    session.meta.win.window = vim.api.nvim_get_current_win()
-    return restore_session_ui_21(deps, session, {["preserve-focus"] = not force})
+  if (session and session["ui-hidden"] and session.meta and session.meta.buf) then
+    local current_buf = vim.api.nvim_get_current_buf()
+    local results_buf = session.meta.buf.buffer
+    local origin_buf = session["origin-buf"]
+    if (force or (current_buf == results_buf) or (current_buf == origin_buf)) then
+      session.meta.win.window = vim.api.nvim_get_current_win()
+      return restore_session_ui_21(deps, session, {["preserve-focus"] = not force})
+    else
+      return nil
+    end
   else
     return nil
   end

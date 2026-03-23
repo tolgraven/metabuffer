@@ -55,10 +55,15 @@
                     (~= (vim.fn.bufnr name) buf))
           (set n (+ n 1))
           (set name (.. base " [" n "]")))
-        (let [[ok] [(pcall vim.api.nvim_buf_set_name buf name)]]
+        (let [rename! (fn []
+                        (vim.cmd (.. "silent noautocmd file " (vim.fn.fnameescape name))))
+              [ok] [(pcall vim.api.nvim_buf_call buf rename!)]]
           (if ok
               name
-              (.. base " [" buf "]"))))))
+              (let [[ok-api] [(pcall vim.api.nvim_buf_set_name buf name)]]
+                (if ok-api
+                    name
+                    (.. base " [" buf "]"))))))))
 
 (fn M.disable-heavy-buffer-features!
   [buf]

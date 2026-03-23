@@ -30,6 +30,17 @@ T['plain :Meta launches session with prompt and info window'] = H.timed_case(fun
   eq(H.session_prompt_win_height() > 0, true)
   eq(type(H.session_info_snapshot()), 'table')
   eq(H.session_preview_visible(), true)
+
+  local messages = H.child.lua_get([[
+    local ok, out = pcall(function()
+      return vim.api.nvim_exec2('silent messages', { output = true }).output or ''
+    end)
+    return ok and out or ''
+  ]])
+
+  eq(type(messages), 'string')
+  eq(string.find(messages, '• Metabuffer [', 1, true) == nil, true)
+  eq(string.find(messages, 'Metabuffer • ', 1, true) ~= nil, true)
 end)
 
 return T
