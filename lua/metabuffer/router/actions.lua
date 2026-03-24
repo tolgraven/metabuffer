@@ -1,5 +1,4 @@
 -- [nfnl] fnl/metabuffer/router/actions.fnl
-import("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local util = require("metabuffer.util")
 local source_mod = require("metabuffer.source")

@@ -1,5 +1,4 @@
 (require-macros :io.gitlab.andreyorst.cljlib.core)
-(import :io.gitlab.andreyorst.cljlib.core)
 
 (local M {})
 (local util (require :metabuffer.util))
