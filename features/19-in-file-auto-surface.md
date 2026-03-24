@@ -13,3 +13,8 @@ Both treesitter (for figuring out what kinda block focus is in) and LSP will be 
 
 Agents will need a "just bring me the context" mode where a tool simply dumps what would've been shown on screen, with file markings of course. And a "expand context from here" action that grabs stuff from ever more outwards.
 - This could be used to drive an nvim instance next to claude/codex and "show what it sees". The fact that only selected stuff gets output should mean it's more than a cool looking blur of lines, as well.
+
+With nice way to build up a buffer of context, agent can edit just those regions in the corresponding "file-based metabuffer" that agent actually can see.
+
+Also if having agent drive nvim view, can do reverse and manually metabuffer up good context (mostly automatically, still) and send it back over.
+Especially Gemini just shits me with its stupid 50 line greps over and over to find all it needs.
