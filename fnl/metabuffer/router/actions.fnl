@@ -383,7 +383,6 @@
         router-prompt-mod (. mods :router-prompt)
         router-util-mod (. mods :router-util)
         sign-mod (. mods :sign)
-        base-buffer (. mods :base-buffer)
         history-api (. history :api)
         curr session.meta]
     (router-prompt-mod.begin-session-close!
@@ -405,7 +404,6 @@
           session.origin-win
           (fn []
             (pcall vim.fn.winrestview session.source-view)))))
-    (base-buffer.switch-buf curr.buf.model)
     (set session.results-edit-mode false)
     (hide-session-ui! deps session)
     curr))

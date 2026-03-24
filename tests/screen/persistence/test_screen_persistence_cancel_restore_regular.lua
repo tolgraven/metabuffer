@@ -29,13 +29,17 @@ T['regular <Esc> hides Meta UI and remains resumable with jump forward'] = H.tim
   ]])
   eq(type(state_before), 'table')
 
+  H.focus_prompt('insert')
+  child.type_keys('<Esc>')
+
+  H.wait_for(function()
+    return H.session_ui_hidden()
+  end, 3000)
+
   local cancel_state = child.lua_get([[
     (function()
       local router = require('metabuffer.router')
       local s = router['active-by-source'][_G.__meta_source_buf]
-      assert(s and s['prompt-buf'], 'missing prompt buffer')
-      router.cancel(s['prompt-buf'])
-      s = router['active-by-source'][_G.__meta_source_buf]
       return {
         current_buf = vim.api.nvim_get_current_buf(),
         session_exists = s ~= nil,
