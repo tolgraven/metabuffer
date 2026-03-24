@@ -1109,3 +1109,4 @@ M.new = function(opts)
   return {["close-window!"] = close_info_window_21, ["update!"] = update_21}
 end
 return M
+eturn M

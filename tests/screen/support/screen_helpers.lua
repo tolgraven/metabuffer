@@ -927,6 +927,10 @@ function M.info_blank_seen()
   return M.child.lua_get('not not _G.__meta_info_blank_seen')
 end
 
+function M.info_blank_seen()
+  return M.child.lua_get('return not not _G.__meta_info_blank_seen')
+end
+
 function M.session_info_view()
   local encoded = M.child.lua_get([[
     (function()
