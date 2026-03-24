@@ -1,6 +1,6 @@
 # metabuffer
 
-Interactive buffer/project line filtering for Neovim, with a prompt-first workflow and fast matcher updates.
+Interactive buffer/project line filtering for Neovim without leaving your current window, and allowing changes made to the filtered view (including over multiple files) to propagate back to origin. "The new argdo". But there are many more features planned, including for LLM workflows.
 
 ![metabuffer screenshot](./metabuffer.png)
 
