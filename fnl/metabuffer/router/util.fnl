@@ -239,6 +239,30 @@
   (and (= (type s) "string")
        (not (not (string.find s "\0" 1 true)))))
 
+(fn suspicious-binary-head?
+  [s]
+  (if (not (= (type s) "string"))
+      false
+      (let [n (# s)]
+        (if (= n 0)
+            false
+            (let [bad0 0]
+              (var bad bad0)
+              (for [i 1 n]
+                (let [b (string.byte s i)]
+                  (when (or (< b 9)
+                            (= b 11)
+                            (= b 12)
+                            (and (> b 13) (< b 32))
+                            (= b 127))
+                    (set bad (+ bad 1)))))
+              (> (/ bad n) 0.1))))))
+
+(fn binary-head?
+  [head]
+  (or (contains-nul-byte? head)
+      (suspicious-binary-head? head)))
+
 (fn read-file-head-bytes
   [path n]
   "Read up to N raw bytes from PATH. Returns string or nil."
@@ -268,7 +292,7 @@
                      (~= (. cached :binary) nil))
                 (not (not (. cached :binary)))
                 (let [head (read-file-head-bytes path 256)
-                      bin? (contains-nul-byte? head)
+                      bin? (binary-head? head)
                       prev-lines (and (= (type cached) "table") (. cached :lines))]
                   (set (. cache path)
                        {:size size
@@ -353,8 +377,8 @@
                       (if (= (type (. cached :lines)) "table")
                           (. cached :lines)
                           nil))
-                  (let [[ok-head head] [(pcall vim.fn.readfile path "b" 8)]]
-                    (if (and ok-head (= (type head) "table") (contains-nul-byte? head))
+                  (let [head (read-file-head-bytes path 4096)]
+                    (if (binary-head? head)
                         (let [entry {:size size :mtime mtime :binary true}]
                           (if include-binary
                               (let [lines (if hex-view (hex-lines path size) (strings-lines path size))

@@ -883,6 +883,29 @@ function M.session_preview_visible()
   ]])
 end
 
+function M.session_preview_view()
+  local encoded = M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      local win = s and s['preview-win'] or nil
+      if not (win and vim.api.nvim_win_is_valid(win)) then
+        return nil
+      end
+      local view = vim.api.nvim_win_call(win, function()
+        return vim.fn.winsaveview()
+      end)
+      return vim.json.encode({
+        lnum = view.lnum or 0,
+        topline = view.topline or 0,
+        height = vim.api.nvim_win_get_height(win),
+      })
+    end)()
+  ]])
+  if encoded == nil or encoded == vim.NIL then return nil end
+  return vim.json.decode(encoded)
+end
+
 function M.session_preview_width()
   return M.child.lua_get([[
     (function()

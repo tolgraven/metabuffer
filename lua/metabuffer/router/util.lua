@@ -263,6 +263,30 @@ end
 local function contains_nul_byte_3f(s)
   return ((type(s) == "string") and not not string.find(s, "\0", 1, true))
 end
+local function suspicious_binary_head_3f(s)
+  if not (type(s) == "string") then
+    return false
+  else
+    local n = #s
+    if (n == 0) then
+      return false
+    else
+      local bad0 = 0
+      local bad = bad0
+      for i = 1, n do
+        local b = string.byte(s, i)
+        if ((b < 9) or (b == 11) or (b == 12) or ((b > 13) and (b < 32)) or (b == 127)) then
+          bad = (bad + 1)
+        else
+        end
+      end
+      return ((bad / n) > 0.1)
+    end
+  end
+end
+local function binary_head_3f(head)
+  return (contains_nul_byte_3f(head) or suspicious_binary_head_3f(head))
+end
 local function read_file_head_bytes(path, n)
   local uv = (vim.uv or vim.loop)
   if (uv and uv.fs_open and uv.fs_read and uv.fs_close and path) then
@@ -300,15 +324,15 @@ M["binary-file?"] = function(settings, path)
         return not not cached.binary
       else
         local head = read_file_head_bytes(path, 256)
-        local bin_3f = contains_nul_byte_3f(head)
+        local bin_3f = binary_head_3f(head)
         local prev_lines = ((type(cached) == "table") and cached.lines)
-        local _32_
+        local _35_
         if (type(prev_lines) == "table") then
-          _32_ = prev_lines
+          _35_ = prev_lines
         else
-          _32_ = nil
+          _35_ = nil
         end
-        cache[path] = {size = size, mtime = mtime, binary = not not bin_3f, lines = _32_}
+        cache[path] = {size = size, mtime = mtime, binary = not not bin_3f, lines = _35_}
         return not not bin_3f
       end
     end
@@ -422,8 +446,8 @@ M["read-file-lines-cached"] = function(settings, path, opts)
           end
         end
       else
-        local ok_head,head = pcall(vim.fn.readfile, path, "b", 8)
-        if (ok_head and (type(head) == "table") and contains_nul_byte_3f(head)) then
+        local head = read_file_head_bytes(path, 4096)
+        if binary_head_3f(head) then
           local entry = {size = size, mtime = mtime, binary = true}
           if include_binary then
             local lines
