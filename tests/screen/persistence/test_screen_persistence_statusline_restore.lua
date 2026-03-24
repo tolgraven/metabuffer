@@ -8,6 +8,7 @@ T['cancel restores original window statusline and winhighlight'] = H.timed_case(
   H.child.lua([[
     vim.wo.statusline = 'ORIGINAL STATUS'
     vim.wo.winhighlight = 'StatusLine:DiffText,StatusLineNC:DiffAdd'
+    vim.wo.colorcolumn = '80,120,160,200,240'
   ]])
   H.child.api.nvim_buf_set_lines(0, 0, -1, false, {
     'alpha one',
@@ -32,12 +33,14 @@ T['cancel restores original window statusline and winhighlight'] = H.timed_case(
       return {
         statusline = vim.api.nvim_get_option_value('statusline', { win = vim.api.nvim_get_current_win() }),
         winhighlight = vim.api.nvim_get_option_value('winhighlight', { win = vim.api.nvim_get_current_win() }),
+        colorcolumn = vim.api.nvim_get_option_value('colorcolumn', { win = vim.api.nvim_get_current_win() }),
       }
     end)()
   ]])
 
   eq(restored.statusline, 'ORIGINAL STATUS')
   eq(restored.winhighlight, 'StatusLine:DiffText,StatusLineNC:DiffAdd')
+  eq(restored.colorcolumn, '80,120,160,200,240')
 end)
 
 T['cancel after help-hide cycle restores original window statusline and winhighlight'] = H.timed_case(function()

@@ -20,7 +20,7 @@
                      :sidescrolloff 0
                      :signcolumn "yes:1"
                      :winhighlight (main-winhighlight nil)})
-(set M.opts-to-stash ["foldcolumn" "number" "numberwidth" "relativenumber" "statuscolumn" "wrap" "conceallevel" "signcolumn" "scrolloff" "sidescrolloff" "statusline" "cursorline" "winhighlight"])
+(set M.opts-to-stash ["foldcolumn" "number" "numberwidth" "relativenumber" "statuscolumn" "colorcolumn" "wrap" "conceallevel" "signcolumn" "scrolloff" "sidescrolloff" "statusline" "cursorline" "winhighlight"])
 
 (set M.statusline
   "%s%%#%s#%%=%s ")

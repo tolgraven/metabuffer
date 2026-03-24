@@ -6,7 +6,7 @@ local function main_winhighlight(middle_group)
   return (metabuffer_winhighlight() .. ",StatusLine:" .. (middle_group or "MetaStatuslineMiddle") .. ",StatusLineNC:" .. (middle_group or "MetaStatuslineMiddle"))
 end
 M["default-opts"] = {number = true, cursorline = true, scrolloff = 0, sidescrolloff = 0, signcolumn = "yes:1", winhighlight = main_winhighlight(nil), cursorcolumn = false, foldenable = false, relativenumber = false, spell = false}
-M["opts-to-stash"] = {"foldcolumn", "number", "numberwidth", "relativenumber", "statuscolumn", "wrap", "conceallevel", "signcolumn", "scrolloff", "sidescrolloff", "statusline", "cursorline", "winhighlight"}
+M["opts-to-stash"] = {"foldcolumn", "number", "numberwidth", "relativenumber", "statuscolumn", "colorcolumn", "wrap", "conceallevel", "signcolumn", "scrolloff", "sidescrolloff", "statusline", "cursorline", "winhighlight"}
 M.statusline = "%s%%#%s#%%=%s "
 M.new = function(nvim, win)
   local self = base.new(nvim, (win or vim.api.nvim_get_current_win()), M["opts-to-stash"], M["default-opts"])
