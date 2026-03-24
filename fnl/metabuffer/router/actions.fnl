@@ -1,4 +1,5 @@
 (require-macros :io.gitlab.andreyorst.cljlib.core)
+(import :io.gitlab.andreyorst.cljlib.core)
 
 (local M {})
 (local util (require :metabuffer.util))
@@ -204,6 +205,20 @@
   (when (and old-buf (vim.api.nvim_buf_is_valid old-buf))
     (util.delete-transient-unnamed-buffer! old-buf)))
 
+(fn handoff-host-window!
+  [win buf]
+  "Re-fire host window enter autocmds after silent Meta teardown staging."
+  (when (and win buf
+             (vim.api.nvim_win_is_valid win)
+             (vim.api.nvim_buf_is_valid buf))
+    (pcall vim.api.nvim_win_call
+           win
+           (fn []
+             (pcall vim.api.nvim_exec_autocmds "BufWinEnter" {:buffer buf :modeline false})
+             (pcall vim.api.nvim_exec_autocmds "BufEnter" {:buffer buf :modeline false})
+             (pcall vim.api.nvim_exec_autocmds "WinEnter" {:modeline false})
+             (pcall vim.cmd "redraw!")))))
+
 (fn hide-session-ui!
   [deps session]
   (let [{: router : mods : windows : history} deps
@@ -406,6 +421,7 @@
             (pcall vim.fn.winrestview session.source-view)))))
     (set session.results-edit-mode false)
     (hide-session-ui! deps session)
+    (handoff-host-window! session.origin-win session.origin-buf)
     curr))
 
 (fn M.finish!
