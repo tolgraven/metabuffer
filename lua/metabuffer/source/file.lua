@@ -2,6 +2,7 @@
 local text = require("metabuffer.source.text")
 local file_info = require("metabuffer.source.file_info")
 local M = {}
+M["provider-key"] = "file-entry"
 M["hit-prefix"] = function(ref)
   return text["path-prefix"](ref)
 end
@@ -60,5 +61,47 @@ M["preview-lines"] = function(session, ref, height, read_file_lines_cached)
   else
   end
   return text["preview-lines"](session, r, height, read_file_lines_cached)
+end
+local function normalize_target_path(old_path, text0)
+  local trimmed = vim.trim((text0 or ""))
+  if ((trimmed == "") or (trimmed == old_path)) then
+    return old_path
+  else
+    local cwd = vim.fn.getcwd()
+    local candidate = vim.fn.fnamemodify(trimmed, ":p")
+    if vim.startswith(candidate, cwd) then
+      return candidate
+    else
+      return vim.fn.fnamemodify((cwd .. "/" .. trimmed), ":p")
+    end
+  end
+end
+M["apply-write-ops!"] = function(ops)
+  local renames = {}
+  local touched_paths = {}
+  local total = 0
+  local any_write = false
+  for path, per_file in pairs((ops or {})) do
+    if ((#(per_file or {}) == 1) and (((per_file[1] and per_file[1].kind) or "") == "replace")) then
+      local op = per_file[1]
+      local target = normalize_target_path(path, op.text)
+      if (target ~= path) then
+        if (vim.fn.mkdir(vim.fn.fnamemodify(target, ":h"), "p") == 1) then
+        else
+        end
+        local ok = pcall(vim.loop.fs_rename, path, target)
+        if ok then
+          any_write = true
+          total = (total + 1)
+          touched_paths[path] = true
+          renames[path] = target
+        else
+        end
+      else
+      end
+    else
+    end
+  end
+  return {wrote = any_write, changed = total, ["post-lines"] = {}, paths = touched_paths, renames = renames}
 end
 return M

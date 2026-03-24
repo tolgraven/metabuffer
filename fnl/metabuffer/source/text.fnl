@@ -3,6 +3,7 @@
 (local file-info (require :metabuffer.source.file_info))
 
 (local M {})
+(set M.provider-key "text")
 
 (fn ref-path
   [session ref]
@@ -186,5 +187,138 @@
                :focus-lnum lnum
                :lines (trim-or-pad-lines slice h)})
             {:start-lnum 1 :focus-lnum 1 :lines (trim-or-pad-lines [] h)}))))
+
+(fn apply-op-to-loaded-buffer!
+  [buf op delta]
+  (if (= (. op :kind) :replace)
+      (let [lnum (+ (. op :lnum) delta)
+            line-count (vim.api.nvim_buf_line_count buf)]
+        (if (and (>= lnum 1) (<= lnum line-count))
+            (let [old (or (. (vim.api.nvim_buf_get_lines buf (- lnum 1) lnum false) 1) "")
+                  new (or (. op :text) "")]
+              (if (~= old new)
+                  (do
+                    (vim.api.nvim_buf_set_lines buf (- lnum 1) lnum false [new])
+                    [delta 1])
+                  [delta 0]))
+            [delta 0]))
+      (= (. op :kind) :delete)
+      (let [lnum (+ (. op :lnum) delta)
+            line-count (vim.api.nvim_buf_line_count buf)]
+        (if (and (>= lnum 1) (<= lnum line-count))
+            (do
+              (vim.api.nvim_buf_set_lines buf (- lnum 1) lnum false [])
+              [(- delta 1) 1])
+            [delta 0]))
+      (= (. op :kind) :insert-before)
+      (let [ins (or (. op :lines) [])
+            lnum (+ (. op :lnum) delta)
+            pos (math.max 1 (math.min (+ (vim.api.nvim_buf_line_count buf) 1) lnum))]
+        (if (> (# ins) 0)
+            (do
+              (vim.api.nvim_buf_set_lines buf (- pos 1) (- pos 1) false ins)
+              [(+ delta (# ins)) (# ins)])
+            [delta 0]))
+      (let [ins (or (. op :lines) [])
+            lnum (+ (. op :lnum) delta)
+            pos (math.max 0 (math.min (vim.api.nvim_buf_line_count buf) lnum))]
+        (if (> (# ins) 0)
+            (do
+              (vim.api.nvim_buf_set_lines buf pos pos false ins)
+              [(+ delta (# ins)) (# ins)])
+            [delta 0]))))
+
+(fn apply-op-to-lines!
+  [lines op delta]
+  (if (= (. op :kind) :replace)
+      (let [lnum (+ (. op :lnum) delta)]
+        (if (and (>= lnum 1) (<= lnum (# lines))
+                 (~= (. lines lnum) (. op :text)))
+            (do
+              (set (. lines lnum) (. op :text))
+              [delta 1])
+            [delta 0]))
+      (= (. op :kind) :delete)
+      (let [lnum (+ (. op :lnum) delta)]
+        (if (and (>= lnum 1) (<= lnum (# lines)))
+            (do
+              (table.remove lines lnum)
+              [(- delta 1) 1])
+            [delta 0]))
+      (= (. op :kind) :insert-before)
+      (let [ins (or (. op :lines) [])
+            lnum (+ (. op :lnum) delta)
+            pos (math.max 1 (math.min (+ (# lines) 1) lnum))]
+        (if (> (# ins) 0)
+            (do
+              (for [i 1 (# ins)]
+                (table.insert lines (+ pos i -1) (. ins i)))
+              [(+ delta (# ins)) (# ins)])
+            [delta 0]))
+      (let [ins (or (. op :lines) [])
+            lnum (+ (. op :lnum) delta)
+            pos (math.max 0 (math.min (# lines) lnum))]
+        (if (> (# ins) 0)
+            (do
+              (for [i 1 (# ins)]
+                (table.insert lines (+ pos i) (. ins i)))
+              [(+ delta (# ins)) (# ins)])
+            [delta 0]))))
+
+(fn M.apply-write-ops!
+  [ops]
+  (let [post-lines {}
+        touched-paths {}]
+    (var total 0)
+    (var any-write false)
+    (each [path per-file (pairs (or ops {}))]
+      (let [bufnr (vim.fn.bufnr path)]
+        (if (and bufnr (> bufnr 0) (vim.api.nvim_buf_is_loaded bufnr))
+            (let [bo (. vim.bo bufnr)
+                  old-mod (. bo :modifiable)
+                  old-ro (. bo :readonly)]
+              (set (. bo :modifiable) true)
+              (set (. bo :readonly) false)
+              (var delta 0)
+              (var changed 0)
+              (each [_ op (ipairs (or per-file []))]
+                (let [[next-delta bump] (apply-op-to-loaded-buffer! bufnr op delta)]
+                  (set delta next-delta)
+                  (set changed (+ changed bump))))
+              (set (. bo :modifiable) old-mod)
+              (set (. bo :readonly) old-ro)
+              (when (> changed 0)
+                (let [[ok-write] [(pcall vim.api.nvim_buf_call bufnr (fn [] (vim.cmd "silent keepalt noautocmd write")))]]
+                  (if ok-write
+                      (do
+                        (set any-write true)
+                        (set total (+ total changed))
+                        (set (. touched-paths path) true)
+                        (set (. post-lines path) (vim.api.nvim_buf_get_lines bufnr 0 -1 false)))
+                      (let [[ok-read lines0] [(pcall vim.api.nvim_buf_get_lines bufnr 0 -1 false)]]
+                        (when (and ok-read (= (type lines0) "table"))
+                          (let [[ok-fallback] [(pcall vim.fn.writefile lines0 path)]]
+                            (when ok-fallback
+                              (set any-write true)
+                              (set total (+ total changed))
+                              (set (. touched-paths path) true)
+                              (set (. post-lines path) lines0)))))))))
+            (let [[ok-read lines0] [(pcall vim.fn.readfile path)]]
+              (when (and ok-read (= (type lines0) "table"))
+                (let [lines (vim.deepcopy lines0)]
+                  (var delta 0)
+                  (var changed 0)
+                  (each [_ op (ipairs (or per-file []))]
+                    (let [[next-delta bump] (apply-op-to-lines! lines op delta)]
+                      (set delta next-delta)
+                      (set changed (+ changed bump))))
+                  (when (> changed 0)
+                    (let [[ok-write] [(pcall vim.fn.writefile lines path)]]
+                      (when ok-write
+                        (set any-write true)
+                        (set total (+ total changed))
+                        (set (. touched-paths path) true)
+                        (set (. post-lines path) lines))))))))))
+    {:wrote any-write :changed total :post-lines post-lines :paths touched-paths :renames {}}))
 
 M

@@ -260,17 +260,51 @@ M["path-under-root?"] = function(path, root)
   local r = M["canonical-path"](root)
   return (p and r and vim.startswith(p, r))
 end
-local function contains_nul_byte_3f(lines)
-  local n = math.min(8, #(lines or {}))
-  local found = false
-  for i = 1, n do
-    local line = (lines[i] or "")
-    if string.find(line, "\0", 1, true) then
-      found = true
+local function contains_nul_byte_3f(s)
+  return ((type(s) == "string") and not not string.find(s, "\0", 1, true))
+end
+local function suspicious_binary_head_3f(s)
+  if not (type(s) == "string") then
+    return false
+  else
+    local n = #s
+    if (n == 0) then
+      return false
     else
+      local bad0 = 0
+      local bad = bad0
+      for i = 1, n do
+        local b = string.byte(s, i)
+        if ((b < 9) or (b == 11) or (b == 12) or ((b > 13) and (b < 32)) or (b == 127)) then
+          bad = (bad + 1)
+        else
+        end
+      end
+      return ((bad / n) > 0.1)
     end
   end
-  return found
+end
+local function binary_head_3f(head)
+  return (contains_nul_byte_3f(head) or suspicious_binary_head_3f(head))
+end
+local function read_file_head_bytes(path, n)
+  local uv = (vim.uv or vim.loop)
+  if (uv and uv.fs_open and uv.fs_read and uv.fs_close and path) then
+    local ok_open,fd = pcall(uv.fs_open, path, "r", 438)
+    if (ok_open and fd) then
+      local ok_read,chunk = pcall(uv.fs_read, fd, (n or 256), 0)
+      pcall(uv.fs_close, fd)
+      if (ok_read and (type(chunk) == "string")) then
+        return chunk
+      else
+        return nil
+      end
+    else
+      return nil
+    end
+  else
+    return nil
+  end
 end
 M["binary-file?"] = function(settings, path)
   if (not path or (0 == vim.fn.filereadable(path))) then
@@ -289,16 +323,16 @@ M["binary-file?"] = function(settings, path)
       if ((type(cached) == "table") and (cached.size == size) and (cached.mtime == mtime) and (cached.binary ~= nil)) then
         return not not cached.binary
       else
-        local ok_head,head = pcall(vim.fn.readfile, path, "b", 8)
-        local bin_3f = (ok_head and (type(head) == "table") and contains_nul_byte_3f(head))
+        local head = read_file_head_bytes(path, 256)
+        local bin_3f = binary_head_3f(head)
         local prev_lines = ((type(cached) == "table") and cached.lines)
-        local _30_
+        local _35_
         if (type(prev_lines) == "table") then
-          _30_ = prev_lines
+          _35_ = prev_lines
         else
-          _30_ = nil
+          _35_ = nil
         end
-        cache[path] = {size = size, mtime = mtime, binary = not not bin_3f, lines = _30_}
+        cache[path] = {size = size, mtime = mtime, binary = not not bin_3f, lines = _35_}
         return not not bin_3f
       end
     end
@@ -412,8 +446,8 @@ M["read-file-lines-cached"] = function(settings, path, opts)
           end
         end
       else
-        local ok_head,head = pcall(vim.fn.readfile, path, "b", 8)
-        if (ok_head and (type(head) == "table") and contains_nul_byte_3f(head)) then
+        local head = read_file_head_bytes(path, 4096)
+        if binary_head_3f(head) then
           local entry = {size = size, mtime = mtime, binary = true}
           if include_binary then
             local lines

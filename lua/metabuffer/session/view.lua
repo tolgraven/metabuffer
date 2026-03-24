@@ -1,5 +1,6 @@
 -- [nfnl] fnl/metabuffer/session/view.fnl
 local state = require("metabuffer.core.state")
+local util = require("metabuffer.util")
 local M = {}
 M["wipe-temp-buffers"] = function(meta)
   if meta then
@@ -7,10 +8,12 @@ M["wipe-temp-buffers"] = function(meta)
     local model_buf = meta.buf.model
     local index_buf = (meta.buf.indexbuf and meta.buf.indexbuf.buffer)
     if (index_buf and not (index_buf == model_buf) and vim.api.nvim_buf_is_valid(index_buf)) then
+      util["restore-heavy-buffer-features!"](index_buf)
       pcall(vim.api.nvim_buf_delete, index_buf, {force = true})
     else
     end
     if (main_buf and not (main_buf == model_buf) and vim.api.nvim_buf_is_valid(main_buf)) then
+      util["restore-heavy-buffer-features!"](main_buf)
       return pcall(vim.api.nvim_buf_delete, main_buf, {force = true})
     else
       return nil
@@ -45,6 +48,7 @@ M["restore-meta-view!"] = function(meta, source_view, session, update_info_windo
   if (meta and vim.api.nvim_win_is_valid(meta.win.window)) then
     local line_count = vim.api.nvim_buf_line_count(meta.buf.buffer)
     local line = math.max(1, math.min(meta.selected_line(), line_count))
+    local win_height = math.max(1, vim.api.nvim_win_get_height(meta.win.window))
     local current_view
     local function _8_()
       return vim.fn.winsaveview()
@@ -61,8 +65,14 @@ M["restore-meta-view!"] = function(meta, source_view, session, update_info_windo
     local base_lnum = (base_view.lnum or line)
     local base_topline = (base_view.topline or base_lnum)
     local offset = math.max(0, (base_lnum - base_topline))
-    local topline = math.max(1, math.min((line - offset), line_count))
-    local function _10_()
+    local unclamped_topline = math.max(1, math.min((line - offset), line_count))
+    local topline
+    if (line_count <= win_height) then
+      topline = 1
+    else
+      topline = math.max(1, math.min(unclamped_topline, math.max(1, ((line_count - win_height) + 1))))
+    end
+    local function _11_()
       local view = vim.fn.winsaveview()
       view["lnum"] = line
       view["topline"] = topline
@@ -76,15 +86,15 @@ M["restore-meta-view!"] = function(meta, source_view, session, update_info_windo
       end
       vim.fn.winrestview(view)
       if (update_info_window and session) then
-        local function _13_()
+        local function _14_()
           return pcall(update_info_window, session, true)
         end
-        return vim.defer_fn(_13_, 50)
+        return vim.defer_fn(_14_, 50)
       else
         return nil
       end
     end
-    return vim.api.nvim_win_call(meta.win.window, _10_)
+    return vim.api.nvim_win_call(meta.win.window, _11_)
   else
     return nil
   end
@@ -112,12 +122,12 @@ M["sync-selected-from-main-cursor!"] = function(session)
   end
 end
 M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
-  local _let_19_ = (opts or {})
-  local active_by_prompt = _let_19_["active-by-prompt"]
-  local schedule_source_syntax_refresh_21 = _let_19_["schedule-source-syntax-refresh!"]
-  local update_info_window = _let_19_["update-info-window"]
-  local update_preview_window_21 = _let_19_["update-preview-window!"]
-  local update_context_window_21 = _let_19_["update-context-window!"]
+  local _let_20_ = (opts or {})
+  local active_by_prompt = _let_20_["active-by-prompt"]
+  local schedule_source_syntax_refresh_21 = _let_20_["schedule-source-syntax-refresh!"]
+  local update_info_window = _let_20_["update-info-window"]
+  local update_preview_window_21 = _let_20_["update-preview-window!"]
+  local update_context_window_21 = _let_20_["update-context-window!"]
   if (session and (not session["startup-initializing"] or session["project-mode"]) and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
     local before = session.meta.selected_index
     M["sync-selected-from-main-cursor!"](session)
@@ -131,7 +141,7 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
         pcall(update_preview_window_21, session)
       else
       end
-      pcall(update_info_window, session, true)
+      pcall(update_info_window, session, false)
       if update_context_window_21 then
         return pcall(update_context_window_21, session)
       else
@@ -145,16 +155,20 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
   end
 end
 M["schedule-scroll-sync!"] = function(session, opts)
-  local _let_25_ = (opts or {})
-  local maybe_sync_from_main_21 = _let_25_["maybe-sync-from-main!"]
-  local scroll_sync_debounce_ms = _let_25_["scroll-sync-debounce-ms"]
-  if (session and not session["scroll-sync-pending"]) then
+  local _let_26_ = (opts or {})
+  local maybe_sync_from_main_21 = _let_26_["maybe-sync-from-main!"]
+  local scroll_sync_debounce_ms = _let_26_["scroll-sync-debounce-ms"]
+  if (session and not session["scroll-sync-pending"] and not session["scroll-animating?"] and not session["scroll-command-view"]) then
     session["scroll-sync-pending"] = true
-    local function _26_()
+    local function _27_()
       session["scroll-sync-pending"] = false
-      return maybe_sync_from_main_21(session, true)
+      if (not session["scroll-animating?"] and not session["scroll-command-view"]) then
+        return maybe_sync_from_main_21(session, true)
+      else
+        return nil
+      end
     end
-    return vim.defer_fn(_26_, scroll_sync_debounce_ms)
+    return vim.defer_fn(_27_, scroll_sync_debounce_ms)
   else
     return nil
   end

@@ -14,22 +14,30 @@
       ""))
 
 (fn M.reset
-  []
-  "%*")
+  [group]
+  (if (and (= (type group) "string") (~= group ""))
+      (.. "%#" group "#")
+      "%*"))
 
 (fn path-hl
-  [hl]
+  [hl opts]
   (let [h (or hl "")]
     (if (= h "MetaPathSep")
-        "MetaStatuslinePathFile"
+        (or (. (or opts {}) :sep-group)
+            (. (or opts {}) :file-group)
+            "MetaPreviewStatuslinePathFile")
         (if (vim.startswith h "MetaPathSeg")
-            (.. "MetaStatuslinePathSeg" (string.sub h (+ (# "MetaPathSeg") 1)))
-            "MetaStatuslinePathFile"))))
+            (.. (or (. (or opts {}) :seg-prefix) "MetaPreviewStatuslinePathSeg")
+                (string.sub h (+ (# "MetaPathSeg") 1)))
+            (or (. (or opts {}) :file-group) "MetaPreviewStatuslinePathFile")))))
 
 (fn M.render-path
   [path opts]
   (let [default-text (or (. (or opts {}) :default-text) "Preview")
-        file-group (or (. (or opts {}) :file-group) "MetaStatuslinePathFile")]
+        file-group (or (. (or opts {}) :file-group) "MetaPreviewStatuslinePathFile")
+        base-group (or (. (or opts {}) :base-group) file-group)
+        left-pad (or (. (or opts {}) :left-pad) " ")
+        right-pad (or (. (or opts {}) :right-pad) " ")]
     (if (and (= (type path) "string") (~= path ""))
         (let [short (vim.fn.fnamemodify path ":~:.")
               file (vim.fn.fnamemodify short ":t")
@@ -37,14 +45,14 @@
               dir (if (= dir0 ".") "" dir0)
               dirtxt (if (= dir "") "" (.. dir "/"))
               ranges (path-highlight.ranges-for-dir dirtxt 0)
-              out [(.. (M.reset) " ")]]
+              out [(.. (M.reset base-group) left-pad)]]
           (each [_ dr (ipairs ranges)]
             (let [seg (string.sub dirtxt (+ (. dr :start) 1) (. dr :end))]
-              (table.insert out (.. "%#" (path-hl (. dr :hl)) "#" (M.escape seg)))))
+              (table.insert out (.. "%#" (path-hl (. dr :hl) opts) "#" (M.escape seg)))))
           (when (> (# file) 0)
             (table.insert out (.. "%#" file-group "#" (M.escape file))))
-          (table.insert out (.. (M.reset) " "))
+          (table.insert out (.. (M.reset base-group) right-pad))
           (table.concat out ""))
-        (.. (M.reset) " " default-text " "))))
+        (.. (M.reset base-group) left-pad default-text right-pad))))
 
 M

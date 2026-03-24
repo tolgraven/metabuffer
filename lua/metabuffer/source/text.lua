@@ -3,6 +3,7 @@ local path_hl = require("metabuffer.path_highlight")
 local util = require("metabuffer.util")
 local file_info = require("metabuffer.source.file_info")
 local M = {}
+M["provider-key"] = "text"
 local function ref_path(session, ref)
   local or_1_ = (ref and ref.path)
   if not or_1_ then
@@ -166,5 +167,175 @@ M["preview-lines"] = function(session, ref, height, read_file_lines_cached)
       return {["start-lnum"] = 1, ["focus-lnum"] = 1, lines = trim_or_pad_lines({}, h)}
     end
   end
+end
+local function apply_op_to_loaded_buffer_21(buf, op, delta)
+  if (op.kind == "replace") then
+    local lnum = (op.lnum + delta)
+    local line_count = vim.api.nvim_buf_line_count(buf)
+    if ((lnum >= 1) and (lnum <= line_count)) then
+      local old = (vim.api.nvim_buf_get_lines(buf, (lnum - 1), lnum, false)[1] or "")
+      local new = (op.text or "")
+      if (old ~= new) then
+        vim.api.nvim_buf_set_lines(buf, (lnum - 1), lnum, false, {new})
+        return {delta, 1}
+      else
+        return {delta, 0}
+      end
+    else
+      return {delta, 0}
+    end
+  elseif (op.kind == "delete") then
+    local lnum = (op.lnum + delta)
+    local line_count = vim.api.nvim_buf_line_count(buf)
+    if ((lnum >= 1) and (lnum <= line_count)) then
+      vim.api.nvim_buf_set_lines(buf, (lnum - 1), lnum, false, {})
+      return {(delta - 1), 1}
+    else
+      return {delta, 0}
+    end
+  elseif (op.kind == "insert-before") then
+    local ins = (op.lines or {})
+    local lnum = (op.lnum + delta)
+    local pos = math.max(1, math.min((vim.api.nvim_buf_line_count(buf) + 1), lnum))
+    if (#ins > 0) then
+      vim.api.nvim_buf_set_lines(buf, (pos - 1), (pos - 1), false, ins)
+      return {(delta + #ins), #ins}
+    else
+      return {delta, 0}
+    end
+  else
+    local ins = (op.lines or {})
+    local lnum = (op.lnum + delta)
+    local pos = math.max(0, math.min(vim.api.nvim_buf_line_count(buf), lnum))
+    if (#ins > 0) then
+      vim.api.nvim_buf_set_lines(buf, pos, pos, false, ins)
+      return {(delta + #ins), #ins}
+    else
+      return {delta, 0}
+    end
+  end
+end
+local function apply_op_to_lines_21(lines, op, delta)
+  if (op.kind == "replace") then
+    local lnum = (op.lnum + delta)
+    if ((lnum >= 1) and (lnum <= #lines) and (lines[lnum] ~= op.text)) then
+      lines[lnum] = op.text
+      return {delta, 1}
+    else
+      return {delta, 0}
+    end
+  elseif (op.kind == "delete") then
+    local lnum = (op.lnum + delta)
+    if ((lnum >= 1) and (lnum <= #lines)) then
+      table.remove(lines, lnum)
+      return {(delta - 1), 1}
+    else
+      return {delta, 0}
+    end
+  elseif (op.kind == "insert-before") then
+    local ins = (op.lines or {})
+    local lnum = (op.lnum + delta)
+    local pos = math.max(1, math.min((#lines + 1), lnum))
+    if (#ins > 0) then
+      for i = 1, #ins do
+        table.insert(lines, (pos + i + -1), ins[i])
+      end
+      return {(delta + #ins), #ins}
+    else
+      return {delta, 0}
+    end
+  else
+    local ins = (op.lines or {})
+    local lnum = (op.lnum + delta)
+    local pos = math.max(0, math.min(#lines, lnum))
+    if (#ins > 0) then
+      for i = 1, #ins do
+        table.insert(lines, (pos + i), ins[i])
+      end
+      return {(delta + #ins), #ins}
+    else
+      return {delta, 0}
+    end
+  end
+end
+M["apply-write-ops!"] = function(ops)
+  local post_lines = {}
+  local touched_paths = {}
+  local total = 0
+  local any_write = false
+  for path, per_file in pairs((ops or {})) do
+    local bufnr = vim.fn.bufnr(path)
+    if (bufnr and (bufnr > 0) and vim.api.nvim_buf_is_loaded(bufnr)) then
+      local bo = vim.bo[bufnr]
+      local old_mod = bo.modifiable
+      local old_ro = bo.readonly
+      bo["modifiable"] = true
+      bo["readonly"] = false
+      local delta = 0
+      local changed = 0
+      for _, op in ipairs((per_file or {})) do
+        local _let_32_ = apply_op_to_loaded_buffer_21(bufnr, op, delta)
+        local next_delta = _let_32_[1]
+        local bump = _let_32_[2]
+        delta = next_delta
+        changed = (changed + bump)
+      end
+      bo["modifiable"] = old_mod
+      bo["readonly"] = old_ro
+      if (changed > 0) then
+        local function _33_()
+          return vim.cmd("silent keepalt noautocmd write")
+        end
+        local ok_write = pcall(vim.api.nvim_buf_call, bufnr, _33_)
+        if ok_write then
+          any_write = true
+          total = (total + changed)
+          touched_paths[path] = true
+          post_lines[path] = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
+        else
+          local ok_read,lines0 = pcall(vim.api.nvim_buf_get_lines, bufnr, 0, -1, false)
+          if (ok_read and (type(lines0) == "table")) then
+            local ok_fallback = pcall(vim.fn.writefile, lines0, path)
+            if ok_fallback then
+              any_write = true
+              total = (total + changed)
+              touched_paths[path] = true
+              post_lines[path] = lines0
+            else
+            end
+          else
+          end
+        end
+      else
+      end
+    else
+      local ok_read,lines0 = pcall(vim.fn.readfile, path)
+      if (ok_read and (type(lines0) == "table")) then
+        local lines = vim.deepcopy(lines0)
+        local delta = 0
+        local changed = 0
+        for _, op in ipairs((per_file or {})) do
+          local _let_38_ = apply_op_to_lines_21(lines, op, delta)
+          local next_delta = _let_38_[1]
+          local bump = _let_38_[2]
+          delta = next_delta
+          changed = (changed + bump)
+        end
+        if (changed > 0) then
+          local ok_write = pcall(vim.fn.writefile, lines, path)
+          if ok_write then
+            any_write = true
+            total = (total + changed)
+            touched_paths[path] = true
+            post_lines[path] = lines
+          else
+          end
+        else
+        end
+      else
+      end
+    end
+  end
+  return {wrote = any_write, changed = total, ["post-lines"] = post_lines, paths = touched_paths, renames = {}}
 end
 return M

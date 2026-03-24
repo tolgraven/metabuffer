@@ -24,11 +24,12 @@ T['accept hit then MetaResume restores previous prompt and mode state'] = H.time
   eq(type(selected), 'table')
 
   H.type_prompt('<CR>')
-  H.wait_for(function() return not H.session_active() end)
+  H.wait_for(function() return H.session_ui_hidden() end)
   H.wait_for(function() return vim.api.nvim_win_get_cursor(0)[1] == selected.lnum end)
 
   child.cmd('MetaResume')
   H.wait_for(function() return H.session_active() end)
+  H.wait_for(function() return not H.session_ui_hidden() end)
   H.wait_for(function() return H.session_query_text() == 'metabuffer' end)
   H.wait_for(function() return H.session_matcher_name() == 'fuzzy' end)
   H.wait_for(function() return H.session_case_mode() == saved_case end)

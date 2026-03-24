@@ -13,6 +13,10 @@
     (when (~= on? default-on?)
       (project-setting-token name on?))))
 
+(fn explicit-setting-present?
+  [parsed key]
+  (~= (. parsed key) nil))
+
 (fn normalize-history-prompt
   [text]
   (let [parts (vim.split (or text "") "%s+" {:trimempty true})
@@ -61,6 +65,7 @@
     (fn api.history-entry-with-settings
       [session prompt]
       (let [query-text (or prompt "")
+            parsed (query-mod.parse-query-text query-text)
             seen {}
             tokens []
             _ (each [_ part (ipairs (vim.split query-text "%s+" {:trimempty true}))]
@@ -73,21 +78,24 @@
                                    "hidden"
                                    session.effective-include-hidden
                                    defaults.default-include-hidden)]
-                    (when-not (. seen tok)
+                    (when (and (not (explicit-setting-present? parsed :include-hidden))
+                               (not (. seen tok)))
                       (table.insert tokens tok)))
                   (when-let [tok (changed-setting-token
                                    query-mod
                                    "ignored"
                                    session.effective-include-ignored
                                    defaults.default-include-ignored)]
-                    (when-not (. seen tok)
+                    (when (and (not (explicit-setting-present? parsed :include-ignored))
+                               (not (. seen tok)))
                       (table.insert tokens tok)))
                   (when-let [tok (changed-setting-token
                                    query-mod
                                    "deps"
                                    session.effective-include-deps
                                    defaults.default-include-deps)]
-                    (when-not (. seen tok)
+                    (when (and (not (explicit-setting-present? parsed :include-deps))
+                               (not (. seen tok)))
                       (table.insert tokens tok)))
                   ;; Keep only consumed controls in synthetic history prefix.
                   ;; Non-consumed controls (#file/#binary/#hex) stay in prompt text as typed.
@@ -96,14 +104,16 @@
                                    "prefilter"
                                    session.prefilter-mode
                                    defaults.project-lazy-prefilter-enabled)]
-                    (when-not (. seen tok)
+                    (when (and (not (explicit-setting-present? parsed :prefilter))
+                               (not (. seen tok)))
                       (table.insert tokens tok)))
                   (when-let [tok (changed-setting-token
                                    query-mod
                                    "lazy"
                                    session.lazy-mode
                                    defaults.project-lazy-enabled)]
-                    (when-not (. seen tok)
+                    (when (and (not (explicit-setting-present? parsed :lazy))
+                               (not (. seen tok)))
                       (table.insert tokens tok)))))
             prefix (if (> (# tokens) 0) (table.concat tokens " ") "")]
         (if (= prefix "")

@@ -7,7 +7,9 @@
 (fn M.new-buffer
   []
   "Public API: M.new-buffer."
-  (vim.api.nvim_create_buf false false))
+  (let [buf (vim.api.nvim_create_buf false false)]
+    (util.disable-heavy-buffer-features! buf)
+    buf))
 
 (fn M.switch-buf
   [buf]
@@ -93,7 +95,7 @@
   (fn self.set-name
   [buf-name]
     (let [target-name (self.unique-name buf-name)
-          [ok err] [(pcall vim.api.nvim_buf_set_name self.buffer target-name)]]
+          [ok] [(pcall vim.api.nvim_buf_set_name self.buffer target-name)]]
       (if ok
           (set self.name target-name)
           ;; Last-resort fallback keeps plugin functional even if name APIs

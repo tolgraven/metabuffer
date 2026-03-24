@@ -42,6 +42,85 @@
   "Public API: M.buf-valid?."
   (and buf (vim.api.nvim_buf_is_valid buf)))
 
+(fn M.delete-transient-unnamed-buffer!
+  [buf]
+  "Best-effort wipe of a temporary unnamed split buffer. Returns true if deleted."
+  (if (not (M.buf-valid? buf))
+      false
+      (let [name (vim.api.nvim_buf_get_name buf)
+            lines (vim.api.nvim_buf_line_count buf)
+            wins (vim.fn.win_findbuf buf)
+            attached? (> (# (or wins [])) 0)]
+        (if (and (= (or name "") "")
+                 (<= lines 1)
+                 (not attached?))
+            (let [bo (. vim.bo buf)]
+              (set (. bo :buflisted) false)
+              (set (. bo :bufhidden) "wipe")
+              (set (. bo :swapfile) false)
+              (not (not (pcall vim.api.nvim_buf_delete buf {:force true}))))
+            false))))
+
+(fn M.mark-transient-unnamed-buffer!
+  [buf]
+  "Best-effort mark of a temporary unnamed split buffer so it never shows in :ls."
+  (when (M.buf-valid? buf)
+    (let [name (vim.api.nvim_buf_get_name buf)]
+      (when (= (or name "") "")
+        (let [bo (. vim.bo buf)]
+          (set (. bo :buflisted) false)
+          (set (. bo :bufhidden) "wipe")
+          (set (. bo :swapfile) false))))))
+
+(fn M.set-buffer-name!
+  [buf base-name]
+  "Best-effort unique buffer naming. Expected output: assigned name or fallback."
+  (if (not (M.buf-valid? buf))
+      (or base-name "")
+      (let [base (or base-name "metabuffer")
+            name0 base]
+        (var name name0)
+        (var n 1)
+        (while (and (> (vim.fn.bufnr name) 0)
+                    (~= (vim.fn.bufnr name) buf))
+          (set n (+ n 1))
+          (set name (.. base " [" n "]")))
+        (let [rename! (fn []
+                        (vim.cmd (.. "silent noautocmd file " (vim.fn.fnameescape name))))
+              [ok] [(pcall vim.api.nvim_buf_call buf rename!)]]
+          (if ok
+              name
+              (let [[ok-api] [(pcall vim.api.nvim_buf_set_name buf name)]]
+                (if ok-api
+                    name
+                    (.. base " [" buf "]"))))))))
+
+(fn M.disable-heavy-buffer-features!
+  [buf]
+  "Best-effort opt-out of heavy buffer-local helpers on Meta-owned buffers."
+  (when (M.buf-valid? buf)
+    (pcall vim.api.nvim_buf_set_var buf "conjure_disable" true)
+    (pcall vim.api.nvim_buf_set_var buf "lsp_disabled" 1)
+    (pcall vim.api.nvim_buf_set_var buf "gitgutter_enabled" 0)
+    (pcall vim.api.nvim_buf_set_var buf "gitsigns_disable" true)
+    (pcall vim.diagnostic.enable false {:bufnr buf})
+    (when (= 1 (vim.fn.exists "*rainbow_parentheses#deactivate"))
+      (pcall vim.api.nvim_buf_set_var buf "metabuffer_rainbow_parentheses_disabled" true)
+      (let [deactivate! (fn []
+                          (vim.cmd "silent! call rainbow_parentheses#deactivate()"))]
+        (pcall vim.api.nvim_buf_call buf deactivate!)))))
+
+(fn M.restore-heavy-buffer-features!
+  [buf]
+  "Undo Meta's best-effort heavy-helper opt-outs on surviving buffers."
+  (when (M.buf-valid? buf)
+    (let [[ok disabled?] [(pcall vim.api.nvim_buf_get_var buf "metabuffer_rainbow_parentheses_disabled")]]
+      (when (and ok disabled? (= 1 (vim.fn.exists "*rainbow_parentheses#activate")))
+        (let [activate! (fn []
+                          (vim.cmd "silent! call rainbow_parentheses#activate()"))]
+          (pcall vim.api.nvim_buf_call buf activate!))
+        (pcall vim.api.nvim_buf_del_var buf "metabuffer_rainbow_parentheses_disabled")))))
+
 (fn M.win-valid?
   [win]
   "Public API: M.win-valid?."

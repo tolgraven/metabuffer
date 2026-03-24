@@ -7,14 +7,158 @@
 (local regex_matcher (require :metabuffer.matcher.regex))
 (local meta_buffer_mod (require :metabuffer.buffer.metabuffer))
 (local meta_window_mod (require :metabuffer.window.metawindow))
+(local statusline_mod (require :metabuffer.window.statusline))
 (local expand_mod (require :metabuffer.context.expand))
-(local util (require :metabuffer.util))
 
 (local M {})
+(local STATUS_PROGRESS (. prompt_mod :STATUS_PROGRESS))
+(local state-cases (. state :cases))
+(local state-syntax-types (. state :syntax-types))
+
+(fn session-busy?
+  [session]
+  (and session
+       (or session.prompt-update-pending
+           session.prompt-update-dirty
+           session.lazy-refresh-pending
+           session.lazy-refresh-dirty
+           session.project-bootstrap-pending
+           (and session.project-mode
+                (not session.project-bootstrapped)))))
+
+(fn loading-visible?
+  [session]
+  (and session
+       session.loading-indicator?
+       (or (session-busy? session)
+           (~= session.loading-anim-phase nil)
+           session.loading-idle-pending)))
+
+(fn results-middle-group
+  [session]
+  (or (and session
+           session.results-statusline-pulse-active?
+           "MetaStatuslineMiddlePulse")
+      "MetaStatuslineMiddle"))
+
+(fn results-group
+  [session group]
+  (or (and session
+           session.results-statusline-pulse-active?
+           (.. group "Pulse"))
+      group))
+
+(fn ping-pong-center
+  [phase width]
+  (let [w (math.max 1 (or width 1))]
+    (if (<= w 1)
+        1
+        (let [period (math.max 1 (- (* 2 w) 2))
+              step (% (or phase 0) period)]
+          (if (< step w)
+              (+ step 1)
+              (- period step -1))))))
+
+(fn status-fragment
+  [group text]
+  (if (or (= (type text) "nil") (= text ""))
+      ""
+      (.. "%#" group "#" (string.gsub text "%%" "%%%%"))))
+
+(fn project-flag-fragment
+  [session name on?]
+  (.. (status-fragment (results-group session "MetaStatuslineKey") (if on? "+" "-"))
+      (status-fragment (results-group session (if on? "MetaStatuslineFlagOn" "MetaStatuslineFlagOff")) name)))
+
+(fn loading-fragment
+  [session]
+  (if (loading-visible? session)
+      (let [word "Working"
+            phase (or session.loading-anim-phase 0)
+            center (ping-pong-center phase (# word))
+            out []]
+        (for [i 1 (# word)]
+          (let [dist (math.abs (- i center))
+                hl (if (= dist 0)
+                       "MetaLoading6"
+                       (= dist 1)
+                       "MetaLoading5"
+                       (= dist 2)
+                       "MetaLoading4"
+                       (= dist 3)
+                       "MetaLoading3"
+                       (= dist 4)
+                       "MetaLoading2"
+                       "MetaLoading1")]
+            (table.insert out (status-fragment hl (string.sub word i i)))))
+        (table.concat out ""))
+      ""))
+
+(fn project-flags-fragment
+  [session]
+  (if (and session session.project-mode)
+      (let [parts []
+            flags [(project-flag-fragment session "hidden" (not (not session.effective-include-hidden)))
+                   (project-flag-fragment session "ignored" (not (not session.effective-include-ignored)))
+                   (project-flag-fragment session "deps" (not (not session.effective-include-deps)))
+                   (project-flag-fragment session "file" (not (not session.effective-include-files)))
+                   (project-flag-fragment session "binary" (not (not session.effective-include-binary)))
+                   (project-flag-fragment session "hex" (not (not session.effective-include-hex)))
+                   (project-flag-fragment session "prefilter" (not (not session.prefilter-mode)))
+                   (project-flag-fragment session "lazy" (not (not session.lazy-mode)))]]
+        (each [_ frag (ipairs flags)]
+          (when (> (# frag) 0)
+            (table.insert parts frag)))
+        (table.concat parts (status-fragment (results-middle-group session) "  ")))
+      ""))
+
+(fn results-statusline-left
+  [self]
+  (let [session self.session
+        buf self.buf.buffer
+        modified? (and buf
+                       (vim.api.nvim_buf_is_valid buf)
+                       (. vim.bo buf :modified))
+        modified-fragment (if modified?
+                              (status-fragment (results-group session "MetaStatuslineIndicator") "[+]")
+                              "")
+        loading (loading-fragment session)
+        debug (or self.debug_out "")
+        parts []]
+    (when (> (# modified-fragment) 0)
+      (table.insert parts modified-fragment))
+    (when (> (# loading) 0)
+      (table.insert parts loading))
+    (when (> (# debug) 0)
+      (table.insert parts (status-fragment (results-group session "MetaStatuslineIndicator") debug)))
+    (if (= (# parts) 0)
+        ""
+        (.. " " (table.concat parts (status-fragment (results-middle-group session) "  "))))))
+
+(fn results-statusline-right
+  [self]
+  (let [flags (project-flags-fragment self.session)]
+    (if (> (# flags) 0)
+        (.. " " flags)
+        "")))
 
 (fn line_of_index
   [buf idx]
   (or (. buf.indices (+ idx 1)) 1))
+
+(fn union-query-indices
+  [matcher queries candidates ignorecase]
+  "Return sorted union of per-line query matches. Expected output: ascending source indices."
+  (let [seen {}
+        out []]
+    (each [_ q (ipairs (or queries []))]
+      (let [hits (matcher.filter matcher q (vim.fn.range 1 (# candidates)) candidates ignorecase)]
+        (each [_ idx (ipairs hits)]
+          (when-not (. seen idx)
+            (set (. seen idx) true)
+            (table.insert out idx)))))
+    (table.sort out)
+    out))
 
 (fn ref-is-file-entry?
   [ref]
@@ -31,7 +175,7 @@
         (not (not (string.find probe query 1 true))))))
 
 (fn apply-file-entry-filter
-  [indices refs file-query-lines regular-queries ignorecase include-files regular-query-active?]
+  [indices refs file-query-lines ignorecase include-files regular-query-active?]
   (if (not include-files)
       indices
   (let [queries0 []]
@@ -111,6 +255,24 @@
         (vim.startswith m "i")
         {:group "Insert" :label (if (nerd-font-enabled?) "𝐈" "Insert")}
         {:group "Normal" :label (if (nerd-font-enabled?) "𝗡" "Normal")})))
+
+(fn prompt-statusline-text
+  [self]
+  (let [mode-state (statusline-mode-state)
+        matcher (. (self.matcher) :name)
+        matcher-suffix (statusline_mod.title-case matcher)
+        case-mode (self.case)
+        case-suffix (statusline_mod.title-case case-mode)
+        hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")]
+    (string.format
+      "%%#MetaStatuslineMode%s# %s %%#MetaStatuslineIndicator# %d/%d %%#MetaStatuslineMiddle#%%=%%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s "
+      (. mode-state :group)
+      (. mode-state :label)
+      (# self.buf.indices)
+      (self.buf.line-count)
+      matcher-suffix matcher "C^"
+      case-suffix case-mode "C-o"
+      hl-prefix (self.syntax) "Cs")))
 
 (fn highlight-pattern->vim-query
   [pat]
@@ -240,8 +402,8 @@
        {:matcher (modeindexer.new [(all_matcher.new) (fuzzy_matcher.new) (regex_matcher.new)]
                                   (or cond.matcher-index 1)
                                   {:on-leave "remove-highlight"})
-        :case (modeindexer.new state.cases (or cond.case-index 1) nil)
-        :syntax (modeindexer.new state.syntax-types (or cond.syntax-index 1)
+        :case (modeindexer.new state-cases (or cond.case-index 1) nil)
+        :syntax (modeindexer.new state-syntax-types (or cond.syntax-index 1)
                                  {:on-active (fn [idx]
                                                (self.buf.apply-syntax
                                                 (if (= (idx.current) "meta") "meta" "buffer")))})})
@@ -279,7 +441,7 @@
         [lines]
         (set self.query-lines (or lines []))
         (let [active (self.active-queries)]
-          (set self.text (table.concat active " && "))))
+          (set self.text (table.concat active "\n"))))
 
   (fn self.selected_line
     []
@@ -290,7 +452,7 @@
     (let [mode_obj (. self.mode which)]
       (mode_obj.next)
       (set self._prev_text "")
-      (self.on-update prompt_mod.STATUS_PROGRESS)))
+      (self.on-update STATUS_PROGRESS)))
 
   (fn self.vim_query
     []
@@ -308,22 +470,31 @@
 
       (fn self.refresh_statusline
         []
-        (let [mode-state (statusline-mode-state)
-              hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")]
-          (self.status-win.set-statusline-state
-            (. mode-state :group)
-            (. mode-state :label)
-            self.buf.name
-            (# self.buf.indices)
-            (self.buf.line-count)
-            (self.selected_line)
-            self.debug_out
-            ""
-            (. (self.matcher) :name)
-            (self.case)
-            hl-prefix
-            (self.syntax))
-          (vim.cmd "redrawstatus")))
+        (when-not (and self.session self.session.ui-hidden)
+          (let [mode-state (statusline-mode-state)
+                hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")]
+            (self.status-win.set-statusline-state
+              (. mode-state :group)
+              (. mode-state :label)
+              self.buf.name
+              (# self.buf.indices)
+              (self.buf.line-count)
+              (self.selected_line)
+              (results-statusline-left self)
+              (results-statusline-right self)
+              (. (self.matcher) :name)
+              (self.case)
+              hl-prefix
+              (self.syntax)
+              (results-middle-group self.session))
+            (when (and self.session
+                       self.session.prompt-win
+                       (vim.api.nvim_win_is_valid self.session.prompt-win))
+              (pcall vim.api.nvim_set_option_value
+                     "statusline"
+                     (prompt-statusline-text self)
+                     {:win self.session.prompt-win}))
+            (vim.cmd "redrawstatus"))))
 
       (fn self.on-init
         []
@@ -351,20 +522,23 @@
           (when (~= (. source-view :col) nil)
             (set (. view :col) (. source-view :col)))
           (vim.fn.winrestview view))))
-        prompt_mod.STATUS_PROGRESS)
+        STATUS_PROGRESS)
 
   (fn self.on-redraw
     []
     (self.refresh_statusline)
     (self.redraw-prompt)
-    prompt_mod.STATUS_PROGRESS)
+    STATUS_PROGRESS)
 
   (fn self.on-update
     [status]
       (let [queries (self.active-queries)
           prev-text self._prev_text
           prev-hits (vim.deepcopy (or self.buf.indices []))
+          prev-rank (math.max 1 (+ self.selected_index 1))
           prev-line (line_of_index self.buf self.selected_index)
+          anchor-line (or (and (= (# prev-hits) 0) self._no-hits-anchor-line)
+                          prev-line)
           effective-query (table.concat queries "\n")
           matcher-name (. (self.matcher) :name)
           ignorecase (self.ignorecase)
@@ -404,7 +578,7 @@
                       (not narrow-reuse?)
                       (or (not shortened?)
                           broaden-on-delete?))]
-      (set (. self._selection-cache prev-cache-key) prev-line)
+      (set (. self._selection-cache prev-cache-key) anchor-line)
       (when cache-reset?
         (set self._filter-cache {})
         (set self._filter-cache-line-count line-count))
@@ -418,7 +592,7 @@
         ;; Ensure broaden-on-delete always starts from full candidate set.
         ;; This avoids sticky narrowed indices when cache/reuse paths race.
         (self.buf.reset-filter))
-      (if (= (# queries) 0)
+          (if (= (# queries) 0)
           (do
             (self.buf.reset-filter)
             (clear-all-highlights))
@@ -438,30 +612,30 @@
                   (var cached-line-count cached-line-count0)
                   ;; Extend cached results incrementally when project streaming
                   ;; appended lines since this cache entry was materialized.
-                  (let [next0 (vim.deepcopy cached)]
-                    (var next next0)
-                  (when (< cached-line-count line-count)
-                    (let [added0 []]
-                      (var added added0)
-                      (for [i (+ cached-line-count 1) line-count]
-                        (table.insert added i))
-                      (each [_ q (ipairs queries)]
-                        (set added (matcher.filter matcher q added self.buf.content ignorecase)))
-                      (each [_ idx (ipairs added)]
-                        (table.insert next idx))
-                      (set cached-line-count line-count)))
-                  ;; Copy cached indices so future incremental updates cannot
-                  ;; accidentally mutate cache entries by reference.
-                  (set self.buf.indices (vim.deepcopy next))
-                  (set (. self._filter-cache cache-key)
-                       {:indices (vim.deepcopy next)
-                        :line-count line-count
-                        :full true})))
+                  (let [next (vim.deepcopy cached)
+                        seen {}]
+                    (each [_ idx (ipairs next)]
+                      (set (. seen idx) true))
+                    (when (< cached-line-count line-count)
+                      (let [added-candidates []]
+                        (for [i (+ cached-line-count 1) line-count]
+                          (table.insert added-candidates (. self.buf.content i)))
+                        (let [added-hits (union-query-indices matcher queries added-candidates ignorecase)]
+                          (each [_ rel-idx (ipairs added-hits)]
+                            (let [idx (+ cached-line-count rel-idx)]
+                              (when-not (. seen idx)
+                                (set (. seen idx) true)
+                                (table.insert next idx)))))
+                        (set cached-line-count line-count)))
+                    ;; Copy cached indices so future incremental updates cannot
+                    ;; accidentally mutate cache entries by reference.
+                    (set self.buf.indices (vim.deepcopy next))
+                    (set (. self._filter-cache cache-key)
+                         {:indices (vim.deepcopy next)
+                          :line-count line-count
+                          :full true})))
                 (do
-                  (var first reset?)
-                  (each [_ q (ipairs queries)]
-                    (self.buf.run-filter matcher q ignorecase first self.win.window)
-                    (set first false))
+                  (set self.buf.indices (union-query-indices matcher queries self.buf.content ignorecase))
                   (when reset?
                     (set (. self._filter-cache cache-key)
                          {:indices (vim.deepcopy self.buf.indices)
@@ -472,7 +646,6 @@
                             self.buf.indices
                             refs
                             self.file-query-lines
-                            queries
                             ignorecase
                             self.include-files
                             (> (# queries) 0))
@@ -487,6 +660,9 @@
                         :around-lines (or vim.g.meta_context_around_lines 3)
                         :max-blocks (or vim.g.meta_context_max_blocks 24)})
             _ (set self.buf.indices expanded)
+            _ (if (= (# self.buf.indices) 0)
+                  (set self._no-hits-anchor-line anchor-line)
+                  (set self._no-hits-anchor-line nil))
             hits-changed (if (= prev-hits self.buf.indices)
                              false
                              (if (~= (# prev-hits) (# self.buf.indices))
@@ -496,13 +672,17 @@
       (when needs-render?
         (self.buf.render))
       (when needs-render?
-        (let [preferred-line (or (. self._selection-cache cache-key) prev-line)]
+        (let [preferred-line (or (. self._selection-cache cache-key) anchor-line)
+              preferred-rank (math.max 1 (math.min prev-rank (# self.buf.indices)))]
         (var idx nil)
-        (each [i src (ipairs self.buf.indices)]
-          (when (and (not idx) (= src preferred-line))
-            (set idx i)))
-        (when-not idx
-          (set idx (self.buf.closest-index preferred-line)))
+        (if broaden-on-delete?
+            (set idx preferred-rank)
+            (do
+              (each [i src (ipairs self.buf.indices)]
+                (when (and (not idx) (= src preferred-line))
+                  (set idx i)))
+              (when-not idx
+                (set idx (self.buf.closest-index preferred-line)))))
         (when idx
           (set self.selected_index (- idx 1))
           (set (. self._selection-cache cache-key)
@@ -521,7 +701,7 @@
               (or vim.g.meta_highlight_max_hits 40000)]
         (if (or (= (# queries) 0) (>= (# self.buf.indices) highlight-max-hits))
             (matcher.remove-highlight matcher)
-            (matcher.highlight matcher effective-query ignorecase self.win.window))))))
+            (matcher.highlight matcher queries ignorecase self.win.window))))))
     status)
 
   (fn self.on-term

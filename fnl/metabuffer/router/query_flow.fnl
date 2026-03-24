@@ -15,13 +15,6 @@
     router_util_mod.prompt-lines
     session))
 
-(fn prompt-has-active-query?
-  [query-mod session]
-  (router_prompt_mod.prompt-has-active-query?
-    query-mod
-    router_util_mod.prompt-lines
-    session))
-
 (fn schedule-update!
   [prompt-scheduler-ctx session delay]
   (router_prompt_mod.schedule-prompt-update!

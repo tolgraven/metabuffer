@@ -170,7 +170,7 @@ local function file_meta_line(meta)
       git_author = a
     end
   end
-  return (mtime_text .. " " .. age_fragment .. "\t" .. git_author)
+  return (mtime_text .. " " .. age_fragment .. "\t " .. git_author)
 end
 M["file-meta-data"] = function(session, path)
   local cache = (session["info-file-meta-cache"] or {})
@@ -507,7 +507,6 @@ M["aligned-meta-suffix"] = function(suffix, path_width)
     author_end = (author_start + #right)
   end
   local age_token = (string.match(left, "(%d+[a-z]+)$") or "")
-  local age_num_part = (string.match(age_token, "^(%d+)") or "")
   local age_start
   if (age_token ~= "") then
     local age_pos = string.find(left, (" " .. age_token), 1, true)
@@ -521,7 +520,7 @@ M["aligned-meta-suffix"] = function(suffix, path_width)
   end
   local age_end
   if (age_start >= 0) then
-    age_end = (age_start + #age_num_part)
+    age_end = (age_start + #age_token)
   else
     age_end = -1
   end
@@ -548,8 +547,7 @@ M["line-meta-info-view"] = function(session, path, lnum, path_width)
   local mtime = vim.fn.getftime(path)
   local found = cache[key]
   local meta = (((type(found) == "table") and (found.mtime == mtime) and (found.lnum == lnum) and (type(found.text) == "string") and (type(found.status) == "string") and found) or {status = "clean", text = ""})
-  local sign = M["file-status-sign"](((meta and meta.status) or ""))
   local laid = M["aligned-meta-suffix"](meta.text, path_width)
-  return {path = "", ["icon-path"] = path, sign = sign, suffix = (laid.text or ""), ["suffix-prefix"] = "", ["suffix-highlights"] = (laid["suffix-highlights"] or {}), ["highlight-dir"] = false, ["highlight-file"] = false, ["show-icon"] = false}
+  return {path = "", ["icon-path"] = path, sign = {text = "  ", hl = "LineNr"}, suffix = (laid.text or ""), ["suffix-prefix"] = "", ["suffix-highlights"] = (laid["suffix-highlights"] or {}), ["highlight-dir"] = false, ["highlight-file"] = false, ["show-icon"] = false}
 end
 return M

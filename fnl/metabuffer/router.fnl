@@ -45,6 +45,7 @@
 (set M._instance-seq 0)
 (set M.active-by-source {})
 (set M.active-by-prompt {})
+(set M.launching-by-source {})
 (var update-info-window nil)
 (var apply-prompt-lines nil)
 (var preview-window nil)
@@ -111,7 +112,7 @@
            :info-fade-ms M.ui-animation-info-ms
            :read-file-lines-cached (fn [path]
                                      (router_util_mod.read-file-lines-cached M path))})]
-    (if false ;(= (type candidate) "function")
+    (if (= (type candidate) "function")
         {:update! candidate
          :close-window! (fn [_] nil)}
         candidate)))
@@ -139,9 +140,11 @@
   (fn [session refresh-lines]
     (when session
       (if session.ui-hidden
-          (when (and info-window info-window.close-window!)
+          (when (and (= (type info-window) "table")
+                     info-window.close-window!)
             (info-window.close-window! session))
-          (when (and info-window info-window.update!)
+          (when (and (= (type info-window) "table")
+                     info-window.update!)
             (info-window.update! session refresh-lines))))))
 
 (set context-window
@@ -253,7 +256,8 @@
    :history {:api history-api
              :store history_store}
    :project {:source project-source}
-   :refresh {:info! update-info-window
+   :refresh {:preview! update-preview-window
+             :info! update-info-window
              :sync-prompt-buffer-name! sync-prompt-buffer-name!
              :apply-prompt-lines! apply-prompt-lines
              :wrapup M._wrapup}})
@@ -453,10 +457,20 @@
   "Handle manual results-buffer wipe by cleaning hidden/resting session state."
   (router_actions_mod.on-results-buffer-wipe! actions-deps results-buf))
 
+(fn M.remove-session
+  [session]
+  "Remove a session immediately."
+  (remove-session session))
+
 (fn M.maybe-restore-hidden-ui
   [prompt-buf force]
   "Restore hidden prompt/info UI when revisiting a preserved results buffer."
   (router_actions_mod.maybe-restore-ui! actions-deps prompt-buf (if (= force nil) false force)))
+
+(fn M.hide-visible-ui
+  [prompt-buf]
+  "Hide Meta auxiliary UI while keeping the session resumable."
+  (router_actions_mod.hide-visible-ui! actions-deps prompt-buf))
 
 (set session-deps
   {:router M
@@ -476,8 +490,16 @@
                         (M.on-prompt-changed prompt-buf force event-tick))
    :maybe-sync-from-main! maybe-sync-from-main!
    :schedule-scroll-sync! schedule-scroll-sync!
-   :maybe-restore-hidden-ui! (fn [session force]
-                               (M.maybe-restore-hidden-ui session.prompt-buf force))
+   :maybe-restore-hidden-ui! (fn [session-or-prompt-buf force]
+                               (let [prompt-buf (if (= (type session-or-prompt-buf) "table")
+                                                    session-or-prompt-buf.prompt-buf
+                                                    session-or-prompt-buf)]
+                                 (M.maybe-restore-hidden-ui prompt-buf force)))
+   :hide-visible-ui! (fn [session-or-prompt-buf]
+                       (let [prompt-buf (if (= (type session-or-prompt-buf) "table")
+                                            session-or-prompt-buf.prompt-buf
+                                            session-or-prompt-buf)]
+                         (M.hide-visible-ui prompt-buf)))
    :mods {:meta meta_mod
           :router-util router_util_mod
           :prompt-window prompt_window_mod
@@ -489,22 +511,26 @@
              :context context-window}
    :ui {:loading-indicator M.ui-loading-indicator
         :animation {:enabled M.ui-animations-enabled
+                    :backend M.ui-animation-backend
                     :time-scale M.ui-animations-time-scale
                     :prompt {:enabled M.ui-animation-prompt-enabled
                              :ms M.ui-animation-prompt-ms
-                             :time-scale M.ui-animation-prompt-time-scale}
+                             :time-scale M.ui-animation-prompt-time-scale
+                             :backend M.ui-animation-prompt-backend}
                     :preview {:enabled M.ui-animation-preview-enabled
                               :ms M.ui-animation-preview-ms
                               :time-scale M.ui-animation-preview-time-scale}
                     :info {:enabled M.ui-animation-info-enabled
                            :ms M.ui-animation-info-ms
-                           :time-scale M.ui-animation-info-time-scale}
+                           :time-scale M.ui-animation-info-time-scale
+                           :backend M.ui-animation-info-backend}
                     :loading {:enabled M.ui-animation-loading-enabled
                               :ms M.ui-animation-loading-ms
                               :time-scale M.ui-animation-loading-time-scale}
                     :scroll {:enabled M.ui-animation-scroll-enabled
                              :ms M.ui-animation-scroll-ms
-                             :time-scale M.ui-animation-scroll-time-scale}}}})
+                             :time-scale M.ui-animation-scroll-time-scale
+                             :backend M.ui-animation-scroll-backend}}}})
 
 (fn M.toggle-scan-option
   [prompt-buf which]
@@ -569,12 +595,15 @@
   []
   "Public API: M.entry_push."
   (let [key (vim.api.nvim_get_current_buf)]
-    (let [session (. M.active-by-source key)
-          inst (. M.instances key)
-          meta (or (and session session.meta)
-                   (and inst inst.meta)
-                   inst)]
-      (M.push meta))))
+    (let [session (. M.active-by-source key)]
+      (if (and session session.prompt-buf session.meta session.meta.buf
+               (= key session.meta.buf.buffer))
+          (M.write-results session.prompt-buf)
+          (let [inst (. M.instances key)
+                meta (or (and session session.meta)
+                         (and inst inst.meta)
+                         inst)]
+            (M.push meta))))))
 
 (fn M.entry_cursor_word
   [resume]
@@ -629,18 +658,21 @@
           (maybe-close-win! session.meta.win.window))
         (when (and session.meta session.meta.buf)
           (maybe-delete-buf! session.meta.buf.buffer))
-        (when (and info-window info-window.close-window!)
+        (when (and (= (type info-window) "table")
+                   info-window.close-window!)
           (pcall info-window.close-window! session))
         (when (and (= (type preview-window) "table")
                    preview-window.close-window!)
           (pcall preview-window.close-window! session))
-        (when (and context-window context-window.close-window!)
+        (when (and (= (type context-window) "table")
+                   context-window.close-window!)
           (pcall context-window.close-window! session))
         (when history-api
           (pcall history-api.close-history-browser! session))))
     (clear-table! M.instances)
     (clear-table! M.active-by-prompt)
     (clear-table! M.active-by-source)
+    (clear-table! M.launching-by-source)
     (set M._teardown-in-progress false))
   (vim.schedule
     (fn []

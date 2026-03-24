@@ -1,6 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not : cond} :io.gitlab.andreyorst.cljlib.core)
 
 (local M {})
+(local util (require :metabuffer.util))
 
 (fn buf-for-ref
   [ref]
@@ -47,6 +48,8 @@
           (let [buf (vim.api.nvim_create_buf false true)
                 ft (filetype-for-ref ref)
                 lines (lines-for-ref session ref read-file-lines-cached)]
+            (util.disable-heavy-buffer-features! buf)
+            (util.set-buffer-name! buf "[Metabuffer Context]")
             (let [bo (. vim.bo buf)]
               (set (. bo :bufhidden) "hide")
               (set (. bo :buftype) "nofile")
@@ -123,7 +126,9 @@
 (fn identifier-at-ref
   [session ref read-file-lines-cached]
   (let [lines (lines-for-ref session ref read-file-lines-cached)
-        line (or (. lines (or ref.lnum 1)) (or ref.line ""))]
+        line (or (. lines (or ref.lnum 1))
+                 ref.line
+                 "")]
     (or (string.match line "[%a_][%w_%.:]*")
         "")))
 

@@ -1,14 +1,29 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local base (require :metabuffer.window.base))
-(local statusline-mod (require :metabuffer.window.statusline))
+(local metabuffer-winhighlight (. base :metabuffer-winhighlight))
 
 (local M {})
 
-(set M.default-opts {:spell false :foldenable false :cursorcolumn false :scrolloff 0 :sidescrolloff 0 :signcolumn "yes:1"})
-(set M.opts-to-stash ["foldcolumn" "number" "relativenumber" "wrap" "conceallevel" "signcolumn" "scrolloff" "sidescrolloff" "statusline"])
+(fn main-winhighlight
+  [middle-group]
+  (.. (metabuffer-winhighlight)
+      ",StatusLine:" (or middle-group "MetaStatuslineMiddle")
+      ",StatusLineNC:" (or middle-group "MetaStatuslineMiddle")))
+
+(set M.default-opts {:spell false
+                     :foldenable false
+                     :number true
+                     :relativenumber false
+                     :cursorcolumn false
+                     :cursorline true
+                     :scrolloff 0
+                     :sidescrolloff 0
+                     :signcolumn "yes:1"
+                     :winhighlight (main-winhighlight nil)})
+(set M.opts-to-stash ["foldcolumn" "number" "numberwidth" "relativenumber" "statuscolumn" "colorcolumn" "wrap" "conceallevel" "signcolumn" "scrolloff" "sidescrolloff" "statusline" "cursorline" "winhighlight"])
 
 (set M.statusline
-  "%%#MetaStatuslineMode%s# %s%%#MetaStatuslineIndicator# %d/%d%s%%#MetaStatuslineMiddle#%%=%%#MetaStatuslineFile# %s %%#MetaStatuslineMatcher%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineCase%s# %s %%#MetaStatuslineKey#%s%%#MetaStatuslineSyntax%s# %s %%#MetaStatuslineKey#%s ")
+  "%s%%#%s#%%=%s ")
 
 (fn M.new
   [nvim win]
@@ -16,16 +31,12 @@
   (let [self (base.new nvim (or win (vim.api.nvim_get_current_win)) M.opts-to-stash M.default-opts)]
 
     (fn self.set-statusline-state
-      [mode-group mode-label name num-hits num-lines line-nr debug-out preview-file matcher case-mode hl-prefix syntax]
-      (let [matcher-suffix (statusline-mod.title-case matcher)
-            case-suffix (statusline-mod.title-case case-mode)
-            text (string.format M.statusline
-                   mode-group mode-label
-                   num-hits num-lines (or debug-out "")
-                   (or preview-file "")
-                   matcher-suffix matcher "C^"
-                   case-suffix case-mode "C-o"
-                   hl-prefix syntax "Cs")]
+      [_mode-group _mode-label _name _num-hits _num-lines _line-nr left-extra right-extra _matcher _case-mode _hl-prefix _syntax middle-group]
+      (let [middle (or middle-group "MetaStatuslineMiddle")
+            winhl (main-winhighlight middle)
+            text (string.format M.statusline (or left-extra "") middle (or right-extra ""))]
+        (when (and self.window (vim.api.nvim_win_is_valid self.window))
+          (pcall vim.api.nvim_set_option_value "winhighlight" winhl {:win self.window}))
         (self.set-statusline text)))
 
     self))

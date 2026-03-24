@@ -3,30 +3,10 @@
 (local ui (require :metabuffer.buffer.ui))
 (local query-mod (require :metabuffer.query))
 (local source-mod (require :metabuffer.source))
-(local util (require :metabuffer.util))
 
 (local M {})
 
 (set M.default-opts {:buflisted false :bufhidden "hide" :buftype "nofile"})
-
-;;
-;; This should really be two synced-up buffers:
-;; hits, and metadata (some of which goes in info window).
-(fn icon-field
-  [icon]
-  (if (and (= (type icon) "string") (~= icon ""))
-      (let [text (.. icon " ")]
-        {:text text :width (vim.fn.strdisplaywidth text)})
-      {:text "" :width 0}))
-
-(fn split-source-path
-  [path]
-  (let [p (or path "")
-        rel (if (~= p "") (vim.fn.fnamemodify p ":~:.") "[Current Buffer]")
-        dir (vim.fn.fnamemodify rel ":h")
-        file (vim.fn.fnamemodify rel ":t")
-        dir-part (if (and dir (~= dir ".") (~= dir "")) (.. dir "/") "")]
-    {:dir dir-part :file file}))
 
 (fn source-prefix
   [ref]
@@ -57,6 +37,22 @@
     (pcall vim.api.nvim_buf_set_var buf "fennel_lua_version" "5.1")
     (pcall vim.api.nvim_buf_set_var buf "fennel_use_luajit" (if jit 1 0))))
 
+(fn stop-buffer-treesitter!
+  [buf]
+  (when (and buf (vim.api.nvim_buf_is_valid buf) vim.treesitter)
+    (pcall vim.treesitter.stop buf)))
+
+(fn start-buffer-treesitter!
+  [buf ft]
+  (when (and buf
+             (vim.api.nvim_buf_is_valid buf)
+             vim.treesitter
+             (= (type ft) "string")
+             (~= ft "")
+             (~= ft "metabuffer")
+             (~= ft "text"))
+    (pcall vim.treesitter.start buf ft)))
+
 (fn normalize-render-line
   [line]
   (let [txt (tostring (or line ""))]
@@ -85,13 +81,6 @@
              session.lazy-refresh-dirty
              session.project-bootstrap-pending
              (and session.project-mode (not session.project-bootstrapped))))))
-
-(fn session_has_active_query
-  [self]
-  (let [session self.session
-        parsed (and session session.last-parsed-query)]
-    (and parsed
-         (query-mod.query-lines-has-active? (or (. parsed :lines) [])))))
 
 (fn any-non-empty-line?
   [lines]
@@ -259,7 +248,7 @@
 
 (fn apply_frame_separators
   [self]
-  (when (and self.show-source-separators self.source-refs)
+  (when self.source-refs
     (let [n (# self.indices)]
       (var alt false)
       (var prev-path nil)
@@ -272,39 +261,36 @@
           (when (~= path prev-path)
             (set alt (not alt))
             (set prev-path path))
-          (when alt
+          (when (and self.show-source-alt-bg alt)
             (vim.api.nvim_buf_set_extmark
               self.buffer
               self.source-alt-ns
               (- i 1)
               0
-              {:end_row i
-               :end_col 0
-               :hl_group "MetaSourceAltBg"
-               :hl_eol true
-               :hl_mode "combine"
-               :priority 1}))))
-      (for [i 1 (- n 1)]
-        (let [cur-idx (. self.indices i)
-              next-idx (. self.indices (+ i 1))
-              cur-ref (and cur-idx (. self.source-refs cur-idx))
-              next-ref (and next-idx (. self.source-refs next-idx))
-              cur-path (and cur-ref cur-ref.path)
-              next-path (and next-ref next-ref.path)]
-          (when (and (~= (or cur-path "") (or next-path ""))
-                     (~= (and cur-ref cur-ref.kind) "file-entry")
-                     (~= (and next-ref next-ref.kind) "file-entry"))
-            (vim.api.nvim_buf_set_extmark
-              self.buffer
-              self.source-sep-ns
-              (- i 1)
-              0
-              {:end_row i
-               :end_col 0
-               :hl_group "MetaSourceBoundary"
-               :hl_eol true
-               :hl_mode "combine"
-               :priority 120})))))))
+              {:line_hl_group "MetaSourceAltBg"
+               :priority 90}))))
+      (when self.show-source-separators
+        (for [i 1 (- n 1)]
+          (let [cur-idx (. self.indices i)
+                next-idx (. self.indices (+ i 1))
+                cur-ref (and cur-idx (. self.source-refs cur-idx))
+                next-ref (and next-idx (. self.source-refs next-idx))
+                cur-path (and cur-ref cur-ref.path)
+                next-path (and next-ref next-ref.path)]
+            (when (and (~= (or cur-path "") (or next-path ""))
+                       (~= (and cur-ref cur-ref.kind) "file-entry")
+                       (~= (and next-ref next-ref.kind) "file-entry"))
+              (vim.api.nvim_buf_set_extmark
+                self.buffer
+                self.source-sep-ns
+                (- i 1)
+                0
+                {:end_row i
+                 :end_col 0
+                 :hl_group "MetaSourceBoundary"
+                 :hl_eol true
+                 :hl_mode "combine"
+                 :priority 120}))))))))
 
 (fn finalize_render
   [self views]
@@ -337,6 +323,7 @@
     (set self.indexbuf (ui.new nvim self "indexes"))
     (set self.show-source-prefix false)
     (set self.show-source-separators false)
+    (set self.show-source-alt-bg true)
     (set self.visible-source-syntax-only false)
     (set self.source-hl-ns (vim.api.nvim_create_namespace "metabuffer_source"))
     (set self.source-sep-ns (vim.api.nvim_create_namespace "metabuffer_source_separator"))
@@ -371,6 +358,7 @@
   []
     (set self.source-syntax-fill-token (+ 1 (or self.source-syntax-fill-token 0)))
     (set self.source-syntax-fill-pending false)
+    (stop-buffer-treesitter! self.buffer)
     (when (and self.source-syntax-groups (> (# self.source-syntax-groups) 0))
       (vim.api.nvim_buf_call self.buffer
         (fn []
@@ -542,11 +530,14 @@
                   (set (. bo :filetype) ft))
                 (if (and syn (~= syn ""))
                     (set (. bo :syntax) syn)
-                    (set (. bo :syntax) "")))
+                    (set (. bo :syntax) ""))
+                (start-buffer-treesitter! self.buffer ft))
               (do
+                (stop-buffer-treesitter! self.buffer)
                 (set (. bo :filetype) "metabuffer")
                 (set (. bo :syntax) "metabuffer")))
           (do
+            (stop-buffer-treesitter! self.buffer)
             (set (. bo :filetype) "metabuffer")
             (set (. bo :syntax) "metabuffer")))))
 

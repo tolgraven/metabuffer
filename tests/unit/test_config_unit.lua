@@ -34,6 +34,11 @@ T['resolve preserves debounce defaults when options absent'] = function()
   local resolved = config.resolve({})
   eq(type(resolved.options.prompt_update_debounce_ms), 'number')
   eq(resolved.options.prompt_update_debounce_ms >= 0, true)
+  eq(resolved.options.ui_animation_backend, 'mini')
+  eq(resolved.options.ui_animation_prompt_backend, 'mini')
+  eq(resolved.options.ui_animation_info_backend, 'mini')
+  eq(resolved.options.ui_animation_scroll_backend, 'mini')
+  eq(resolved.options.ui_animation_scroll_ms, 100)
 end
 
 T['defaults treat deps directory as dependency content'] = function()
@@ -52,9 +57,11 @@ T['resolve exposes animation controls with master and per-animation settings'] =
     ui = {
       animation = {
         enabled = false,
+        backend = 'mini',
         time_scale = 0.5,
         prompt = { enabled = true, time_scale = 2.0 },
         preview = { enabled = false },
+        info = {},
         scroll = { time_scale = 0.75 },
         loading_indicator = false,
       },
@@ -63,10 +70,14 @@ T['resolve exposes animation controls with master and per-animation settings'] =
 
   eq(resolved.options.ui_animations_enabled, false)
   eq(resolved.options.ui_animations_time_scale, 0.5)
+  eq(resolved.options.ui_animation_backend, 'mini')
   eq(resolved.options.ui_animation_prompt_enabled, true)
   eq(resolved.options.ui_animation_prompt_time_scale, 2.0)
+  eq(resolved.options.ui_animation_prompt_backend, 'mini')
   eq(resolved.options.ui_animation_preview_enabled, false)
+  eq(resolved.options.ui_animation_info_backend, 'mini')
   eq(resolved.options.ui_animation_scroll_time_scale, 0.75)
+  eq(resolved.options.ui_animation_scroll_backend, 'mini')
   eq(resolved.options.ui_loading_indicator, false)
 end
 
@@ -87,9 +98,12 @@ T['animation helper applies master and local time scales'] = function()
   local session = {
     ['animation-settings'] = {
       enabled = true,
+      backend = 'mini',
       ['time-scale'] = 0.5,
       prompt = { enabled = true, ms = 140, ['time-scale'] = 2.0 },
       preview = { enabled = false, ms = 180, ['time-scale'] = 1.0 },
+      info = {},
+      scroll = {},
     },
   }
 
@@ -97,6 +111,11 @@ T['animation helper applies master and local time scales'] = function()
   eq(animation['enabled?'](session, 'preview'), false)
   eq(animation['duration-ms'](session, 'prompt', 140), 140)
   eq(animation['duration-ms'](session, 'preview', 180), 90)
+  eq(animation['animation-backend'](session, 'prompt'), 'mini')
+  eq(animation['animation-backend'](session, 'info'), 'mini')
+  eq(animation['scroll-backend'](session), 'mini')
+  eq(animation['supports-backend?']('native'), true)
+  eq(animation['supports-scroll-backend?']('native'), true)
 end
 
 return T

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build/update SYMBOL_INDEX.md for this repository.
 
-Collects important symbols from Fennel/Lua sources:
+Collects important symbols from source files:
 - functions (primary)
 - module exports (M.*)
 - global assignments (vim.g)
@@ -32,7 +32,7 @@ LUA_M_SET_RE = re.compile(r"^\s*M\.([A-Za-z0-9_]+)\s*=")
 LUA_VIMG_RE = re.compile(r'^\s*vim\.g(?:\["([^"]+)"\]|\.([A-Za-z0-9_]+))\s*=')
 
 
-TARGET_DIRS = ("fnl", "lua", "plugin")
+TARGET_DIRS = ("fnl", "plugin")
 TARGET_SUFFIXES = (".fnl", ".lua")
 
 

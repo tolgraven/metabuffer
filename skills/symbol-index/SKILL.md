@@ -1,6 +1,6 @@
 ---
 name: symbol-index
-description: Create or update the repository symbol index for key code artifacts (functions first, plus module exports and global assignments). Use after code changes in this repo to keep `SYMBOL_INDEX.md` current, especially when editing `fnl/`, `lua/`, or `plugin/`.
+description: Create or update the repository symbol index for key code artifacts (functions first, plus module exports and global assignments). Use after code changes in this repo to keep `SYMBOL_INDEX.md` current, especially when editing source files under `fnl/` or `plugin/`.
 ---
 
 # Symbol Index
@@ -24,7 +24,7 @@ Check `SYMBOL_INDEX.md` and ensure major touched files/functions are represented
 ## Script
 
 - `scripts/update-symbol-index.py`
-Scans `fnl/`, `lua/`, and `plugin/` and writes `SYMBOL_INDEX.md` with:
+Scans `fnl/` and `plugin/` and writes `SYMBOL_INDEX.md` with:
 1. Functions
 2. Module exports
 3. Global assignments

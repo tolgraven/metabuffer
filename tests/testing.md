@@ -8,9 +8,15 @@ This repo now has two parallelized suites:
 
 - Full run (screen + unit, parallel workers):
   - `./scripts/test-mini.sh`
+- Run without the startup smoke prefix:
+  - `./scripts/test-mini.sh --no-smoke tests/unit/test_query_unit.lua`
 - Full run with profiling:
-  - `./scripts/test-mini.sh --profile`
+- `./scripts/test-mini.sh --profile`
   - runner prints the persistent `/tmp/...` profile directory and each worker profile file path
+- `make test-profile`
+- `make test-profile tests/screen/project/test_screen_project_profile_scroll.lua`
+- pass runner flags through `make` with `--`, for example:
+  - `make test-profile -- tests/screen/project/test_screen_project_profile_scroll.lua --verbose`
 - Use the real metabuffer repo instead of the default generated project fixture:
   - `TEST_REAL_REPO=1 ./scripts/test-mini.sh`
 - Enable UI animations inside the headless mini child:
@@ -23,11 +29,28 @@ This repo now has two parallelized suites:
   - `TEST_MAX_JOBS=16 ./scripts/test-mini.sh`
 - Rerun a single file:
   - `./scripts/test-mini.sh tests/unit/test_query_unit.lua`
+- Run a selected test or category first, then automatically the full suite if it passes:
+  - `make test-then-all tests/unit/test_query_unit.lua`
+  - `make test-then-all persistence`
+  - selected phase skips startup smokes; the full-suite phase still runs them first
+  - uses a higher per-file timeout by default (`30000ms`)
+  - forces `TEST_JOBS=1` only for the selected-first phase; the full-suite phase uses the normal runner default unless you override it
+- Run a whole category/directory:
+  - `./scripts/test-mini.sh animation`
+  - `./scripts/test-mini.sh edit`
+  - `./scripts/test-mini.sh persistence`
+  - `./scripts/test-mini.sh project`
+  - `./scripts/test-mini.sh screen`
+  - `./scripts/test-mini.sh unit`
 - Rerun only previously failing files:
   - `TEST_FAILED_ONLY=1 ./scripts/test-mini.sh`
 
 Runner behavior:
-- Discovers `tests/**/test_*.lua`.
+- Discovers regular suite files under `tests/screen/` and `tests/unit/`.
+- Always runs `tests/smoke/test_smoke_plain_launch.lua` and `tests/smoke/test_smoke_project_plain_launch.lua` first as startup smoke tests, even for single-file or category runs.
+- `--no-smoke` disables that startup-smoke prefix for the current invocation.
+- Those startup smoke tests force `TEST_UI_ANIMATIONS=1` so launch-time animation/timer failures are covered even though the rest of the screen suite defaults animations off for determinism.
+- Aborts the whole run immediately if either startup smoke test fails.
 - Executes files concurrently in separate headless Neovim instances.
 - Defaults to oversubscribing workers for these mostly wait-heavy screen tests:
   - default jobs = `min(test_files, TEST_MAX_JOBS or (cpu_count * 2), cpu_count * (TEST_JOBS_MULTIPLIER or 1) + (TEST_JOBS_EXTRA or 2))`
@@ -75,9 +98,16 @@ Key helper coverage:
 - Project mode immediate typing during lazy stream.
 - Clear-query broadening while preserving source pool.
 
+### `tests/screen/animation/test_screen_animation_*.lua`
+- Dedicated animation-on coverage for regular and project launch/scroll paths with the mini backend.
+
 ### `tests/screen/project/test_screen_project_restore_view.lua`
 - Project bootstrap keeps the startup-selected result at the same viewport offset.
 - Guards against post-startup restores pushing the selected line toward the top.
+
+### `tests/screen/project/test_screen_project_profile_scroll.lua`
+- Profile-oriented scroll benchmark coverage for both `"native"` and `"mini"` backends.
+- Uses dedicated benchmark spans so `--profile` output shows backend cost directly.
 
 ### `tests/screen/project/test_screen_project_flags_core_*.lua`
 - `#hidden/#deps/#nolazy` consumption + status/debug reflection.
@@ -85,6 +115,19 @@ Key helper coverage:
 
 ### `tests/screen/project/test_screen_project_file_mode_file_entries.lua`
 - `#file <token>` file-entry activation and file-only result sets.
+
+### `tests/screen/project/test_screen_project_file_mode_rename.lua`
+- Straight edits on file-entry rows rename only the targeted file path.
+
+### `tests/screen/edit/test_screen_edit_propagation.lua`
+- In-place line replacements from results edit mode write back to the owned source line only.
+- Replacement writeback preserves overall project line totals.
+
+### `tests/screen/edit/test_screen_edit_regular_writeback.lua`
+- Regular/plain Meta writeback coverage for contiguous edits, filtered regular inserts/replacements, and direct project-result inserts.
+
+### `tests/screen/edit/test_screen_edit_structural_writeback.lua`
+- Sparse project inserts from `o`/`O`/`p`/`P` anchor to exactly one owned source line and leave other files untouched.
 
 ### `tests/screen/project/test_screen_project_file_mode_binary.lua`
 - `-binary` exclusion from file-entry mode.
@@ -107,6 +150,9 @@ Key helper coverage:
 ### `tests/screen/project/test_screen_project_info_sync.lua`
 - Hit-buffer and info-window sync/alignment while typing/deleting.
 
+### `tests/screen/project/test_screen_project_scroll_sync.lua`
+- Animated project scrolling keeps results cursor, selection, and info window aligned.
+
 ### `tests/screen/project/test_screen_project_deps_toggle.lua`
 - Deterministic deps toggle transitions (`#deps`, `#-deps`).
 
@@ -114,9 +160,54 @@ Key helper coverage:
 - `:Meta <query>` immediate application.
 - Prompt height persistence across invocations.
 - Accept + `MetaResume` restores query/modes.
+- Hidden regular sessions restore on `<C-o>` back to the results buffer.
+- Hidden sessions are pruned once their results buffer falls out of the jumplist.
+
+### `tests/screen/persistence/test_screen_persistence_statusline_prompt_only.lua`
+- Prompt statusline keeps mode/count/key-hint content while the main results statusline only shows runtime state.
+
+### `tests/screen/persistence/test_screen_persistence_statusline_restore.lua`
+- Closing Meta restores the original window-local `statusline` and `winhighlight`.
+
+### `tests/screen/persistence/test_screen_persistence_cancel_restore_regular.lua`
+- Regular `Esc` hides Meta UI, returns to the origin buffer, and keeps the session resumable via jumplist forward.
+
+### `tests/screen/persistence/test_screen_persistence_cursor_word.lua`
+- `:MetaCursorWord` seeds the prompt and leaves insert at the end so new typing appends after the current word.
+
+## Smoke Tests
+
+### `tests/smoke/test_smoke_plain_launch.lua`
+- Plain `:Meta` launch opens a live session with prompt and info window on a normal buffer.
+
+### `tests/smoke/test_smoke_project_plain_launch.lua`
+- Plain `:Meta!` launch opens a live project session with prompt and info window.
+
+### `tests/screen/persistence/test_screen_persistence_named_buffers.lua`
+- Meta-owned prompt/preview/info/results buffers use stable names instead of showing up as unnamed scratch buffers.
+- Plain `:Meta` followed by cancel does not leave stray listed `[No Name]` buffers behind.
+
+### `tests/screen/persistence/test_screen_persistence_double_launch_block.lua`
+- A second `:Meta` during animated startup is ignored instead of creating a duplicate session/layout.
+- `Esc` during animated startup stays hidden after the delayed startup callbacks settle.
+
+### `tests/screen/persistence/test_screen_persistence_treesitter_regular.lua`
+- Regular file-backed `:Meta` keeps Tree-sitter highlighting active on the results buffer when a parser is available.
+
+### `tests/screen/persistence/test_screen_persistence_treesitter_autocmd_safe.lua`
+- Global `FileType` autocmds that call `vim.treesitter.start()` do not crash Meta startup on preview/info scratch buffers.
+
+### `tests/screen/persistence/test_screen_persistence_external_split_pause.lua`
+- Opening unrelated windows like `:help` hides Meta auxiliary UI instead of floating over the new split.
+
+### `tests/screen/persistence/test_screen_persistence_existing_split_no_pause.lua`
+- Moving to an already existing split does not hide Meta UI.
 
 ### `tests/screen/persistence/test_screen_persistence_history_commands_*.lua`
 - `:Meta !!` and `:Meta !$` history expansion.
+
+### `tests/screen/matchers/test_screen_matchers_multiline_or.lua`
+- Multiple prompt lines match as OR by default, including direct prompt-buffer multiline updates.
 - `<CR>` from results opens selected hit correctly.
 - Repeated `!!` insertion does not duplicate payload.
 
@@ -159,6 +250,9 @@ Key helper coverage:
 ### `tests/unit/test_prompt_timing_unit.lua`
 - Debounce timing by query length (1/2/3+ chars).
 - Prompt delay scaling by result pool size thresholds.
+
+### `tests/unit/test_prompt_hooks_unit.lua`
+- `metabuffer.prompt.hooks.new()` returns the expected hook table shape.
 - Extra debounce while project lazy stream is still active.
 
 ### `tests/unit/test_query_flow_unit.lua`

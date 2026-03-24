@@ -60,4 +60,44 @@
   (let [provider (M.provider-for-ref ref)]
     ((. provider :preview-lines) session ref height read-file-lines-cached)))
 
+(fn M.provider-for-op
+  [op]
+  (if (= (or (and op op.ref-kind) "") "file-entry")
+      file
+      text))
+
+(fn M.apply-write-ops!
+  [ops]
+  (let [grouped {}]
+    (each [_ op (ipairs (or ops []))]
+      (let [provider (M.provider-for-op op)
+            key (or (. provider :provider-key) "text")
+            bucket (or (. grouped key) {:provider provider :ops {}})
+            bucket-ops (. bucket :ops)
+            path (or (. op :path) "")
+            per-path (or (. bucket-ops path) [])]
+        (table.insert per-path op)
+        (set (. bucket-ops path) per-path)
+        (set (. grouped key) bucket)))
+    (let [result {:wrote false :changed 0 :post-lines {} :paths {} :renames {}}
+          post-lines (. result :post-lines)
+          paths (. result :paths)
+          renames (. result :renames)]
+      (each [_ bucket (pairs grouped)]
+        (let [provider (. bucket :provider)
+              f (. provider :apply-write-ops!)
+              part (if (= (type f) "function")
+                       (f (. bucket :ops))
+                       {:wrote false :changed 0 :post-lines {} :paths {} :renames {}})]
+          (when (. part :wrote)
+            (set (. result :wrote) true))
+          (set (. result :changed) (+ (. result :changed) (or (. part :changed) 0)))
+          (each [path lines (pairs (or (. part :post-lines) {}))]
+            (set (. post-lines path) lines))
+          (each [path v (pairs (or (. part :paths) {}))]
+            (set (. paths path) v))
+          (each [old-path new-path (pairs (or (. part :renames) {}))]
+            (set (. renames old-path) new-path))))
+      result)))
+
 M

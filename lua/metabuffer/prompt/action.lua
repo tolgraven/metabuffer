@@ -3,6 +3,10 @@ local digraph_mod = require("metabuffer.prompt.digraph")
 local util = require("metabuffer.prompt.util")
 local M = {}
 M.ACTION_PATTERN = "^([%w_]+:[%w_]+):?(.*)$"
+local STATUS_ACCEPT = 1
+local STATUS_CANCEL = 2
+local INSERT_MODE_INSERT = 1
+local INSERT_MODE_REPLACE = 2
 M.new = function()
   local self = {registry = {}}
   self.clear = function()
@@ -70,26 +74,23 @@ M.new = function()
   end
   return self
 end
-local function _prompt_mod()
-  return require("metabuffer.prompt.prompt")
-end
 local function _accept(_, _0)
-  local p = _prompt_mod()
-  return p.STATUS_ACCEPT
+  return STATUS_ACCEPT
 end
 local function _cancel(_, _0)
-  local p = _prompt_mod()
-  return p.STATUS_CANCEL
+  return STATUS_CANCEL
 end
 local function _toggle_insert_mode(prompt, _)
-  local p = _prompt_mod()
-  if (prompt["insert-mode"] == p.INSERT_MODE_INSERT) then
-    prompt["insert-mode"] = p.INSERT_MODE_REPLACE
+  if (prompt["insert-mode"] == INSERT_MODE_INSERT) then
+    prompt["insert-mode"] = INSERT_MODE_REPLACE
     return nil
   else
-    prompt["insert-mode"] = p.INSERT_MODE_INSERT
+    prompt["insert-mode"] = INSERT_MODE_INSERT
     return nil
   end
+end
+M["default-action"] = function()
+  return M.DEFAULT_ACTION
 end
 local function _delete_char_before_caret(prompt, _)
   local l = prompt.caret["get-locus"]()

@@ -3,25 +3,24 @@
 
 (set M.author-groups (util.build-group-names "MetaAuthor" 24))
 
-(set M.author->group {})
-(set M.next-group-idx 1)
-
 (fn normalize-author
   [name]
   (string.lower (vim.trim (tostring (or name "")))))
 
-(fn M.group-for-author
+(fn bucket-for-author
   [author]
   (let [key (normalize-author author)
-        existing (. M.author->group key)]
-    (if existing
-        (. M.author-groups existing)
-        (let [idx (math.max 1 (math.min (or M.next-group-idx 1) (# M.author-groups)))]
-          (set (. M.author->group key) idx)
-          (set M.next-group-idx
-               (if (< idx (# M.author-groups))
-                   (+ idx 1)
-                   1))
-          (. M.author-groups idx)))))
+        n (math.max 1 (# M.author-groups))]
+    (if (= key "")
+        1
+        (let [acc0 5381]
+          (var acc acc0)
+          (for [i 1 (# key)]
+            (set acc (% (+ (* acc 33) (string.byte key i)) 2147483647)))
+          (+ (% acc n) 1)))))
+
+(fn M.group-for-author
+  [author]
+  (. M.author-groups (bucket-for-author author)))
 
 M

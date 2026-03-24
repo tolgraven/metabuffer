@@ -6,6 +6,31 @@
 (set M.default-hi-char "MetaSearchHitFuzzyBetween")
 (set M.default-match-priority (or vim.g.meta_search_match_priority 220))
 
+(fn line-highlight-group
+  [matcher-name idx default-group]
+  (let [suffix (tostring (+ (% (math.max 0 (- (or idx 1) 1)) 6) 1))
+        candidate (.. M.default-hi-prefix
+                       (string.upper (string.sub matcher-name 1 1))
+                       (string.sub matcher-name 2)
+                       suffix)]
+    (if (> (vim.fn.hlexists candidate) 0)
+        candidate
+        default-group)))
+
+(fn per-line-item-group
+  [idx fallback-group item-group]
+  (let [generic-all "MetaSearchHitAll"
+        generic-fuzzy "MetaSearchHitFuzzy"
+        generic-regex "MetaSearchHitRegex"
+        target (or item-group fallback-group)]
+    (if (= target generic-all)
+        (line-highlight-group "all" idx generic-all)
+        (= target generic-fuzzy)
+        (line-highlight-group "fuzzy" idx generic-fuzzy)
+        (= target generic-regex)
+        (line-highlight-group "regex" idx generic-regex)
+        target)))
+
 (fn M.new
   [name opts]
   "Public API: M.new."
@@ -36,7 +61,6 @@
 
   (fn matchadd-in-window
   [group pattern win]
-    (var id nil)
     (if (and win (vim.api.nvim_win_is_valid win))
         (let [[ok win-id] [(pcall vim.fn.matchadd group pattern M.default-match-priority -1 {:window win})]]
           (if ok
@@ -52,25 +76,42 @@
   [_ query ignorecase target-win]
     (self.remove-highlight)
     (when (and query (~= query ""))
-      (let [pat (self.get-highlight-pattern self query)
-            group (.. M.default-hi-prefix (string.upper (string.sub self.name 1 1)) (string.sub self.name 2))
+      (let [group (.. M.default-hi-prefix (string.upper (string.sub self.name 1 1)) (string.sub self.name 2))
             case-prefix (if ignorecase "\\c" "\\C")
             win (or target-win (vim.api.nvim_get_current_win))]
         (set self.match-win win)
-        (if (= (type pat) "string")
-            (when (~= pat "")
-              (table.insert self.match-ids
-                (matchadd-in-window group (.. case-prefix pat) win)))
-            (when (= (type pat) "table")
-              (each [_ item (ipairs pat)]
-                (let [item-group (or (. item :group) group)
-                      item-pat (or (. item :pattern) "")]
-                  (when (~= item-pat "")
-                    (table.insert self.match-ids
-                      (matchadd-in-window item-group (.. case-prefix item-pat) win)))))))
+        (if (= (type query) "table")
+            (each [idx item-query (ipairs query)]
+              (let [item-pat (self.get-highlight-pattern self item-query)
+                    item-group (line-highlight-group self.name idx group)]
+                (if (= (type item-pat) "string")
+                    (when (~= item-pat "")
+                      (table.insert self.match-ids
+                        (matchadd-in-window item-group (.. case-prefix item-pat) win)))
+                    (when (= (type item-pat) "table")
+                      (each [_ item (ipairs item-pat)]
+                        (let [resolved-group (per-line-item-group idx item-group (. item :group))
+                              resolved-pat (or (. item :pattern) "")]
+                          (when (~= resolved-pat "")
+                            (table.insert self.match-ids
+                              (matchadd-in-window resolved-group (.. case-prefix resolved-pat) win)))))))))
+            (let [pat (self.get-highlight-pattern self query)]
+            (if (= (type pat) "string")
+                (when (~= pat "")
+                  (table.insert self.match-ids
+                    (matchadd-in-window group (.. case-prefix pat) win)))
+                (when (= (type pat) "table")
+                  (each [_ item (ipairs pat)]
+                    (let [item-group (or (. item :group) group)
+                          item-pat (or (. item :pattern) "")]
+                      (when (~= item-pat "")
+                        (table.insert self.match-ids
+                          (matchadd-in-window item-group (.. case-prefix item-pat) win)))))))))
         (when self.also-highlight-per-char
           (set self.char-match-id
-            (matchadd-in-window M.default-hi-char (table.concat (vim.split query "") "\\|") win))))))
+            (matchadd-in-window M.default-hi-char (table.concat (vim.split (if (= (type query) "table")
+                                                                               (table.concat query " ")
+                                                                               query) "") "\\|") win))))))
 
   self))
 

@@ -235,14 +235,45 @@
     (and p r (vim.startswith p r))))
 
 (fn contains-nul-byte?
-  [lines]
-  (let [n (math.min 8 (# (or lines [])))]
-    (var found false)
-    (for [i 1 n]
-      (let [line (or (. lines i) "")]
-        (when (string.find line "\0" 1 true)
-          (set found true))))
-    found))
+  [s]
+  (and (= (type s) "string")
+       (not (not (string.find s "\0" 1 true)))))
+
+(fn suspicious-binary-head?
+  [s]
+  (if (not (= (type s) "string"))
+      false
+      (let [n (# s)]
+        (if (= n 0)
+            false
+            (let [bad0 0]
+              (var bad bad0)
+              (for [i 1 n]
+                (let [b (string.byte s i)]
+                  (when (or (< b 9)
+                            (= b 11)
+                            (= b 12)
+                            (and (> b 13) (< b 32))
+                            (= b 127))
+                    (set bad (+ bad 1)))))
+              (> (/ bad n) 0.1))))))
+
+(fn binary-head?
+  [head]
+  (or (contains-nul-byte? head)
+      (suspicious-binary-head? head)))
+
+(fn read-file-head-bytes
+  [path n]
+  "Read up to N raw bytes from PATH. Returns string or nil."
+  (let [uv (or vim.uv vim.loop)]
+    (when (and uv uv.fs_open uv.fs_read uv.fs_close path)
+      (let [[ok-open fd] [(pcall uv.fs_open path "r" 438)]]
+        (when (and ok-open fd)
+          (let [[ok-read chunk] [(pcall uv.fs_read fd (or n 256) 0)]]
+            (pcall uv.fs_close fd)
+            (when (and ok-read (= (type chunk) "string"))
+              chunk)))))))
 
 (fn M.binary-file?
   [settings path]
@@ -260,8 +291,8 @@
                      (= (. cached :mtime) mtime)
                      (~= (. cached :binary) nil))
                 (not (not (. cached :binary)))
-                (let [[ok-head head] [(pcall vim.fn.readfile path "b" 8)]
-                      bin? (and ok-head (= (type head) "table") (contains-nul-byte? head))
+                (let [head (read-file-head-bytes path 256)
+                      bin? (binary-head? head)
                       prev-lines (and (= (type cached) "table") (. cached :lines))]
                   (set (. cache path)
                        {:size size
@@ -346,8 +377,8 @@
                       (if (= (type (. cached :lines)) "table")
                           (. cached :lines)
                           nil))
-                  (let [[ok-head head] [(pcall vim.fn.readfile path "b" 8)]]
-                    (if (and ok-head (= (type head) "table") (contains-nul-byte? head))
+                  (let [head (read-file-head-bytes path 4096)]
+                    (if (binary-head? head)
                         (let [entry {:size size :mtime mtime :binary true}]
                           (if include-binary
                               (let [lines (if hex-view (hex-lines path size) (strings-lines path size))

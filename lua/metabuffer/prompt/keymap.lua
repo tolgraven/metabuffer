@@ -1,7 +1,6 @@
 -- [nfnl] fnl/metabuffer/prompt/keymap.fnl
 local key_mod = require("metabuffer.prompt.key")
 local ks_mod = require("metabuffer.prompt.keystroke")
-local util = require("metabuffer.prompt.util")
 local debug = require("metabuffer.debug")
 local M = {}
 local function debug_log(msg)
@@ -39,7 +38,7 @@ local function parse_definition(nvim, rule)
   end
   return {lhs = ks_mod.parse(nvim, lhs), rhs = _4_, noremap = opts.noremap, nowait = opts.nowait, expr = opts.expr}
 end
-local function _getcode(timeoutlen, callback, interval)
+local function _getcode(_timeoutlen, callback, _interval)
   if callback then
     callback()
   else
@@ -191,5 +190,8 @@ if (type(vim.g.meta_legacy_prompt_keymap_rules) == "table") then
   M.DEFAULT_KEYMAP_RULES = vim.g.meta_legacy_prompt_keymap_rules
 else
   M.DEFAULT_KEYMAP_RULES = default_keymap_rules
+end
+M["default-keymap-rules"] = function()
+  return M.DEFAULT_KEYMAP_RULES
 end
 return M

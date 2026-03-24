@@ -64,7 +64,7 @@
 
 (fn place-hunk-signs!
   [buf line-count id-start h]
-  (let [[a-start a-count b-start b-count] (hunk-indices h)
+  (let [[_a-start a-count b-start b-count] (hunk-indices h)
         common (math.min a-count b-count)]
     (var next-id id-start)
     (for [i 0 (- common 1)]

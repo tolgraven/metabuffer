@@ -18,6 +18,9 @@ local function changed_setting_token(query_mod, name, enabled, default_enabled)
     return nil
   end
 end
+local function explicit_setting_present_3f(parsed, key)
+  return (parsed[key] ~= nil)
+end
 local function normalize_history_prompt(text)
   local parts = vim.split((text or ""), "%s+", {trimempty = true})
   local out = {}
@@ -69,6 +72,7 @@ M.new = function(opts)
   end
   api["history-entry-with-settings"] = function(session, prompt)
     local query_text = (prompt or "")
+    local parsed = query_mod["parse-query-text"](query_text)
     local seen = {}
     local tokens = {}
     local _
@@ -86,7 +90,7 @@ M.new = function(opts)
         local val_110_auto = changed_setting_token(query_mod, "hidden", session["effective-include-hidden"], defaults["default-include-hidden"])
         if val_110_auto then
           local tok = val_110_auto
-          if not seen[tok] then
+          if (not explicit_setting_present_3f(parsed, "include-hidden") and not seen[tok]) then
             table.insert(tokens, tok)
           else
           end
@@ -97,7 +101,7 @@ M.new = function(opts)
         local val_110_auto = changed_setting_token(query_mod, "ignored", session["effective-include-ignored"], defaults["default-include-ignored"])
         if val_110_auto then
           local tok = val_110_auto
-          if not seen[tok] then
+          if (not explicit_setting_present_3f(parsed, "include-ignored") and not seen[tok]) then
             table.insert(tokens, tok)
           else
           end
@@ -108,7 +112,7 @@ M.new = function(opts)
         local val_110_auto = changed_setting_token(query_mod, "deps", session["effective-include-deps"], defaults["default-include-deps"])
         if val_110_auto then
           local tok = val_110_auto
-          if not seen[tok] then
+          if (not explicit_setting_present_3f(parsed, "include-deps") and not seen[tok]) then
             table.insert(tokens, tok)
           else
           end
@@ -119,7 +123,7 @@ M.new = function(opts)
         local val_110_auto = changed_setting_token(query_mod, "prefilter", session["prefilter-mode"], defaults["project-lazy-prefilter-enabled"])
         if val_110_auto then
           local tok = val_110_auto
-          if not seen[tok] then
+          if (not explicit_setting_present_3f(parsed, "prefilter") and not seen[tok]) then
             table.insert(tokens, tok)
           else
           end
@@ -129,7 +133,7 @@ M.new = function(opts)
       local val_110_auto = changed_setting_token(query_mod, "lazy", session["lazy-mode"], defaults["project-lazy-enabled"])
       if val_110_auto then
         local tok = val_110_auto
-        if not seen[tok] then
+        if (not explicit_setting_present_3f(parsed, "lazy") and not seen[tok]) then
           _0 = table.insert(tokens, tok)
         else
           _0 = nil

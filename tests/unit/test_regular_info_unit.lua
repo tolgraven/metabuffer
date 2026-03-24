@@ -1,4 +1,5 @@
 local eq = MiniTest.expect.equality
+local file_info = require('metabuffer.source.file_info')
 
 local T = MiniTest.new_set()
 
@@ -56,6 +57,20 @@ T['regular meta keeps info window with line numbers only'] = function()
   eq(string.find(info_line, 'alpha', 1, true) == nil, true)
   eq(string.find(info_line, 'one', 1, true) == nil, true)
   eq(string.find(info_line, '1', 1, true) ~= nil, true)
+end
+
+T['aligned meta suffix highlights full compact age token'] = function()
+  local laid = file_info['aligned-meta-suffix']('240101  3d\t Alice', 24)
+  local age_hl = nil
+
+  for _, hl in ipairs(laid['suffix-highlights'] or {}) do
+    if hl.hl == 'MetaFileAgeDay' then
+      age_hl = hl
+    end
+  end
+
+  eq(type(age_hl), 'table')
+  eq(string.sub(laid.text, age_hl.start + 1, age_hl['end']), '3d')
 end
 
 return T

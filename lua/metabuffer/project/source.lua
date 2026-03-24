@@ -180,7 +180,7 @@ M.new = function(opts)
     end
     return table.insert(refs, {path = path, lnum = 1, line = _20_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
   end
-  local function all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)
+  local function all_project_file_paths(_session, include_hidden, include_ignored, include_deps, include_binary)
     local root = vim.fn.getcwd()
     local seen = {}
     local out = {}
@@ -360,14 +360,29 @@ M.new = function(opts)
       end
     end
   end
+  local function current_project_prefilter(session)
+    if (session and session["project-mode"] and session["prefilter-mode"] and session.meta and session.meta.ignorecase) then
+      local query_lines = ((session["last-parsed-query"] and session["last-parsed-query"].lines) or (session.meta and session.meta["query-lines"]) or {})
+      local ignorecase = not not session.meta.ignorecase()
+      local groups = parse_prefilter_terms(query_lines, ignorecase)
+      if (#groups > 0) then
+        return {groups = groups, ignorecase = ignorecase}
+      else
+        return nil
+      end
+    else
+      return nil
+    end
+  end
   local function open_project_buffer_paths(session, root, include_hidden, include_deps)
     local out = {}
     local seen = {}
     local current = canonical_path(current_buffer_path(session["source-buf"]))
+    local include_binary = session["effective-include-binary"]
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
       if (vim.api.nvim_buf_is_valid(buf) and (vim.bo[buf].buftype == "") and truthy_3f(vim.bo[buf].buflisted)) then
         local name = canonical_path(vim.api.nvim_buf_get_name(buf))
-        if (name and (not current or (name ~= current)) and not seen[name] and (1 == vim.fn.filereadable(name)) and path_under_root_3f(name, root)) then
+        if (name and (not current or (name ~= current)) and not seen[name] and (1 == vim.fn.filereadable(name)) and (include_binary or not binary_file_3f(name)) and path_under_root_3f(name, root)) then
           local rel = vim.fn.fnamemodify(name, ":.")
           if allow_project_path_3f(rel, include_hidden, include_deps) then
             seen[name] = true
@@ -392,7 +407,7 @@ M.new = function(opts)
     end
     return math.floor((bytes / 80))
   end
-  local function collect_project_sources(session, include_hidden, include_ignored, include_deps, include_binary, include_hex, include_files)
+  local function collect_project_sources(session, include_hidden, include_ignored, include_deps, include_binary, include_hex, include_files, prefilter)
     local root = vim.fn.getcwd()
     local current_path = current_buffer_path(session["source-buf"])
     local file_cache = (session["preview-file-cache"] or {})
@@ -402,67 +417,51 @@ M.new = function(opts)
     local content = {}
     local refs = {}
     if file_only_mode_3f(session) then
-      local meta = session.meta
       for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)) do
         table.insert(content, "")
-        local _51_
+        local _53_
         do
           local rel = vim.fn.fnamemodify(path, ":.")
           if ((type(rel) == "string") and (rel ~= "")) then
-            _51_ = rel
+            _53_ = rel
           else
-            _51_ = path
+            _53_ = path
           end
         end
-        table.insert(refs, {path = path, lnum = 1, line = _51_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
+        table.insert(refs, {path = path, lnum = 1, line = _53_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
       end
-      do local _ = {content = content, refs = refs} end
+      return {content = content, refs = refs}
     else
-    end
-    local total_lines = 0
-    local push_line_21
-    local function _54_(path, lnum, line)
-      table.insert(content, line)
-      table.insert(refs, {path = path, lnum = lnum, line = line})
-      total_lines = (total_lines + 1)
-      return nil
-    end
-    push_line_21 = _54_
-    for i, line in ipairs((session["single-content"] or {})) do
-      push_line_21((current_path or "[Current Buffer]"), i, line)
-    end
-    if (current_path and (type(session["single-content"]) == "table")) then
-      file_cache[current_path] = vim.deepcopy(session["single-content"])
-    else
-    end
-    if include_files then
-      for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)) do
-        push_file_entry_into_pool_21(session, path)
+      local pool_session = {meta = {buf = {content = content, ["source-refs"] = refs, ["all-indices"] = {}}}}
+      push_file_into_pool_21(pool_session, (current_path or "[Current Buffer]"), (session["single-content"] or {}), prefilter)
+      if (current_path and (type(session["single-content"]) == "table")) then
+        file_cache[current_path] = vim.deepcopy(session["single-content"])
+      else
       end
-    else
-    end
-    for _0, path in ipairs(project_file_list(root, include_hidden, include_ignored, include_deps)) do
-      local rel = vim.fn.fnamemodify(path, ":.")
-      if ((total_lines < settings["project-max-total-lines"]) and allow_project_path_3f(rel, include_hidden, include_deps) and (not current_path or (vim.fn.fnamemodify(path, ":p") ~= vim.fn.fnamemodify(current_path, ":p"))) and (1 == vim.fn.filereadable(path))) then
-        local size = vim.fn.getfsize(path)
-        if ((size >= 0) and (size <= settings["project-max-file-bytes"])) then
-          local lines = read_file_lines_cached(path, {["include-binary"] = include_binary, ["hex-view"] = include_hex})
-          if (type(lines) == "table") then
-            file_cache[path] = lines
-            for lnum, line in ipairs(lines) do
-              if (total_lines < settings["project-max-total-lines"]) then
-                push_line_21(path, lnum, line)
-              else
-              end
+      if include_files then
+        for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)) do
+          push_file_entry_into_pool_21(session, path)
+        end
+      else
+      end
+      for _0, path in ipairs(project_file_list(root, include_hidden, include_ignored, include_deps)) do
+        local rel = vim.fn.fnamemodify(path, ":.")
+        if ((#content < settings["project-max-total-lines"]) and allow_project_path_3f(rel, include_hidden, include_deps) and (not current_path or (vim.fn.fnamemodify(path, ":p") ~= vim.fn.fnamemodify(current_path, ":p"))) and (1 == vim.fn.filereadable(path))) then
+          local size = vim.fn.getfsize(path)
+          if ((size >= 0) and (size <= settings["project-max-file-bytes"])) then
+            local lines = read_file_lines_cached(path, {["include-binary"] = include_binary, ["hex-view"] = include_hex})
+            if (type(lines) == "table") then
+              file_cache[path] = lines
+              push_file_into_pool_21(pool_session, path, lines, prefilter)
+            else
             end
           else
           end
         else
         end
-      else
       end
+      return {content = content, refs = refs}
     end
-    return {content = content, refs = refs}
   end
   local function init_project_pool_21(session, prefilter)
     local root = vim.fn.getcwd()
@@ -552,6 +551,10 @@ M.new = function(opts)
         if (session["lazy-stream-done"] and session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
           session.meta.buf["visible-source-syntax-only"] = false
           pcall(session.meta.buf["apply-source-syntax-regions"])
+          if not prompt_has_active_query_3f(session) then
+            restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
+          else
+          end
           pcall(session.meta.refresh_statusline)
           pcall(update_info_window, session, true)
         else
@@ -574,6 +577,7 @@ M.new = function(opts)
   local function apply_source_set_21(session)
     local meta = session.meta
     local old_ref = (session["project-mode"] and selected_ref(meta))
+    local prefilter = current_project_prefilter(session)
     local old_line
     if (meta.selected_index and (meta.selected_index >= 0) and ((meta.selected_index + 1) <= #meta.buf.indices)) then
       old_line = math.max(1, meta.selected_line())
@@ -581,11 +585,11 @@ M.new = function(opts)
       old_line = math.max(1, (session["initial-source-line"] or 1))
     end
     if session["project-mode"] then
-      local init = init_project_pool_21(session, nil)
+      local init = init_project_pool_21(session, prefilter)
       if lazy_preferred_3f(session, (init["estimated-lines"] or 0)) then
-        start_project_stream_21(session, nil, init)
+        start_project_stream_21(session, prefilter, init)
       else
-        local pool = collect_project_sources(session, session["effective-include-hidden"], session["effective-include-ignored"], session["effective-include-deps"], session["effective-include-binary"], session["effective-include-hex"], session["effective-include-files"])
+        local pool = collect_project_sources(session, session["effective-include-hidden"], session["effective-include-ignored"], session["effective-include-deps"], session["effective-include-binary"], session["effective-include-hex"], session["effective-include-files"], prefilter)
         meta.buf.content = pool.content
         meta.buf["source-refs"] = pool.refs
         session["lazy-stream-done"] = true
@@ -618,7 +622,7 @@ M.new = function(opts)
       session["source-set-rebuild-token"] = (1 + (session["source-set-rebuild-token"] or 0))
       local token = session["source-set-rebuild-token"]
       session["source-set-rebuild-pending"] = true
-      local function _77_()
+      local function _78_()
         if (session and (token == session["source-set-rebuild-token"])) then
           session["source-set-rebuild-pending"] = false
         else
@@ -634,7 +638,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_77_, math.max(0, (wait_ms or 0)))
+      return vim.defer_fn(_78_, math.max(0, (wait_ms or 0)))
     else
       return nil
     end
@@ -660,8 +664,10 @@ M.new = function(opts)
     if (session and session["project-mode"] and not session["project-bootstrapped"]) then
       session["project-bootstrap-token"] = (1 + (session["project-bootstrap-token"] or 0))
       local token = session["project-bootstrap-token"]
+      local delay = math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"] or 0))
       session["project-bootstrap-pending"] = true
-      local function _83_()
+      local run_bootstrap_21
+      local function _84_()
         if (session and (token == session["project-bootstrap-token"])) then
           session["project-bootstrap-pending"] = false
         else
@@ -686,19 +692,30 @@ M.new = function(opts)
             pcall(session.meta.buf.render)
             restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
             pcall(session.meta.refresh_statusline)
-            return pcall(update_info_window, session)
+            pcall(update_info_window, session, true)
+            local function _88_()
+              if (session and session_active_3f(session) and not session.closing) then
+                return pcall(update_info_window, session, true)
+              else
+                return nil
+              end
+            end
+            vim.defer_fn(_88_, 17)
           else
-            return nil
           end
+          session["project-mode-starting?"] = false
+          return nil
         else
           return nil
         end
       end
-      return vim.defer_fn(_83_, math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"])))
+      run_bootstrap_21 = _84_
+      return vim.defer_fn(run_bootstrap_21, delay)
     else
       return nil
     end
   end
-  return {["schedule-lazy-refresh!"] = schedule_lazy_refresh_21, ["apply-source-set!"] = apply_source_set_21, ["schedule-source-set-rebuild!"] = schedule_source_set_rebuild_21, ["apply-minimal-source-set!"] = apply_minimal_source_set_21, ["schedule-project-bootstrap!"] = schedule_project_bootstrap_21}
+  local api = {["schedule-lazy-refresh!"] = schedule_lazy_refresh_21, ["apply-source-set!"] = apply_source_set_21, ["schedule-source-set-rebuild!"] = schedule_source_set_rebuild_21, ["apply-minimal-source-set!"] = apply_minimal_source_set_21, ["schedule-project-bootstrap!"] = schedule_project_bootstrap_21}
+  return api
 end
 return M

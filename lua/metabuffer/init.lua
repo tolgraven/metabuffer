@@ -1,6 +1,7 @@
 -- [nfnl] fnl/metabuffer/init.fnl
 local router = require("metabuffer.router")
 local config = require("metabuffer.config")
+local PRIMARY_LINE_GROUPS = {"Title", "String", "Number", "Special", "Type", "Identifier"}
 local M = {}
 local PATH_SEG_GROUPS = {"Directory", "Identifier", "Type", "Special", "String", "Constant", "Function", "Statement", "PreProc", "Keyword", "Operator", "Character", "Tag", "Delimiter", "Number", "Boolean", "Macro", "Title", "Question", "Exception", "DiffAdd", "DiffChange", "DiffText", "DiagnosticInfo"}
 local AUTHOR_GROUPS = {"Identifier", "Type", "Special", "String", "Constant", "Function", "Statement", "PreProc", "Keyword", "Operator", "Character", "Tag", "Delimiter", "Number", "Boolean", "Macro", "Title", "Question", "Exception", "DiffAdd", "DiffChange", "DiffText", "DiagnosticInfo", "DiagnosticHint"}
@@ -14,32 +15,45 @@ local function rgb_luma(n)
     return ((0.2126 * r) + (0.7152 * g) + (0.0722 * b))
   end
 end
-local function effective_fg(hl)
-  return (hl.fg or (hl.reverse and hl.bg))
+local function hl_rendered_fg(hl)
+  if (hl and hl.reverse) then
+    return (hl.bg or hl.fg)
+  else
+    return hl.fg
+  end
 end
-local function effective_ctermfg(hl)
-  return (hl.ctermfg or ((hl.reverse or (hl.cterm and hl.cterm.reverse)) and hl.ctermbg))
+local function hl_rendered_bg(hl)
+  if (hl and hl.reverse) then
+    return (hl.fg or hl.bg)
+  else
+    return hl.bg
+  end
 end
+local meta_statusline_bg = nil
+local meta_preview_statusline_bg = nil
+local refresh_augroup = nil
+local last_setup_opts = nil
 local function statusline_color_from(group)
   local opts = {cterm = {reverse = false}, reverse = false}
   local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  local ok_sl,sl = pcall(vim.api.nvim_get_hl, 0, {name = "StatusLine", link = false})
   local ok_normal,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
   if (ok and (type(hl) == "table")) then
-    local fg = effective_fg(hl)
-    local cfg = effective_ctermfg(hl)
+    local fg = hl.fg
+    local cfg = hl.ctermfg
     if fg then
-      opts["bg"] = fg
+      opts["fg"] = fg
     else
-      if (ok_normal and (type(normal) == "table") and normal.bg) then
-        opts["bg"] = normal.bg
+      if (ok_sl and (type(sl) == "table")) then
+        opts["fg"] = hl_rendered_fg(sl)
       else
       end
     end
     if cfg then
-      opts["ctermbg"] = cfg
+      opts["ctermfg"] = cfg
     else
-      if (ok_normal and (type(normal) == "table") and normal.ctermbg) then
-        opts["ctermbg"] = normal.ctermbg
+      if (ok_sl and (type(sl) == "table")) then
+        opts["ctermfg"] = sl.ctermfg
       else
       end
     end
@@ -49,33 +63,14 @@ local function statusline_color_from(group)
     end
   else
   end
-  do
-    local bl = rgb_luma(opts.bg)
-    if (bl and (bl > 128)) then
-      opts["fg"] = 0
-    else
-      opts["fg"] = 16777215
-    end
-  end
-  if (opts.ctermbg and (opts.ctermbg > 7)) then
-    opts["ctermfg"] = 0
+  opts["bg"] = meta_statusline_bg()
+  opts["ctermbg"] = ((ok_sl and (type(sl) == "table") and sl.ctermbg) or (ok_normal and (type(normal) == "table") and normal.ctermbg) or 0)
+  if not opts.fg then
+    opts["fg"] = ((ok_sl and (type(sl) == "table") and hl_rendered_fg(sl)) or 16777215)
   else
-    opts["ctermfg"] = 15
   end
-  return opts
-end
-local function undercurl_from(group)
-  local opts = {default = true, undercurl = true}
-  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
-  if (ok and (type(hl) == "table")) then
-    if hl.sp then
-      opts["sp"] = hl.sp
-    else
-    end
-    if (not opts.sp and hl.fg) then
-      opts["sp"] = hl.fg
-    else
-    end
+  if not opts.ctermfg then
+    opts["ctermfg"] = ((ok_sl and (type(sl) == "table") and sl.ctermfg) or 15)
   else
   end
   return opts
@@ -116,6 +111,11 @@ local function hit_hl(main_group, curl_group)
   end
   return opts
 end
+local function hit_hl_primary(main_group, curl_group)
+  local opts = hit_hl(main_group, curl_group)
+  opts["default"] = true
+  return opts
+end
 local function thin_underline_from(group)
   local opts = {default = true, underdotted = true, nocombine = true}
   local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
@@ -137,12 +137,12 @@ local function plain_hl_from(group)
   local opts = {default = true}
   local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
   if (ok and (type(hl) == "table")) then
-    if hl.fg then
-      opts["fg"] = hl.fg
+    if hl_rendered_fg(hl) then
+      opts["fg"] = hl_rendered_fg(hl)
     else
     end
-    if hl.bg then
-      opts["bg"] = hl.bg
+    if hl_rendered_bg(hl) then
+      opts["bg"] = hl_rendered_bg(hl)
     else
     end
     if hl.ctermfg then
@@ -161,8 +161,8 @@ local function fg_only_hl_from(group)
   local opts = {default = true}
   local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
   if (ok and (type(hl) == "table")) then
-    if hl.fg then
-      opts["fg"] = hl.fg
+    if hl_rendered_fg(hl) then
+      opts["fg"] = hl_rendered_fg(hl)
     else
     end
     if hl.ctermfg then
@@ -173,53 +173,36 @@ local function fg_only_hl_from(group)
   end
   return opts
 end
-local function statusline_path_hl_from(group)
-  local opts = {default = true}
-  local ok_hl,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
-  local ok_sl,sl = pcall(vim.api.nvim_get_hl, 0, {name = "StatusLine", link = false})
-  opts["fg"] = ((ok_hl and (type(hl) == "table") and effective_fg(hl)) or (ok_sl and (type(sl) == "table") and effective_fg(sl)) or 16777215)
-  opts["bg"] = ((ok_sl and (type(sl) == "table") and sl.bg) or (ok_hl and (type(hl) == "table") and hl.bg) or 0)
-  opts["ctermfg"] = ((ok_hl and (type(hl) == "table") and effective_ctermfg(hl)) or (ok_sl and (type(sl) == "table") and effective_ctermfg(sl)) or 15)
-  opts["ctermbg"] = ((ok_sl and (type(sl) == "table") and sl.ctermbg) or (ok_hl and (type(hl) == "table") and hl.ctermbg) or 0)
-  return opts
-end
 local function statusline_fg_hl_from(group)
   local opts = {cterm = {reverse = false}, reverse = false}
   local ok_hl,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
   local ok_sl,sl = pcall(vim.api.nvim_get_hl, 0, {name = "StatusLine", link = false})
   local ok_normal,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
-  opts["fg"] = ((ok_hl and (type(hl) == "table") and effective_fg(hl)) or (ok_sl and (type(sl) == "table") and effective_fg(sl)) or 16777215)
-  if (ok_normal and (type(normal) == "table")) then
-    if normal.bg then
-      opts["bg"] = normal.bg
-    else
-    end
-    if normal.ctermbg then
-      opts["ctermbg"] = normal.ctermbg
-    else
-    end
-  else
-  end
-  opts["ctermfg"] = ((ok_hl and (type(hl) == "table") and effective_ctermfg(hl)) or (ok_sl and (type(sl) == "table") and effective_ctermfg(sl)) or 15)
+  opts["fg"] = ((ok_hl and (type(hl) == "table") and hl_rendered_fg(hl)) or (ok_sl and (type(sl) == "table") and hl_rendered_fg(sl)) or 16777215)
+  opts["bg"] = meta_statusline_bg()
+  opts["ctermbg"] = ((ok_sl and (type(sl) == "table") and sl.ctermbg) or (ok_normal and (type(normal) == "table") and normal.ctermbg) or 0)
+  opts["ctermfg"] = ((ok_hl and (type(hl) == "table") and hl.ctermfg) or (ok_sl and (type(sl) == "table") and sl.ctermfg) or 15)
   return opts
 end
-local function statusline_sep_hl()
-  local opts = {cterm = {reverse = false}, reverse = false}
+local function statusline_fg_hl_with_bg(group, bg_fn)
+  local opts = {default = true, cterm = {reverse = false}, reverse = false}
+  local ok_hl,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
   local ok_sl,sl = pcall(vim.api.nvim_get_hl, 0, {name = "StatusLine", link = false})
   local ok_normal,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
-  opts["fg"] = ((ok_sl and (type(sl) == "table") and effective_fg(sl)) or (ok_normal and (type(normal) == "table") and effective_fg(normal)) or 16777215)
-  if (ok_normal and (type(normal) == "table")) then
-    if normal.bg then
-      opts["bg"] = normal.bg
-    else
-    end
-    if normal.ctermbg then
-      opts["ctermbg"] = normal.ctermbg
-    else
-    end
-  else
-  end
-  opts["ctermfg"] = ((ok_sl and (type(sl) == "table") and effective_ctermfg(sl)) or (ok_normal and (type(normal) == "table") and effective_ctermfg(normal)) or 15)
+  opts["fg"] = ((ok_hl and (type(hl) == "table") and hl_rendered_fg(hl)) or (ok_sl and (type(sl) == "table") and hl_rendered_fg(sl)) or 16777215)
+  opts["bg"] = bg_fn()
+  opts["ctermbg"] = ((ok_sl and (type(sl) == "table") and sl.ctermbg) or (ok_normal and (type(normal) == "table") and normal.ctermbg) or 0)
+  opts["ctermfg"] = ((ok_hl and (type(hl) == "table") and hl.ctermfg) or (ok_sl and (type(sl) == "table") and sl.ctermfg) or 15)
+  return opts
+end
+local function statusline_sep_hl_with_bg(bg_fn)
+  local opts = {default = true, cterm = {reverse = false}, reverse = false}
+  local ok_sl,sl = pcall(vim.api.nvim_get_hl, 0, {name = "StatusLine", link = false})
+  local ok_normal,normal = pcall(vim.api.nvim_get_hl, 0, {name = "Normal", link = false})
+  opts["fg"] = ((ok_sl and (type(sl) == "table") and hl_rendered_fg(sl)) or (ok_normal and (type(normal) == "table") and hl_rendered_fg(normal)) or 16777215)
+  opts["bg"] = bg_fn()
+  opts["ctermbg"] = ((ok_sl and (type(sl) == "table") and sl.ctermbg) or (ok_normal and (type(normal) == "table") and normal.ctermbg) or 0)
+  opts["ctermfg"] = ((ok_sl and (type(sl) == "table") and sl.ctermfg) or (ok_normal and (type(normal) == "table") and normal.ctermfg) or 15)
   return opts
 end
 local function underlined_text_from(text_group, underline_group)
@@ -270,9 +253,22 @@ end
 local function hl_bg(group)
   local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
   if (ok and (type(hl) == "table")) then
-    return hl.bg
+    return hl_rendered_bg(hl)
   else
     return nil
+  end
+end
+local function darker_bg(a, b)
+  local la = rgb_luma(a)
+  local lb = rgb_luma(b)
+  if (la and lb) then
+    if (la <= lb) then
+      return a
+    else
+      return b
+    end
+  else
+    return (a or b)
   end
 end
 local function alt_bg_from(group)
@@ -283,6 +279,95 @@ local function alt_bg_from(group)
     opts["bg"] = bg
   else
   end
+  return opts
+end
+local function _40_()
+  return (brighten_rgb(darker_bg(hl_bg("StatusLine"), (hl_bg("Normal") or hl_bg("NormalNC"))), 0.09) or hl_bg("StatusLine") or hl_bg("StatusLineNC") or hl_bg("Normal") or 2763306)
+end
+meta_statusline_bg = _40_
+local function meta_statusline_middle_hl()
+  local opts = plain_hl_from("StatusLine")
+  opts["default"] = true
+  opts["bg"] = meta_statusline_bg()
+  return opts
+end
+local function meta_statusline_middle_hl_with_bg(bg_fn)
+  local opts = plain_hl_from("StatusLine")
+  opts["default"] = true
+  opts["bg"] = bg_fn()
+  return opts
+end
+local function meta_preview_statusline_hl()
+  local opts = plain_hl_from("StatusLine")
+  local base_bg = meta_preview_statusline_bg()
+  opts["default"] = true
+  opts["bg"] = base_bg
+  return opts
+end
+local function _41_()
+  return meta_statusline_bg()
+end
+meta_preview_statusline_bg = _41_
+local function results_pulse_bg(step)
+  local base = meta_statusline_bg()
+  if (step == 2) then
+    return (brighten_rgb(base, 0.02) or base)
+  elseif (step == 3) then
+    return (brighten_rgb(base, 0.04) or base)
+  elseif (step == 4) then
+    return (brighten_rgb(base, 0.06) or base)
+  elseif (step == 5) then
+    return (brighten_rgb(base, 0.04) or base)
+  elseif (step == 6) then
+    return (brighten_rgb(base, 0.02) or base)
+  elseif (step == 7) then
+    return (darken_rgb(base, 0.02) or base)
+  elseif (step == 8) then
+    return (darken_rgb(base, 0.04) or base)
+  elseif (step == 9) then
+    return (brighten_rgb(base, 0.06) or base)
+  elseif (step == 10) then
+    return (brighten_rgb(base, 0.04) or base)
+  elseif (step == 11) then
+    return (darken_rgb(base, 0.02) or base)
+  else
+    return base
+  end
+end
+local function cterm_bg(group)
+  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  if (ok and (type(hl) == "table")) then
+    return hl.ctermbg
+  else
+    return nil
+  end
+end
+local function meta_window_cursorline_hl()
+  local opts = plain_hl_from("CursorLine")
+  local bg = (opts.bg or hl_bg("CursorLine") or hl_bg("Normal") or 1973790)
+  local ok_cl,cl = pcall(vim.api.nvim_get_hl, 0, {name = "CursorLine", link = false})
+  local ctermbg = ((ok_cl and (type(cl) == "table") and cl.ctermbg) or cterm_bg("Normal") or 0)
+  opts["default"] = true
+  opts["bg"] = bg
+  opts["ctermbg"] = ctermbg
+  opts["underline"] = false
+  opts["undercurl"] = false
+  opts["underdotted"] = false
+  opts["underdashed"] = false
+  opts["underdouble"] = false
+  opts["bold"] = false
+  opts["italic"] = false
+  opts["nocombine"] = true
+  opts["cterm"] = {}
+  return opts
+end
+local function meta_window_separator_hl()
+  local bg = (hl_bg("Normal") or hl_bg("NormalNC") or 1973790)
+  local fg = (darken_rgb(bg, 0.18) or bg)
+  local opts = {default = true, fg = fg, bg = bg}
+  local ctermbg = (cterm_bg("Normal") or cterm_bg("NormalNC") or 0)
+  opts["ctermbg"] = ctermbg
+  opts["ctermfg"] = ctermbg
   return opts
 end
 local function prompt_text_hl()
@@ -300,6 +385,20 @@ local function prompt_text_hl()
   end
   if fg then
     opts["fg"] = fg
+  else
+  end
+  return opts
+end
+local function prompt_text_hl_from(group)
+  local opts = prompt_text_hl()
+  local ok,hl = pcall(vim.api.nvim_get_hl, 0, {name = group, link = false})
+  local fg = (ok and (type(hl) == "table") and hl_rendered_fg(hl))
+  if fg then
+    opts["fg"] = fg
+  else
+  end
+  if (ok and (type(hl) == "table") and hl.ctermfg) then
+    opts["ctermfg"] = hl.ctermfg
   else
   end
   return opts
@@ -356,14 +455,15 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaStatuslineModeInsert", statusline_color_from("ErrorMsg"))
   hi(0, "MetaStatuslineModeReplace", statusline_color_from("Todo"))
   do
-    local normal_mode_hl = plain_hl_from("StatusLine")
+    local normal_mode_hl = meta_statusline_middle_hl()
     normal_mode_hl["bold"] = true
     normal_mode_hl["cterm"] = {bold = true}
     hi(0, "MetaStatuslineModeNormal", normal_mode_hl)
   end
   hi(0, "MetaStatuslineQuery", statusline_color_from("Normal"))
-  hi(0, "MetaStatuslineFile", statusline_color_from("Comment"))
-  hi(0, "MetaStatuslineMiddle", plain_hl_from("StatusLine"))
+  hi(0, "MetaStatuslineFile", statusline_fg_hl_from("Comment"))
+  hi(0, "MetaStatuslineMiddle", meta_statusline_middle_hl())
+  hi(0, "MetaPreviewStatusline", meta_preview_statusline_hl())
   hi(0, "MetaStatuslineMatcherAll", statusline_color_from("Statement"))
   hi(0, "MetaStatuslineMatcherFuzzy", statusline_color_from("Number"))
   hi(0, "MetaStatuslineMatcherRegex", statusline_color_from("Special"))
@@ -376,12 +476,31 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaStatuslineKey", statusline_color_from("Comment"))
   hi(0, "MetaStatuslineFlagOn", statusline_color_from("String"))
   hi(0, "MetaStatuslineFlagOff", statusline_color_from("ErrorMsg"))
+  do
+    local bg_fn
+    local function _54_()
+      return results_pulse_bg(1)
+    end
+    bg_fn = _54_
+    hi(0, "MetaStatuslineMiddlePulse", meta_statusline_middle_hl_with_bg(bg_fn))
+    hi(0, "MetaStatuslineIndicatorPulse", statusline_fg_hl_with_bg("Tag", bg_fn))
+    hi(0, "MetaStatuslineKeyPulse", statusline_fg_hl_with_bg("Comment", bg_fn))
+    hi(0, "MetaStatuslineFlagOnPulse", statusline_fg_hl_with_bg("String", bg_fn))
+    hi(0, "MetaStatuslineFlagOffPulse", statusline_fg_hl_with_bg("ErrorMsg", bg_fn))
+  end
   hi(0, "MetaSearchHitAll", hit_hl("Statement", "Error"))
   hi(0, "MetaSearchHitBuffer", hit_hl("Statement", "Error"))
   hi(0, "MetaSearchHitFuzzy", hit_hl("Number", "WarningMsg"))
   hi(0, "MetaSearchHitFuzzyBetween", hit_hl("IncSearch", "Question"))
   hi(0, "MetaSearchHitRegex", hit_hl("Special", "Type"))
   hi(0, "MetaPromptText", prompt_text_hl())
+  for i, src in ipairs(PRIMARY_LINE_GROUPS) do
+    local suffix = tostring(i)
+    hi(0, ("MetaPromptText" .. suffix), prompt_text_hl_from(src))
+    hi(0, ("MetaSearchHitAll" .. suffix), hit_hl_primary(src, "Error"))
+    hi(0, ("MetaSearchHitFuzzy" .. suffix), hit_hl_primary(src, "WarningMsg"))
+    hi(0, ("MetaSearchHitRegex" .. suffix), hit_hl_primary(src, "Type"))
+  end
   hi(0, "MetaPromptNeg", {default = true, link = "ErrorMsg"})
   hi(0, "MetaPromptAnchor", {default = true, link = "SpecialChar"})
   hi(0, "MetaPromptRegex", {default = true, link = "MetaSearchHitRegex", underline = true})
@@ -400,16 +519,18 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaSourceLineNr", {default = true, link = "LineNr"})
   hi(0, "MetaSourceDir", {default = true, link = "Directory"})
   hi(0, "MetaSourceBoundary", thin_underline_from("Error"))
+  hi(0, "MetaWindowCursorLine", meta_window_cursorline_hl())
+  hi(0, "MetaWindowSeparator", meta_window_separator_hl())
   hi(0, "MetaSourceAltBg", alt_bg_from("Normal"))
   for i, src in ipairs(PATH_SEG_GROUPS) do
     hi(0, ("MetaPathSeg" .. tostring(i)), {default = true, link = src})
   end
   hi(0, "MetaPathSep", {default = true, link = "Normal"})
   for i, src in ipairs(PATH_SEG_GROUPS) do
-    hi(0, ("MetaStatuslinePathSeg" .. tostring(i)), statusline_fg_hl_from(src))
+    hi(0, ("MetaPreviewStatuslinePathSeg" .. tostring(i)), statusline_fg_hl_with_bg(src, meta_preview_statusline_bg))
   end
-  hi(0, "MetaStatuslinePathSep", statusline_sep_hl())
-  hi(0, "MetaStatuslinePathFile", statusline_fg_hl_from("Comment"))
+  hi(0, "MetaPreviewStatuslinePathSep", statusline_sep_hl_with_bg(meta_preview_statusline_bg))
+  hi(0, "MetaPreviewStatuslinePathFile", statusline_fg_hl_with_bg("Comment", meta_preview_statusline_bg))
   hi(0, "MetaFileSignDirty", {default = true, link = "WarningMsg"})
   hi(0, "MetaFileSignUntracked", {default = true, link = "DiagnosticError"})
   hi(0, "MetaFileSignClean", {default = true, link = "LineNr"})
@@ -417,7 +538,7 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaBufSignModified", {default = true, link = "Statement"})
   hi(0, "MetaBufSignRemoved", {default = true, link = "DiagnosticError"})
   hi(0, "MetaFileAge", {default = true, link = "Comment"})
-  hi(0, "MetaFileAgeMinute", {default = true, link = "DiagnosticOk"})
+  hi(0, "MetaFileAgeMinute", {default = true, link = "DiagnosticHint"})
   hi(0, "MetaFileAgeHour", {default = true, link = "DiagnosticHint"})
   hi(0, "MetaFileAgeDay", {default = true, link = "DiagnosticInfo"})
   hi(0, "MetaFileAgeWeek", {default = true, link = "DiagnosticWarn"})
@@ -431,6 +552,22 @@ local function ensure_defaults_and_highlights_21(opts)
   else
     return hi(0, "MetaSourceFile", {default = true, link = "Normal"})
   end
+end
+local function ensure_highlight_refresh_autocmd_21()
+  if refresh_augroup then
+    pcall(vim.api.nvim_del_augroup_by_id, refresh_augroup)
+  else
+  end
+  refresh_augroup = vim.api.nvim_create_augroup("MetabufferHighlights", {clear = true})
+  local function _57_(event)
+    if ((event.event == "ColorScheme") or (event.match == "background")) then
+      ensure_defaults_and_highlights_21(last_setup_opts)
+      return pcall(vim.cmd, "redrawstatus")
+    else
+      return nil
+    end
+  end
+  return vim.api.nvim_create_autocmd({"ColorScheme", "OptionSet"}, {group = refresh_augroup, pattern = {"*", "background"}, callback = _57_})
 end
 local function ensure_command(name, callback, opts)
   pcall(vim.api.nvim_del_user_command, name)
@@ -493,43 +630,45 @@ M.reload = function(opts)
   clear_module_cache()
   clear_plugin_loaded_flags_21()
   source_plugin_bootstrap_21()
-  local _60_
+  local _65_
   if do_compile then
-    _60_ = "[metabuffer] reloaded (compiled)"
+    _65_ = "[metabuffer] reloaded (compiled)"
   else
-    _60_ = "[metabuffer] reloaded"
+    _65_ = "[metabuffer] reloaded"
   end
-  vim.notify(_60_, vim.log.levels.INFO)
+  vim.notify(_65_, vim.log.levels.INFO)
   return true
 end
 M.setup = function(opts)
+  last_setup_opts = opts
   router.configure(opts)
   ensure_defaults_and_highlights_21(opts)
-  local function _62_(args)
+  ensure_highlight_refresh_autocmd_21()
+  local function _67_(args)
     return router.entry_start(args.args, args.bang)
   end
-  ensure_command("Meta", _62_, {nargs = "?", bang = true})
-  local function _63_(args)
+  ensure_command("Meta", _67_, {nargs = "?", bang = true})
+  local function _68_(args)
     return router.entry_resume(args.args)
   end
-  ensure_command("MetaResume", _63_, {nargs = "?"})
-  local function _64_()
+  ensure_command("MetaResume", _68_, {nargs = "?"})
+  local function _69_()
     return router.entry_cursor_word(false)
   end
-  ensure_command("MetaCursorWord", _64_, {nargs = 0})
-  local function _65_()
+  ensure_command("MetaCursorWord", _69_, {nargs = 0})
+  local function _70_()
     return router.entry_cursor_word(true)
   end
-  ensure_command("MetaResumeCursorWord", _65_, {nargs = 0})
-  local function _66_(args)
+  ensure_command("MetaResumeCursorWord", _70_, {nargs = 0})
+  local function _71_(args)
     return router.entry_sync(args.args)
   end
-  ensure_command("MetaSync", _66_, {nargs = "?"})
-  local function _67_()
+  ensure_command("MetaSync", _71_, {nargs = "?"})
+  local function _72_()
     return router.entry_push()
   end
-  ensure_command("MetaPush", _67_, {nargs = 0})
-  local function _68_(args)
+  ensure_command("MetaPush", _72_, {nargs = 0})
+  local function _73_(args)
     local ok,err = pcall(M.reload, {compile = args.bang})
     if not ok then
       return vim.notify(("[metabuffer] reload failed: " .. tostring(err)), vim.log.levels.ERROR)
@@ -537,8 +676,21 @@ M.setup = function(opts)
       return nil
     end
   end
-  ensure_command("MetaReload", _68_, {nargs = 0, bang = true})
+  ensure_command("MetaReload", _73_, {nargs = 0, bang = true})
   return true
+end
+M["update-results-loading-pulse!"] = function(step)
+  local hi = vim.api.nvim_set_hl
+  local bg_fn
+  local function _75_()
+    return results_pulse_bg(step)
+  end
+  bg_fn = _75_
+  hi(0, "MetaStatuslineMiddlePulse", meta_statusline_middle_hl_with_bg(bg_fn))
+  hi(0, "MetaStatuslineIndicatorPulse", statusline_fg_hl_with_bg("Tag", bg_fn))
+  hi(0, "MetaStatuslineKeyPulse", statusline_fg_hl_with_bg("Comment", bg_fn))
+  hi(0, "MetaStatuslineFlagOnPulse", statusline_fg_hl_with_bg("String", bg_fn))
+  return hi(0, "MetaStatuslineFlagOffPulse", statusline_fg_hl_with_bg("ErrorMsg", bg_fn))
 end
 M.defaults = config.defaults
 return M

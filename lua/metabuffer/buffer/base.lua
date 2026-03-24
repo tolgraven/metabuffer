@@ -3,7 +3,9 @@ local handle = require("metabuffer.handle")
 local util = require("metabuffer.util")
 local M = {}
 M["new-buffer"] = function()
-  return vim.api.nvim_create_buf(false, false)
+  local buf = vim.api.nvim_create_buf(false, false)
+  util["disable-heavy-buffer-features!"](buf)
+  return buf
 end
 M["switch-buf"] = function(buf)
   if (buf and vim.api.nvim_buf_is_valid(buf)) then
@@ -93,7 +95,7 @@ M.new = function(nvim, opts)
   end
   self["set-name"] = function(buf_name)
     local target_name = self["unique-name"](buf_name)
-    local ok,err = pcall(vim.api.nvim_buf_set_name, self.buffer, target_name)
+    local ok = pcall(vim.api.nvim_buf_set_name, self.buffer, target_name)
     if ok then
       self.name = target_name
       return nil

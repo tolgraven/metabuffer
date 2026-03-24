@@ -1,4 +1,4 @@
-.PHONY: all compile check check-fnl check-lua test
+.PHONY: all compile check check-fnl check-lua test test-then-all test-profile
 
 XDG_STATE_HOME := /tmp
 XDG_DATA_HOME := /tmp
@@ -6,7 +6,8 @@ XDG_CACHE_HOME := /tmp
 NVIM_APPNAME := metabuffer-make
 NVIM_ENV = XDG_STATE_HOME="$(XDG_STATE_HOME)" XDG_DATA_HOME="$(XDG_DATA_HOME)" XDG_CACHE_HOME="$(XDG_CACHE_HOME)" NVIM_APPNAME="$(NVIM_APPNAME)"
 PRIMARY_GOAL := $(firstword $(MAKECMDGOALS))
-FILE_ARGS ?= $(filter-out $(PRIMARY_GOAL),$(MAKECMDGOALS))
+RAW_ARGS ?= $(filter-out $(PRIMARY_GOAL),$(MAKECMDGOALS))
+FILE_ARGS ?= $(filter-out --,$(RAW_ARGS))
 FNL_CHECK_ARGS = $(if $(strip $(filter %.fnl,$(FILE_ARGS))),$(filter %.fnl,$(FILE_ARGS)),$$(find fnl -name "*.fnl"))
 LUA_CHECK_ARGS = $(if $(strip $(filter %.lua,$(FILE_ARGS))),$(filter %.lua,$(FILE_ARGS)),.)
 
@@ -32,9 +33,23 @@ check-lua:
 	lua-language-server --check $(LUA_CHECK_ARGS)
 
 # Run tests. Use 'make test' for all tests or 'make test tests/some_test.lua' for specific ones.
-test:
+test: compile
 	@echo "[make] running tests..."
 	$(NVIM_ENV) ./scripts/test-mini.sh $(FILE_ARGS)
+
+test-then-all: compile
+	@if [ -z "$(strip $(FILE_ARGS))" ]; then \
+		echo "error: make test-then-all requires at least one test selector or file" >&2; \
+		exit 2; \
+	fi
+	@echo "[make] running selected tests first..."
+	TEST_FILE_TIMEOUT_MS="$${TEST_FILE_TIMEOUT_MS:-30000}" TEST_JOBS="$${TEST_JOBS:-1}" $(NVIM_ENV) ./scripts/test-mini.sh --no-smoke $(FILE_ARGS)
+	@echo "[make] selected tests passed; running full suite..."
+	TEST_FILE_TIMEOUT_MS="$${TEST_FILE_TIMEOUT_MS:-30000}" $(NVIM_ENV) ./scripts/test-mini.sh
+
+test-profile: compile
+	@echo "[make] running tests with profiling..."
+	TEST_FILE_TIMEOUT_MS="$${TEST_FILE_TIMEOUT_MS:-120000}" $(NVIM_ENV) ./scripts/test-mini.sh --profile $(FILE_ARGS)
 
 # Catch-all target to allow passing arguments to 'make test'
 %:

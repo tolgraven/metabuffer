@@ -4,6 +4,10 @@
 
 (local M {})
 (set M.ACTION_PATTERN "^([%w_]+:[%w_]+):?(.*)$")
+(local STATUS_ACCEPT 1)
+(local STATUS_CANCEL 2)
+(local INSERT_MODE_INSERT 1)
+(local INSERT_MODE_REPLACE 2)
 
 (fn M.new
   []
@@ -58,25 +62,23 @@
 
   self))
 
-(fn _prompt_mod
-  [] (require :metabuffer.prompt.prompt))
-
 (fn _accept
   [_ _]
-  (let [p (_prompt_mod)]
-    p.STATUS_ACCEPT))
+  STATUS_ACCEPT)
 
 (fn _cancel
   [_ _]
-  (let [p (_prompt_mod)]
-    p.STATUS_CANCEL))
+  STATUS_CANCEL)
 
 (fn _toggle_insert_mode
   [prompt _]
-  (let [p (_prompt_mod)]
-    (if (= prompt.insert-mode p.INSERT_MODE_INSERT)
-        (set prompt.insert-mode p.INSERT_MODE_REPLACE)
-        (set prompt.insert-mode p.INSERT_MODE_INSERT))))
+  (if (= prompt.insert-mode INSERT_MODE_INSERT)
+      (set prompt.insert-mode INSERT_MODE_REPLACE)
+      (set prompt.insert-mode INSERT_MODE_INSERT)))
+
+(fn M.default-action
+  []
+  M.DEFAULT_ACTION)
 
 (fn _delete_char_before_caret
   [prompt _]

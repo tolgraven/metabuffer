@@ -44,8 +44,8 @@
               :is-macvim (and (= 1 (vim.fn.has "gui_running")) (= 1 (vim.fn.has "mac")))}]
     (set self.caret (caret_mod.new self 0))
     (set self.history (history_mod.new self))
-    (set self.action action_mod.DEFAULT_ACTION)
-    (set self.keymap (keymap_mod.from_rules nvim keymap_mod.DEFAULT_KEYMAP_RULES))
+    (set self.action (action_mod.default-action))
+    (set self.keymap (keymap_mod.from_rules nvim (keymap_mod.default-keymap-rules)))
 
     (fn self.insert-text
       [txt]

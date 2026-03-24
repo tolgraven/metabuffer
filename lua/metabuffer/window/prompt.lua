@@ -1,9 +1,19 @@
 -- [nfnl] fnl/metabuffer/window/prompt.fnl
 local base = require("metabuffer.window.base")
 local animation_mod = require("metabuffer.window.animation")
+local util = require("metabuffer.util")
 local M = {}
+local disable_airline_statusline_21 = base["disable-airline-statusline!"]
+local apply_metabuffer_window_highlights_21 = base["apply-metabuffer-window-highlights!"]
+local metabuffer_winhighlight = base["metabuffer-winhighlight"]
+local with_split_mins = animation_mod["with-split-mins"]
+local function prompt_winhighlight()
+  return (metabuffer_winhighlight() .. ",StatusLine:MetaStatuslineMiddle,StatusLineNC:MetaStatuslineMiddle")
+end
 local function prompt_buffer_21(win)
   local buf = vim.api.nvim_win_get_buf(win)
+  util["disable-heavy-buffer-features!"](buf)
+  util["set-buffer-name!"](buf, "[Metabuffer Prompt]")
   do
     local bo = vim.bo[buf]
     bo["buftype"] = "nofile"
@@ -15,7 +25,8 @@ local function prompt_buffer_21(win)
   return buf
 end
 local function prompt_window_opts_21(win)
-  base["disable-airline-statusline!"](win)
+  disable_airline_statusline_21(win)
+  apply_metabuffer_window_highlights_21(win)
   local wo = vim.wo[win]
   wo["winfixheight"] = true
   wo["number"] = false
@@ -25,8 +36,10 @@ local function prompt_window_opts_21(win)
   wo["statusline"] = " "
   wo["winbar"] = ""
   wo["spell"] = false
+  wo["cursorline"] = false
   wo["wrap"] = true
   wo["linebreak"] = true
+  wo["winhighlight"] = prompt_winhighlight()
   wo["winblend"] = 0
   return nil
 end
@@ -45,7 +58,19 @@ local function open_split_win_21(origin_win, local_layout_3f, start_height)
     end
   end
   open_21 = _1_
-  return animation_mod["with-split-mins"](open_21)
+  local win = with_split_mins(open_21)
+  if (win and vim.api.nvim_win_is_valid(win)) then
+    util["mark-transient-unnamed-buffer!"](vim.api.nvim_win_get_buf(win))
+  else
+  end
+  return win
+end
+local function wipe_replaced_split_buffer_21(old_buf)
+  if (old_buf and vim.api.nvim_buf_is_valid(old_buf)) then
+    return util["delete-transient-unnamed-buffer!"](old_buf)
+  else
+    return nil
+  end
 end
 local function float_config(origin_win, start_height)
   local host
@@ -105,23 +130,25 @@ M["handoff-to-split!"] = function(nvim, prompt_win, opts)
   local old_win = prompt_win.window
   local buf = prompt_win.buffer
   local saved_view
-  local and_9_ = origin_win and vim.api.nvim_win_is_valid(origin_win)
-  if and_9_ then
-    local function _10_()
+  local and_11_ = origin_win and vim.api.nvim_win_is_valid(origin_win)
+  if and_11_ then
+    local function _12_()
       return vim.fn.winsaveview()
     end
-    and_9_ = vim.api.nvim_win_call(origin_win, _10_)
+    and_11_ = vim.api.nvim_win_call(origin_win, _12_)
   end
-  saved_view = and_9_
+  saved_view = and_11_
   local split_win = open_split_win_21(origin_win, local_layout_3f, height)
+  local old_buf = (split_win and vim.api.nvim_win_is_valid(split_win) and vim.api.nvim_win_get_buf(split_win))
   pcall(vim.api.nvim_win_set_buf, split_win, buf)
+  wipe_replaced_split_buffer_21(old_buf)
   pcall(vim.api.nvim_win_set_height, split_win, height)
   prompt_window_opts_21(split_win)
   if (origin_win and saved_view and vim.api.nvim_win_is_valid(origin_win)) then
-    local function _11_()
+    local function _13_()
       return pcall(vim.fn.winrestview, saved_view)
     end
-    vim.api.nvim_win_call(origin_win, _11_)
+    vim.api.nvim_win_call(origin_win, _13_)
   else
   end
   if (old_win and vim.api.nvim_win_is_valid(old_win)) then

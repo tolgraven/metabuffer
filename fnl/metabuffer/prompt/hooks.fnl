@@ -7,8 +7,10 @@
   "Public API: M.new."
   (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
          : default-main-keymaps
-         : on-prompt-changed : update-info-window : maybe-sync-from-main!
+         : on-prompt-changed : update-info-window : update-preview-window
+         : maybe-sync-from-main!
          : schedule-scroll-sync! : maybe-restore-hidden-ui!
+         : hide-visible-ui!
          : maybe-refresh-preview-statusline! : sign-mod} opts]
     (let [animation-enabled? (. animation-mod :enabled?)
           animation-duration-ms (. animation-mod :duration-ms)]
@@ -63,6 +65,93 @@
             (set hit true)))
         hit))
 
+    (fn window-rect
+      [win]
+      (when (and win (= (type win) "number") (vim.api.nvim_win_is_valid win))
+        (let [pos (vim.api.nvim_win_get_position win)
+              row (or (. pos 1) 0)
+              col (or (. pos 2) 0)
+              height (vim.api.nvim_win_get_height win)
+              width (vim.api.nvim_win_get_width win)]
+          {:top row
+           :left col
+           :bottom (+ row height -1)
+           :right (+ col width -1)})))
+
+    (fn rect-overlap?
+      [a b]
+      (and a b
+           (<= (. a :top) (. b :bottom))
+           (<= (. b :top) (. a :bottom))
+           (<= (. a :left) (. b :right))
+           (<= (. b :left) (. a :right))))
+
+    (fn meta-owned-window?
+      [session win]
+      (let [meta-win (and session.meta session.meta.win session.meta.win.window)
+            prompt-win session.prompt-win
+            info-win session.info-win
+            preview-win session.preview-win
+            history-win session.history-browser-win]
+        (or (= win meta-win)
+            (= win prompt-win)
+            (= win info-win)
+            (= win preview-win)
+            (= win history-win))))
+
+    (fn covered-by-new-window?
+      [session win]
+      (let [target (window-rect win)
+            prompt-win session.prompt-win
+            info-win session.info-win
+            preview-win session.preview-win
+            history-win session.history-browser-win]
+        (and target
+             (not (meta-owned-window? session win))
+             (or (rect-overlap? target (window-rect info-win))
+                 (rect-overlap? target (window-rect preview-win))
+                 (rect-overlap? target (window-rect history-win))
+                 (and session.prompt-floating?
+                      (rect-overlap? target (window-rect prompt-win)))))))
+
+    (fn transient-overlay-buffer?
+      [buf]
+      (when (and buf (= (type buf) "number") (vim.api.nvim_buf_is_valid buf))
+        (let [bo (. vim.bo buf)
+              ft (or (. bo :filetype) "")
+              bt (or (. bo :buftype) "")]
+          (or (= ft "help")
+              (= ft "man")
+              (= bt "help")))))
+
+    (fn first-window-for-buffer
+      [buf]
+      (when (and buf (= (type buf) "number") (vim.api.nvim_buf_is_valid buf))
+        (let [wins (vim.fn.win_findbuf buf)]
+          (var found nil)
+          (each [_ win (ipairs (or wins []))]
+            (when (and (not found) (vim.api.nvim_win_is_valid win))
+              (set found win)))
+          found)))
+
+    (fn hidden-session-reachable?
+      [session]
+      (let [results-buf (and session session.meta session.meta.buf session.meta.buf.buffer)]
+        (if (not (and results-buf (vim.api.nvim_buf_is_valid results-buf)))
+            false
+            (if (= (vim.api.nvim_get_current_buf) results-buf)
+                true
+                (let [raw (vim.fn.getjumplist)
+                      jumps (if (and (= (type raw) "table") (= (type (. raw 1)) "table"))
+                                (. raw 1)
+                                [])]
+                  (let [hit0 false]
+                    (var hit hit0)
+                    (each [_ item (ipairs (or jumps []))]
+                      (when (= (or (. item :bufnr) (. item "bufnr")) results-buf)
+                        (set hit true)))
+                    hit))))))
+
     (fn control-token-style
       [tok]
       (let [token (or tok "")
@@ -94,49 +183,6 @@
                               (if off? "MetaPromptFlagTextOff" "MetaPromptFlagTextOn"))}
                 nil))))
 
-    (fn project-flag-token
-      [name on?]
-      [(if on?
-           (.. "#" name)
-           (.. "#-" name))
-       (control-token-style (if on? (.. "#" name) (.. "#-" name)))])
-
-    (fn wrap-flag-pieces
-      [pieces max-cols]
-      (let [width (math.max 12 (or max-cols 12))
-            lines []
-            current0 {}
-            line-w0 0]
-        (var current current0)
-        (var line-w line-w0)
-        (fn flush-line!
-          []
-          (when (> (# current) 0)
-            (table.insert lines current)
-            (set current {})
-            (set line-w 0)))
-        (each [_ p (ipairs pieces)]
-          (let [chunks (or (. p :chunks) [[(or (. p :text) "") (or (. p :hl) "MetaPromptText")]])
-                w (or (. p :width)
-                      (let [sum0 0]
-                        (var sum sum0)
-                        (each [_ c (ipairs chunks)]
-                          (set sum (+ sum (vim.fn.strdisplaywidth (or (. c 1) "")))))
-                        sum))]
-            (if (and (> line-w 0) (> (+ line-w w) width))
-                (flush-line!))
-            (each [_ c (ipairs chunks)]
-              (table.insert current [(or (. c 1) "") (or (. c 2) "MetaPromptText")]))
-            (set line-w (+ line-w w))))
-        (flush-line!)
-        (if (> (# lines) 0) lines [[["" "MetaPromptText"]]])))
-
-    (fn line-display-rows
-      [line width]
-      (let [w (math.max 1 (or width 1))
-            n (vim.fn.strdisplaywidth (or line ""))]
-        (math.max 1 (math.ceil (/ n w)))))
-
     (fn session-busy?
       [session]
       (and session
@@ -148,137 +194,181 @@
                (and session.project-mode
                     (not session.project-bootstrapped)))))
 
+    (fn session-actually-idle?
+      [session]
+      (and session
+           (not (session-busy? session))
+           (not session.prompt-update-dirty)
+           (not session.lazy-refresh-dirty)))
+
+    (fn hl-rendered-fg
+      [hl]
+      (if (and hl (. hl :reverse))
+          (or (. hl :bg) (. hl :fg))
+          (. hl :fg)))
+
+    (fn hl-rendered-bg
+      [hl]
+      (if (and hl (. hl :reverse))
+          (or (. hl :fg) (. hl :bg))
+          (. hl :bg)))
+
+    (fn darken-rgb
+      [n factor]
+      (if (not n)
+          nil
+          (let [r (math.floor (/ n 0x10000))
+                g (math.floor (% (/ n 0x100) 0x100))
+                b (% n 0x100)
+                f (math.max 0 (math.min factor 1))
+                dr (math.max 0 (math.min 255 (math.floor (* r (- 1 f)))))
+                dg (math.max 0 (math.min 255 (math.floor (* g (- 1 f)))))
+                db (math.max 0 (math.min 255 (math.floor (* b (- 1 f)))))]
+            (+ (* dr 0x10000) (* dg 0x100) db))))
+
+    (fn brighten-rgb
+      [n factor]
+      (if (not n)
+          nil
+          (let [r (math.floor (/ n 0x10000))
+                g (math.floor (% (/ n 0x100) 0x100))
+                b (% n 0x100)
+                f (math.max 0 (math.min factor 1))
+                br (math.max 0 (math.min 255 (math.floor (+ r (* (- 255 r) f)))))
+                bg (math.max 0 (math.min 255 (math.floor (+ g (* (- 255 g) f)))))
+                bb (math.max 0 (math.min 255 (math.floor (+ b (* (- 255 b) f)))))]
+            (+ (* br 0x10000) (* bg 0x100) bb))))
+
+    (fn results-pulse-bg
+      [step]
+      (let [[ok-middle middle] [(pcall vim.api.nvim_get_hl 0 {:name "MetaStatuslineMiddle" :link false})]
+            [ok-status status] [(pcall vim.api.nvim_get_hl 0 {:name "StatusLine" :link false})]
+            base (or (and ok-middle (= (type middle) "table") (hl-rendered-bg middle))
+                     (and ok-status (= (type status) "table") (hl-rendered-bg status))
+                     0x2a2a2a)]
+        (if (= step 2)
+            (or (brighten-rgb base 0.02) base)
+            (= step 3)
+            (or (brighten-rgb base 0.04) base)
+            (= step 4)
+            (or (brighten-rgb base 0.06) base)
+            (= step 5)
+            (or (brighten-rgb base 0.04) base)
+            (= step 6)
+            (or (brighten-rgb base 0.02) base)
+            (= step 7)
+            (or (darken-rgb base 0.02) base)
+            (= step 8)
+            (or (darken-rgb base 0.04) base)
+            (= step 9)
+            (or (brighten-rgb base 0.06) base)
+            (= step 10)
+            (or (brighten-rgb base 0.04) base)
+            (= step 11)
+            (or (darken-rgb base 0.02) base)
+            base)))
+
+    (fn pulse-hl-from
+      [group bg]
+      (let [opts {:default true :reverse false :cterm {:reverse false}}
+            [ok hl] [(pcall vim.api.nvim_get_hl 0 {:name group :link false})]]
+        (when (and ok (= (type hl) "table"))
+          (when (hl-rendered-fg hl)
+            (set (. opts :fg) (hl-rendered-fg hl)))
+          (when (. hl :ctermfg)
+            (set (. opts :ctermfg) (. hl :ctermfg)))
+          (when (. hl :bold)
+            (set (. opts :bold) (. hl :bold))))
+        (set (. opts :bg) bg)
+        opts))
+
+    (fn update-results-loading-pulse-highlights!
+      [step]
+      (let [bg (results-pulse-bg step)
+            hi vim.api.nvim_set_hl]
+        (hi 0 "MetaStatuslineMiddlePulse" (pulse-hl-from "MetaStatuslineMiddle" bg))
+        (hi 0 "MetaStatuslineIndicatorPulse" (pulse-hl-from "MetaStatuslineIndicator" bg))
+        (hi 0 "MetaStatuslineKeyPulse" (pulse-hl-from "MetaStatuslineKey" bg))
+        (hi 0 "MetaStatuslineFlagOnPulse" (pulse-hl-from "MetaStatuslineFlagOn" bg))
+        (hi 0 "MetaStatuslineFlagOffPulse" (pulse-hl-from "MetaStatuslineFlagOff" bg))))
+
+    (fn set-results-loading-pulse!
+      [session]
+      (if (and session session.loading-anim-phase)
+          (let [step (+ (% (or session.loading-anim-phase 0) 8) 1)]
+            (set session.results-statusline-pulse-active? true)
+            (update-results-loading-pulse-highlights! step))
+          (set session.results-statusline-pulse-active? nil)))
+
     (var refresh-prompt-highlights! nil)
+    (var schedule-loading-indicator! nil)
 
-    (fn loading-pieces
+    (fn loading-indicator-tick!
       [session]
-      (let [word "Working"
-            phase (or session.loading-anim-phase 0)
-            pieces []
-            center (+ 1 (% phase (# word)))]
-        (for [i 1 (# word)]
-          (let [dist (math.abs (- i center))
-                hl (if (= dist 0)
-                       "MetaLoading6"
-                       (= dist 1)
-                       "MetaLoading5"
-                       (= dist 2)
-                       "MetaLoading4"
-                       (= dist 3)
-                       "MetaLoading3"
-                       (= dist 4)
-                       "MetaLoading2"
-                       "MetaLoading1")]
-            (table.insert pieces [(string.sub word i i) hl])))
-        [{:chunks pieces :width (# word)}]))
+      (set session.loading-anim-pending false)
+      (when (session-prompt-valid? session)
+        (let [animating? (and (session-busy? session)
+                              animation-enabled?
+                              (animation-enabled? session :loading))]
+          (if animating?
+              (do
+                (set session.loading-idle-pending false)
+                (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
+                (set-results-loading-pulse! session)
+                (pcall session.meta.refresh_statusline)
+                (refresh-prompt-highlights! session)
+                (schedule-loading-indicator! session))
+              (if session.loading-anim-phase
+                  (if session.loading-idle-pending
+                      (when (session-actually-idle? session)
+                        (set session.loading-idle-pending false)
+                        (set session.loading-anim-phase nil)
+                        (set-results-loading-pulse! session)
+                        (pcall session.meta.refresh_statusline))
+                      (do
+                        (set session.loading-idle-pending true)
+                        (schedule-loading-indicator! session)))
+                  (do
+                    (set session.loading-idle-pending false)
+                    (set-results-loading-pulse! session)))))))
 
-    (fn schedule-loading-indicator!
-      [session]
-      (when (and session
-                 (not session.loading-anim-pending)
-                 session.prompt-buf
-                 (session-prompt-valid? session)
-                 session.loading-indicator?
-                 (session-busy? session))
-        (set session.loading-anim-pending true)
-        (vim.defer_fn
-          (fn []
-            (set session.loading-anim-pending false)
-            (when (and (session-prompt-valid? session)
-                       (session-busy? session)
-                       animation-enabled?
-                       (animation-enabled? session :loading))
-              (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
-              (refresh-prompt-highlights! session)))
-          (animation-duration-ms session :loading 90))))
-
-    (fn prompt-content-display-rows
-      [session width]
-      (let [rows0 0]
-        (var rows rows0)
-        (each [_ line (ipairs (or (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false) []))]
-          (set rows (+ rows (line-display-rows line width))))
-        (math.max 1 rows)))
+    (set schedule-loading-indicator!
+      (fn [session]
+        (when (and session
+                   (not session.loading-anim-pending)
+                   session.prompt-buf
+                   (session-prompt-valid? session)
+                   session.loading-indicator?
+                   (or (session-busy? session)
+                       session.loading-anim-phase
+                       session.loading-idle-pending))
+          (when (and (session-busy? session)
+                     (= session.loading-anim-phase nil))
+            (set session.loading-idle-pending false)
+            (set session.loading-anim-phase 0)
+            (set-results-loading-pulse! session)
+            (pcall session.meta.refresh_statusline))
+          (set session.loading-anim-pending true)
+          (let [delay (if session.loading-idle-pending
+                          120
+                          (animation-duration-ms session :loading 90))]
+            (vim.defer_fn
+              (fn [] (loading-indicator-tick! session))
+              delay)))))
 
     (fn render-project-flags-footer!
       [session]
       (when (and session.prompt-buf
                  (session-prompt-valid? session))
         (let [ns (or session.prompt-footer-ns (vim.api.nvim_create_namespace "metabuffer.prompt.footer"))
-              row (math.max 0 (- (vim.api.nvim_buf_line_count session.prompt-buf) 1))
-              last-line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf row (+ row 1) false) 1) "")
-              [hidden-token hidden-style] (project-flag-token "hidden" (not (not session.effective-include-hidden)))
-              [ignored-token ignored-style] (project-flag-token "ignored" (not (not session.effective-include-ignored)))
-              [deps-token deps-style] (project-flag-token "deps" (not (not session.effective-include-deps)))
-              [file-token file-style] (project-flag-token "file" (not (not session.effective-include-files)))
-              [binary-token binary-style] (project-flag-token "binary" (not (not session.effective-include-binary)))
-              [hex-token hex-style] (project-flag-token "hex" (not (not session.effective-include-hex)))
-              [prefilter-token prefilter-style] (project-flag-token "prefilter" (not (not session.prefilter-mode)))
-              [lazy-token lazy-style] (project-flag-token "lazy" (not (not session.lazy-mode)))
-              tokens [[hidden-token hidden-style]
-                      [ignored-token ignored-style]
-                      [deps-token deps-style]
-                      [file-token file-style]
-                      [binary-token binary-style]
-                      [hex-token hex-style]
-                      [prefilter-token prefilter-style]
-                      [lazy-token lazy-style]]
-              loading0 (if (session-busy? session) (loading-pieces session) [])
-              pieces0 []
-              _ (each [_ p (ipairs loading0)]
-                  (table.insert pieces0 p))
-              _ (when (> (# loading0) 0)
-                  (table.insert pieces0 {:chunks [["  " "MetaPromptText"]] :width 2}))
-              _ (each [i pair (ipairs tokens)]
-                  (let [tok (or (. pair 1) "")
-                        style (. pair 2)
-                        sign-hl (or (and style (. style :hash-hl)) "MetaPromptText")
-                        text-hl (or (and style (. style :text-hl)) "MetaPromptText")]
-                    (when (> (# tok) 0)
-                      (if (vim.startswith tok "#-")
-                          (let [suffix (if (> (# tok) 2) (string.sub tok 3) "")
-                                chunks [["-" sign-hl] [suffix text-hl]]
-                                w (+ 1 (vim.fn.strdisplaywidth suffix))]
-                            (table.insert pieces0 {:chunks chunks :width w}))
-                          (if (vim.startswith tok "#")
-                              (let [suffix (if (> (# tok) 1) (string.sub tok 2) "")
-                                    chunks [["+" sign-hl] [suffix text-hl]]
-                                    w (+ 1 (vim.fn.strdisplaywidth suffix))]
-                                (table.insert pieces0 {:chunks chunks :width w}))
-                              (table.insert pieces0 {:chunks [[tok text-hl]]
-                                                     :width (vim.fn.strdisplaywidth tok)}))))
-                    (when (< i (# tokens))
-                      (table.insert pieces0 {:chunks [[" " "MetaPromptText"]] :width 1}))))
-              pieces pieces0
-              max-cols (if (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
-                           (vim.api.nvim_win_get_width session.prompt-win)
-                           80)
-              win-height (if (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
-                             (vim.api.nvim_win_get_height session.prompt-win)
-                             1)
-              last-line-rows (line-display-rows last-line max-cols)
-              anchor-row (math.max 0 (- row (math.max 0 (- last-line-rows 1))))
-              flag-lines (wrap-flag-pieces pieces max-cols)
-              content-rows (prompt-content-display-rows session max-cols)
-              spacer-count (math.max 0 (- win-height content-rows (# flag-lines)))
-              virt-lines0 []
-              _ (each [_ _i (ipairs (vim.fn.range 1 spacer-count))]
-                  (table.insert virt-lines0 [["" "MetaPromptText"]]))
-              _ (each [_ vl (ipairs flag-lines)]
-                  (table.insert virt-lines0 vl))
-              virt-lines virt-lines0]
+              _ (set session.prompt-footer-ns ns)]
           (set session.prompt-footer-ns ns)
           (vim.api.nvim_buf_clear_namespace session.prompt-buf ns 0 -1)
-          (when session.project-mode
-            (vim.api.nvim_buf_set_extmark
-              session.prompt-buf
-              ns
-              anchor-row
-              0
-              {:virt_lines virt-lines
-               :virt_lines_above false
-               :hl_mode "combine"}))
           (schedule-loading-indicator! session))))
+
+    (fn prompt-line-primary-group
+      [row]
+      (.. "MetaPromptText" (tostring (+ (% (math.max 0 (- row 1)) 6) 1))))
 
     (set refresh-prompt-highlights!
       (fn [session]
@@ -289,7 +379,8 @@
           (vim.api.nvim_buf_clear_namespace session.prompt-buf ns 0 -1)
           (each [row line (ipairs (or lines []))]
             (let [r (- row 1)
-                  txt (or line "")]
+                  txt (or line "")
+                  primary-hl (prompt-line-primary-group row)]
               (var pos 1)
               (while (<= pos (# txt))
                 (let [[s e] [(string.find txt "%S+" pos)]]
@@ -297,12 +388,12 @@
                       (let [token (string.sub txt s e)
                             s0 (- s 1)
                             e0 e]
-                        (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptText" r s0 e0)
+                        (vim.api.nvim_buf_add_highlight session.prompt-buf ns primary-hl r s0 e0)
                         (when-let [style (control-token-style token)]
                           (vim.api.nvim_buf_add_highlight
                             session.prompt-buf
                             ns
-                            (or (. style :hash-hl) "MetaPromptText")
+                            (or (. style :hash-hl) primary-hl)
                             r
                             s0
                             (+ s0 1))
@@ -310,7 +401,7 @@
                             (vim.api.nvim_buf_add_highlight
                               session.prompt-buf
                               ns
-                              (or (. style :text-hl) "MetaPromptText")
+                              (or (. style :text-hl) primary-hl)
                               r
                               (+ s0 1)
                               e0)))
@@ -499,6 +590,8 @@
     (fn resolve-main-map-action
       [router session action arg]
       (if
+        (= action "cancel")
+        (fn [] (router.cancel session.prompt-buf))
         (= action "accept-main")
         (fn [] (router.accept-main session.prompt-buf))
         (= action "enter-edit-mode")
@@ -532,6 +625,65 @@
                 (vim.notify
                   (.. "metabuffer: unknown main keymap action '" (tostring action) "' for " (tostring lhs))
                   vim.log.levels.WARN))))))
+
+    (fn feed-results-normal-key!
+      [key]
+      (vim.api.nvim_feedkeys
+        (vim.api.nvim_replace_termcodes key true false true)
+        "n"
+        false))
+
+    (fn set-pending-structural-edit!
+      [session side]
+      (when (and session.results-edit-mode session.meta session.meta.win
+                 (vim.api.nvim_win_is_valid session.meta.win.window))
+        (let [row (. (vim.api.nvim_win_get_cursor session.meta.win.window) 1)
+              idx (. (or session.meta.buf.indices []) row)
+              ref (and idx (. (or session.meta.buf.source-refs []) idx))]
+          (when (and ref ref.path ref.lnum)
+            (set session.pending-structural-edit
+                 {:path ref.path
+                  :lnum ref.lnum
+                  :side side
+                  :kind (or ref.kind "")})))))
+
+    (fn apply-results-edit-keymaps
+      [session]
+      (let [opts {:buffer session.meta.buf.buffer :silent true :noremap true :nowait true}]
+        (vim.keymap.set "n" "o"
+          (fn []
+            (set-pending-structural-edit! session "after")
+            (feed-results-normal-key! "o"))
+          opts)
+        (vim.keymap.set "n" "O"
+          (fn []
+            (set-pending-structural-edit! session "before")
+            (feed-results-normal-key! "O"))
+          opts)
+        (vim.keymap.set "n" "p"
+          (fn []
+            (set-pending-structural-edit! session "after")
+            (feed-results-normal-key! "p"))
+          opts)
+        (vim.keymap.set "n" "P"
+          (fn []
+            (set-pending-structural-edit! session "before")
+            (feed-results-normal-key! "P"))
+          opts)))
+
+    (fn begin-direct-results-edit!
+      [session]
+      (when (and sign-mod session.meta session.meta.buf
+                 (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+        (let [buf session.meta.buf.buffer
+              internal? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_internal_render")]]
+                          (and ok v))
+              manual? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_manual_edit_active")]]
+                        (and ok v))]
+          (when-not (or internal? manual?)
+            (set session.results-edit-mode true)
+            (pcall sign-mod.capture-baseline! session)
+            (pcall vim.api.nvim_buf_set_var buf "meta_manual_edit_active" true)))))
 
     (fn register!
   [router session]
@@ -615,6 +767,8 @@
                          (fn []
                            (when-not session.prompt-animating?
                              (pcall refresh-prompt-highlights! session)
+                             (when update-preview-window
+                               (pcall update-preview-window session))
                              (pcall update-info-window session)))))} )
       ;; Keep selection/status/info synced when user scrolls or moves in the
       ;; main meta window with regular motions/mouse while prompt is open.
@@ -625,6 +779,11 @@
                        (schedule-when-valid session
                          (fn []
                            (maybe-sync-from-main! session))))})
+        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       (begin-direct-results-edit! session))})
         (vim.api.nvim_create_autocmd ["TextChanged" "TextChangedI"]
           {:group aug
            :buffer session.meta.buf.buffer
@@ -634,7 +793,7 @@
                                internal? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_internal_render")]]
                                            (and ok v))]
                            (when-not internal?
-                             (pcall vim.api.nvim_buf_set_var buf "meta_manual_edit_active" true))
+                             (begin-direct-results-edit! session))
                            (vim.schedule
                              (fn []
                                (when (and session.prompt-buf
@@ -643,7 +802,7 @@
                                  (pcall maybe-sync-from-main! session true)
                                  (pcall update-info-window session true)
                                  (pcall sign-mod.refresh-change-signs! session)))))))})
-        (vim.api.nvim_create_autocmd "BufEnter"
+        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
           {:group aug
            :buffer session.meta.buf.buffer
            :callback (fn [_]
@@ -661,13 +820,61 @@
                            (fn []
                              (when (and session.prompt-buf
                                         (= (. active-by-prompt session.prompt-buf) session))
-                               (pcall maybe-restore-hidden-ui! session))))))})
+                             (pcall maybe-restore-hidden-ui! session))))))})
+        (vim.api.nvim_create_autocmd "WinNew"
+          {:group aug
+           :callback (fn [_]
+                       (vim.defer_fn
+                         (fn []
+                           (when (and hide-visible-ui!
+                                      (not session.ui-hidden)
+                                      session.prompt-buf
+                                      (= (. active-by-prompt session.prompt-buf) session))
+                             (let [win (vim.api.nvim_get_current_win)]
+                               (when (covered-by-new-window? session win)
+                                 (pcall hide-visible-ui! session)))))
+                         20))})
+        (vim.api.nvim_create_autocmd "BufWinEnter"
+          {:group aug
+           :callback (fn [ev]
+                       (vim.defer_fn
+                         (fn []
+                           (when (and hide-visible-ui!
+                                      (not session.ui-hidden)
+                                      session.prompt-buf
+                                      (= (. active-by-prompt session.prompt-buf) session))
+                             (let [buf (or ev.buf (vim.api.nvim_get_current_buf))
+                                   win (or (first-window-for-buffer buf)
+                                           (vim.api.nvim_get_current_win))]
+                               (when (or (transient-overlay-buffer? buf)
+                                         (covered-by-new-window? session win))
+                                 (pcall hide-visible-ui! session)))))
+                         20))})
+        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
+          {:group aug
+           :buffer session.meta.buf.buffer
+           :callback (fn [_]
+                       (schedule-when-valid session
+                         (fn []
+                           (pcall session.meta.refresh_statusline))))} )
+        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
+          {:group aug
+           :callback (fn [_]
+                       (vim.schedule
+                         (fn []
+                           (when (and session.ui-hidden
+                                      session.prompt-buf
+                                      (= (. active-by-prompt session.prompt-buf) session)
+                                      (not (hidden-session-reachable? session)))
+                             (pcall router.remove-session session)))))} )
         (vim.api.nvim_create_autocmd "BufLeave"
           {:group aug
            :buffer session.meta.buf.buffer
            :callback (fn [_]
                        ;; When leaving the results buffer, check if the window it
-                       ;; was in is now showing something else. If so, close Meta.
+                       ;; was in is now showing something else. Project-mode
+                       ;; sessions should hide auxiliary UI and remain resumable;
+                       ;; regular sessions can close entirely.
                        (vim.schedule
                          (fn []
                            (when (and (not session.ui-hidden)
@@ -679,8 +886,11 @@
                                    (router.cancel session.prompt-buf)
                                    (let [buf (vim.api.nvim_win_get_buf win)]
                                      (when (not= buf session.meta.buf.buffer)
-                                       (router.cancel session.prompt-buf)))))))))})
+                                       (if (and session.project-mode hide-visible-ui!)
+                                           (hide-visible-ui! session.prompt-buf)
+                                           (router.cancel session.prompt-buf))))))))))})
         (apply-main-keymaps router session)
+        (apply-results-edit-keymaps session)
         (vim.api.nvim_create_autocmd "WinScrolled"
           {:group aug
            :callback (fn [_]

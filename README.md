@@ -20,13 +20,14 @@ require("metabuffer").setup({
   ui = {
     animation = {
       enabled = true,
+      backend = "mini",
       time_scale = 1.0,
       loading_indicator = true,
       prompt = { enabled = true, time_scale = 1.0 },
       preview = { enabled = true, time_scale = 1.0 },
       info = { enabled = true, time_scale = 1.0 },
       loading = { enabled = true, time_scale = 1.0 },
-      scroll = { enabled = true, time_scale = 1.0 },
+      scroll = { enabled = true, time_scale = 1.0, backend = "mini" },
     },
   },
   keymaps = {
@@ -107,6 +108,7 @@ require("metabuffer").defaults
 Animation controls:
 
 - `ui.animation.enabled`: master on/off switch for Meta window animations
+- `ui.animation.backend`: global animation backend, `"mini"` or `"native"`
 - `ui.animation.time_scale`: master speed multiplier
   - `1.0` = normal
   - `0.5` = twice as fast
@@ -118,6 +120,8 @@ Animation controls:
   - `ui.animation.loading.enabled`, `ui.animation.loading.time_scale`
   - `ui.animation.scroll.enabled`, `ui.animation.scroll.time_scale`
 - `ui.animation.loading_indicator` controls whether the animated prompt footer loading word is shown at all
+
+`ui.animation.backend` defaults to `"mini"`. Set it to `"native"` to force the built-in fallback path instead. Per-animation backend keys are still accepted as compatibility overrides, but the global backend is now the intended control surface.
 
 Durations are not part of the public setup surface. Meta keeps sensible base timings internally and applies the master/per-animation scales on top.
 
