@@ -45,6 +45,7 @@
 (set M._instance-seq 0)
 (set M.active-by-source {})
 (set M.active-by-prompt {})
+(set M.launching-by-source {})
 (var update-info-window nil)
 (var apply-prompt-lines nil)
 (var preview-window nil)
@@ -671,6 +672,7 @@
     (clear-table! M.instances)
     (clear-table! M.active-by-prompt)
     (clear-table! M.active-by-source)
+    (clear-table! M.launching-by-source)
     (set M._teardown-in-progress false))
   (vim.schedule
     (fn []

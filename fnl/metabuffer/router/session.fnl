@@ -67,6 +67,48 @@
                      1))
       (or (. condition :selected-index) 0)))
 
+(fn hide-startup-cursor!
+  [session]
+  (when (and session (not session.startup-cursor-hidden?))
+    (let [[ok current] [(pcall vim.api.nvim_get_option_value "guicursor" {:scope "global"})]]
+      (set session.startup-saved-guicursor (if ok current vim.o.guicursor))
+      (set session.startup-cursor-hidden? true)
+      (pcall vim.api.nvim_set_option_value "guicursor" "a:ver0" {:scope "global"}))))
+
+(fn restore-startup-cursor!
+  [session]
+  (when (and session session.startup-cursor-hidden?)
+    (let [value (or session.startup-saved-guicursor vim.o.guicursor)]
+      (set session.startup-cursor-hidden? false)
+      (set session.startup-saved-guicursor nil)
+      (pcall vim.api.nvim_set_option_value "guicursor" value {:scope "global"}))))
+
+(fn current-session-for-buffer
+  [router buf]
+  (or (. (. router :active-by-source) buf)
+      (. (. router :active-by-prompt) buf)
+      (let [found0 nil]
+        (var found found0)
+        (each [_ session (pairs (or (. router :active-by-prompt) {}))]
+          (when (and (not found) session)
+            (let [meta-buf (and session.meta session.meta.buf session.meta.buf.buffer)]
+              (when (or (= buf meta-buf)
+                        (= buf session.prompt-buf)
+                        (= buf session.preview-buf)
+                        (= buf session.info-buf)
+                        (= buf session.history-browser-buf)
+                        (= buf session.source-buf)
+                        (= buf session.origin-buf))
+                (set found session)))))
+        found)))
+
+(fn existing-visible-meta
+  [session]
+  (and session
+       (not session.ui-hidden)
+       (not session.closing)
+       session.meta))
+
 (fn register-prompt-hooks!
   [deps session]
     (let [router (. deps :router)
@@ -125,9 +167,15 @@
         ui-animation-prompt-ms (. (. (. deps :ui) :animation) :prompt :ms)
         prompt-buf session.prompt-buf
         prompt-win session.prompt-win]
+    (fn startup-live?
+      []
+      (and (= (. active-by-prompt prompt-buf) session)
+           (not session.ui-hidden)
+           (not session.closing)))
     (fn restore-main-view!
       []
-      (when (and session.meta
+      (when (and (startup-live?)
+                 session.meta
                  session.meta.win
                  (vim.api.nvim_win_is_valid session.meta.win.window))
         (session-view.restore-meta-view! session.meta session.source-view session update-info-window)))
@@ -166,11 +214,12 @@
             [delay]
             (vim.defer_fn
               (fn []
-                (when (= (. active-by-prompt prompt-buf) session)
+                (when (startup-live?)
                   (pcall update-info-window session true)))
               delay))
           (refresh-after! (+ 24 base-delay)))))
     (sync-prompt-buffer-name! session)
+    (hide-startup-cursor! session)
     (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)
     (router-util-mod.mark-prompt-buffer! prompt-buf)
     (register-prompt-hooks! deps session)
@@ -202,13 +251,17 @@
                session.prompt-animating?)
       (vim.schedule
         (fn []
-          (when (and session.prompt-animating?
+          (when (and (startup-live?)
+                     session.prompt-animating?
                      prompt-win
                      (vim.api.nvim_win_is_valid prompt-win))
             (fn done!
               [_]
+              (when-not (startup-live?)
+                (restore-startup-cursor! session))
               (set session.prompt-animating? false)
-              (when (and session.prompt-floating?
+              (when (and (startup-live?)
+                         session.prompt-floating?
                          prompt-window-mod
                          prompt-window-mod.handoff-to-split!)
                 (let [split (prompt-window-mod.handoff-to-split!
@@ -228,7 +281,7 @@
               (vim.schedule
                 (fn []
                   (restore-main-view!)))
-              (when-not vim.g.meta_test_no_startinsert
+              (when (and (startup-live?) (not vim.g.meta_test_no_startinsert))
                 (pcall vim.api.nvim_set_current_win session.prompt-win)))
             (let [target-height (math.max 1 (or session.prompt-target-height 1))
                   duration (prompt-enter-duration-ms)]
@@ -255,7 +308,9 @@
     (schedule-layout-refresh!)
     (vim.defer_fn
       (fn []
-        (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+        (when (and (startup-live?)
+                   session.prompt-win
+                   (vim.api.nvim_win_is_valid session.prompt-win))
           (let [row (math.max 1 (# initial-lines))
                 line (or (. initial-lines row) "")
                 col (# line)]
@@ -279,11 +334,16 @@
         active-by-prompt (. (. deps :router) :active-by-prompt)
         instances (. (. deps :router) :instances)
         startup-layout-unsettled? (not (not session.prompt-animating?))]
+    (fn startup-live?
+      []
+      (and (= (. active-by-prompt session.prompt-buf) session)
+           (not session.ui-hidden)
+           (not session.closing)))
     (fn schedule-aux-ui-refresh!
       []
       (vim.schedule
         (fn []
-          (when (= (. active-by-prompt session.prompt-buf) session)
+          (when (startup-live?)
             (pcall curr.refresh_statusline)
             (when update-preview-window
               (pcall update-preview-window session))
@@ -295,7 +355,7 @@
       (when-not session.project-mode
         (vim.defer_fn
           (fn []
-            (when (= (. active-by-prompt session.prompt-buf) session)
+            (when (startup-live?)
               (set session.single-file-info-fetch-ready true)
               (set session.single-file-info-ready true)
               (pcall update-info-window session true)))
@@ -321,7 +381,8 @@
     (when session.project-mode
       (vim.defer_fn
         (fn []
-          (pcall update-info-window session true)
+          (when (startup-live?)
+            (pcall update-info-window session true))
           ; (when (= (. active-by-prompt session.prompt-buf) session)
             ; (pcall update-info-window session true))
           )
@@ -329,22 +390,27 @@
     (schedule-single-file-info-phases!)
     (vim.schedule
       (fn []
-        (set session.startup-initializing false)
-        (when-not session.project-mode
-          (set session.project-mode-starting? false))
-        (pcall update-info-window session)
-        (vim.defer_fn
-          (fn []
-            (set session.animate-enter? false)
-            (when (and session.project-mode
-                       session.meta
-                       session.meta.buf
-                       session.lazy-stream-done)
-              (set session.meta.buf.visible-source-syntax-only false)
-              (pcall session.meta.buf.apply-source-syntax-regions)))
-          (or session.startup-ui-delay-ms 320))
-        (when (and session.project-mode (not session.project-bootstrapped))
-          (project-source.schedule-project-bootstrap! session 17))))
+        (if (startup-live?)
+            (do
+              (set session.startup-initializing false)
+              (when-not session.project-mode
+                (set session.project-mode-starting? false))
+              (pcall update-info-window session)
+              (vim.defer_fn
+                (fn []
+                  (when (startup-live?)
+                    (set session.animate-enter? false)
+                    (restore-startup-cursor! session)
+                    (when (and session.project-mode
+                               session.meta
+                               session.meta.buf
+                               session.lazy-stream-done)
+                      (set session.meta.buf.visible-source-syntax-only false)
+                      (pcall session.meta.buf.apply-source-syntax-regions))))
+                (or session.startup-ui-delay-ms 320))
+              (when (and session.project-mode (not session.project-bootstrapped))
+                (project-source.schedule-project-bootstrap! session 17)))
+            (restore-startup-cursor! session))))
     (when (or (and session.project-mode (not initial-query-active))
               (and context-window context-window.update!))
       (schedule-aux-ui-refresh!))
@@ -373,9 +439,15 @@
         read-file-lines-cached (. deps :read-file-lines-cached)
         settings router
         next-instance-id! (. deps :next-instance-id!)
+        launching-by-source (. router :launching-by-source)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)]
     (pcall vim.cmd "silent! nohlsearch")
-    (let [start-query (or query "")
+    (let [current-buf (vim.api.nvim_get_current_buf)
+          current-session (current-session-for-buffer router current-buf)]
+      (if (and current-session
+               (existing-visible-meta current-session))
+          (existing-visible-meta current-session)
+          (let [start-query (or query "")
           latest-history (history-api.history-latest nil)
           expanded-query (if (= start-query "!!")
                              latest-history
@@ -423,7 +495,9 @@
           query query0]
       (let [source-buf (vim.api.nvim_get_current_buf)
             existing (. active-by-source source-buf)]
-        (if (and existing
+        (if (. launching-by-source source-buf)
+            (existing-visible-meta existing)
+            (if (and existing
                  existing.ui-hidden
                  maybe-restore-hidden-ui!
                  existing.meta
@@ -431,13 +505,14 @@
                  (= (not (not existing.project-mode)) (not (not project-mode)))
                  (or (= source-buf existing.meta.buf.buffer)
                      (= source-buf existing.origin-buf)))
-            (do
-              (maybe-restore-hidden-ui! existing true)
-              existing.meta)
-            (do
-              (when (and existing (not existing.ui-hidden))
-                (remove-session! existing))
-              (let [origin-win (vim.api.nvim_get_current_win)
+                (do
+                  (maybe-restore-hidden-ui! existing true)
+                  existing.meta)
+                (do
+                  (set (. launching-by-source source-buf) true)
+                  (when (and existing (not existing.ui-hidden))
+                    (remove-session! existing))
+                  (let [origin-win (vim.api.nvim_get_current_win)
                     origin-buf source-buf
                     source-view (vim.fn.winsaveview)
                     _ (set (. source-view :_meta_win_height) (vim.api.nvim_win_get_height origin-win))
@@ -583,7 +658,8 @@
                       curr
                       session
                       initial-query-active)
+                    (set (. launching-by-source source-buf) nil)
                     (show-launch-message! session)
-                    curr)))))))))
+                    curr))))))))))))
 
 M

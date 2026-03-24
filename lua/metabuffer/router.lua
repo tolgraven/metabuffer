@@ -36,6 +36,7 @@ M.instances = {}
 M["_instance-seq"] = 0
 M["active-by-source"] = {}
 M["active-by-prompt"] = {}
+M["launching-by-source"] = {}
 local update_info_window = nil
 local apply_prompt_lines = nil
 local preview_window = nil
@@ -497,6 +498,7 @@ M["fail-safe-teardown!"] = function(where, err)
     clear_table_21(M.instances)
     clear_table_21(M["active-by-prompt"])
     clear_table_21(M["active-by-source"])
+    clear_table_21(M["launching-by-source"])
     M["_teardown-in-progress"] = false
   else
   end

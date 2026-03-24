@@ -178,6 +178,10 @@ Key helper coverage:
 - Meta-owned prompt/preview/info/results buffers use stable names instead of showing up as unnamed scratch buffers.
 - Plain `:Meta` followed by cancel does not leave stray listed `[No Name]` buffers behind.
 
+### `tests/screen/persistence/test_screen_persistence_double_launch_block.lua`
+- A second `:Meta` during animated startup is ignored instead of creating a duplicate session/layout.
+- `Esc` during animated startup stays hidden after the delayed startup callbacks settle.
+
 ### `tests/screen/persistence/test_screen_persistence_treesitter_regular.lua`
 - Regular file-backed `:Meta` keeps Tree-sitter highlighting active on the results buffer when a parser is available.
 

@@ -100,6 +100,14 @@
     (each [_ buf (pairs (or session.ts-expand-bufs {}))]
       (util.restore-heavy-buffer-features! buf))))
 
+(fn restore-startup-cursor!
+  [session]
+  (when (and session session.startup-cursor-hidden?)
+    (let [value (or session.startup-saved-guicursor vim.o.guicursor)]
+      (set session.startup-cursor-hidden? false)
+      (set session.startup-saved-guicursor nil)
+      (pcall vim.api.nvim_set_option_value "guicursor" value {:scope "global"}))))
+
 (fn remove-session!
   [deps session]
   (let [{: router
@@ -121,6 +129,9 @@
       (set session.closing true)
       (when (and animation-mod animation-mod.unmark-mini-session!)
         (animation-mod.unmark-mini-session! session))
+      (when (and animation-mod animation-mod.cancel-session!)
+        (animation-mod.cancel-session! session))
+      (restore-startup-cursor! session)
       (restore-managed-buffer-effects! session)
       (restore-main-window-opts! session)
       (history-api.push-history-entry!
@@ -185,12 +196,16 @@
   [deps session]
   (let [{: router : mods : windows : history} deps
         router-util-mod (. mods :router-util)
+        animation-mod (. mods :animation)
         info-window (. windows :info)
         preview-window (. windows :preview)
         context-window (. windows :context)
         history-api (. history :api)
         active-by-source (. router :active-by-source)]
     (set session.ui-hidden true)
+    (when (and animation-mod animation-mod.cancel-session!)
+      (animation-mod.cancel-session! session))
+    (restore-startup-cursor! session)
     (set session.ui-last-insert-mode (vim.startswith (. (vim.api.nvim_get_mode) :mode) "i"))
     (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
       (let [[ok cur] [(pcall vim.api.nvim_win_get_cursor session.prompt-win)]]

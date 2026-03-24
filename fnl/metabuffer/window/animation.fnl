@@ -218,12 +218,12 @@ Expected output: function."
 Expected output: config table."
   (let [mini (mini-animate-mod)]
     {:cursor {:enable true
-              :timing ((. (. mini :gen_timing) :cubic)
+              :timing ((. (. mini :gen_timing) :linear)
                        {:easing "in-out"
                         :duration 100
                         :unit "total"})}
      :scroll {:enable (enabled? session :scroll)
-              :timing ((. (. mini :gen_timing) :cubic)
+              :timing ((. (. mini :gen_timing) :linear)
                        {:easing "in-out"
                         :duration (duration-ms session :scroll 100)
                         :unit "total"})
@@ -231,13 +231,13 @@ Expected output: config table."
                           {:predicate (fn [n] (> n 1))
                            :max_output_steps 60})}
      :resize {:enable (enabled? session :prompt)
-              :timing ((. (. mini :gen_timing) :cubic)
+              :timing ((. (. mini :gen_timing) :linear)
                        {:easing "in-out"
                         :duration (duration-ms session :prompt 140)
                         :unit "total"})
               :subresize ((. (. mini :gen_subresize) :equal))}
-     :open {:enable false}
-     :close {:enable false}}))
+     :open {:enable true}
+     :close {:enable true}}))
 
 (set mark-mini-session!
   (fn [session]
@@ -261,6 +261,12 @@ Expected output: config table."
           (pcall vim.api.nvim_buf_del_var buf "metabuffer_minianimate_enable")
           (pcall vim.api.nvim_buf_del_var buf "metabuffer_minianimate_config")
           (pcall vim.api.nvim_buf_set_var buf "minianimate_disable" true))))))
+
+(fn cancel-session!
+  [session]
+  "Invalidate any in-flight animation callbacks for SESSION."
+  (when session
+    (set session.anim-state {})))
 
 (set execute-after!
   (fn [animation-type action]
@@ -558,6 +564,7 @@ Expected output: config table."
 (set M.ensure-mini-global! ensure-mini-global!)
 (set M.mark-mini-session! mark-mini-session!)
 (set M.unmark-mini-session! unmark-mini-session!)
+(set M.cancel-session! cancel-session!)
 (set M.with-split-mins with-split-mins)
 (set M.run! run!)
 (set M.animate-win-height! animate-win-height!)
