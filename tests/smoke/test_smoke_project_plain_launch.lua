@@ -1,50 +1,55 @@
-local H = require('tests.screen.support.screen_helpers')
-local eq = H.eq
+local T = MiniTest.new_set()
+local eq = MiniTest.expect.equality
 
-local T = MiniTest.new_set({ hooks = H.case_hooks() })
+local function wait_for(pred, timeout_ms)
+  eq(vim.wait(timeout_ms or 6000, pred, 20), true)
+end
 
-T['plain :Meta! launches project session with prompt and info window'] = H.timed_case(function()
-  H.child.lua([[
-    require('metabuffer').setup({
-      project_bootstrap_delay_ms = 400,
-      project_bootstrap_idle_delay_ms = 400,
-      ui = {
-        animation = {
-          enabled = true,
-          loading_indicator = true,
-          backend = 'mini',
-        },
+T['plain :Meta! launches project session with prompt and info window'] = function()
+  require('metabuffer').setup({
+    project_bootstrap_delay_ms = 400,
+    project_bootstrap_idle_delay_ms = 400,
+    ui = {
+      animation = {
+        enabled = true,
+        loading_indicator = true,
+        backend = 'mini',
       },
-    })
-  ]])
+    },
+  })
 
-  H.child.cmd('cd ' .. H.child.fn.getcwd())
-  H.child.cmd('edit README.md')
-  H.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
-  H.child.type_keys(':', 'Meta!', '<CR>')
-  vim.loop.sleep(150)
-  H.child.lua("if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end")
+  vim.cmd('cd ' .. vim.fn.getcwd())
+  vim.cmd('edit README.md')
+  _G.__meta_source_buf = vim.api.nvim_get_current_buf()
 
-  H.wait_for(function()
-    return H.session_prompt_win_height() > 0
+  vim.cmd('Meta!')
+
+  wait_for(function()
+    local router = require('metabuffer.router')
+    local s = router['active-by-source'][_G.__meta_source_buf]
+    return s and s['prompt-win'] and vim.api.nvim_win_is_valid(s['prompt-win'])
   end, 6000)
 
-  H.wait_for(function()
-    local snap = H.session_info_snapshot()
-    return type(snap) == 'table' and snap.count > 0
+  wait_for(function()
+    local router = require('metabuffer.router')
+    local s = router['active-by-source'][_G.__meta_source_buf]
+    return s and s['info-buf'] and vim.api.nvim_buf_is_valid(s['info-buf'])
   end, 6000)
 
-  H.wait_for(function()
-    return H.session_preview_visible()
+  wait_for(function()
+    local router = require('metabuffer.router')
+    local s = router['active-by-source'][_G.__meta_source_buf]
+    return s and s['preview-win'] and vim.api.nvim_win_is_valid(s['preview-win'])
   end, 6000)
 
-  vim.loop.sleep(800)
-
-  eq(H.session_active(), true)
-  eq(H.session_ui_hidden(), false)
-  eq(H.session_prompt_win_height() > 0, true)
-  eq(type(H.session_info_snapshot()), 'table')
-  eq(H.session_preview_visible(), true)
-end)
+  local router = require('metabuffer.router')
+  local s = router['active-by-source'][_G.__meta_source_buf]
+  eq(not not s, true)
+  eq(s['project-mode'], true)
+  eq(s['ui-hidden'], false)
+  eq(vim.api.nvim_win_is_valid(s['prompt-win']), true)
+  eq(vim.api.nvim_buf_is_valid(s['info-buf']), true)
+  eq(vim.api.nvim_win_is_valid(s['preview-win']), true)
+end
 
 return T

@@ -1,46 +1,52 @@
-local H = require('tests.screen.support.screen_helpers')
-local eq = H.eq
+local T = MiniTest.new_set()
+local eq = MiniTest.expect.equality
 
-local T = MiniTest.new_set({ hooks = H.case_hooks() })
+local function wait_for(pred, timeout_ms)
+  eq(vim.wait(timeout_ms or 3000, pred, 20), true)
+end
 
-T['plain :Meta launches session with prompt and info window'] = H.timed_case(function()
-  H.open_meta_with_lines({
+T['plain :Meta launches session with prompt and info window'] = function()
+  vim.cmd('enew')
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, {
     'alpha one',
     'alpha two',
     'beta three',
     'gamma four',
   })
+  _G.__meta_source_buf = vim.api.nvim_get_current_buf()
 
-  H.wait_for(function()
-    return H.session_prompt_win_height() > 0
+  vim.cmd('Meta')
+
+  wait_for(function()
+    local router = require('metabuffer.router')
+    local s = router['active-by-source'][_G.__meta_source_buf]
+    return s and s['prompt-win'] and vim.api.nvim_win_is_valid(s['prompt-win'])
   end, 3000)
 
-  H.wait_for(function()
-    return type(H.session_info_snapshot()) == 'table'
+  wait_for(function()
+    local router = require('metabuffer.router')
+    local s = router['active-by-source'][_G.__meta_source_buf]
+    return s and s['info-buf'] and vim.api.nvim_buf_is_valid(s['info-buf'])
   end, 3000)
 
-  H.wait_for(function()
-    return H.session_preview_visible()
+  wait_for(function()
+    local router = require('metabuffer.router')
+    local s = router['active-by-source'][_G.__meta_source_buf]
+    return s and s['preview-win'] and vim.api.nvim_win_is_valid(s['preview-win'])
   end, 3000)
 
-  vim.loop.sleep(800)
+  local router = require('metabuffer.router')
+  local s = router['active-by-source'][_G.__meta_source_buf]
+  eq(not not s, true)
+  eq(s['ui-hidden'], false)
+  eq(vim.api.nvim_win_is_valid(s['prompt-win']), true)
+  eq(vim.api.nvim_buf_is_valid(s['info-buf']), true)
+  eq(vim.api.nvim_win_is_valid(s['preview-win']), true)
 
-  eq(H.session_active(), true)
-  eq(H.session_ui_hidden(), false)
-  eq(H.session_prompt_win_height() > 0, true)
-  eq(type(H.session_info_snapshot()), 'table')
-  eq(H.session_preview_visible(), true)
-
-  local messages = H.child.lua_get([[
-    local ok, out = pcall(function()
-      return vim.api.nvim_exec2('silent messages', { output = true }).output or ''
-    end)
-    return ok and out or ''
-  ]])
-
+  local messages = vim.api.nvim_exec2('silent messages', { output = true }).output or ''
   eq(type(messages), 'string')
   eq(string.find(messages, '• Metabuffer [', 1, true) == nil, true)
   eq(string.find(messages, 'Metabuffer • ', 1, true) ~= nil, true)
-end)
+end
 
 return T

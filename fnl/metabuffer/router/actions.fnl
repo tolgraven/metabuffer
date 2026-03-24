@@ -19,6 +19,18 @@
     (when matcher
       (pcall matcher.remove-highlight matcher))))
 
+(fn silent-win-set-buf!
+  [win buf]
+  "Attach buffer to window without surfacing the old viewport first."
+  (when (and win buf
+             (vim.api.nvim_win_is_valid win)
+             (vim.api.nvim_buf_is_valid buf))
+    (or (pcall vim.api.nvim_win_call
+               win
+               (fn []
+                 (vim.cmd (.. "silent keepalt noautocmd buffer " buf))))
+        (pcall vim.api.nvim_win_set_buf win buf))))
+
 (fn clear-buffer-modified!
   [buf]
   (when (and buf (vim.api.nvim_buf_is_valid buf))
@@ -331,35 +343,39 @@
                              path)]
               (vim.cmd (.. "edit " (vim.fn.fnameescape target))))
             (vim.api.nvim_win_set_cursor 0 [(math.max 1 (or ref.open-lnum ref.lnum 1)) 0])))
-        (do
-          (when (and (vim.api.nvim_win_is_valid session.origin-win)
-                     (vim.api.nvim_buf_is_valid session.origin-buf))
-            (pcall vim.api.nvim_set_current_win session.origin-win)
-            (pcall vim.api.nvim_win_set_buf session.origin-win session.origin-buf))
-          (base-buffer.switch-buf curr.buf.model)
-          (let [row (curr.selected_line)]
-            (curr.win.set-row row true)
-            (let [vq (curr.vim_query)]
-              (when (~= vq "")
-                (vim.api.nvim_win_set_cursor 0 [row 0])
-                (let [pos (vim.fn.searchpos vq "cnW" row)
-                      hit-row (. pos 1)
-                      hit-col (. pos 2)]
-                  (when (and (= hit-row row) (> hit-col 0))
-                    (vim.api.nvim_win_set_cursor 0 [row hit-col]))))))))
+        (let [row (curr.selected_line)
+              vq (curr.vim_query)
+              target-buf curr.buf.model
+              target-win session.origin-win]
+          (when (and target-win
+                     (vim.api.nvim_win_is_valid target-win)
+                     target-buf
+                     (vim.api.nvim_buf_is_valid target-buf))
+            (silent-win-set-buf! target-win target-buf)
+            (vim.api.nvim_win_call
+              target-win
+              (fn []
+                (pcall vim.api.nvim_win_set_cursor target-win [row 0])
+                (when (~= vq "")
+                  (let [pos (vim.fn.searchpos vq "cnW" row)
+                        hit-row (. pos 1)
+                        hit-col (. pos 2)]
+                    (when (and (= hit-row row) (> hit-col 0))
+                      (pcall vim.api.nvim_win_set_cursor target-win [row hit-col]))))))
+            (pcall vim.api.nvim_set_current_win target-win)
+            (base-buffer.switch-buf target-buf))))
     (vim.cmd "normal! zv")
     (let [vq (curr.vim_query)]
       (when (~= vq "")
         (vim.fn.setreg "/" vq)
         (set vim.o.hlsearch true)))
-    (do
-      ;; Accept should exit visible Meta UI, but keep resumable state so
-      ;; returning to the results buffer restores prompt/info/selection.
-      (pcall vim.cmd "stopinsert")
-      (clear-hit-highlight! curr)
-      (set session.results-edit-mode false)
-      (hide-session-ui! deps session))
-    curr))
+    ;; Accept should exit visible Meta UI, but keep resumable state so
+    ;; returning to the results buffer restores prompt/info/selection.
+     (pcall vim.cmd "stopinsert")
+     (clear-hit-highlight! curr)
+     (set session.results-edit-mode false)
+     (hide-session-ui! deps session)
+     curr))
 
 (fn finish-cancel
   [deps session]
@@ -1110,13 +1126,13 @@
       (let [current-buf (vim.api.nvim_get_current_buf)
             results-buf session.meta.buf.buffer
             origin-buf session.origin-buf]
-      (when (or force
-                (= current-buf results-buf)
-                (= current-buf origin-buf))
-      (set session.meta.win.window (vim.api.nvim_get_current_win))
-      (restore-session-ui!
-        deps
-        session
-        {:preserve-focus (not force)}))))))
+        (when (or force
+                  (= current-buf results-buf)
+                  (= current-buf origin-buf))
+          (set session.meta.win.window (vim.api.nvim_get_current_win))
+          (restore-session-ui!
+            deps
+            session
+            {:preserve-focus (not force)}))))))
 
 M

@@ -3,7 +3,7 @@ local child, eq = H.child, H.eq
 
 local T = MiniTest.new_set({ hooks = H.case_hooks() })
 
-T['regular :Meta can relaunch from origin buffer after Esc hides session'] = H.timed_case(function()
+T['regular :Meta from origin buffer creates a fresh session after Esc hides previous one'] = H.timed_case(function()
   H.open_meta_with_lines({
     'alpha one',
     'alpha two',
@@ -22,14 +22,7 @@ T['regular :Meta can relaunch from origin buffer after Esc hides session'] = H.t
     end)()
   ]])
 
-  child.lua([[
-    (function()
-      local router = require('metabuffer.router')
-      local s = router['active-by-source'][_G.__meta_source_buf]
-      assert(s and s['prompt-buf'], 'missing prompt buffer')
-      router.cancel(s['prompt-buf'])
-    end)()
-  ]])
+  child.type_keys('<Esc>')
 
   H.wait_for(function()
     return H.session_ui_hidden()
@@ -49,7 +42,7 @@ T['regular :Meta can relaunch from origin buffer after Esc hides session'] = H.t
     (function()
       local router = require('metabuffer.router')
       local s = router['active-by-source'][_G.__meta_source_buf]
-      assert(s and s.meta and s.meta.buf, 'missing restored session')
+      assert(s and s.meta and s.meta.buf, 'missing fresh session')
       return {
         results_buf = s.meta.buf.buffer,
         prompt_buf = s['prompt-buf'],
@@ -57,8 +50,27 @@ T['regular :Meta can relaunch from origin buffer after Esc hides session'] = H.t
     end)()
   ]])
 
-  eq(second.results_buf, first.results_buf)
-  eq(second.prompt_buf, first.prompt_buf)
+  eq(second.results_buf == first.results_buf, false)
+  eq(second.prompt_buf == first.prompt_buf, false)
+end)
+
+T['raw prompt-mode Esc then :Meta relaunches without callback errors'] = H.timed_case(function()
+  child.cmd('edit README.md')
+  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  child.cmd('Meta')
+  vim.loop.sleep(150)
+
+  child.lua([[vim.cmd("normal! \027")]])
+  vim.loop.sleep(100)
+
+  child.cmd('Meta')
+
+  H.wait_for(function()
+    return H.session_active()
+  end, 3000)
+  H.wait_for(function()
+    return H.session_prompt_win_height() > 0
+  end, 3000)
 end)
 
 return T

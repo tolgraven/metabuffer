@@ -1,4 +1,4 @@
-.PHONY: all compile check check-fnl check-lua test test-profile
+.PHONY: all compile check check-fnl check-lua test test-then-all test-profile
 
 XDG_STATE_HOME := /tmp
 XDG_DATA_HOME := /tmp
@@ -36,6 +36,16 @@ check-lua:
 test: compile
 	@echo "[make] running tests..."
 	$(NVIM_ENV) ./scripts/test-mini.sh $(FILE_ARGS)
+
+test-then-all: compile
+	@if [ -z "$(strip $(FILE_ARGS))" ]; then \
+		echo "error: make test-then-all requires at least one test selector or file" >&2; \
+		exit 2; \
+	fi
+	@echo "[make] running selected tests first..."
+	TEST_FILE_TIMEOUT_MS="$${TEST_FILE_TIMEOUT_MS:-30000}" TEST_JOBS="$${TEST_JOBS:-1}" $(NVIM_ENV) ./scripts/test-mini.sh --no-smoke $(FILE_ARGS)
+	@echo "[make] selected tests passed; running full suite..."
+	TEST_FILE_TIMEOUT_MS="$${TEST_FILE_TIMEOUT_MS:-30000}" $(NVIM_ENV) ./scripts/test-mini.sh
 
 test-profile: compile
 	@echo "[make] running tests with profiling..."

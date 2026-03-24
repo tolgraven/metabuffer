@@ -98,6 +98,7 @@ fi
 FILTERS=()
 PROFILE_MODE=0
 VERBOSE=0
+SKIP_SMOKE=0
 TEST_FILE_TIMEOUT_MS="${TEST_FILE_TIMEOUT_MS:-18000}"
 if [[ "$TEST_FILE_TIMEOUT_MS" =~ ^[0-9]+$ ]]; then
   :
@@ -111,6 +112,8 @@ for arg in "$@"; do
     PROFILE_MODE=1
   elif [[ "$arg" == "--verbose" ]]; then
     VERBOSE=1
+  elif [[ "$arg" == "--no-smoke" ]]; then
+    SKIP_SMOKE=1
   else
     POSITIONAL+=("$arg")
   fi
@@ -164,9 +167,11 @@ if [[ ${#FILTERS[@]} -gt 0 ]]; then
 fi
 
 ORDERED_TEST_FILES=()
-for smoke in "${SMOKE_TESTS[@]}"; do
-  ORDERED_TEST_FILES+=("$smoke")
-done
+if (( SKIP_SMOKE == 0 )); then
+  for smoke in "${SMOKE_TESTS[@]}"; do
+    ORDERED_TEST_FILES+=("$smoke")
+  done
+fi
 for file in "${TEST_FILES[@]}"; do
   skip=0
   for smoke in "${SMOKE_TESTS[@]}"; do
@@ -218,7 +223,11 @@ PY
 )
 
 echo "[mini-runner] running ${#TEST_FILES[@]} files with ${JOBS} parallel worker(s)"
-echo "[mini-runner] startup smoke tests first: ${SMOKE_TESTS[*]}"
+if (( SKIP_SMOKE == 0 )); then
+  echo "[mini-runner] startup smoke tests first: ${SMOKE_TESTS[*]}"
+else
+  echo "[mini-runner] startup smoke tests skipped"
+fi
 if (( PROFILE_MODE == 1 )); then
   echo "[mini-runner] profiling enabled"
   echo "[mini-runner] profile dir: $PROFILE_DIR"
@@ -338,32 +347,35 @@ export PROFILE_MODE
 export PROFILE_DIR
 export TEST_FILE_TIMEOUT_MS
 
-SMOKE_COUNT=${#SMOKE_TESTS[@]}
-for i in "${!SMOKE_TESTS[@]}"; do
-  idx=$((i + 1))
-  smoke="${SMOKE_TESTS[$i]}"
-  run_worker "$idx" "$smoke" "$TMP_DIR"
-  smoke_status_file="$TMP_DIR/$idx.status"
-  smoke_rc=99
-  if [[ -f "$smoke_status_file" ]]; then
-    smoke_rc=$(cat "$smoke_status_file")
-  fi
-  if [[ "$smoke_rc" != "0" ]]; then
-    : > "$FAIL_LIST_FILE"
-    echo "$smoke" >> "$FAIL_LIST_FILE"
-    TOTAL_END_MS=$(python3 - <<'PY'
+SMOKE_COUNT=0
+if (( SKIP_SMOKE == 0 )); then
+  SMOKE_COUNT=${#SMOKE_TESTS[@]}
+  for i in "${!SMOKE_TESTS[@]}"; do
+    idx=$((i + 1))
+    smoke="${SMOKE_TESTS[$i]}"
+    run_worker "$idx" "$smoke" "$TMP_DIR"
+    smoke_status_file="$TMP_DIR/$idx.status"
+    smoke_rc=99
+    if [[ -f "$smoke_status_file" ]]; then
+      smoke_rc=$(cat "$smoke_status_file")
+    fi
+    if [[ "$smoke_rc" != "0" ]]; then
+      : > "$FAIL_LIST_FILE"
+      echo "$smoke" >> "$FAIL_LIST_FILE"
+      TOTAL_END_MS=$(python3 - <<'PY'
 import time
 print(int(time.time() * 1000))
 PY
 )
-    TOTAL_DT_MS=$((TOTAL_END_MS - TOTAL_START_MS))
-    echo "[mini-runner] FAIL file=$smoke rc=$smoke_rc"
-    echo "[mini-runner] TOTAL ${#TEST_FILES[@]} file(s) | failed=1 | elapsed=${TOTAL_DT_MS}ms"
-    echo "[mini-runner] aborted after startup smoke failure"
-    echo "[mini-runner] failed list path:  $FAIL_LIST_FILE"
-    exit 1
-  fi
-done
+      TOTAL_DT_MS=$((TOTAL_END_MS - TOTAL_START_MS))
+      echo "[mini-runner] FAIL file=$smoke rc=$smoke_rc"
+      echo "[mini-runner] TOTAL ${#TEST_FILES[@]} file(s) | failed=1 | elapsed=${TOTAL_DT_MS}ms"
+      echo "[mini-runner] aborted after startup smoke failure"
+      echo "[mini-runner] failed list path:  $FAIL_LIST_FILE"
+      exit 1
+    fi
+  done
+fi
 
 if (( ${#TEST_FILES[@]} > SMOKE_COUNT )); then
   : > "$TMP_DIR/indexed.tsv"

@@ -503,8 +503,7 @@
                  existing.meta
                  existing.meta.buf
                  (= (not (not existing.project-mode)) (not (not project-mode)))
-                 (or (= source-buf existing.meta.buf.buffer)
-                     (= source-buf existing.origin-buf)))
+                 (= source-buf existing.meta.buf.buffer))
                 (do
                   (maybe-restore-hidden-ui! existing true)
                   existing.meta)

@@ -8,6 +8,8 @@ This repo now has two parallelized suites:
 
 - Full run (screen + unit, parallel workers):
   - `./scripts/test-mini.sh`
+- Run without the startup smoke prefix:
+  - `./scripts/test-mini.sh --no-smoke tests/unit/test_query_unit.lua`
 - Full run with profiling:
 - `./scripts/test-mini.sh --profile`
   - runner prints the persistent `/tmp/...` profile directory and each worker profile file path
@@ -27,6 +29,12 @@ This repo now has two parallelized suites:
   - `TEST_MAX_JOBS=16 ./scripts/test-mini.sh`
 - Rerun a single file:
   - `./scripts/test-mini.sh tests/unit/test_query_unit.lua`
+- Run a selected test or category first, then automatically the full suite if it passes:
+  - `make test-then-all tests/unit/test_query_unit.lua`
+  - `make test-then-all persistence`
+  - selected phase skips startup smokes; the full-suite phase still runs them first
+  - uses a higher per-file timeout by default (`30000ms`)
+  - forces `TEST_JOBS=1` only for the selected-first phase; the full-suite phase uses the normal runner default unless you override it
 - Run a whole category/directory:
   - `./scripts/test-mini.sh animation`
   - `./scripts/test-mini.sh edit`
@@ -40,6 +48,7 @@ This repo now has two parallelized suites:
 Runner behavior:
 - Discovers regular suite files under `tests/screen/` and `tests/unit/`.
 - Always runs `tests/smoke/test_smoke_plain_launch.lua` and `tests/smoke/test_smoke_project_plain_launch.lua` first as startup smoke tests, even for single-file or category runs.
+- `--no-smoke` disables that startup-smoke prefix for the current invocation.
 - Those startup smoke tests force `TEST_UI_ANIMATIONS=1` so launch-time animation/timer failures are covered even though the rest of the screen suite defaults animations off for determinism.
 - Aborts the whole run immediately if either startup smoke test fails.
 - Executes files concurrently in separate headless Neovim instances.

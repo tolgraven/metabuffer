@@ -587,7 +587,7 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
     if launching_by_source[source_buf] then
       return existing_visible_meta(existing)
     else
-      if (existing and existing["ui-hidden"] and maybe_restore_hidden_ui_21 and existing.meta and existing.meta.buf and (not not existing["project-mode"] == not not project_mode) and ((source_buf == existing.meta.buf.buffer) or (source_buf == existing["origin-buf"]))) then
+      if (existing and existing["ui-hidden"] and maybe_restore_hidden_ui_21 and existing.meta and existing.meta.buf and (not not existing["project-mode"] == not not project_mode) and (source_buf == existing.meta.buf.buffer)) then
         maybe_restore_hidden_ui_21(existing, true)
         return existing.meta
       else
