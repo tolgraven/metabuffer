@@ -176,21 +176,10 @@
       (pcall vim.api.nvim_set_option_value name value {:win win}))))
 
 (fn wipe-replaced-split-buffer!
-  [win next-buf]
+  [old-buf]
   "Delete the temporary unnamed split buffer created by :new before reattaching prompt."
-  (when (and win (vim.api.nvim_win_is_valid win))
-    (let [old-buf (vim.api.nvim_win_get_buf win)]
-      (when (and old-buf
-                 (~= old-buf next-buf)
-                 (vim.api.nvim_buf_is_valid old-buf))
-        (let [bo (. vim.bo old-buf)
-              listed? (. bo :buflisted)
-              lines (vim.api.nvim_buf_line_count old-buf)
-              name (vim.api.nvim_buf_get_name old-buf)]
-          (when (and (<= lines 1)
-                     (= (or name "") "")
-                     (not listed?))
-            (pcall vim.api.nvim_buf_delete old-buf {:force true})))))))
+  (when (and old-buf (vim.api.nvim_buf_is_valid old-buf))
+    (util.delete-transient-unnamed-buffer! old-buf)))
 
 (fn hide-session-ui!
   [deps session]
@@ -253,11 +242,15 @@
                                (vim.api.nvim_get_current_win)))
                            (do
                              (vim.cmd (.. "botright " (tostring height) "new"))
-                             (vim.api.nvim_get_current_win)))]
+                             (vim.api.nvim_get_current_win)))
+            old-buf (and prompt-win
+                         (vim.api.nvim_win_is_valid prompt-win)
+                         (vim.api.nvim_win_get_buf prompt-win))]
         (set session.prompt-win prompt-win)
-        (wipe-replaced-split-buffer! prompt-win session.prompt-buf)
+        (util.mark-transient-unnamed-buffer! old-buf)
         (pcall vim.api.nvim_win_set_height prompt-win height)
         (pcall vim.api.nvim_win_set_buf prompt-win session.prompt-buf)
+        (wipe-replaced-split-buffer! old-buf)
         (let [bo (. vim.bo session.prompt-buf)]
           (set (. bo :buftype) "nofile")
           (set (. bo :bufhidden) "hide")

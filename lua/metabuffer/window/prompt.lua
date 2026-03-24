@@ -58,24 +58,16 @@ local function open_split_win_21(origin_win, local_layout_3f, start_height)
     end
   end
   open_21 = _1_
-  return with_split_mins(open_21)
-end
-local function wipe_replaced_split_buffer_21(win, next_buf)
+  local win = with_split_mins(open_21)
   if (win and vim.api.nvim_win_is_valid(win)) then
-    local old_buf = vim.api.nvim_win_get_buf(win)
-    if (old_buf and (old_buf ~= next_buf) and vim.api.nvim_buf_is_valid(old_buf)) then
-      local bo = vim.bo[old_buf]
-      local listed_3f = bo.buflisted
-      local lines = vim.api.nvim_buf_line_count(old_buf)
-      local name = vim.api.nvim_buf_get_name(old_buf)
-      if ((lines <= 1) and ((name or "") == "") and not listed_3f) then
-        return pcall(vim.api.nvim_buf_delete, old_buf, {force = true})
-      else
-        return nil
-      end
-    else
-      return nil
-    end
+    util["mark-transient-unnamed-buffer!"](vim.api.nvim_win_get_buf(win))
+  else
+  end
+  return win
+end
+local function wipe_replaced_split_buffer_21(old_buf)
+  if (old_buf and vim.api.nvim_buf_is_valid(old_buf)) then
+    return util["delete-transient-unnamed-buffer!"](old_buf)
   else
     return nil
   end
@@ -138,24 +130,25 @@ M["handoff-to-split!"] = function(nvim, prompt_win, opts)
   local old_win = prompt_win.window
   local buf = prompt_win.buffer
   local saved_view
-  local and_12_ = origin_win and vim.api.nvim_win_is_valid(origin_win)
-  if and_12_ then
-    local function _13_()
+  local and_11_ = origin_win and vim.api.nvim_win_is_valid(origin_win)
+  if and_11_ then
+    local function _12_()
       return vim.fn.winsaveview()
     end
-    and_12_ = vim.api.nvim_win_call(origin_win, _13_)
+    and_11_ = vim.api.nvim_win_call(origin_win, _12_)
   end
-  saved_view = and_12_
+  saved_view = and_11_
   local split_win = open_split_win_21(origin_win, local_layout_3f, height)
-  wipe_replaced_split_buffer_21(split_win, buf)
+  local old_buf = (split_win and vim.api.nvim_win_is_valid(split_win) and vim.api.nvim_win_get_buf(split_win))
   pcall(vim.api.nvim_win_set_buf, split_win, buf)
+  wipe_replaced_split_buffer_21(old_buf)
   pcall(vim.api.nvim_win_set_height, split_win, height)
   prompt_window_opts_21(split_win)
   if (origin_win and saved_view and vim.api.nvim_win_is_valid(origin_win)) then
-    local function _14_()
+    local function _13_()
       return pcall(vim.fn.winrestview, saved_view)
     end
-    vim.api.nvim_win_call(origin_win, _14_)
+    vim.api.nvim_win_call(origin_win, _13_)
   else
   end
   if (old_win and vim.api.nvim_win_is_valid(old_win)) then

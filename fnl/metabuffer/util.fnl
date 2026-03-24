@@ -42,6 +42,36 @@
   "Public API: M.buf-valid?."
   (and buf (vim.api.nvim_buf_is_valid buf)))
 
+(fn M.delete-transient-unnamed-buffer!
+  [buf]
+  "Best-effort wipe of a temporary unnamed split buffer. Returns true if deleted."
+  (if (not (M.buf-valid? buf))
+      false
+      (let [name (vim.api.nvim_buf_get_name buf)
+            lines (vim.api.nvim_buf_line_count buf)
+            wins (vim.fn.win_findbuf buf)
+            attached? (> (# (or wins [])) 0)]
+        (if (and (= (or name "") "")
+                 (<= lines 1)
+                 (not attached?))
+            (let [bo (. vim.bo buf)]
+              (set (. bo :buflisted) false)
+              (set (. bo :bufhidden) "wipe")
+              (set (. bo :swapfile) false)
+              (not (not (pcall vim.api.nvim_buf_delete buf {:force true}))))
+            false))))
+
+(fn M.mark-transient-unnamed-buffer!
+  [buf]
+  "Best-effort mark of a temporary unnamed split buffer so it never shows in :ls."
+  (when (M.buf-valid? buf)
+    (let [name (vim.api.nvim_buf_get_name buf)]
+      (when (= (or name "") "")
+        (let [bo (. vim.bo buf)]
+          (set (. bo :buflisted) false)
+          (set (. bo :bufhidden) "wipe")
+          (set (. bo :swapfile) false))))))
+
 (fn M.set-buffer-name!
   [buf base-name]
   "Best-effort unique buffer naming. Expected output: assigned name or fallback."

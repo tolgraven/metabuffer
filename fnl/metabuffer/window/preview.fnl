@@ -66,21 +66,10 @@
           (error result)))))
 
 (fn wipe-replaced-split-buffer!
-  [win next-buf]
+  [old-buf]
   "Delete the temporary [No Name] split buffer created by :vsplit before reattaching preview."
-  (when (and win (vim.api.nvim_win_is_valid win))
-    (let [old-buf (vim.api.nvim_win_get_buf win)]
-      (when (and old-buf
-                 (~= old-buf next-buf)
-                 (vim.api.nvim_buf_is_valid old-buf))
-        (let [bo (. vim.bo old-buf)
-              listed? (. bo :buflisted)
-              lines (vim.api.nvim_buf_line_count old-buf)
-              name (vim.api.nvim_buf_get_name old-buf)]
-          (when (and (<= lines 1)
-                     (= (or name "") "")
-                     (not listed?))
-            (pcall vim.api.nvim_buf_delete old-buf {:force true})))))))
+  (when (and old-buf (vim.api.nvim_buf_is_valid old-buf))
+    (util.delete-transient-unnamed-buffer! old-buf)))
 
 (fn M.new
   [opts]
@@ -253,10 +242,15 @@
         (set session.preview-real-buffer? false)
         (set session.preview-layout nil)
         (set session.preview-last-path nil)
-        (when-not float-start?
-          (wipe-replaced-split-buffer! win-id buf))
+        (let [old-buf (and (not float-start?)
+                           win-id
+                           (vim.api.nvim_win_is_valid win-id)
+                           (vim.api.nvim_win_get_buf win-id))]
+          (when old-buf
+            (util.mark-transient-unnamed-buffer! old-buf))
         (util.set-buffer-name! buf "[Metabuffer Preview]")
         (pcall vim.api.nvim_win_set_buf win-id buf)
+          (wipe-replaced-split-buffer! old-buf))
         (when-not float-start?
           (pcall vim.api.nvim_win_set_width win-id width))
         ;; Keep scratch alive even when preview window temporarily shows source

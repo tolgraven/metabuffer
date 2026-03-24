@@ -59,24 +59,16 @@
                     (do
                       (vim.cmd (.. "botright " (tostring start-height) "new"))
                       (vim.api.nvim_get_current_win))))]
-    (with-split-mins open!)))
+    (let [win (with-split-mins open!)]
+      (when (and win (vim.api.nvim_win_is_valid win))
+        (util.mark-transient-unnamed-buffer! (vim.api.nvim_win_get_buf win)))
+      win)))
 
 (fn wipe-replaced-split-buffer!
-  [win next-buf]
+  [old-buf]
   "Delete the temporary [No Name] split buffer once a real prompt buffer is attached."
-  (when (and win (vim.api.nvim_win_is_valid win))
-    (let [old-buf (vim.api.nvim_win_get_buf win)]
-      (when (and old-buf
-                 (~= old-buf next-buf)
-                 (vim.api.nvim_buf_is_valid old-buf))
-        (let [bo (. vim.bo old-buf)
-              listed? (. bo :buflisted)
-              lines (vim.api.nvim_buf_line_count old-buf)
-              name (vim.api.nvim_buf_get_name old-buf)]
-          (when (and (<= lines 1)
-                     (= (or name "") "")
-                     (not listed?))
-            (pcall vim.api.nvim_buf_delete old-buf {:force true})))))))
+  (when (and old-buf (vim.api.nvim_buf_is_valid old-buf))
+    (util.delete-transient-unnamed-buffer! old-buf)))
 
 (fn float-config
   [origin-win start-height]
@@ -130,9 +122,12 @@
         saved-view (and origin-win
                         (vim.api.nvim_win_is_valid origin-win)
                         (vim.api.nvim_win_call origin-win (fn [] (vim.fn.winsaveview))))
-        split-win (open-split-win! origin-win local-layout? height)]
-    (wipe-replaced-split-buffer! split-win buf)
+        split-win (open-split-win! origin-win local-layout? height)
+        old-buf (and split-win
+                     (vim.api.nvim_win_is_valid split-win)
+                     (vim.api.nvim_win_get_buf split-win))]
     (pcall vim.api.nvim_win_set_buf split-win buf)
+    (wipe-replaced-split-buffer! old-buf)
     (pcall vim.api.nvim_win_set_height split-win height)
     (prompt-window-opts! split-win)
     (when (and origin-win
