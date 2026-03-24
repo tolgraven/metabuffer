@@ -74,4 +74,31 @@ T['regular <Esc> hides Meta UI and remains resumable with jump forward'] = H.tim
   eq(state_after.selected, state_before.selected)
 end)
 
+T['Esc in normal-mode results buffer also hides Meta UI'] = H.timed_case(function()
+  H.open_meta_with_lines({
+    'alpha meta one',
+    'alpha meta two',
+    'beta other',
+    'gamma other',
+  })
+
+  H.type_prompt_text('meta')
+  H.wait_for(function() return H.session_hit_count() == 2 end, 3000)
+
+  H.type_prompt('<M-CR>')
+  H.wait_for(function()
+    local cur = H.session_main_cursor()
+    return type(cur) == 'table' and cur[1] > 0
+  end, 3000)
+
+  child.type_keys('<Esc>')
+
+  H.wait_for(function()
+    return H.session_ui_hidden()
+  end, 3000)
+
+  eq(H.session_ui_hidden(), true)
+  eq(child.lua_get('vim.api.nvim_get_current_buf() == _G.__meta_source_buf'), true)
+end)
+
 return T

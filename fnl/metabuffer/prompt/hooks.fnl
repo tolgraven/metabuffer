@@ -590,6 +590,8 @@
     (fn resolve-main-map-action
       [router session action arg]
       (if
+        (= action "cancel")
+        (fn [] (router.cancel session.prompt-buf))
         (= action "accept-main")
         (fn [] (router.accept-main session.prompt-buf))
         (= action "enter-edit-mode")

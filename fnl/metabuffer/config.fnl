@@ -51,7 +51,8 @@
     [["n" "i"] "<C-t>" "toggle-project-mode"]])
 
 (local default-main-keymaps
-  [ ["n" "!" "exclude-symbol-under-cursor"]
+  [ ["n" "<Esc>" "cancel"]
+    ["n" "!" "exclude-symbol-under-cursor"]
     ["n" "#" "insert-symbol-under-cursor-newline"]
     ["n" "<CR>" "accept-main"]
     ["n" "<LocalLeader>i" "toggle-info-file-entry-view"]
