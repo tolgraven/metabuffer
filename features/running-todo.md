@@ -51,3 +51,4 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 41 [] if changing lines starts lagging behind due to updating info and preview buffers, we should skip directly to the latest directly, "dropping frames" so to speak, and not building up a queue of movements. Bundle them together instead. However, we should also profile what exactly is taking long when changing lines. This entire thing also applies to page scrolling with <C-d> etc.
 - 42 [] <C-d> etc behaves weird at start and end. Should jump to first and last line respectively if that's closer than where it wants to go.
 - 43 [] look into using mini.nvim git stuff, might be faster and more complete than ours.
+- 44 [] linewrap setting should persist across sessions for preview window.
