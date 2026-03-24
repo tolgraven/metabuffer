@@ -1,6 +1,7 @@
 # metabuffer
 
 Interactive buffer/project line filtering for Neovim without leaving your current window, and allowing changes made to the filtered view (including over multiple files) to propagate back to origin. "The new argdo". But there are many more features planned, including for LLM workflows.
+Mostly vibecoded enhanced port of my old Python remote plugin [metabuffer.nvim](https://github.com/tolgraven/metabuffer.nvim) which started as a fork of [lambdalisue/nvim-lista](https://github.com/lambdalisue/nvim-lista) where I got the in-window idea I then kept exploring the possibilities of.
 
 ![metabuffer screenshot](./metabuffer.png)
 
