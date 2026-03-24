@@ -625,6 +625,56 @@ function M.session_info_snapshot()
   return vim.json.decode(encoded)
 end
 
+function M.start_info_blank_watch(duration_ms)
+  M.child.lua(string.format([[
+    (function()
+      _G.__meta_info_blank_watch_done = false
+      _G.__meta_info_blank_seen = false
+      local deadline = vim.loop.now() + %d
+      local function sample()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if s then
+          local info_win, info_buf = s['info-win'], s['info-buf']
+          if info_win and vim.api.nvim_win_is_valid(info_win) and info_buf and vim.api.nvim_buf_is_valid(info_buf) then
+            local view = vim.api.nvim_win_call(info_win, function()
+              return vim.fn.winsaveview()
+            end)
+            local topline = math.max(1, (view and view.topline) or 1)
+            local height = math.max(1, vim.api.nvim_win_get_height(info_win))
+            local bottom = math.min(vim.api.nvim_buf_line_count(info_buf), topline + height - 1)
+            if bottom < topline then
+              _G.__meta_info_blank_seen = true
+            else
+              local lines = vim.api.nvim_buf_get_lines(info_buf, topline - 1, bottom, false)
+              for _, line in ipairs(lines) do
+                if line == '' then
+                  _G.__meta_info_blank_seen = true
+                  break
+                end
+              end
+            end
+          end
+        end
+        if vim.loop.now() >= deadline then
+          _G.__meta_info_blank_watch_done = true
+        else
+          vim.defer_fn(sample, 10)
+        end
+      end
+      sample()
+    end)()
+  ]], duration_ms or 800))
+end
+
+function M.info_blank_watch_done()
+  return M.child.lua_get('return not not _G.__meta_info_blank_watch_done')
+end
+
+function M.info_blank_seen()
+  return M.child.lua_get('return not not _G.__meta_info_blank_seen')
+end
+
 function M.session_info_view()
   local encoded = M.child.lua_get([[
     (function()

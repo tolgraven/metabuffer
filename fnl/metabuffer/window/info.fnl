@@ -23,6 +23,19 @@
       (table.insert out (str x)))
     (table.concat out (or sep ""))))
 
+(fn indices-slice-sig
+  [idxs start-index stop-index]
+  "Return a stable signature string for a visible indices slice. Expected output: \"1,4,7\"."
+  (let [out []
+        idxs (or idxs [])
+        start-index (math.max 1 (or start-index 1))
+        stop-index (math.max 0 (or stop-index 0))]
+    (for [i start-index stop-index]
+      (let [v (. idxs i)]
+        (when-not (= v nil)
+          (table.insert out (tostring v)))))
+    (table.concat out ",")))
+
 (fn valid-info-win?
   [session]
   (and session
@@ -490,12 +503,19 @@
         (when (~= current needed)
           (let [bo (. vim.bo session.info-buf)]
             (set (. bo :modifiable) true))
-          (vim.api.nvim_buf_set_lines
-            session.info-buf
-            0
-            -1
-            false
-            (vim.tbl_map (fn [_] "") (vim.fn.range 1 needed)))
+          (if (< current needed)
+              (vim.api.nvim_buf_set_lines
+                session.info-buf
+                current
+                current
+                false
+                (vim.tbl_map (fn [_] "") (vim.fn.range (+ current 1) needed)))
+              (vim.api.nvim_buf_set_lines
+                session.info-buf
+                needed
+                -1
+                false
+                []))
           (let [bo (. vim.bo session.info-buf)]
             (set (. bo :modifiable) false))))))
 
@@ -744,8 +764,8 @@
                                       (~= render-stop rendered-stop))
             sig (join-str
                   "|"
-                  [idxs
-                   (# idxs)
+                  [(# idxs)
+                   (indices-slice-sig idxs render-start render-stop)
                    render-start
                    render-stop
                    (info-max-width-now session)
@@ -907,8 +927,8 @@
                   (let [idxs (or meta.buf.indices [])
                         sig (join-str
                               "|"
-                              [idxs
-                               (# idxs)
+                              [(# idxs)
+                               (indices-slice-sig idxs wanted-start wanted-stop)
                                wanted-start
                                wanted-stop
                                (info-max-width-now session)
