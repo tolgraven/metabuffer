@@ -1,6 +1,14 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 
+(fn nvim-exiting?
+  []
+  (let [v (and vim.v (. vim.v :exiting))]
+    (and (~= v nil)
+         (~= v vim.NIL)
+         (~= v 0)
+         (~= v ""))))
+
 (fn valid-buf?
   [x]
   (and (= (type x) "number")
@@ -30,19 +38,22 @@
 
 (fn set-local-opt
   [name value target]
-  (if (valid-buf? target)
-      (let [[ok _] [(pcall vim.api.nvim_set_option_value name value {:buf target})]]
-        (if (not ok)
+  (when-not (nvim-exiting?)
+    (let [[got? current] [(pcall get-local-opt name target)]]
+      (when-not (and got? (= current value))
+        (if (valid-buf? target)
+            (let [[ok _] [(pcall vim.api.nvim_set_option_value name value {:buf target})]]
+              (if (not ok)
+                  (if (valid-win? target)
+                      (let [[wok _w] [(pcall vim.api.nvim_set_option_value name value {:win target})]]
+                        (if (not wok)
+                            (pcall vim.api.nvim_set_option_value name value {:scope "local"})))
+                      (pcall vim.api.nvim_set_option_value name value {:scope "local"}))))
             (if (valid-win? target)
-                (let [[wok _w] [(pcall vim.api.nvim_set_option_value name value {:win target})]]
-                  (if (not wok)
+                (let [[ok _] [(pcall vim.api.nvim_set_option_value name value {:win target})]]
+                  (if (not ok)
                       (pcall vim.api.nvim_set_option_value name value {:scope "local"})))
-                (pcall vim.api.nvim_set_option_value name value {:scope "local"}))))
-      (if (valid-win? target)
-          (let [[ok _] [(pcall vim.api.nvim_set_option_value name value {:win target})]]
-            (if (not ok)
-                (pcall vim.api.nvim_set_option_value name value {:scope "local"})))
-          (pcall vim.api.nvim_set_option_value name value {:scope "local"}))))
+                (pcall vim.api.nvim_set_option_value name value {:scope "local"})))))))
 
 (fn M.new
   [nvim target model opts-from-model opts]

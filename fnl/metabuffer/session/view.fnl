@@ -1,4 +1,5 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local state (require :metabuffer.core.state))
 (local util (require :metabuffer.util))
 
@@ -49,7 +50,7 @@
           use-src-scroll? (and (not= (. src-view :topline) nil)
                                (or (not (and session session.project-mode))
                                    session.startup-initializing
-                                   (not (not session.project-mode-starting?))))
+                                   (clj.boolean session.project-mode-starting?)))
           base-view (if use-src-scroll? src-view current-view)
           base-lnum (or (. base-view :lnum) line)
           base-topline (or (. base-view :topline) base-lnum)

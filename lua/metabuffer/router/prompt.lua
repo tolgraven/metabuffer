@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/router/prompt.fnl
+local source_mod = require("metabuffer.source")
 local M = {}
 local function last_non_empty_trimmed(lines)
   local n = #(lines or {})
@@ -73,15 +74,16 @@ M["prompt-update-delay-ms"] = function(settings, query_mod, prompt_lines, sessio
   local short_extra_ms = (settings["prompt-short-query-extra-ms"] or {180, 120, 70})
   local size_thresholds = (settings["prompt-size-scale-thresholds"] or {2000, 10000, 50000})
   local size_extra = (settings["prompt-size-scale-extra"] or {0, 2, 6, 10})
+  local lines = prompt_lines(session)
+  local parsed0
+  if (session["project-mode"] or (session and query_mod["truthy?"](session["default-include-lgrep"]))) then
+    parsed0 = query_mod["parse-query-lines"](lines)
+  else
+    parsed0 = {lines = lines, ["lgrep-lines"] = {}}
+  end
+  local parsed = query_mod["apply-default-source"](parsed0, (session and query_mod["truthy?"](session["default-include-lgrep"])))
   local qlen
   do
-    local lines = prompt_lines(session)
-    local parsed
-    if session["project-mode"] then
-      parsed = query_mod["parse-query-lines"](lines)
-    else
-      parsed = {lines = lines}
-    end
     local last_active = last_non_empty_trimmed((parsed.lines or {}))
     qlen = #(last_active or "")
   end
@@ -119,16 +121,23 @@ M["prompt-update-delay-ms"] = function(settings, query_mod, prompt_lines, sessio
   else
     extra = 0
   end
+  local source_extra_ms = source_mod["query-source-debounce-ms"](settings, parsed)
+  local source_extra
+  if (source_extra_ms > 0) then
+    source_extra = math.max(0, (source_extra_ms - (base + short_extra + scale + extra)))
+  else
+    source_extra = 0
+  end
   local directive_extra
   if incomplete_directive_token_3f(prompt_lines(session)) then
-    directive_extra = math.max(0, ((settings["prompt-incomplete-directive-ms"] or 1000) - (base + short_extra + scale + extra)))
+    directive_extra = math.max(0, ((settings["prompt-incomplete-directive-ms"] or 1000) - (base + short_extra + scale + extra + source_extra)))
   else
     directive_extra = 0
   end
-  return (base + short_extra + scale + extra + directive_extra)
+  return (base + short_extra + scale + extra + source_extra + directive_extra)
 end
 M["prompt-has-active-query?"] = function(query_mod, prompt_lines, session)
-  local parsed = query_mod["parse-query-lines"](prompt_lines(session))
+  local parsed = query_mod["apply-default-source"](query_mod["parse-query-lines"](prompt_lines(session)), (session and query_mod["truthy?"](session["default-include-lgrep"])))
   return any_active_line_3f((parsed.lines or {}))
 end
 M["cancel-prompt-update!"] = function(session)
@@ -196,7 +205,7 @@ M["schedule-prompt-update!"] = function(ctx, session, wait_ms)
     local token = session["prompt-update-token"]
     local timer = vim.loop.new_timer()
     session["prompt-update-timer"] = timer
-    local function _24_()
+    local function _25_()
       if (session["prompt-update-timer"] and (session["prompt-update-timer"] == timer)) then
         cancel_prompt_update_21(session)
       else
@@ -216,7 +225,7 @@ M["schedule-prompt-update!"] = function(ctx, session, wait_ms)
         return nil
       end
     end
-    return timer.start(timer, math.max(0, wait_ms), 0, vim.schedule_wrap(_24_))
+    return timer.start(timer, math.max(0, wait_ms), 0, vim.schedule_wrap(_25_))
   else
     return nil
   end
@@ -227,9 +236,9 @@ end
 M["prompt-insert-at-cursor!"] = function(active_by_prompt, prompt_buf, text)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"]) and (type(text) == "string") and (text ~= "")) then
-    local _let_29_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
-    local row = _let_29_[1]
-    local col = _let_29_[2]
+    local _let_30_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
+    local row = _let_30_[1]
+    local col = _let_30_[2]
     local row0 = math.max(0, (row - 1))
     local chunks = vim.split(text, "\n", {plain = true})
     local last_line = chunks[#chunks]
@@ -248,9 +257,9 @@ M["prompt-insert-at-cursor!"] = function(active_by_prompt, prompt_buf, text)
 end
 local function prompt_row_col(session)
   if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_32_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
-    local row = _let_32_[1]
-    local col = _let_32_[2]
+    local _let_33_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
+    local row = _let_33_[1]
+    local col = _let_33_[2]
     return {row = math.max(1, row), row0 = math.max(0, (row - 1)), col = math.max(0, col)}
   else
     return {row = 1, row0 = 0, col = 0}
@@ -263,8 +272,8 @@ end
 M["prompt-home!"] = function(active_by_prompt, prompt_buf)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_34_ = prompt_row_col(session)
-    local row = _let_34_.row
+    local _let_35_ = prompt_row_col(session)
+    local row = _let_35_.row
     return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, 0})
   else
     return nil
@@ -273,9 +282,9 @@ end
 M["prompt-end!"] = function(active_by_prompt, prompt_buf)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_36_ = prompt_row_col(session)
-    local row = _let_36_.row
-    local row0 = _let_36_.row0
+    local _let_37_ = prompt_row_col(session)
+    local row = _let_37_.row
+    local row0 = _let_37_.row0
     local line = prompt_line_text(session, row0)
     return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, #line})
   else
@@ -285,10 +294,10 @@ end
 M["prompt-kill-backward!"] = function(active_by_prompt, prompt_buf)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_38_ = prompt_row_col(session)
-    local row = _let_38_.row
-    local row0 = _let_38_.row0
-    local col = _let_38_.col
+    local _let_39_ = prompt_row_col(session)
+    local row = _let_39_.row
+    local row0 = _let_39_.row0
+    local col = _let_39_.col
     if (col > 0) then
       local line = prompt_line_text(session, row0)
       local killed = string.sub(line, 1, col)
@@ -305,10 +314,10 @@ end
 M["prompt-kill-forward!"] = function(active_by_prompt, prompt_buf)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_41_ = prompt_row_col(session)
-    local row = _let_41_.row
-    local row0 = _let_41_.row0
-    local col = _let_41_.col
+    local _let_42_ = prompt_row_col(session)
+    local row = _let_42_.row
+    local row0 = _let_42_.row0
+    local col = _let_42_.col
     local line = prompt_line_text(session, row0)
     local len = #line
     if (col < len) then
@@ -422,9 +431,9 @@ end
 M["negate-current-token!"] = function(active_by_prompt, prompt_buf)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-    local _let_56_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
-    local row = _let_56_[1]
-    local col = _let_56_[2]
+    local _let_57_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
+    local row = _let_57_[1]
+    local col = _let_57_[2]
     local row0 = math.max(0, (row - 1))
     local line = (vim.api.nvim_buf_get_lines(session["prompt-buf"], row0, (row0 + 1), false)[1] or "")
     local val_110_auto = find_token_span(line, col)
@@ -443,13 +452,13 @@ M["negate-current-token!"] = function(active_by_prompt, prompt_buf)
       local delta = (#next_token - #token)
       local s0 = (s - 1)
       vim.api.nvim_buf_set_text(session["prompt-buf"], row0, s0, row0, e, {next_token})
-      local _58_
+      local _59_
       if (col >= s0) then
-        _58_ = delta
+        _59_ = delta
       else
-        _58_ = 0
+        _59_ = 0
       end
-      return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, math.max(0, (col + _58_))})
+      return pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, math.max(0, (col + _59_))})
     else
       return nil
     end

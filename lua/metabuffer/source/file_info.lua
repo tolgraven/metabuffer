@@ -1,5 +1,7 @@
 -- [nfnl] fnl/metabuffer/source/file_info.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local author_hl = require("metabuffer.author_highlight")
+local transform_mod = require("metabuffer.transform")
 local M = {}
 local line_meta_key = nil
 local line_meta_cache_hit_3f = nil
@@ -7,18 +9,19 @@ local normalized_line_numbers = nil
 local missing_line_numbers = nil
 local clear_pending_line_meta = nil
 local parse_range_blame_stdout = nil
-M["file-first-line"] = function(session, read_file_lines_cached, path)
+M["file-first-line"] = function(session, read_file_lines_cached, read_file_view_cached, path)
   local cache = (session["info-file-head-cache"] or {})
   local mtime = vim.fn.getftime(path)
-  local include_binary = not not (session and session["effective-include-binary"])
-  local include_hex = not not (session and session["effective-include-hex"])
+  local include_binary = clj.boolean((session and session["effective-include-binary"]))
+  local transform_sig = transform_mod.signature(((session and session["effective-transforms"]) or {}))
   local found = cache[path]
-  if ((type(found) == "table") and (found.mtime == mtime) and (found["include-binary"] == include_binary) and (found["include-hex"] == include_hex) and (type(found.line) == "string")) then
+  if ((type(found) == "table") and (found.mtime == mtime) and (found["include-binary"] == include_binary) and (found["transform-sig"] == transform_sig) and (type(found.line) == "string")) then
     return found.line
   else
-    local line0 = ((read_file_lines_cached(path, {["include-binary"] = include_binary, ["hex-view"] = include_hex}) or {})[1] or "")
+    local view = ((read_file_view_cached and read_file_view_cached(path, {["include-binary"] = include_binary, transforms = ((session and session["effective-transforms"]) or (session and session["transform-flags"]) or {})})) or {lines = (read_file_lines_cached(path, {["include-binary"] = include_binary, ["hex-view"] = (session and session["effective-include-hex"])}) or {})})
+    local line0 = ((view.lines or {})[1] or "")
     local line = tostring(line0)
-    cache[path] = {mtime = mtime, ["include-binary"] = include_binary, ["include-hex"] = include_hex, line = line}
+    cache[path] = {mtime = mtime, ["include-binary"] = include_binary, ["transform-sig"] = transform_sig, line = line}
     session["info-file-head-cache"] = cache
     return line
   end

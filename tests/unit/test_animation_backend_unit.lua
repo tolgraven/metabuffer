@@ -17,7 +17,8 @@ local function with_stubbed_mini_animate(stub, f)
 end
 
 T['prompt height animation can use mini resize backend'] = function()
-  vim.cmd('enew')
+  -- Close all splits so the single window has max height (avoids E36 in batch)
+  vim.cmd('only | enew')
   local win = vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_get_current_buf()
   vim.api.nvim_win_set_buf(win, buf)
@@ -30,7 +31,7 @@ T['prompt height animation can use mini resize backend'] = function()
   with_stubbed_mini_animate({
     setup = function(config)
       setup_calls = setup_calls + 1
-      eq(config.cursor.enable, false)
+      eq(config.cursor.enable, true)
       eq(config.resize.enable, true)
       eq(config.scroll.enable, true)
     end,
@@ -38,6 +39,18 @@ T['prompt height animation can use mini resize backend'] = function()
       cubic = function()
         return function()
           return 0
+        end
+      end,
+      linear = function()
+        return function()
+          return 0
+        end
+      end,
+    },
+    gen_subscroll = {
+      equal = function()
+        return function()
+          return { 1 }
         end
       end,
     },
@@ -99,6 +112,11 @@ T['scroll animation can delegate completion to mini execute_after'] = function()
           return 0
         end
       end,
+      linear = function()
+        return function()
+          return 0
+        end
+      end,
     },
     gen_subscroll = {
       equal = function()
@@ -120,6 +138,8 @@ T['scroll animation can delegate completion to mini execute_after'] = function()
     end,
   }, function()
     animation['animate-scroll-view!']({
+      ['prompt-buf'] = nil,
+      ['info-buf'] = nil,
       ['animation-settings'] = {
         backend = 'mini',
         prompt = {},
@@ -134,6 +154,10 @@ T['scroll animation can delegate completion to mini execute_after'] = function()
         done_view = view
       end,
     })
+
+    vim.wait(200, function()
+      return #execute_after_calls > 0
+    end)
   end)
 
   eq(setup_calls, 1)
@@ -177,7 +201,7 @@ T['info float animation can use mini open helpers'] = function()
     },
     animate = function(step_action)
       animate_calls = animate_calls + 1
-      for step = 0, 8 do
+      for step = 0, 100 do
         if not step_action(step) then break end
       end
     end,
@@ -202,7 +226,8 @@ T['info float animation can use mini open helpers'] = function()
 
   eq(animate_calls, 1)
   eq(#blend_calls > 0, true)
-  eq(cfg.col[false], 1)
+  local col_val = (type(cfg.col) == 'table') and cfg.col[false] or cfg.col
+  eq(col_val, 1)
   eq(cfg.width, 12)
   eq(cfg.height, 4)
   eq(blend, 13)

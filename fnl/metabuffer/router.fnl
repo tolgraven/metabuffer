@@ -84,6 +84,8 @@
      :selected-ref router_util_mod.selected-ref
      :read-file-lines-cached (fn [path]
                                (router_util_mod.read-file-lines-cached M path))
+     :read-file-view-cached (fn [path opts]
+                              (router_util_mod.read-file-view-cached M path opts))
      :is-active-session (fn [session]
                           (and session
                                session.prompt-buf
@@ -111,7 +113,9 @@
                                   session.animate-enter?))
            :info-fade-ms M.ui-animation-info-ms
            :read-file-lines-cached (fn [path]
-                                     (router_util_mod.read-file-lines-cached M path))})]
+                                     (router_util_mod.read-file-lines-cached M path))
+           :read-file-view-cached (fn [path opts]
+                                    (router_util_mod.read-file-view-cached M path opts))})]
     (if (= (type candidate) "function")
         {:update! candidate
          :close-window! (fn [_] nil)}
@@ -151,6 +155,8 @@
   (context_window_mod.new
     {:read-file-lines-cached (fn [path opts]
                                (router_util_mod.read-file-lines-cached M path opts))
+     :read-file-view-cached (fn [path opts]
+                              (router_util_mod.read-file-view-cached M path opts))
      :height-fn (fn [_session] (or M.context-height 14))
      :around-lines M.context-around-lines
      :max-blocks M.context-max-blocks}))
@@ -172,6 +178,8 @@
                      (router_util_mod.binary-file? M path))
      :read-file-lines-cached (fn [path opts]
                                (router_util_mod.read-file-lines-cached M path opts))
+     :read-file-view-cached (fn [path opts]
+                              (router_util_mod.read-file-view-cached M path opts))
      :session-active? (fn [session]
                         (router_util_mod.session-active? M.active-by-prompt session))
      :lazy-streaming-allowed? (fn [session]

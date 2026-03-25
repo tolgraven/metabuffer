@@ -5,6 +5,8 @@
                  : when-not
                  : cond}
   :io.gitlab.andreyorst.cljlib.core)
+(local directive-mod (require :metabuffer.query.directive))
+(local source-mod (require :metabuffer.source))
 (local M {})
 
 (fn M.truthy?
@@ -20,54 +22,46 @@
       "#")
     "#"))
 
+(fn tokenize-line
+  [line]
+  "Split one prompt line into tokens while preserving quoted spans. Expected output: [\"#lg\" \"\\\"setup path\\\"\" \"rest\"]."
+  (let [s (or line "")
+        n (# s)
+        out []
+        cur0 []
+        quote-char0 nil]
+    (var cur cur0)
+    (var quote-char quote-char0)
+    (local flush!
+      (fn []
+        (when (> (# cur) 0)
+          (table.insert out (table.concat cur))
+          (set cur []))))
+    (var i 1)
+    (while (<= i n)
+      (let [ch (string.sub s i i)]
+        (if quote-char
+            (do
+              (table.insert cur ch)
+              (when (= ch quote-char)
+                (set quote-char nil)))
+            (if (or (= ch "\"") (= ch "'"))
+                (do
+                  (table.insert cur ch)
+                  (set quote-char ch))
+                (if (string.match ch "%s")
+                    (flush!)
+                    (table.insert cur ch)))))
+      (set i (+ i 1)))
+    (flush!)
+    out))
+
 (fn parse-option-token
   [tok]
   (let [prefix (option-prefix)
-        expansion-mode (or (string.match tok "^#exp:(.+)$")
-                           (string.match tok (.. "^" (vim.pesc prefix) "exp:(.+)$")))
-        hidden-on (or (= tok "#hidden") (= tok "+hidden") (= tok "#+hidden") (= tok (.. prefix "hidden")))
-        hidden-off (or (= tok "#nohidden") (= tok "-hidden") (= tok "#-hidden") (= tok (.. prefix "nohidden")))
-        ignored-on (or (= tok "#ignored") (= tok "+ignored") (= tok "#+ignored") (= tok (.. prefix "ignored")))
-        ignored-off (or (= tok "#noignored") (= tok "-ignored") (= tok "#-ignored") (= tok (.. prefix "noignored")))
-        deps-on (or (= tok "#deps") (= tok "+deps") (= tok "#+deps") (= tok (.. prefix "deps")))
-        deps-off (or (= tok "#nodeps") (= tok "-deps") (= tok "#-deps") (= tok (.. prefix "nodeps")))
-        binary-on (or (= tok "#binary") (= tok "+binary") (= tok "#+binary") (= tok (.. prefix "binary")))
-        binary-off (or (= tok "#nobinary") (= tok "-binary") (= tok "#-binary") (= tok (.. prefix "nobinary")))
-        hex-on (or (= tok "#hex") (= tok "+hex") (= tok "#+hex") (= tok (.. prefix "hex")))
-        hex-off (or (= tok "#nohex") (= tok "-hex") (= tok "#-hex") (= tok (.. prefix "nohex")))
-        prefilter-off (or (= tok "#escape") (= tok "+escape") (= tok "#+escape") (= tok (.. prefix "escape")) (= tok "#noprefilter") (= tok "-prefilter") (= tok "#-prefilter") (= tok (.. prefix "noprefilter")))
-        prefilter-on (or (= tok "#prefilter") (= tok "+prefilter") (= tok "#+prefilter") (= tok (.. prefix "prefilter")))
-        lazy-off (or (= tok "#nolazy") (= tok "-lazy") (= tok "#-lazy") (= tok (.. prefix "nolazy")))
-        lazy-on (or (= tok "#lazy") (= tok "+lazy") (= tok "#+lazy") (= tok (.. prefix "lazy")))
-        files-off (or (= tok "#nofile") (= tok "-file") (= tok "#-file") (= tok (.. prefix "nofile")))
-        files-on (or (= tok "#file") (= tok "+file") (= tok "#+file") (= tok (.. prefix "file")))
-        history-merge? (= tok "#history")
-        save-tag (or (string.match tok "^#save:(.+)$")
-                     (string.match tok (.. "^" (vim.pesc prefix) "save:(.+)$")))
-        saved-tag (string.match tok "^##(.+)$")
-        saved-browser? (= tok "##")]
-    (cond
-      hidden-on [:hidden true]
-      hidden-off [:hidden false]
-      ignored-on [:ignored true]
-      ignored-off [:ignored false]
-      deps-on [:deps true]
-      deps-off [:deps false]
-      binary-on [:binary true]
-      binary-off [:binary false]
-      hex-on [:hex true]
-      hex-off [:hex false]
-      prefilter-off [:prefilter false]
-      prefilter-on [:prefilter true]
-      lazy-off [:lazy false]
-      lazy-on [:lazy true]
-      files-off [:files false]
-      files-on [:files true]
-      (and expansion-mode (~= (vim.trim expansion-mode) "")) [:expansion (vim.trim expansion-mode)]
-      history-merge? [:history true]
-      save-tag [:save-tag save-tag]
-      (and saved-tag (~= (vim.trim saved-tag) "")) [:saved-tag (vim.trim saved-tag)]
-      saved-browser? [:saved-browser true])))
+        parsed (directive-mod.parse-token prefix tok)]
+    (when parsed
+      [(. parsed :key) (. parsed :value) (. parsed :await)])))
 
 (fn escaped-prefix-token
   [tok]
@@ -105,45 +99,36 @@
           t))
       t)))
 
-(fn file-query-shortcut-token
-  [tok]
-  (let [t (or tok "")]
-    (if (= t "./")
-      :await
-      (string.match t "^%./(.+)$"))))
+(fn apply-awaited-directive
+  [state tok]
+  "Consume one awaited directive argument token. Expected output: updated parser state."
+  (let [directive (. state :await-directive)
+        arg (unquote-token tok)]
+    (source-mod.apply-awaited-directive state directive arg)))
 
 (fn parse-parts
   [parts idx state]
   (if (> idx (# parts))
     state
     (let [tok (. parts idx)]
-      (if-let [escaped (escaped-prefix-token tok)]
+        (if-let [escaped (escaped-prefix-token tok)]
         (let [next (vim.deepcopy state)]
           (table.insert (. next :keep) escaped)
           (parse-parts parts (+ idx 1) next))
-        (if-let [shortcut (file-query-shortcut-token tok)]
-          (let [next (assoc-option state :files true)]
-            (if (= shortcut :await)
-              (parse-parts parts (+ idx 1) (assoc-option next :file-await-token true))
-              (let [next2 (vim.deepcopy next)]
-                (table.insert (. next2 :file-lines) (unquote-token shortcut))
-                (set (. next2 :file-await-token) false)
-                (parse-parts parts (+ idx 1) next2))))
+        (if-let [shortcut (source-mod.parse-bare-token state tok unquote-token)]
+          (parse-parts parts (+ idx 1) shortcut)
           (if-let [parsed (parse-option-token tok)]
-            (let [next (assoc-option state (. parsed 1) (. parsed 2))]
-              (if (= (. parsed 1) :files)
-                (parse-parts parts (+ idx 1) (assoc-option next :file-await-token true))
-                (parse-parts parts (+ idx 1) next)))
-            (if (prefix-directive-token? tok)
+            (let [next (source-mod.apply-parsed-directive state (. parsed 1) (. parsed 2) (. parsed 3))]
+              (parse-parts parts (+ idx 1) next))
+              (if (prefix-directive-token? tok)
               (parse-parts parts (+ idx 1) state)
-              (if (and (. state :file-await-token) (~= (vim.trim tok) ""))
-                (let [next (vim.deepcopy state)]
-                  (table.insert (. next :file-lines) (unquote-token tok))
-                  (set (. next :file-await-token) false)
-                  (parse-parts parts (+ idx 1) next))
-                (let [next (vim.deepcopy state)]
-                  (table.insert (. next :keep) tok)
-                  (parse-parts parts (+ idx 1) next))))))))))
+              (if (and (. state :await-directive) (~= (vim.trim tok) ""))
+                  (parse-parts parts (+ idx 1) (apply-awaited-directive state tok))
+                  (if-let [next (source-mod.consume-pending-token state tok unquote-token)]
+                      (parse-parts parts (+ idx 1) next)
+                      (let [next (vim.deepcopy state)]
+                        (table.insert (. next :keep) tok)
+                        (parse-parts parts (+ idx 1) next)))))))))))
 
 (fn parse-line
   [acc line]
@@ -151,13 +136,21 @@
     (if (= trimmed "")
       (let [next (vim.deepcopy acc)]
         (table.insert (. next :lines) "")
+        (table.insert (. next :source-lines) nil)
         next)
-      (let [parts (vim.split trimmed "%s+" {:trimempty true})
-            state (parse-parts parts 1 (assoc-option acc :keep []))
+      (let [parts (tokenize-line trimmed)
+            state (parse-parts
+                    parts
+                    1
+                    (-> (assoc-option acc :keep [])
+                        (assoc-option :line-source nil)
+                        (assoc-option :await-directive nil)))
             next (vim.deepcopy state)]
         (table.insert (. next :lines) (table.concat (. state :keep) " "))
+        (table.insert (. next :source-lines) (. state :line-source))
         (set (. next :keep) nil)
-        (set (. next :file-await-token) false)
+        (set (. next :line-source) nil)
+        (set (. next :await-directive) nil)
         next))))
 
 (fn parse-lines
@@ -169,71 +162,43 @@
 (fn M.parse-query-lines
   [lines]
   "Public API: M.parse-query-lines."
-  (let [init {:lines []
-              :hidden nil
-              :ignored nil
-              :deps nil
-              :binary nil
-              :hex nil
-              :prefilter nil
-              :lazy nil
-              :expansion nil
-              :files nil
-              :history nil
-              :save-tag nil
-              :saved-tag nil
-              :saved-browser nil
-              :file-lines []
-              :file-await-token false}]
+  (let [init (vim.tbl_extend "force"
+                             {:lines []}
+                             (directive-mod.query-state-init)
+                             (source-mod.query-state-init))]
     (let [parsed (parse-lines (or lines []) 1 init)]
-      (set (. parsed :include-hidden) (. parsed :hidden))
-      (set (. parsed :include-ignored) (. parsed :ignored))
-      (set (. parsed :include-deps) (. parsed :deps))
-      (set (. parsed :include-binary) (. parsed :binary))
-      (set (. parsed :include-hex) (. parsed :hex))
-      (set (. parsed :include-files) (. parsed :files))
-      parsed)))
+      (directive-mod.finalize-parsed! parsed)
+      (source-mod.finalize-parsed! parsed))))
 
 (fn M.parse-query-text
   [query]
   "Public API: M.parse-query-text."
   (if (and (= (type query) "string") (~= query ""))
     (let [lines (vim.split query "\n" {:plain true})
-          parsed (M.parse-query-lines lines)]
-      {:query (table.concat (. parsed :lines) "\n")
-       :lines (or (. parsed :lines) [])
-       :include-hidden (. parsed :hidden)
-       :include-ignored (. parsed :ignored)
-       :include-deps (. parsed :deps)
-       :include-binary (. parsed :binary)
-       :include-hex (. parsed :hex)
-       :include-files (. parsed :files)
-       :prefilter (. parsed :prefilter)
-       :lazy (. parsed :lazy)
-       :expansion (. parsed :expansion)
-       :file-lines (or (. parsed :file-lines) [])
-       :history (. parsed :history)
-       :save-tag (. parsed :save-tag)
-       :saved-tag (. parsed :saved-tag)
-       :saved-browser (. parsed :saved-browser)})
-    {:query query
-     :lines (if (and (= (type query) "string") (~= query ""))
-                (vim.split query "\n" {:plain true})
-                [])
-     :include-hidden nil
-     :include-ignored nil
-     :include-deps nil
-     :include-binary nil
-     :include-hex nil
-     :include-files nil
-     :prefilter nil
-     :lazy nil
-     :expansion nil
-     :file-lines []
-     :history nil
-     :save-tag nil
-     :saved-tag nil
-     :saved-browser nil}))
+          parsed (M.parse-query-lines lines)
+          out {:query (table.concat (. parsed :lines) "\n")
+               :lines (or (. parsed :lines) [])
+               :source-lines (or (. parsed :source-lines) [])}]
+      (vim.tbl_extend
+        "force"
+        (vim.tbl_extend "force" out (directive-mod.query-compat-view parsed))
+        (source-mod.query-compat-view parsed)))
+    (let [out {:query query
+               :lines (if (and (= (type query) "string") (~= query ""))
+                          (vim.split query "\n" {:plain true})
+                          [])
+               :source-lines []}]
+      (vim.tbl_extend
+        "force"
+        (vim.tbl_extend "force" out (directive-mod.empty-query-compat-view))
+        (source-mod.empty-query-compat-view)))))
+
+(fn M.apply-default-source
+  [parsed enabled?]
+  "Promote the first token on each non-empty line into the default query source when enabled. Expected output: parsed query table."
+  (let [next (source-mod.apply-default-query-source parsed enabled? tokenize-line)]
+    (set (. next :query) (table.concat (or (. next :lines) []) "\n"))
+    next))
 
 (fn lines-has-active?
   [lines idx]
@@ -246,5 +211,7 @@
   [lines]
   "Public API: M.query-lines-has-active?."
   (lines-has-active? (or lines []) 1))
+
+(set M.tokenize-line tokenize-line)
 
 M

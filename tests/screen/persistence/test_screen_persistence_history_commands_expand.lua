@@ -20,7 +20,7 @@ T['Meta !! and Meta !$ expand from previous invocation history'] = H.timed_case(
   H.wait_for(function() return H.session_active() end)
   H.wait_for(function() return H.session_query_text() == 'alpha meta' end)
   H.close_meta_prompt()
-  H.wait_for(function() return not H.session_active() end)
+  H.wait_for(H.session_not_visible)
 
   child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
   child.cmd('Meta !$')

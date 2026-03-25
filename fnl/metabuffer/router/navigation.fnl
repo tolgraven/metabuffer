@@ -1,4 +1,5 @@
 (import-macros {: when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 
 (local M {})
 
@@ -66,7 +67,7 @@
         (vim.schedule
           (fn []
             (set session.selection-refresh-pending false)
-            (let [force-refresh? (not (not session.selection-refresh-force?))]
+            (let [force-refresh? (clj.boolean session.selection-refresh-force?)]
               (set session.selection-refresh-force? false)
               (when force-refresh?
                 (schedule-source-syntax-refresh! deps session))

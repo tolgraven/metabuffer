@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/router/history.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local function project_setting_token(name, enabled)
   local _1_
@@ -220,7 +221,7 @@ M.new = function(opts)
         local tag = (item.tag or "")
         local prompt = normalize_history_prompt((item.prompt or ""))
         local hay = string.lower((tag .. " " .. prompt))
-        if ((filter0 == "") or not not string.find(hay, filter0, 1, true)) then
+        if ((filter0 == "") or (nil ~= string.find(hay, filter0, 1, true))) then
           table.insert(out, {label = ("##" .. tag .. "  " .. prompt), prompt = prompt, tag = tag})
         else
         end
@@ -230,7 +231,7 @@ M.new = function(opts)
       for i = #h, 1, -1 do
         local entry = normalize_history_prompt((h[i] or ""))
         local hay = string.lower(entry)
-        if ((filter0 == "") or not not string.find(hay, filter0, 1, true)) then
+        if ((filter0 == "") or (nil ~= string.find(hay, filter0, 1, true))) then
           table.insert(out, {label = entry, prompt = entry})
         else
         end

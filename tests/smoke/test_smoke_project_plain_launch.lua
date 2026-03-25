@@ -46,7 +46,7 @@ T['plain :Meta! launches project session with prompt and info window'] = functio
   local s = router['active-by-source'][_G.__meta_source_buf]
   eq(not not s, true)
   eq(s['project-mode'], true)
-  eq(s['ui-hidden'], false)
+  eq(not s['ui-hidden'], true)
   eq(vim.api.nvim_win_is_valid(s['prompt-win']), true)
   eq(vim.api.nvim_buf_is_valid(s['info-buf']), true)
   eq(vim.api.nvim_win_is_valid(s['preview-win']), true)

@@ -4,7 +4,19 @@
                  : if-some
                  : when-not}
   :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
+(var mini-icons-cache nil)
+(var mini-icons-tried? false)
+
+(fn ensure-mini-icons
+  []
+  (when-not mini-icons-tried?
+    (set mini-icons-tried? true)
+    (let [[ok mod] [(pcall require :mini.icons)]]
+      (when (and ok mod)
+        (set mini-icons-cache mod))))
+  (or _G.MiniIcons mini-icons-cache))
 
 (fn M.split-input
   [text]
@@ -58,7 +70,7 @@
               (set (. bo :buflisted) false)
               (set (. bo :bufhidden) "wipe")
               (set (. bo :swapfile) false)
-              (not (not (pcall vim.api.nvim_buf_delete buf {:force true}))))
+              (let [(ok) (pcall vim.api.nvim_buf_delete buf {:force true})] ok))
             false))))
 
 (fn M.mark-transient-unnamed-buffer!
@@ -157,10 +169,9 @@
   [path fallback-hl]
   "Public API: M.devicon-info."
   (let [file (vim.fn.fnamemodify (or path "") ":t")
-        ext (M.ext-from-path path)
-        [ok-web web] [(pcall require :nvim-web-devicons)]]
-    (if (and ok-web web)
-        (let [[ok-i icon icon-hl] [(pcall web.get_icon file ext {:default true})]
+        mini (ensure-mini-icons)]
+    (if (and mini (= (type (. mini :get)) "function"))
+        (let [[ok-i icon icon-hl] [(pcall (. mini :get) "file" file)]
               next-hl (if (and ok-i (= (type icon-hl) "string") (~= icon-hl ""))
                           icon-hl
                           fallback-hl)]
@@ -168,16 +179,65 @@
            :icon-hl next-hl
            :ext-hl next-hl
            :file-hl fallback-hl})
-        (if (= 1 (vim.fn.exists "*WebDevIconsGetFileTypeSymbol"))
-            (let [icon (vim.fn.WebDevIconsGetFileTypeSymbol file)]
-              {:icon (if (and (= (type icon) "string") (~= icon "")) icon "")
-               :icon-hl fallback-hl
-               :ext-hl fallback-hl
-               :file-hl fallback-hl})
-            {:icon ""
-             :icon-hl fallback-hl
-             :ext-hl fallback-hl
-             :file-hl fallback-hl}))))
+        {:icon ""
+         :icon-hl fallback-hl
+         :ext-hl fallback-hl
+         :file-hl fallback-hl})))
+
+(fn first-visible-glyph
+  [text]
+  (let [s (or text "")]
+    (if-let [pos (string.find s "%S")]
+      (vim.fn.strcharpart s (- pos 1) 1)
+      "")))
+
+(fn marker-sign
+  [glyph hl]
+  (if (~= (or glyph "") "")
+      {:text glyph
+       :hl hl
+       :highlights [{:start 0 :end (# glyph) :hl hl}]}
+      {:text "  " :hl "LineNr"}))
+
+(fn M.icon-sign
+  [spec]
+  "Return a sign object from an icon spec. Expected output: {:text \"󰈔\" :hl \"MetaSourceFile\"}."
+  (let [marker (or spec {})
+        mini (ensure-mini-icons)
+        icon-result (if (and mini
+                             (= (type (. mini :get)) "function")
+                             (~= (or (. marker :category) "") ""))
+                        [(pcall (. mini :get) (. marker :category) (. marker :name))]
+                        [false nil nil])
+        [ok glyph hl] icon-result
+        text (if (and ok (= (type glyph) "string") (~= glyph ""))
+                 glyph
+                 (. marker :fallback))
+        sign-hl (if (and ok (= (type hl) "string") (~= hl ""))
+                    hl
+                    (. marker :hl))]
+    (marker-sign text sign-hl)))
+
+(fn M.combine-signs
+  [primary secondary]
+  "Merge two sign descriptors into one 2-cell sign. Expected output: {:text \"󰈔✹\" :highlights [...]}."
+  (let [left (first-visible-glyph (and primary primary.text))
+        right (first-visible-glyph (and secondary secondary.text))
+        left-hl (or (and primary primary.hl) "LineNr")
+        right-hl (or (and secondary secondary.hl) "LineNr")
+        text (if (~= left "")
+                 (if (or (= right "") (>= (vim.fn.strdisplaywidth left) 2))
+                     left
+                     (.. left right))
+                 (if (~= right "") right "  "))
+        highs []]
+    (when (~= left "")
+      (table.insert highs {:start 0 :end (# left) :hl left-hl}))
+    (when (and (~= right "") (~= text left))
+      (table.insert highs {:start (# left) :end (+ (# left) (# right)) :hl right-hl}))
+    {:text text
+     :hl (if (~= left "") left-hl right-hl)
+     :highlights highs}))
 
 (fn M.buf-lines
   [buf]

@@ -8,9 +8,33 @@ T['reopening hidden project Meta keeps preview synced with restored selection'] 
   H.open_project_meta_in_dir(root, 'main.txt')
 
   H.type_prompt_text('meta')
-  H.wait_for(function() return H.session_hit_count() > 2 end, 6000)
+  H.wait_for(function() return H.session_hit_count() > 3 end, 6000)
+  local source_before = child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta) then return nil end
+      local src_idx = (s.meta.buf.indices or {})[(s.meta.selected_index or 0) + 1]
+      local ref = src_idx and (s.meta.buf['source-refs'] or {})[src_idx] or nil
+      return ref and (ref.path or '') or ''
+    end)()
+  ]])
   H.type_prompt('<C-n>')
   H.type_prompt('<C-n>')
+
+  H.wait_for(function()
+    local path_now = child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not (s and s.meta) then return nil end
+        local src_idx = (s.meta.buf.indices or {})[(s.meta.selected_index or 0) + 1]
+        local ref = src_idx and (s.meta.buf['source-refs'] or {})[src_idx] or nil
+        return ref and (ref.path or '') or ''
+      end)()
+    ]])
+    return type(path_now) == 'string' and path_now ~= '' and path_now ~= source_before
+  end, 3000)
 
   local before = child.lua_get([[
     (function()

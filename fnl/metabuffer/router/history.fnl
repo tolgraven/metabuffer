@@ -1,4 +1,5 @@
 (import-macros {: when-let : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 
 (local M {})
 
@@ -177,7 +178,7 @@
                     prompt (normalize-history-prompt (or (. item :prompt) ""))
                     hay (string.lower (.. tag " " prompt))]
                 (when (or (= filter0 "")
-                          (not (not (string.find hay filter0 1 true))))
+                          (not= nil (string.find hay filter0 1 true)))
                   (table.insert out {:label (.. "##" tag "  " prompt)
                                      :prompt prompt
                                      :tag tag}))))
@@ -186,7 +187,7 @@
                 (let [entry (normalize-history-prompt (or (. h i) ""))
                       hay (string.lower entry)]
                   (when (or (= filter0 "")
-                            (not (not (string.find hay filter0 1 true))))
+                            (not= nil (string.find hay filter0 1 true)))
                     (table.insert out {:label entry :prompt entry}))))))
         out))
 

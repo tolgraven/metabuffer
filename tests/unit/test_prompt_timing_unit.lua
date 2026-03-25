@@ -19,6 +19,8 @@ T['prompt-update-delay-ms scales by query length and pool size'] = function()
     ['parse-query-lines'] = function(lines)
       return { lines = lines }
     end,
+    ['apply-default-source'] = function(parsed) return parsed end,
+    ['truthy?'] = function(v) return v == true or v == 1 end,
   }
   local prompt_lines = function()
     return { 'abc' }
@@ -48,6 +50,8 @@ T['prompt-update-delay-ms adds project streaming and size penalties'] = function
     ['parse-query-lines'] = function(lines)
       return { lines = lines }
     end,
+    ['apply-default-source'] = function(parsed) return parsed end,
+    ['truthy?'] = function(v) return v == true or v == 1 end,
   }
   local prompt_lines = function()
     return { 'querytext' }
@@ -84,6 +88,8 @@ T['prompt-update-delay-ms holds incomplete directive tokens longer'] = function(
     ['parse-query-lines'] = function(lines)
       return { lines = lines }
     end,
+    ['apply-default-source'] = function(parsed) return parsed end,
+    ['truthy?'] = function(v) return v == true or v == 1 end,
   }
   local prompt_lines = function()
     return { '#exp' }

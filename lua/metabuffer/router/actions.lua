@@ -1,8 +1,8 @@
 -- [nfnl] fnl/metabuffer/router/actions.fnl
-import("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local util = require("metabuffer.util")
 local source_mod = require("metabuffer.source")
+local transform_mod = require("metabuffer.transform")
 local function session_by_prompt(active_by_prompt, prompt_buf)
   return active_by_prompt[prompt_buf]
 end
@@ -165,6 +165,7 @@ local function remove_session_21(deps, session)
     end
     history_api["push-history-entry!"](session, or_18_)
     router_util_mod["persist-prompt-height!"](session)
+    router_util_mod["persist-results-wrap!"](session)
     if session.augroup then
       pcall(vim.api.nvim_del_augroup_by_id, session.augroup)
     else
@@ -257,6 +258,7 @@ local function hide_session_ui_21(deps, session)
   local history_api = history.api
   local active_by_source = router["active-by-source"]
   session["ui-hidden"] = true
+  session["_last-prompt-statusline"] = nil
   if (animation_mod and animation_mod["cancel-session!"]) then
     animation_mod["cancel-session!"](session)
   else
@@ -272,6 +274,7 @@ local function hide_session_ui_21(deps, session)
       end
     end
     router_util_mod["persist-prompt-height!"](session)
+    router_util_mod["persist-results-wrap!"](session)
     session["hidden-prompt-height"] = vim.api.nvim_win_get_height(session["prompt-win"])
     if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
       local bo = vim.bo[session["prompt-buf"]]
@@ -349,6 +352,7 @@ local function restore_session_ui_21(deps, session, opts)
     end
     apply_prompt_window_opts_21(prompt_win)
     sync_prompt_buffer_name_21(session)
+    session["_last-prompt-statusline"] = nil
     curr["status-win"] = curr.win
     session["ui-hidden"] = false
     resume_main_window_opts_21(deps, session)
@@ -976,11 +980,42 @@ end
 local function valid_row_3f(row)
   return (row and (type(row.path) == "string") and (row.path ~= "") and (type(row.lnum) == "number") and (row.lnum > 0))
 end
+local function special_projected_row_3f(row)
+  return (row and row["source-group-id"] and ((#(row["transform-chain"] or {}) > 0) or ((row["source-group-kind"] or "") == "file")))
+end
 local function append_op_21(ops, path, op)
   local per_file = (ops[path] or {})
   table.insert(per_file, op)
   ops[path] = per_file
   return nil
+end
+local function append_group_op_21(ops, row, current_rows, processed)
+  local group_id = row["source-group-id"]
+  local path = row.path
+  local key = (path .. "|" .. tostring(group_id))
+  local group_lines = {}
+  if (processed or {})[key] then
+    return nil
+  else
+    processed[key] = true
+    for _, r in ipairs((current_rows or {})) do
+      if ((r.path == path) and (r["source-group-id"] == group_id)) then
+        table.insert(group_lines, (r.text or r.line or ""))
+      else
+      end
+    end
+    local reversed = transform_mod["reverse-group"](row, group_lines, {path = path, lnum = row.lnum})
+    if reversed.error then
+      return {error = reversed.error}
+    else
+      if (reversed.kind == "rewrite-bytes") then
+        append_op_21(ops, path, {kind = "rewrite-bytes", bytes = reversed.bytes, ["ref-kind"] = (row.kind or "")})
+      else
+        append_op_21(ops, path, {kind = "replace", lnum = row.lnum, text = reversed.text, ["old-text"] = (row["source-text"] or ""), ["ref-kind"] = (row.kind or "")})
+      end
+      return nil
+    end
+  end
 end
 local function structural_op_from_current_rows(current_rows, start, count)
   local rows = slice_lines(current_rows, start, count)
@@ -1029,14 +1064,14 @@ local function collect_file_ops(session)
   local current_rows = projected_rows_from_edits(session, baseline_rows, baseline_lines, current_lines)
   local hunks = diff_hunks(baseline_lines, current_lines)
   local ops = {}
-  local state = {["unsafe-structural?"] = false}
+  local state = {["processed-special-groups"] = {}, ["unsafe-structural?"] = false}
   session["live-edit-rows"] = current_rows
   for _, h in ipairs(hunks) do
-    local _let_117_ = hunk_indices(h)
-    local a_start = _let_117_[1]
-    local a_count = _let_117_[2]
-    local b_start = _let_117_[3]
-    local b_count = _let_117_[4]
+    local _let_121_ = hunk_indices(h)
+    local a_start = _let_121_[1]
+    local a_count = _let_121_[2]
+    local b_start = _let_121_[3]
+    local b_count = _let_121_[4]
     local common = math.min(a_count, b_count)
     local old_rows = slice_lines(baseline_rows, a_start, a_count)
     local new_lines = slice_lines(current_lines, b_start, b_count)
@@ -1045,14 +1080,22 @@ local function collect_file_ops(session)
         local row = old_rows[i]
         local text = (new_lines[i] or "")
         if (valid_row_3f(row) and ((row.text or "") ~= text)) then
-          append_op_21(ops, row.path, {kind = "replace", lnum = row.lnum, text = text, ["old-text"] = (row.text or ""), ["ref-kind"] = (row.kind or "")})
+          if special_projected_row_3f(row) then
+            local err = append_group_op_21(ops, row, current_rows, state["processed-special-groups"])
+            if err then
+              state["unsafe-structural?"] = true
+            else
+            end
+          else
+            append_op_21(ops, row.path, {kind = "replace", lnum = row.lnum, text = text, ["old-text"] = (row.text or ""), ["ref-kind"] = (row.kind or "")})
+          end
         else
         end
       end
       if (a_count > b_count) then
         for i = (common + 1), a_count do
           local row = old_rows[i]
-          if valid_row_3f(row) then
+          if (valid_row_3f(row) and not special_projected_row_3f(row)) then
             append_op_21(ops, row.path, {kind = "delete", lnum = row.lnum, ["ref-kind"] = (row.kind or "")})
           else
             state["unsafe-structural?"] = true
@@ -1063,13 +1106,13 @@ local function collect_file_ops(session)
       if (b_count > a_count) then
         local insert_op = (structural_op_from_current_rows(current_rows, (b_start + common), (b_count - common)) or pending_structural_op(session, (b_start + common), (b_count - common), current_lines, ((old_rows[common] and old_rows[common].kind) or (old_rows[(common + 1)] and old_rows[(common + 1)].kind) or "")))
         if insert_op then
-          local _121_
+          local _127_
           if (insert_op.side == "before") then
-            _121_ = "insert-before"
+            _127_ = "insert-before"
           else
-            _121_ = "insert-after"
+            _127_ = "insert-after"
           end
-          append_op_21(ops, insert_op.path, {kind = _121_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
+          append_op_21(ops, insert_op.path, {kind = _127_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
         else
           state["unsafe-structural?"] = true
         end
@@ -1079,13 +1122,13 @@ local function collect_file_ops(session)
       if (b_count > 0) then
         local insert_op = (structural_op_from_current_rows(current_rows, b_start, b_count) or pending_structural_op(session, b_start, b_count, current_lines, ""))
         if insert_op then
-          local _125_
+          local _131_
           if (insert_op.side == "before") then
-            _125_ = "insert-before"
+            _131_ = "insert-before"
           else
-            _125_ = "insert-after"
+            _131_ = "insert-after"
           end
-          append_op_21(ops, insert_op.path, {kind = _125_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
+          append_op_21(ops, insert_op.path, {kind = _131_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
         else
           state["unsafe-structural?"] = true
         end
@@ -1178,7 +1221,7 @@ local function update_session_refs_after_ops_21(session, current_rows, ops, post
       ref["text"] = ref.line
     else
     end
-    table.insert(refs, {kind = (ref.kind or ""), path = (ref.path or ""), lnum = (ref.lnum or 1), ["open-lnum"] = (ref["open-lnum"] or ref.lnum or 1), line = (ref.line or "")})
+    table.insert(refs, {kind = (ref.kind or ""), path = (ref.path or ""), lnum = (ref.lnum or 1), ["open-lnum"] = (ref["open-lnum"] or ref.lnum or 1), ["source-lnum"] = ref["source-lnum"], ["source-text"] = ref["source-text"], ["source-group-id"] = ref["source-group-id"], ["source-group-kind"] = ref["source-group-kind"], ["transform-chain"] = vim.deepcopy((ref["transform-chain"] or {})), line = (ref.line or "")})
     table.insert(content, (ref.line or ""))
     table.insert(idxs, idx)
   end
@@ -1252,13 +1295,13 @@ M["write-results!"] = function(deps, prompt_buf)
         pcall(sign_mod["refresh-change-signs!"], session)
       else
       end
-      local _144_
+      local _150_
       if (result.changed > 0) then
-        _144_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+        _150_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
       else
-        _144_ = "metabuffer: no changes"
+        _150_ = "metabuffer: no changes"
       end
-      return vim.notify(_144_, vim.log.levels.INFO)
+      return vim.notify(_150_, vim.log.levels.INFO)
     end
   else
     return nil
@@ -1334,7 +1377,7 @@ M["maybe-restore-ui!"] = function(deps, prompt_buf, force)
     local current_buf = vim.api.nvim_get_current_buf()
     local results_buf = session.meta.buf.buffer
     local origin_buf = session["origin-buf"]
-    if (force or (current_buf == results_buf) or (current_buf == origin_buf)) then
+    if (force or (current_buf == results_buf)) then
       session.meta.win.window = vim.api.nvim_get_current_win()
       return restore_session_ui_21(deps, session, {["preserve-focus"] = not force})
     else

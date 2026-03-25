@@ -1,4 +1,5 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local prompt_mod (require :metabuffer.prompt.prompt))
 (local modeindexer (require :metabuffer.modeindexer))
 (local state (require :metabuffer.core.state))
@@ -9,6 +10,8 @@
 (local meta_window_mod (require :metabuffer.window.metawindow))
 (local statusline_mod (require :metabuffer.window.statusline))
 (local expand_mod (require :metabuffer.context.expand))
+(local directive-mod (require :metabuffer.query.directive))
+(local util (require :metabuffer.util))
 
 (local M {})
 (local STATUS_PROGRESS (. prompt_mod :STATUS_PROGRESS))
@@ -40,6 +43,14 @@
            session.results-statusline-pulse-active?
            "MetaStatuslineMiddlePulse")
       "MetaStatuslineMiddle"))
+
+(fn nvim-exiting?
+  []
+  (let [v (and vim.v (. vim.v :exiting))]
+    (and (~= v nil)
+         (~= v vim.NIL)
+         (~= v 0)
+         (~= v ""))))
 
 (fn results-group
   [session group]
@@ -94,23 +105,18 @@
         (table.concat out ""))
       ""))
 
-(fn project-flags-fragment
+(fn status-flags-fragment
   [session]
-  (if (and session session.project-mode)
-      (let [parts []
-            flags [(project-flag-fragment session "hidden" (not (not session.effective-include-hidden)))
-                   (project-flag-fragment session "ignored" (not (not session.effective-include-ignored)))
-                   (project-flag-fragment session "deps" (not (not session.effective-include-deps)))
-                   (project-flag-fragment session "file" (not (not session.effective-include-files)))
-                   (project-flag-fragment session "binary" (not (not session.effective-include-binary)))
-                   (project-flag-fragment session "hex" (not (not session.effective-include-hex)))
-                   (project-flag-fragment session "prefilter" (not (not session.prefilter-mode)))
-                   (project-flag-fragment session "lazy" (not (not session.lazy-mode)))]]
-        (each [_ frag (ipairs flags)]
-          (when (> (# frag) 0)
-            (table.insert parts frag)))
-        (table.concat parts (status-fragment (results-middle-group session) "  ")))
-      ""))
+  (let [parts []]
+    (each [_ item (ipairs (directive-mod.statusline-items session))]
+      (let [frag (project-flag-fragment session
+                                        (or (. item :label) "")
+                                        (clj.boolean (. item :active)))]
+        (when (> (# frag) 0)
+          (table.insert parts frag))))
+    (if (> (# parts) 0)
+        (table.concat parts (status-fragment (results-middle-group session) "  "))
+        "")))
 
 (fn results-statusline-left
   [self]
@@ -137,7 +143,7 @@
 
 (fn results-statusline-right
   [self]
-  (let [flags (project-flags-fragment self.session)]
+  (let [flags (status-flags-fragment self.session)]
     (if (> (# flags) 0)
         (.. " " flags)
         "")))
@@ -172,7 +178,7 @@
         query (if ignorecase (string.lower query0) query0)]
     (if (= query "")
         true
-        (not (not (string.find probe query 1 true))))))
+        (not= nil (string.find probe query 1 true)))))
 
 (fn apply-file-entry-filter
   [indices refs file-query-lines ignorecase include-files regular-query-active?]
@@ -304,16 +310,16 @@
                           "")]
            (and (~= before "\\")
                 (or (= prev-n 1)
-                    (not (not (string.find before "%s"))))))
+                    (not= nil (string.find before "%s")))))
          (let [added (string.sub next0 (+ prev-n 1) (+ prev-n 1))]
-           (not (not (string.find added "%S")))))))
+           (not= nil (string.find added "%S"))))))
 
 (fn ends-with-space?
   [s]
   (let [txt (or s "")
         n (# txt)]
     (and (> n 0)
-         (not (not (string.find (string.sub txt n n) "%s"))))))
+         (not= nil (string.find (string.sub txt n n) "%s")))))
 
 (fn last-token
   [s]
@@ -383,20 +389,51 @@
   (set self._prev-ignorecase nil)
   (set self._prev-matcher nil)
   (set self._selection-cache {})
+  (set self._lgrep-match-ids [])
 
   (set self.win (meta_window_mod.new nvim (vim.api.nvim_get_current_win)))
   (set self.status-win self.win)
   (set self.buf (meta_buffer_mod.new nvim (vim.api.nvim_get_current_buf)))
   (set self._filter-cache {})
   (set self._filter-cache-line-count (# self.buf.content))
+  (set self._content-version-seen (or self.buf.content-version 0))
     (let [prompt-on-term self.on-term]
+      (fn delete-win-match
+        [win id]
+        (if (and win (vim.api.nvim_win_is_valid win))
+            (or (pcall vim.fn.matchdelete id win)
+                (pcall vim.api.nvim_win_call win (fn [] (vim.fn.matchdelete id))))
+            (pcall vim.fn.matchdelete id)))
+      (fn lgrep-queries
+        []
+        (let [out []]
+          (each [_ spec (ipairs (or (and self.session self.session.last-parsed-query self.session.last-parsed-query.lgrep-lines) []))]
+            (when (and spec
+                       (= (type spec) "table")
+                       (~= (vim.trim (or (. spec :query) "")) ""))
+              (table.insert out (vim.trim (or (. spec :query) "")))))
+          out))
+      (fn apply-lgrep-highlights
+        []
+        (each [_ id (ipairs (or self._lgrep-match-ids []))]
+          (delete-win-match self.win.window id))
+        (set self._lgrep-match-ids [])
+        (when (and self.win self.win.window (vim.api.nvim_win_is_valid self.win.window))
+          (each [_ q (ipairs (lgrep-queries))]
+            (let [pat (.. "\\V" (util.escape-vim-pattern q))
+                  [ok id] [(pcall vim.fn.matchadd "MetaSearchHitLgrep" pat 215 -1 {:window self.win.window})]]
+              (when ok
+                (table.insert self._lgrep-match-ids id))))))
       (fn clear-all-highlights
         []
         (let [matcher-mode (. self.mode :matcher)]
           (when matcher-mode
             (each [_ m (ipairs matcher-mode.candidates)]
               (when m
-                (pcall m.remove-highlight m))))))
+                (pcall m.remove-highlight m)))))
+        (each [_ id (ipairs (or self._lgrep-match-ids []))]
+          (delete-win-match self.win.window id))
+        (set self._lgrep-match-ids []))
 
   (set self.mode
        {:matcher (modeindexer.new [(all_matcher.new) (fuzzy_matcher.new) (regex_matcher.new)]
@@ -470,7 +507,10 @@
 
       (fn self.refresh_statusline
         []
-        (when-not (and self.session self.session.ui-hidden)
+        (when-not (or (nvim-exiting?)
+                      (and self.session
+                           (or self.session.ui-hidden
+                               self.session.closing)))
           (let [mode-state (statusline-mode-state)
                 hl-prefix (if (= self.buf.syntax-type "meta") "Meta" "Buffer")]
             (self.status-win.set-statusline-state
@@ -490,10 +530,13 @@
             (when (and self.session
                        self.session.prompt-win
                        (vim.api.nvim_win_is_valid self.session.prompt-win))
-              (pcall vim.api.nvim_set_option_value
-                     "statusline"
-                     (prompt-statusline-text self)
-                     {:win self.session.prompt-win}))
+              (let [prompt-text (prompt-statusline-text self)]
+                (when (~= self.session._last-prompt-statusline prompt-text)
+                  (set self.session._last-prompt-statusline prompt-text)
+                  (pcall vim.api.nvim_set_option_value
+                         "statusline"
+                         prompt-text
+                         {:win self.session.prompt-win}))))
             (vim.cmd "redrawstatus"))))
 
       (fn self.on-init
@@ -503,7 +546,7 @@
                                (metabuffer-display-name self.buf.model)))
         (let [init-syntax (or (. vim.g "meta#syntax_on_init") "buffer")]
           (self.buf.apply-syntax (if (= init-syntax "meta") "meta" "buffer")))
-        (set self.buf.visible-source-syntax-only (not (not cond.project-mode)))
+        (set self.buf.visible-source-syntax-only (clj.boolean cond.project-mode))
     (clear-all-highlights)
     (self.buf.render)
     (let [line-count (vim.api.nvim_buf_line_count self.buf.buffer)
@@ -552,6 +595,8 @@
           cache-shrank? (< line-count self._filter-cache-line-count)
           cache-reset? cache-shrank?
           cache-key (.. matcher-name "|" (if ignorecase "1" "0") "|" effective-query)
+          content-version (or self.buf.content-version 0)
+          content-changed? (~= content-version (or self._content-version-seen 0))
           reset0? (or (= prev-text "")
                       (not (vim.startswith self.text prev-text))
                       (bang-token-completed? prev-text self.text)
@@ -668,9 +713,10 @@
                              (if (~= (# prev-hits) (# self.buf.indices))
                                  true
                                  (not (vim.deep_equal prev-hits self.buf.indices))))
-            needs-render? (or hits-changed broaden-on-delete?)]
+            needs-render? (or hits-changed broaden-on-delete? content-changed?)]
       (when needs-render?
         (self.buf.render))
+      (set self._content-version-seen content-version)
       (when needs-render?
         (let [preferred-line (or (. self._selection-cache cache-key) anchor-line)
               preferred-rank (math.max 1 (math.min prev-rank (# self.buf.indices)))]
@@ -701,7 +747,8 @@
               (or vim.g.meta_highlight_max_hits 40000)]
         (if (or (= (# queries) 0) (>= (# self.buf.indices) highlight-max-hits))
             (matcher.remove-highlight matcher)
-            (matcher.highlight matcher queries ignorecase self.win.window))))))
+            (matcher.highlight matcher queries ignorecase self.win.window)))
+      (apply-lgrep-highlights))))
     status)
 
   (fn self.on-term

@@ -4,7 +4,7 @@ local child, eq = H.child, H.eq
 local T = MiniTest.new_set({ hooks = H.case_hooks() })
 
 T['hidden regular session does not intercept later project launch'] = H.timed_case(function()
-  H.open_fixture_file('README.md')
+  H.edit_fixture_file('README.md')
 
   child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(function()

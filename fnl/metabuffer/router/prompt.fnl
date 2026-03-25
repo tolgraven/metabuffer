@@ -1,4 +1,5 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local source-mod (require :metabuffer.source))
 (local M {})
 
 (fn last-non-empty-trimmed
@@ -62,11 +63,15 @@
         short-extra-ms (or settings.prompt-short-query-extra-ms [180 120 70])
         size-thresholds (or settings.prompt-size-scale-thresholds [2000 10000 50000])
         size-extra (or settings.prompt-size-scale-extra [0 2 6 10])
-        qlen (let [lines (prompt-lines session)
-                   parsed (if session.project-mode
-                              (query-mod.parse-query-lines lines)
-                              {:lines lines})
-                   last-active (last-non-empty-trimmed (or (. parsed :lines) []))]
+        lines (prompt-lines session)
+        parsed0 (if (or session.project-mode
+                        (and session (query-mod.truthy? session.default-include-lgrep)))
+                    (query-mod.parse-query-lines lines)
+                    {:lines lines :lgrep-lines []})
+        parsed (query-mod.apply-default-source
+                 parsed0
+                 (and session (query-mod.truthy? session.default-include-lgrep)))
+        qlen (let [last-active (last-non-empty-trimmed (or (. parsed :lines) []))]
                (# (or last-active "")))
         short-extra (if (<= qlen 1)
                         (or (. short-extra-ms 1) 180)
@@ -81,15 +86,22 @@
                           (or (. size-extra 3) 6)
                           (or (. size-extra 4) 10))))
         extra (if (and session session.project-mode (not session.lazy-stream-done)) 2 0)
+        source-extra-ms (source-mod.query-source-debounce-ms settings parsed)
+        source-extra (if (> source-extra-ms 0)
+                         (math.max 0 (- source-extra-ms
+                                        (+ base short-extra scale extra)))
+                         0)
         directive-extra (if (incomplete-directive-token? (prompt-lines session))
                             (math.max 0 (- (or settings.prompt-incomplete-directive-ms 1000)
-                                           (+ base short-extra scale extra)))
+                                           (+ base short-extra scale extra source-extra)))
                             0)]
-    (+ base short-extra scale extra directive-extra)))
+    (+ base short-extra scale extra source-extra directive-extra)))
 
 (fn M.prompt-has-active-query?
   [query-mod prompt-lines session]
-  (let [parsed (query-mod.parse-query-lines (prompt-lines session))]
+  (let [parsed (query-mod.apply-default-source
+                 (query-mod.parse-query-lines (prompt-lines session))
+                 (and session (query-mod.truthy? session.default-include-lgrep)))]
     (any-active-line? (or (. parsed :lines) []))))
 
 (fn M.cancel-prompt-update!

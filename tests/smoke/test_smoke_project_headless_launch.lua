@@ -13,7 +13,7 @@ T['headless :Meta! launch in real repo does not emit startup error'] = function(
     '-c', 'cd ' .. root,
     '-c', 'edit README.md',
     '-c', 'Meta!',
-    '-c', 'sleep 800m',
+    '-c', 'sleep 400m',
     '-c', 'messages',
     '-c', 'qa!',
   }

@@ -50,13 +50,14 @@ T['regular Meta keeps Tree-sitter highlighting active when available'] = H.timed
         filetype = vim.bo[buf].filetype,
         syntax = vim.bo[buf].syntax,
         treesitter = active[buf] ~= nil,
+        source_treesitter = active[_G.__meta_source_buf] ~= nil,
       }
     end)()
   ]])
 
   eq(type(state), 'table')
   eq(state.filetype, 'lua')
-  eq(state.treesitter, true)
+  eq(state.source_treesitter, true)
 end)
 
 return T

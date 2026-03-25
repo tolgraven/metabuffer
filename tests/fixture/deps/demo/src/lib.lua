@@ -1,0 +1,27 @@
+local dep_meta = true
+return dep_meta
+local dep_line = "meta from deps" 001
+local dep_line = "meta from deps" 002
+local dep_line = "meta from deps" 003
+local dep_line = "meta from deps" 004
+local dep_line = "meta from deps" 005
+local dep_line = "meta from deps" 006
+local dep_line = "meta from deps" 007
+local dep_line = "meta from deps" 008
+local dep_line = "meta from deps" 009
+local dep_line = "meta from deps" 010
+local dep_line = "meta from deps" 011
+local dep_line = "meta from deps" 012
+local dep_line = "meta from deps" 013
+local dep_line = "meta from deps" 014
+local dep_line = "meta from deps" 015
+local dep_line = "meta from deps" 016
+local dep_line = "meta from deps" 017
+local dep_line = "meta from deps" 018
+local dep_line = "meta from deps" 019
+local dep_line = "meta from deps" 020
+local dep_line = "meta from deps" 021
+local dep_line = "meta from deps" 022
+local dep_line = "meta from deps" 023
+local dep_line = "meta from deps" 024
+local dep_line = "meta from deps" 025

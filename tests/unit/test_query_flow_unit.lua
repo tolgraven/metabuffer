@@ -64,6 +64,9 @@ local function mk_deps(overrides)
           lazy = nil,
         }
       end,
+      ['apply-default-source'] = function(parsed)
+        return parsed
+      end,
       ['query-lines-has-active?'] = function(lines)
         for _, line in ipairs(lines) do
           if vim.trim(line) ~= '' then
@@ -91,6 +94,11 @@ local function mk_deps(overrides)
   if overrides then
     deps = vim.tbl_deep_extend('force', deps, overrides)
   end
+  deps.mods = { query = deps['query-mod'] }
+  deps.project = { source = deps['project-source'] }
+  deps.refresh = { ["info!"] = deps['update-info-window'] }
+  deps.windows = { context = nil }
+  deps.history = {}
   deps._state = state
   return deps
 end

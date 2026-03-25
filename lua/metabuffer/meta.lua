@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/meta.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local prompt_mod = require("metabuffer.prompt.prompt")
 local modeindexer = require("metabuffer.modeindexer")
 local state = require("metabuffer.core.state")
@@ -9,6 +10,8 @@ local meta_buffer_mod = require("metabuffer.buffer.metabuffer")
 local meta_window_mod = require("metabuffer.window.metawindow")
 local statusline_mod = require("metabuffer.window.statusline")
 local expand_mod = require("metabuffer.context.expand")
+local directive_mod = require("metabuffer.query.directive")
+local util = require("metabuffer.util")
 local M = {}
 local STATUS_PROGRESS = prompt_mod.STATUS_PROGRESS
 local state_cases = state.cases
@@ -21,6 +24,10 @@ local function loading_visible_3f(session)
 end
 local function results_middle_group(session)
   return ((session and session["results-statusline-pulse-active?"] and "MetaStatuslineMiddlePulse") or "MetaStatuslineMiddle")
+end
+local function nvim_exiting_3f()
+  local v = (vim.v and vim.v.exiting)
+  return ((v ~= nil) and (v ~= vim.NIL) and (v ~= 0) and (v ~= ""))
 end
 local function results_group(session, group)
   return ((session and session["results-statusline-pulse-active?"] and (group .. "Pulse")) or group)
@@ -92,16 +99,16 @@ local function loading_fragment(session)
     return ""
   end
 end
-local function project_flags_fragment(session)
-  if (session and session["project-mode"]) then
-    local parts = {}
-    local flags = {project_flag_fragment(session, "hidden", not not session["effective-include-hidden"]), project_flag_fragment(session, "ignored", not not session["effective-include-ignored"]), project_flag_fragment(session, "deps", not not session["effective-include-deps"]), project_flag_fragment(session, "file", not not session["effective-include-files"]), project_flag_fragment(session, "binary", not not session["effective-include-binary"]), project_flag_fragment(session, "hex", not not session["effective-include-hex"]), project_flag_fragment(session, "prefilter", not not session["prefilter-mode"]), project_flag_fragment(session, "lazy", not not session["lazy-mode"])}
-    for _, frag in ipairs(flags) do
-      if (#frag > 0) then
-        table.insert(parts, frag)
-      else
-      end
+local function status_flags_fragment(session)
+  local parts = {}
+  for _, item in ipairs(directive_mod["statusline-items"](session)) do
+    local frag = project_flag_fragment(session, (item.label or ""), clj.boolean(item.active))
+    if (#frag > 0) then
+      table.insert(parts, frag)
+    else
     end
+  end
+  if (#parts > 0) then
     return table.concat(parts, status_fragment(results_middle_group(session), "  "))
   else
     return ""
@@ -139,7 +146,7 @@ local function results_statusline_left(self)
   end
 end
 local function results_statusline_right(self)
-  local flags = project_flags_fragment(self.session)
+  local flags = status_flags_fragment(self.session)
   if (#flags > 0) then
     return (" " .. flags)
   else
@@ -186,7 +193,7 @@ local function file_query_matches_3f(path, q, ignorecase)
   if (query == "") then
     return true
   else
-    return not not string.find(probe, query, 1, true)
+    return (nil ~= string.find(probe, query, 1, true))
   end
 end
 local function apply_file_entry_filter(indices, refs, file_query_lines, ignorecase, include_files, regular_query_active_3f)
@@ -373,18 +380,18 @@ local function bang_token_completed_3f(prev, next)
     else
       before = ""
     end
-    and_47_ = ((before ~= "\\") and ((prev_n == 1) or not not string.find(before, "%s")))
+    and_47_ = ((before ~= "\\") and ((prev_n == 1) or (nil ~= string.find(before, "%s"))))
   end
   if and_47_ then
     local added = string.sub(next0, (prev_n + 1), (prev_n + 1))
-    and_47_ = not not string.find(added, "%S")
+    and_47_ = (nil ~= string.find(added, "%S"))
   end
   return and_47_
 end
 local function ends_with_space_3f(s)
   local txt = (s or "")
   local n = #txt
-  return ((n > 0) and not not string.find(string.sub(txt, n, n), "%s"))
+  return ((n > 0) and (nil ~= string.find(string.sub(txt, n, n), "%s")))
 end
 local function last_token(s)
   local txt = (s or "")
@@ -439,18 +446,49 @@ M.new = function(nvim, condition)
   self["_prev-ignorecase"] = nil
   self["_prev-matcher"] = nil
   self["_selection-cache"] = {}
+  self["_lgrep-match-ids"] = {}
   self.win = meta_window_mod.new(nvim, vim.api.nvim_get_current_win())
   self["status-win"] = self.win
   self.buf = meta_buffer_mod.new(nvim, vim.api.nvim_get_current_buf())
   self["_filter-cache"] = {}
   self["_filter-cache-line-count"] = #self.buf.content
+  self["_content-version-seen"] = (self.buf["content-version"] or 0)
   local prompt_on_term = self["on-term"]
-  local function clear_all_highlights()
-    local matcher_mode = self.mode.matcher
-    if matcher_mode then
-      for _, m in ipairs(matcher_mode.candidates) do
-        if m then
-          pcall(m["remove-highlight"], m)
+  local function delete_win_match(win, id)
+    if (win and vim.api.nvim_win_is_valid(win)) then
+      local or_54_ = pcall(vim.fn.matchdelete, id, win)
+      if not or_54_ then
+        local function _55_()
+          return vim.fn.matchdelete(id)
+        end
+        or_54_ = pcall(vim.api.nvim_win_call, win, _55_)
+      end
+      return or_54_
+    else
+      return pcall(vim.fn.matchdelete, id)
+    end
+  end
+  local function lgrep_queries()
+    local out = {}
+    for _, spec in ipairs(((self.session and self.session["last-parsed-query"] and self.session["last-parsed-query"]["lgrep-lines"]) or {})) do
+      if (spec and (type(spec) == "table") and (vim.trim((spec.query or "")) ~= "")) then
+        table.insert(out, vim.trim((spec.query or "")))
+      else
+      end
+    end
+    return out
+  end
+  local function apply_lgrep_highlights()
+    for _, id in ipairs((self["_lgrep-match-ids"] or {})) do
+      delete_win_match(self.win.window, id)
+    end
+    self["_lgrep-match-ids"] = {}
+    if (self.win and self.win.window and vim.api.nvim_win_is_valid(self.win.window)) then
+      for _, q in ipairs(lgrep_queries()) do
+        local pat = ("\\V" .. util["escape-vim-pattern"](q))
+        local ok,id = pcall(vim.fn.matchadd, "MetaSearchHitLgrep", pat, 215, -1, {window = self.win.window})
+        if ok then
+          table.insert(self["_lgrep-match-ids"], id)
         else
         end
       end
@@ -459,17 +497,36 @@ M.new = function(nvim, condition)
       return nil
     end
   end
-  local function _56_(idx)
-    local function _57_()
+  local function clear_all_highlights()
+    do
+      local matcher_mode = self.mode.matcher
+      if matcher_mode then
+        for _, m in ipairs(matcher_mode.candidates) do
+          if m then
+            pcall(m["remove-highlight"], m)
+          else
+          end
+        end
+      else
+      end
+    end
+    for _, id in ipairs((self["_lgrep-match-ids"] or {})) do
+      delete_win_match(self.win.window, id)
+    end
+    self["_lgrep-match-ids"] = {}
+    return nil
+  end
+  local function _62_(idx)
+    local function _63_()
       if (idx.current() == "meta") then
         return "meta"
       else
         return "buffer"
       end
     end
-    return self.buf["apply-syntax"](_57_())
+    return self.buf["apply-syntax"](_63_())
   end
-  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state_cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state_syntax_types, (cond["syntax-index"] or 1), {["on-active"] = _56_})}
+  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state_cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state_syntax_types, (cond["syntax-index"] or 1), {["on-active"] = _62_})}
   self.text = (cond.text or "")
   if (self.text ~= "") then
     self["query-lines"] = {self.text}
@@ -536,7 +593,7 @@ M.new = function(nvim, condition)
     end
   end
   self.refresh_statusline = function()
-    if not (self.session and self.session["ui-hidden"]) then
+    if not (nvim_exiting_3f() or (self.session and (self.session["ui-hidden"] or self.session.closing))) then
       local mode_state = statusline_mode_state()
       local hl_prefix
       if (self.buf["syntax-type"] == "meta") then
@@ -546,7 +603,12 @@ M.new = function(nvim, condition)
       end
       self["status-win"]["set-statusline-state"](mode_state.group, mode_state.label, self.buf.name, #self.buf.indices, self.buf["line-count"](), self.selected_line(), results_statusline_left(self), results_statusline_right(self), self.matcher().name, self.case(), hl_prefix, self.syntax(), results_middle_group(self.session))
       if (self.session and self.session["prompt-win"] and vim.api.nvim_win_is_valid(self.session["prompt-win"])) then
-        pcall(vim.api.nvim_set_option_value, "statusline", prompt_statusline_text(self), {win = self.session["prompt-win"]})
+        local prompt_text = prompt_statusline_text(self)
+        if (self.session["_last-prompt-statusline"] ~= prompt_text) then
+          self.session["_last-prompt-statusline"] = prompt_text
+          pcall(vim.api.nvim_set_option_value, "statusline", prompt_text, {win = self.session["prompt-win"]})
+        else
+        end
       else
       end
       return vim.cmd("redrawstatus")
@@ -555,26 +617,26 @@ M.new = function(nvim, condition)
     end
   end
   self["on-init"] = function()
-    local function _66_()
+    local function _73_()
       if self["project-mode"] then
         return project_display_name()
       else
         return metabuffer_display_name(self.buf.model)
       end
     end
-    self.buf["set-name"](_66_())
+    self.buf["set-name"](_73_())
     do
       local init_syntax = (vim.g["meta#syntax_on_init"] or "buffer")
-      local function _67_()
+      local function _74_()
         if (init_syntax == "meta") then
           return "meta"
         else
           return "buffer"
         end
       end
-      self.buf["apply-syntax"](_67_())
+      self.buf["apply-syntax"](_74_())
     end
-    self.buf["visible-source-syntax-only"] = not not cond["project-mode"]
+    self.buf["visible-source-syntax-only"] = clj.boolean(cond["project-mode"])
     clear_all_highlights()
     self.buf.render()
     do
@@ -627,25 +689,27 @@ M.new = function(nvim, condition)
       end
       local prev_matcher_name = (self["_prev-matcher"] or matcher_name)
       local prev_cache_key
-      local _72_
+      local _79_
       if prev_ignorecase then
-        _72_ = "1"
+        _79_ = "1"
       else
-        _72_ = "0"
+        _79_ = "0"
       end
-      prev_cache_key = (prev_matcher_name .. "|" .. _72_ .. "|" .. (prev_text or ""))
+      prev_cache_key = (prev_matcher_name .. "|" .. _79_ .. "|" .. (prev_text or ""))
       local line_count = #self.buf.content
       local cache_grew_3f = (line_count > self["_filter-cache-line-count"])
       local cache_shrank_3f = (line_count < self["_filter-cache-line-count"])
       local cache_reset_3f = cache_shrank_3f
       local cache_key
-      local _74_
+      local _81_
       if ignorecase then
-        _74_ = "1"
+        _81_ = "1"
       else
-        _74_ = "0"
+        _81_ = "0"
       end
-      cache_key = (matcher_name .. "|" .. _74_ .. "|" .. effective_query)
+      cache_key = (matcher_name .. "|" .. _81_ .. "|" .. effective_query)
+      local content_version = (self.buf["content-version"] or 0)
+      local content_changed_3f = (content_version ~= (self["_content-version-seen"] or 0))
       local reset0_3f = ((prev_text == "") or not vim.startswith(self.text, prev_text) or bang_token_completed_3f(prev_text, self.text) or cache_grew_3f or cache_reset_3f or (self["_prev-ignorecase"] ~= ignorecase) or (self["_prev-matcher"] ~= matcher_name))
       local narrow_reuse_threshold = (vim.g.meta_narrow_reuse_threshold or 400)
       local narrow_reuse_3f = (reset0_3f and vim.startswith(self.text, prev_text) and (matcher_name == "all") and not negation_growth_broadens_3f(prev_text, self.text) and (#prev_text > 0) and (#self.text > #prev_text) and (#prev_hits <= narrow_reuse_threshold))
@@ -733,14 +797,14 @@ M.new = function(nvim, condition)
       local refs = (self.buf["source-refs"] or {})
       local file_filtered = apply_file_entry_filter(self.buf.indices, refs, self["file-query-lines"], ignorecase, self["include-files"], (#queries > 0))
       local expanded
-      local or_87_ = (self.session and self.session["read-file-lines-cached"])
-      if not or_87_ then
-        local function _88_(path, _opts)
+      local or_94_ = (self.session and self.session["read-file-lines-cached"])
+      if not or_94_ then
+        local function _95_(path, _opts)
           return vim.fn.readfile(path)
         end
-        or_87_ = _88_
+        or_94_ = _95_
       end
-      expanded = expand_mod["expanded-indices"](self.session, file_filtered, refs, {mode = ((self.session and self.session["expansion-mode"]) or "none"), ["read-file-lines-cached"] = or_87_, ["around-lines"] = (vim.g.meta_context_around_lines or 3), ["max-blocks"] = (vim.g.meta_context_max_blocks or 24)})
+      expanded = expand_mod["expanded-indices"](self.session, file_filtered, refs, {mode = ((self.session and self.session["expansion-mode"]) or "none"), ["read-file-lines-cached"] = or_94_, ["around-lines"] = (vim.g.meta_context_around_lines or 3), ["max-blocks"] = (vim.g.meta_context_max_blocks or 24)})
       local _
       self.buf.indices = expanded
       _ = nil
@@ -762,11 +826,12 @@ M.new = function(nvim, condition)
           hits_changed = not vim.deep_equal(prev_hits, self.buf.indices)
         end
       end
-      local needs_render_3f = (hits_changed or broaden_on_delete_3f)
+      local needs_render_3f = (hits_changed or broaden_on_delete_3f or content_changed_3f)
       if needs_render_3f then
         self.buf.render()
       else
       end
+      self["_content-version-seen"] = content_version
       if needs_render_3f then
         local preferred_line = (self["_selection-cache"][cache_key] or anchor_line)
         local preferred_rank = math.max(1, math.min(prev_rank, #self.buf.indices))
@@ -803,12 +868,15 @@ M.new = function(nvim, condition)
         else
         end
       end
-      local highlight_max_hits = (vim.g.meta_highlight_max_hits or 40000)
-      if ((#queries == 0) or (#self.buf.indices >= highlight_max_hits)) then
-        matcher["remove-highlight"](matcher)
-      else
-        matcher.highlight(matcher, queries, ignorecase, self.win.window)
+      do
+        local highlight_max_hits = (vim.g.meta_highlight_max_hits or 40000)
+        if ((#queries == 0) or (#self.buf.indices >= highlight_max_hits)) then
+          matcher["remove-highlight"](matcher)
+        else
+          matcher.highlight(matcher, queries, ignorecase, self.win.window)
+        end
       end
+      apply_lgrep_highlights()
     end
     return status
   end

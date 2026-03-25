@@ -1,4 +1,5 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not : cond} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 
 (local M {})
 (local util (require :metabuffer.util))
@@ -73,16 +74,16 @@
       (or (= t "fn_form")
           (= t "lambda_form")
           (= t "macro_form")
-          (not (not (string.find t "function" 1 true)))
-          (not (not (string.find t "method" 1 true)))
-          (not (not (string.find t "func" 1 true)))
-          (not (not (string.find t "lambda" 1 true))))
+          (not= nil (string.find t "function" 1 true))
+          (not= nil (string.find t "method" 1 true))
+          (not= nil (string.find t "func" 1 true))
+          (not= nil (string.find t "lambda" 1 true)))
       (= mode "class")
-      (or (not (not (string.find t "class" 1 true)))
-          (not (not (string.find t "interface" 1 true)))
-          (not (not (string.find t "struct" 1 true)))
-          (not (not (string.find t "impl" 1 true)))
-          (not (not (string.find t "module" 1 true))))
+      (or (not= nil (string.find t "class" 1 true))
+          (not= nil (string.find t "interface" 1 true))
+          (not= nil (string.find t "struct" 1 true))
+          (not= nil (string.find t "impl" 1 true))
+          (not= nil (string.find t "module" 1 true)))
       (= mode "scope")
       (or (node-type-matches? "fn" t)
           (node-type-matches? "class" t)
@@ -93,7 +94,7 @@
           (= t "while_form")
           (= t "accumulate_form")
           (= t "do_form")
-          (not (not (string.find t "block" 1 true)))
+          (not= nil (string.find t "block" 1 true))
           (= t "chunk")
           (= t "program")
           (= t "source_file"))
@@ -136,7 +137,7 @@
   [line word]
   (let [pat (.. "%f[%w_]" (vim.pesc (or word "")) "%f[^%w_]")]
     (and (~= (or word "") "")
-         (not (not (string.find (or line "") pat))))))
+         (not= nil (string.find (or line "") pat)))))
 
 (fn around-range
   [ref total around]

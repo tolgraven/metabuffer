@@ -18,6 +18,10 @@ T['project flags are consumed and reflected in debug-statusline'] = H.timed_case
   local sl = H.session_main_statusline()
   eq(H.str_contains(sl, '+hid'), true)
   eq(H.str_contains(sl, '+dep'), true)
+  eq(H.str_contains(sl, '-bin'), true)
+  eq(H.str_contains(sl, '-fil'), true)
+  eq(H.str_contains(sl, '-pre'), true)
+  eq(H.str_contains(sl, '-laz'), true)
 end)
 
 return T

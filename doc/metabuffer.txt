@@ -129,14 +129,82 @@ PROMPT DIRECTIVES\t\t\t*metabuffer-prompt-directives*
 
 Most directives are consumed from prompt text after applying:
 
-\t#history\tMerge persisted history into current session cache
-\t#save:tag\tSave current prompt under `tag`
-\t##tag\t\tRestore saved prompt `tag`
-\t##\t\tOpen saved-prompt browser
-\t#+deps\t\tEnable deps searching (consumed)
-\t#-deps\t\tDisable deps searching (consumed)
-\t#+hidden / #-hidden, #+ignored / #-ignored,
-\t#+prefilter / #-prefilter, #+lazy / #-lazy are also supported.
+All #toggles
+	Options:
+	#escape / #e	Disable prefiltering.
+	#exp / #ex {expander}	Set the active expansion mode.
+	#history / #h	Merge persisted history into the current session.
+	#lazy / #l	Enable lazy project loading.
+		Disable with #-lazy, #nolazy, #-l.
+	#prefilter / #p	Enable project lazy prefiltering.
+		Disable with #-prefilter, #noprefilter, #-p.
+	#save / #s {tag}	Save the current prompt under a tag.
+	##	Open the saved-prompt browser.
+	##{tag}	Restore a saved prompt inline.
+	Scope:
+	#binary / #b	Include binary files.
+		Disable with #-binary, #nobinary, #-b.
+	#deps / #d	Include dependency and vendor paths.
+		Disable with #-deps, #nodeps, #-d.
+	#hidden / #hi	Include hidden paths.
+		Disable with #-hidden, #nohidden, #-hi.
+	#ignored / #i	Include ignored paths.
+		Disable with #-ignored, #noignored, #-i.
+	Transforms:
+	#b64 / #b6	Decode obvious base64 text before display and filtering.
+		Disable with #-b64, #nob64, #-b6.
+	#bplist / #bp	Pretty-print binary plist files.
+		Disable with #-bplist, #nobplist, #-bp.
+	#css / #c	Pretty-print minified CSS lines.
+		Disable with #-css, #nocss, #-c.
+	#hex / #he	Render binary files through hex view.
+		Disable with #-hex, #nohex, #-he.
+	#json / #j	Pretty-print minified JSON lines.
+		Disable with #-json, #nojson, #-j.
+	#strings / #st	Extract printable strings from binary files.
+		Disable with #-strings, #nostrings, #-st.
+	#xml / #x	Pretty-print minified XML lines.
+		Disable with #-xml, #noxml, #-x.
+	Sources:
+	#file / #f {token}	Switch to file-entry source filtering.
+		Disable with #-file, #nofile, #-f.
+	#lgrep / #lg {query}	Switch the source set to lgrep semantic search hits.
+	#lgrep:d / #lg:d {symbol}	Switch the source set to lgrep definitions for a symbol.
+	#lgrep:u / #lg:u {symbol}	Switch the source set to lgrep usages for a symbol.
+End #toggles
+
+\tRelated setup options:
+\t\tdefault_include_lgrep
+\t\tlgrep_bin
+\t\tlgrep_limit
+\t\tlgrep_debounce_ms
+
+\tCustom transforms:
+\t\tDefine them under `options.custom.transforms`.
+\t\tInvoke them as `#transform:name`.
+\t\tShort aliases are derived automatically at runtime; completion/help
+\t\tshows the resolved alias.
+\t\tEach transform accepts:
+\t\t- `from`: required shell command (argv list or shell string)
+\t\t- `to`: optional reverse shell command for writeback
+\t\t- `scope`: `line` or `file` (default `line`)
+\t\t- `applies_to`: `text`, `binary`, or `all` (default `text`)
+\t\t- `filetypes`: optional list of detected filetypes to limit application
+\t\t- `filetype_commands`: optional per-filetype command map overriding `from`/`to`
+\t\t- `enabled`: optional default state
+\t\t- `doc`: help text for completion/popup docs
+\t\tExample:
+\t\t\tdecompyle = {
+\t\t\t  filetype_commands = {
+\t\t\t    python = {
+\t\t\t      from = { "decompyle3", "-" },
+\t\t\t    },
+\t\t\t  },
+\t\t\t  scope = "file",
+\t\t\t  applies_to = "binary",
+\t\t\t  filetypes = { "python" },
+\t\t\t  doc = "Decompile Python bytecode files.",
+\t\t\t}
 
 ==============================================================================
 PROMPT BEHAVIOR\t\t\t*metabuffer-prompt-behavior*

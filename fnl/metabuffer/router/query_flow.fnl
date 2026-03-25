@@ -1,6 +1,8 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local router_util_mod (require :metabuffer.router.util))
 (local router_prompt_mod (require :metabuffer.router.prompt))
+(local source-mod (require :metabuffer.source))
+(local transform-mod (require :metabuffer.transform))
 (local M {})
 
 (fn choose-current-when-nil
@@ -45,20 +47,30 @@
     (set session.meta._filter-cache {})
     (set session.meta._filter-cache-line-count (# session.meta.buf.content))))
 
+(fn resolve-parsed-query
+  [query-mod session parsed]
+  (query-mod.apply-default-source
+    parsed
+    (and session (query-mod.truthy? session.default-include-lgrep))))
+
 (fn source-flags-changed?
   [session parsed]
   (let [next-hidden (choose-current-when-nil (. parsed :include-hidden) session.include-hidden)
         next-ignored (choose-current-when-nil (. parsed :include-ignored) session.include-ignored)
         next-deps (choose-current-when-nil (. parsed :include-deps) session.include-deps)
         next-binary (choose-current-when-nil (. parsed :include-binary) session.include-binary)
-        next-hex (choose-current-when-nil (. parsed :include-hex) session.include-hex)
-        next-files (choose-current-when-nil (. parsed :include-files) session.include-files)]
+        next-files (choose-current-when-nil (. parsed :include-files) session.include-files)
+        next-transforms (transform-mod.enabled-map parsed session nil)
+        next-source (source-mod.query-source-signature parsed)
+        cur-source (source-mod.query-source-signature (or session.last-parsed-query {}))]
     (or (~= next-hidden session.effective-include-hidden)
         (~= next-ignored session.effective-include-ignored)
         (~= next-deps session.effective-include-deps)
         (~= next-binary session.effective-include-binary)
-        (~= next-hex session.effective-include-hex)
-        (~= next-files session.effective-include-files))))
+        (~= next-files session.effective-include-files)
+        (~= (transform-mod.signature next-transforms)
+            (transform-mod.signature (or session.effective-transforms {})))
+        (~= next-source cur-source))))
 
 (fn render-flags-changed?
   [session parsed]
@@ -125,7 +137,6 @@
              (~= (. parsed :include-ignored) nil)
              (~= (. parsed :include-deps) nil)
              (~= (. parsed :include-binary) nil)
-             (~= (. parsed :include-hex) nil)
              (~= (. parsed :prefilter) nil)
              (~= (. parsed :lazy) nil)
              (. parsed :history)
@@ -136,7 +147,7 @@
                   (~= (vim.trim (. parsed :saved-tag)) "")))
          (= (. parsed :include-files) nil)
          (= (. parsed :include-binary) nil)
-         (= (. parsed :include-hex) nil))))
+         (= (transform-mod.signature (transform-mod.enabled-map parsed nil nil)) ""))))
 
 (fn consume-visible-controls-lines
   [query-mod raw-lines]
@@ -168,8 +179,11 @@
                (not session.closing)
                (vim.api.nvim_buf_is_valid session.prompt-buf)
                (not session._rewriting-visible-controls))
-      (let [raw-lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
-        (let [parsed (query-mod.parse-query-lines raw-lines)
+        (let [raw-lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
+        (let [parsed (resolve-parsed-query
+                       query-mod
+                       session
+                       (query-mod.parse-query-lines raw-lines))
               lines (. parsed :lines)
               consume-visible-controls? false
               effective-lines lines
@@ -178,8 +192,8 @@
               next-ignored (choose-current-when-nil (. parsed :include-ignored) session.include-ignored)
               next-deps (choose-current-when-nil (. parsed :include-deps) session.include-deps)
               next-binary (choose-current-when-nil (. parsed :include-binary) session.include-binary)
-              next-hex (choose-current-when-nil (. parsed :include-hex) session.include-hex)
               next-files (choose-current-when-nil (. parsed :include-files) session.include-files)
+              next-transforms (transform-mod.enabled-map parsed session nil)
               next-prefilter (choose-current-when-nil (. parsed :prefilter) session.prefilter-mode)
               next-lazy (choose-current-when-nil (. parsed :lazy) session.lazy-mode)
               next-expansion (choose-current-when-nil (. parsed :expansion) session.expansion-mode)
@@ -207,14 +221,13 @@
           (set session.effective-include-ignored next-ignored)
           (set session.effective-include-deps next-deps)
           (set session.effective-include-binary next-binary)
-          (set session.effective-include-hex next-hex)
           (set session.effective-include-files next-files)
           (set session.include-hidden next-hidden)
           (set session.include-ignored next-ignored)
           (set session.include-deps next-deps)
           (set session.include-binary next-binary)
-          (set session.include-hex next-hex)
           (set session.include-files next-files)
+          (transform-mod.apply-flags! session next-transforms)
           (set session.prefilter-mode next-prefilter)
           (set session.lazy-mode next-lazy)
           (set session.expansion-mode next-expansion)
@@ -224,8 +237,8 @@
           (set session.prompt-last-applied-text effective-text)
           (set session.meta.file-query-lines (or (. parsed :file-lines) []))
           (set session.meta.include-binary next-binary)
-          (set session.meta.include-hex next-hex)
           (set session.meta.include-files next-files)
+          (transform-mod.apply-flags! session.meta next-transforms)
           (when consume-visible-controls?
             (let [visible-lines (consume-visible-controls-lines query-mod raw-lines)
                   visible-text (table.concat visible-lines "\n")
@@ -239,7 +252,10 @@
             (invalidate-filter-cache! session))
           (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
             (pcall vim.api.nvim_buf_set_var session.meta.buf.buffer "meta_manual_edit_active" false))
-          (when (and session.project-mode source-changed?)
+          (when (and (or session.project-mode
+                         session.active-source-key
+                         (source-mod.query-source-active? parsed))
+                     source-changed?)
             (if schedule-source-set-rebuild!
                 (schedule-source-set-rebuild! session 0)
                 (when apply-source-set!
@@ -274,7 +290,7 @@
         session (. active-by-prompt prompt-buf)]
     (when (and session (not session.closing))
       (let [lines (router_util_mod.prompt-lines session)
-            parsed (query-mod.parse-query-lines lines)
+            parsed (resolve-parsed-query query-mod session (query-mod.parse-query-lines lines))
             effective-text (table.concat (or (. parsed :lines) []) "\n")
             pure-flag-edit? (and (~= effective-text (or session.prompt-last-event-text ""))
                                  (= effective-text (or session.prompt-last-applied-text ""))

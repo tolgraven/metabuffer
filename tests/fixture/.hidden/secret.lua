@@ -1,0 +1,22 @@
+local hidden_meta = "secret meta"
+return hidden_meta
+local hidden_line = "hidden meta" 001
+local hidden_line = "hidden meta" 002
+local hidden_line = "hidden meta" 003
+local hidden_line = "hidden meta" 004
+local hidden_line = "hidden meta" 005
+local hidden_line = "hidden meta" 006
+local hidden_line = "hidden meta" 007
+local hidden_line = "hidden meta" 008
+local hidden_line = "hidden meta" 009
+local hidden_line = "hidden meta" 010
+local hidden_line = "hidden meta" 011
+local hidden_line = "hidden meta" 012
+local hidden_line = "hidden meta" 013
+local hidden_line = "hidden meta" 014
+local hidden_line = "hidden meta" 015
+local hidden_line = "hidden meta" 016
+local hidden_line = "hidden meta" 017
+local hidden_line = "hidden meta" 018
+local hidden_line = "hidden meta" 019
+local hidden_line = "hidden meta" 020

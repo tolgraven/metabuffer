@@ -1,6 +1,8 @@
 -- [nfnl] fnl/metabuffer/window/prompt.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local base = require("metabuffer.window.base")
 local animation_mod = require("metabuffer.window.animation")
+local directive_mod = require("metabuffer.query.directive")
 local util = require("metabuffer.util")
 local M = {}
 local disable_airline_statusline_21 = base["disable-airline-statusline!"]
@@ -20,6 +22,8 @@ local function prompt_buffer_21(win)
     bo["bufhidden"] = "wipe"
     bo["swapfile"] = false
     bo["modifiable"] = true
+    _G.__meta_directive_completefunc = directive_mod.completefunc
+    bo["completefunc"] = "v:lua.__meta_directive_completefunc"
     bo["filetype"] = "metabufferprompt"
   end
   return buf
@@ -94,7 +98,7 @@ M.new = function(nvim, opts)
     local_layout_3f = cfg["window-local-layout"]
   end
   local origin_win = cfg["origin-win"]
-  local floating_3f = not not cfg["floating?"]
+  local floating_3f = clj.boolean(cfg["floating?"])
   local win
   if floating_3f then
     win = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), false, float_config(origin_win, start_height))

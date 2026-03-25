@@ -39,7 +39,7 @@ local function snapshot_rows(session)
   local rows = {}
   for _, src_idx in ipairs(idxs) do
     local ref = (src_idx and refs[src_idx])
-    table.insert(rows, {["src-idx"] = src_idx, kind = ((ref and ref.kind) or ""), path = ((ref and ref.path) or ""), lnum = (ref and ref.lnum), text = ((ref and ref.line) or (src_idx and content[src_idx]) or "")})
+    table.insert(rows, {["src-idx"] = src_idx, kind = ((ref and ref.kind) or ""), path = ((ref and ref.path) or ""), lnum = (ref and ref.lnum), ["source-lnum"] = (ref and ref["source-lnum"]), ["source-text"] = (ref and ref["source-text"]), ["source-group-id"] = (ref and ref["source-group-id"]), ["source-group-kind"] = (ref and ref["source-group-kind"]), ["transform-chain"] = vim.deepcopy(((ref and ref["transform-chain"]) or {})), text = ((ref and ref.line) or (src_idx and content[src_idx]) or "")})
   end
   return rows
 end

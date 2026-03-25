@@ -1,4 +1,5 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local custom-mod (require :metabuffer.custom))
 (local M {})
 
 (local default-prompt-keymaps
@@ -79,6 +80,7 @@
     :default_include_binary false
     :default_include_hex false
     :default_include_files false
+    :default_include_lgrep false
     :project_rg_bin "rg"
     :project_rg_base_args ["--files" "--glob" "!.git"]
     :project_rg_include_ignored_args ["--no-ignore" "--no-ignore-vcs" "--no-ignore-parent"]
@@ -107,6 +109,9 @@
     :project_source_syntax_chunk_lines 240
     :project_bootstrap_delay_ms 120
     :project_bootstrap_idle_delay_ms 140
+    :lgrep_bin "lgrep"
+    :lgrep_limit 80
+    :lgrep_debounce_ms 260
     :prompt_forced_coalesce_ms 700
     :preview_source_switch_debounce_ms 60
     :source_syntax_refresh_debounce_ms 80
@@ -134,6 +139,7 @@
     :ui_animation_scroll_time_scale 1.0
     :ui_animation_scroll_backend "mini"
     :window_local_layout true
+    :custom {:transforms {}}
     :dep_dir_names
     {"node_modules" true
      ".venv" true
@@ -254,6 +260,7 @@
       :default_include_binary (opt-value opts :default_include_binary :meta_project_include_binary (. defaults :default_include_binary))
       :default_include_hex (opt-value opts :default_include_hex :meta_project_include_hex (. defaults :default_include_hex))
       :default_include_files (opt-value opts :default_include_files :meta_project_include_files (. defaults :default_include_files))
+      :default_include_lgrep (opt-value opts :default_include_lgrep :meta_default_include_lgrep (. defaults :default_include_lgrep))
       :project_rg_bin (opt-value opts :project_rg_bin :meta_project_rg_bin (. defaults :project_rg_bin))
       :project_rg_base_args (opt-value opts :project_rg_base_args :meta_project_rg_base_args (. defaults :project_rg_base_args))
       :project_rg_include_ignored_args (opt-value opts :project_rg_include_ignored_args :meta_project_rg_include_ignored_args (. defaults :project_rg_include_ignored_args))
@@ -282,6 +289,9 @@
       :project_source_syntax_chunk_lines (opt-value opts :project_source_syntax_chunk_lines :meta_project_source_syntax_chunk_lines (. defaults :project_source_syntax_chunk_lines))
       :project_bootstrap_delay_ms (opt-value opts :project_bootstrap_delay_ms :meta_project_bootstrap_delay_ms (. defaults :project_bootstrap_delay_ms))
       :project_bootstrap_idle_delay_ms (opt-value opts :project_bootstrap_idle_delay_ms :meta_project_bootstrap_idle_delay_ms (. defaults :project_bootstrap_idle_delay_ms))
+      :lgrep_bin (opt-value opts :lgrep_bin :meta_lgrep_bin (. defaults :lgrep_bin))
+      :lgrep_limit (opt-value opts :lgrep_limit :meta_lgrep_limit (. defaults :lgrep_limit))
+      :lgrep_debounce_ms (opt-value opts :lgrep_debounce_ms :meta_lgrep_debounce_ms (. defaults :lgrep_debounce_ms))
       :prompt_forced_coalesce_ms (opt-value opts :prompt_forced_coalesce_ms :meta_prompt_forced_coalesce_ms (. defaults :prompt_forced_coalesce_ms))
       :preview_source_switch_debounce_ms (opt-value opts :preview_source_switch_debounce_ms :meta_preview_source_switch_debounce_ms (. defaults :preview_source_switch_debounce_ms))
       :source_syntax_refresh_debounce_ms (opt-value opts :source_syntax_refresh_debounce_ms :meta_source_syntax_refresh_debounce_ms (. defaults :source_syntax_refresh_debounce_ms))
@@ -340,6 +350,9 @@
                                                               (nested-value opts [:ui :animation :backend]
                                                                             (opt-value opts :ui_animation_backend :meta_ui_animation_backend
                                                                                        (. defaults :ui_animation_backend)))))
+      :custom (vim.deepcopy (or (nested-value opts [:options :custom] nil)
+                                (nested-value opts [:custom] nil)
+                                (. defaults :custom)))
       :window_local_layout (if (= (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)) nil)
                                true
                                (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)))
@@ -364,6 +377,7 @@
     (set router.default-include-binary (. options :default_include_binary))
     (set router.default-include-hex (. options :default_include_hex))
     (set router.default-include-files (. options :default_include_files))
+    (set router.default-include-lgrep (. options :default_include_lgrep))
     (set router.project-rg-bin (. options :project_rg_bin))
     (set router.project-rg-base-args (. options :project_rg_base_args))
     (set router.project-rg-include-ignored-args (. options :project_rg_include_ignored_args))
@@ -392,6 +406,9 @@
     (set router.project-lazy-prefilter-enabled (. options :project_lazy_prefilter_enabled))
     (set router.project-bootstrap-delay-ms (. options :project_bootstrap_delay_ms))
     (set router.project-bootstrap-idle-delay-ms (. options :project_bootstrap_idle_delay_ms))
+    (set router.lgrep-bin (. options :lgrep_bin))
+    (set router.lgrep-limit (. options :lgrep_limit))
+    (set router.lgrep-debounce-ms (. options :lgrep_debounce_ms))
     (set router.prompt-forced-coalesce-ms (. options :prompt_forced_coalesce_ms))
     (set router.preview-source-switch-debounce-ms (. options :preview_source_switch_debounce_ms))
     (set router.source-syntax-refresh-debounce-ms (. options :source_syntax_refresh_debounce_ms))
@@ -419,6 +436,7 @@
     (set router.ui-animation-scroll-time-scale (. options :ui_animation_scroll_time_scale))
     (set router.ui-animation-scroll-backend (. options :ui_animation_scroll_backend))
     (set router.window-local-layout (. options :window_local_layout))
+    (set router.custom-config (. options :custom))
     (set router.default-prompt-keymaps (. (. M.defaults :keymaps) :prompt))
     (set router.default-main-keymaps (. (. M.defaults :keymaps) :main))
     (set router.default-prompt-fallback-keymaps (. (. M.defaults :keymaps) :prompt_fallback))
@@ -426,6 +444,7 @@
     (set router.main-keymaps (. keymaps :main))
     (set router.prompt-fallback-keymaps (. keymaps :prompt_fallback))
     (set router.dep-dir-names (. options :dep_dir_names))
+    (custom-mod.configure! (. options :custom))
     resolved))
 
 M

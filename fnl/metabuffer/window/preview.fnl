@@ -1,4 +1,5 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
 (local source-mod (require :metabuffer.source))
 (local statusline-mod (require :metabuffer.window.statusline))
@@ -76,6 +77,7 @@
   "Create preview window manager for selected source refs."
   (local selected-ref (. opts :selected-ref))
   (local read-file-lines-cached (. opts :read-file-lines-cached))
+  (local read-file-view-cached (. opts :read-file-view-cached))
   (local floating-window-mod (. opts :floating-window-mod))
   (local is-active-session (. opts :is-active-session))
   (local debug-log (. opts :debug-log))
@@ -180,7 +182,7 @@
     (fn [session win]
       (when (and win (vim.api.nvim_win_is_valid win))
         (disable-airline-statusline! win)
-        (let [real-buffer? (not (not session.preview-real-buffer?))
+        (let [real-buffer? (clj.boolean session.preview-real-buffer?)
               win-opts {:number real-buffer?
                         :relativenumber false
                         :wrap false
@@ -226,7 +228,7 @@
                     session.preview-scratch-buf
                     (vim.api.nvim_create_buf false true))
             width (target-preview-width session)
-            float-start? (not (not session.prompt-animating?))
+            float-start? (clj.boolean session.prompt-animating?)
             height (if float-start? 1 (math.max 1 (vim.api.nvim_win_get_height session.prompt-win)))
             win-id (if float-start?
                        (. (floating-window-mod.new vim buf (preview-float-config session width height)) :window)
@@ -321,7 +323,7 @@
                        (vim.api.nvim_win_get_height session.preview-win)
                        (vim.api.nvim_win_get_height session.meta.win.window))
           width (target-preview-width session)
-          preview-data (source-mod.preview-lines session ref p-height read-file-lines-cached)
+          preview-data (source-mod.preview-lines session ref p-height read-file-lines-cached read-file-view-cached)
           ft (source-mod.preview-filetype ref)
           lines (or preview-data.lines (trim-or-pad-lines [] p-height))
           src-lnum (math.max 1 (or preview-data.focus-lnum (and ref (or ref.preview-lnum ref.lnum)) 1))

@@ -1,0 +1,69 @@
+local M = {}
+
+function M.setup(opts)
+  local meta = opts and opts.meta or "meta"
+  local metam = opts and opts.metam or "metam"
+  return { meta = meta, metam = metam }
+end
+
+return M
+local fixture_lua_value = "meta local lua" 001
+local fixture_lua_value = "meta local lua" 002
+local fixture_lua_value = "meta local lua" 003
+local fixture_lua_value = "meta local lua" 004
+local fixture_lua_value = "meta local lua" 005
+local fixture_lua_value = "meta local lua" 006
+local fixture_lua_value = "meta local lua" 007
+local fixture_lua_value = "meta local lua" 008
+local fixture_lua_value = "meta local lua" 009
+local fixture_lua_value = "meta local lua" 010
+local fixture_lua_value = "meta local lua" 011
+local fixture_lua_value = "meta local lua" 012
+local fixture_lua_value = "meta local lua" 013
+local fixture_lua_value = "meta local lua" 014
+local fixture_lua_value = "meta local lua" 015
+local fixture_lua_value = "meta local lua" 016
+local fixture_lua_value = "meta local lua" 017
+local fixture_lua_value = "meta local lua" 018
+local fixture_lua_value = "meta local lua" 019
+local fixture_lua_value = "meta local lua" 020
+local fixture_lua_value = "meta local lua" 021
+local fixture_lua_value = "meta local lua" 022
+local fixture_lua_value = "meta local lua" 023
+local fixture_lua_value = "meta local lua" 024
+local fixture_lua_value = "meta local lua" 025
+local fixture_lua_value = "meta local lua" 026
+local fixture_lua_value = "meta local lua" 027
+local fixture_lua_value = "meta local lua" 028
+local fixture_lua_value = "meta local lua" 029
+local fixture_lua_value = "meta local lua" 030
+local fixture_lua_value = "meta local lua" 031
+local fixture_lua_value = "meta local lua" 032
+local fixture_lua_value = "meta local lua" 033
+local fixture_lua_value = "meta local lua" 034
+local fixture_lua_value = "meta local lua" 035
+local fixture_lua_value = "meta local lua" 036
+local fixture_lua_value = "meta local lua" 037
+local fixture_lua_value = "meta local lua" 038
+local fixture_lua_value = "meta local lua" 039
+local fixture_lua_value = "meta local lua" 040
+local fixture_lua_value = "meta local lua" 041
+local fixture_lua_value = "meta local lua" 042
+local fixture_lua_value = "meta local lua" 043
+local fixture_lua_value = "meta local lua" 044
+local fixture_lua_value = "meta local lua" 045
+local fixture_lua_value = "meta local lua" 046
+local fixture_lua_value = "meta local lua" 047
+local fixture_lua_value = "meta local lua" 048
+local fixture_lua_value = "meta local lua" 049
+local fixture_lua_value = "meta local lua" 050
+local fixture_lua_value = "meta local lua" 051
+local fixture_lua_value = "meta local lua" 052
+local fixture_lua_value = "meta local lua" 053
+local fixture_lua_value = "meta local lua" 054
+local fixture_lua_value = "meta local lua" 055
+local fixture_lua_value = "meta local lua" 056
+local fixture_lua_value = "meta local lua" 057
+local fixture_lua_value = "meta local lua" 058
+local fixture_lua_value = "meta local lua" 059
+local fixture_lua_value = "meta local lua" 060

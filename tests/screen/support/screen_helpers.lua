@@ -6,10 +6,51 @@ M.eq = MiniTest.expect.equality
 
 local debug_dump_path = "/tmp/metabuffer-mini-integration.log"
 local debug_dump_enabled = vim.env.TEST_DEBUG_DUMP == '1'
+local stress_wait_scale = tonumber(vim.env.META_STRESS_WAIT_SCALE or '1') or 1
+local session_resolver = [[
+  local function resolve_session()
+    local router = require('metabuffer.router')
+    local source = rawget(_G, '__meta_source_buf')
+    local s = source and router['active-by-source'][source] or nil
+    if s then
+      return s
+    end
+    local uniq, found = {}, nil
+    for _, session in pairs(router['active-by-prompt']) do
+      if session and not uniq[session] then
+        uniq[session] = true
+        if found and found ~= session then
+          return nil
+        end
+        found = session
+      end
+    end
+    if found and found['source-buf'] then
+      _G.__meta_source_buf = found['source-buf']
+    end
+    return found
+  end
+  local s = resolve_session()
+]]
+
+local function session_expr(body)
+  return ([[(function()
+%s
+%s
+end)()]]):format(session_resolver, body)
+end
+
+local function hook_dump(tag)
+  if not debug_dump_enabled then
+    return
+  end
+  vim.fn.writefile({ '[hook] ' .. tag }, debug_dump_path, 'a')
+end
 
 function M.wait_for(pred, timeout_ms)
   local ok = profiler.measure('wait', profiler.caller_label(2, 'wait_for'), function()
-    return vim.wait(timeout_ms or 3000, pred, 20)
+    local timeout = math.max(50, math.floor((timeout_ms or 3000) * stress_wait_scale))
+    return vim.wait(timeout, pred, 20)
   end)
   M.eq(ok, true)
 end
@@ -17,7 +58,7 @@ end
 function M.child_setup()
   local root = vim.fn.getcwd()
   local worker_idx = tonumber(vim.env.TEST_WORKER_INDEX or '') or 1
-  local startup_jitter = (worker_idx % 8) * 35
+  local startup_jitter = (worker_idx % 8) * 15
 
   if startup_jitter > 0 then
     vim.loop.sleep(startup_jitter)
@@ -27,9 +68,10 @@ function M.child_setup()
     local last_err = nil
     for attempt = 1, 4 do
       local ok, err = pcall(function()
-        M.child.restart(
+        M.stop_child_once()
+        M.child.start(
           { "-u", root .. "/tests/minimal_init.lua", "-n", "-i", "NONE" },
-          { connection_timeout = 20000 }
+          { connection_timeout = 12000 }
         )
       end)
       if ok then
@@ -40,29 +82,48 @@ function M.child_setup()
     end
     error(last_err)
   end)
-  M.child.o.hidden = true
-  M.child.o.swapfile = false
-  M.child.cmd("cd " .. root)
   M.child.lua(string.format([[
+    vim.o.hidden = true
+    vim.o.swapfile = false
+    vim.cmd("cd %s")
     _G.__meta_debug_dump_path = %q
-    local ok = pcall(vim.fn.delete, _G.__meta_debug_dump_path)
-    if not ok then end
-    vim.v.errmsg = ''
-    pcall(vim.cmd, 'messages clear')
-  ]], debug_dump_path))
+    pcall(vim.fn.delete, _G.__meta_debug_dump_path)
+    require('tests.support.runtime_guard').clear()
+  ]], root, debug_dump_path))
 end
 
 function M.stop_child_once()
   if M.child.is_running() then
+    local job = M.child.job
     pcall(function()
-      M.child.lua([[
-        pcall(vim.cmd, 'stopinsert')
-        vim.schedule(function()
-          pcall(vim.cmd, 'silent! qa!')
-        end)
-      ]])
+      if job and job.channel then
+        vim.rpcnotify(job.channel, 'nvim_exec_lua', [[
+          pcall(vim.cmd, 'stopinsert')
+          vim.schedule(function()
+            pcall(vim.cmd, 'silent! qa!')
+          end)
+        ]], {})
+      end
     end)
-    M.child.stop()
+    if job and job.id then
+      vim.fn.jobwait({ job.id }, 300)
+    end
+    pcall(function()
+      if job and job.channel then
+        vim.fn.chanclose(job.channel)
+      end
+    end)
+    pcall(function()
+      if job and job.id then
+        vim.fn.chanclose(job.id)
+      end
+    end)
+    pcall(function()
+      if job and job.address then
+        vim.fn.delete(job.address)
+      end
+    end)
+    M.child.job = nil
   end
 end
 
@@ -128,13 +189,9 @@ function M.feed_prompt_key(key, mode)
 end
 
 function M.session_prompt_focused()
-  return M.child.lua_get([[
-    (function()
-      local router = require('metabuffer.router')
-      local s = router['active-by-source'][_G.__meta_source_buf]
-      return not not (s and s['prompt-win'] and vim.api.nvim_get_current_win() == s['prompt-win'])
-    end)()
-  ]])
+  return M.child.lua_get(session_expr([[
+    return not not (s and s['prompt-win'] and vim.api.nvim_get_current_win() == s['prompt-win'])
+  ]]))
 end
 
 function M.case_name()
@@ -153,38 +210,114 @@ end
 function M.case_hooks()
   return {
     pre_case = function()
+      hook_dump('pre_case/before-child-setup')
       M.child_setup()
+      hook_dump('pre_case/after-child-setup')
     end,
     post_case = function()
-      local errmsg = M.child.lua_get("return vim.v.errmsg or ''")
-      if type(errmsg) == 'string' then
-        errmsg = errmsg:gsub('^%s+', ''):gsub('%s+$', '')
-      end
-      M.eq(errmsg, '')
-
-      local messages = M.child.lua_get([[
-        local ok, out = pcall(function()
-          return vim.api.nvim_exec2('silent messages', { output = true }).output or ''
-        end)
-        return ok and out or ''
-      ]])
-      if type(messages) == 'string' then
-        local trimmed = messages:gsub('^%s+', ''):gsub('%s+$', '')
-        local bad =
-          trimmed:find('stack traceback', 1, true)
-          or trimmed:find('torn down after error', 1, true)
-          or trimmed:find('_core/editor.lua', 1, true)
-          or trimmed:find('expected', 1, true)
-          or trimmed:find('nil', 1, true)
-        if bad ~= nil then
-          io.stdout:write('[screen-helper] unexpected :messages output follows\n')
-          io.stdout:write(trimmed .. '\n')
-        end
-        M.eq(bad == nil, true)
-      end
+      hook_dump('post_case/start')
+      M.stop_child_once()
+      hook_dump('post_case/end')
     end,
     post_once = function()
+      hook_dump('post_once/start')
       M.stop_child_once()
+      hook_dump('post_once/end')
+    end,
+  }
+end
+
+function M.shared_child_hooks()
+  return {
+    pre_once = function()
+      hook_dump('pre_once/shared-child-setup')
+      M.child_setup()
+      hook_dump('pre_once/shared-child-setup-done')
+    end,
+    pre_case = function()
+      hook_dump('pre_case/shared-reset')
+      pcall(function()
+        M.child.lua([[
+          (function()
+            local r = require('metabuffer.router')
+            for k, s in pairs(r['active-by-prompt'] or {}) do
+              pcall(function()
+                s.closing = true
+                if s.meta and s.meta.win then
+                  pcall(function() s.meta.win:close() end)
+                end
+              end)
+            end
+            r['active-by-prompt'] = {}
+            r['active-by-source'] = {}
+            r['sessions'] = {}
+            vim.cmd('silent! %bwipeout!')
+            vim.cmd('enew')
+          end)()
+        ]])
+      end)
+      hook_dump('pre_case/shared-reset-done')
+    end,
+    post_case = function()
+      hook_dump('post_case/shared-noop')
+    end,
+    post_once = function()
+      hook_dump('post_once/shared-stop')
+      M.stop_child_once()
+      hook_dump('post_once/shared-stop-done')
+    end,
+  }
+end
+
+--- Hooks for cross-set child sharing within a MiniTest batch.
+--- Unlike shared_child_hooks(), the child is NOT stopped in post_once.
+--- This lets multiple test files batched into one MiniTest process share
+--- a single child nvim, eliminating ~2s startup per additional file.
+--- The child dies when the parent nvim exits at batch end.
+function M.batch_child_hooks()
+  return {
+    pre_once = function()
+      hook_dump('pre_once/batch-child-check')
+      if not M.child.is_running() then
+        hook_dump('pre_once/batch-child-setup')
+        M.child_setup()
+        hook_dump('pre_once/batch-child-setup-done')
+      else
+        hook_dump('pre_once/batch-child-reuse')
+      end
+    end,
+    pre_case = function()
+      hook_dump('pre_case/batch-reset')
+      pcall(function()
+        M.child.lua([[
+          (function()
+            local r = require('metabuffer.router')
+            for k, s in pairs(r['active-by-prompt'] or {}) do
+              pcall(function()
+                s.closing = true
+                if s.meta and s.meta.win then
+                  pcall(function() s.meta.win:close() end)
+                end
+              end)
+            end
+            r['active-by-prompt'] = {}
+            r['active-by-source'] = {}
+            r['sessions'] = {}
+            vim.cmd('silent! %bwipeout!')
+            vim.cmd('enew')
+          end)()
+        ]])
+      end)
+      hook_dump('pre_case/batch-reset-done')
+    end,
+    post_case = function()
+      hook_dump('post_case/batch-noop')
+    end,
+    post_once = function()
+      hook_dump('post_once/batch-keep-alive')
+      -- Intentionally NOT stopping child.
+      -- It will be reused by the next test set in this batch,
+      -- or killed when the parent nvim process exits.
     end,
   }
 end
@@ -194,12 +327,13 @@ function M.timed_case(fn)
 end
 
 function M.open_meta_with_lines(lines)
-  M.child.cmd("enew")
-  M.child.api.nvim_buf_set_lines(0, 0, -1, false, lines)
-  M.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
-  M.child.type_keys(":", "Meta", "<CR>")
-  vim.loop.sleep(150)
-  M.child.lua("if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end")
+  M.child.lua(string.format([[
+    vim.cmd('enew')
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, %s)
+    _G.__meta_source_buf = vim.api.nvim_get_current_buf()
+    vim.cmd('Meta')
+    if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end
+  ]], vim.inspect(lines)))
   M.wait_for(function()
     return M.child.lua_get("require('metabuffer.router')['active-by-source'][_G.__meta_source_buf] ~= nil")
   end)
@@ -222,6 +356,40 @@ local function project_root_for_tests()
     return M._fixture_root
   end
 
+   -- Shared pre-copied fixture: skip in-child file creation, just seed file cache.
+  -- Resolve symlinks (macOS /var -> /private/var) so cache key matches getcwd().
+  local shared = vim.env.META_TEST_FIXTURE_ROOT
+  if shared and shared ~= '' and vim.fn.isdirectory(shared) == 1 then
+    local resolved = vim.uv.fs_realpath(shared) or shared
+    M._fixture_root = resolved
+    M.child.lua(string.format([[
+      (function()
+        local root = %q
+        local all_files = vim.fn.globpath(root, '**/*', true, true)
+        local visible = {}
+        for _, f in ipairs(all_files) do
+          if vim.fn.isdirectory(f) == 0
+            and not f:find('/.hidden/', 1, true)
+            and not f:find('/ignored/', 1, true) then
+            visible[#visible + 1] = f
+          end
+        end
+        local cache = {}
+        cache[root .. '|0|0|0'] = visible
+        cache[root .. '|0|0|1'] = all_files
+        cache[root .. '|0|1|0'] = visible
+        cache[root .. '|0|1|1'] = all_files
+        cache[root .. '|1|0|0'] = all_files
+        cache[root .. '|1|0|1'] = all_files
+        cache[root .. '|1|1|0'] = all_files
+        cache[root .. '|1|1|1'] = all_files
+        vim.g.__meta_project_file_list_cache = cache
+      end)()
+    ]], resolved))
+    return M._fixture_root
+  end
+
+  -- Fallback: create fixture inside child nvim (slower).
   M._fixture_root = M.child.lua_get([[
     (function()
       local root = vim.fn.tempname()
@@ -257,6 +425,7 @@ local function project_root_for_tests()
       end
 
       mkdir(root)
+      root = vim.uv.fs_realpath(root) or root
       mkdir(root .. '/lua/metabuffer/core')
       mkdir(root .. '/lua/metabuffer/window')
       mkdir(root .. '/fnl/metabuffer/router')
@@ -359,6 +528,28 @@ local function project_root_for_tests()
         }, repeat_lines(string.format('local fixture_pack_%02d = "meta local lua"', i), 24)))
       end
 
+      -- Pre-seed project file list cache so rg never runs under test load.
+      local all_files = vim.fn.globpath(root, '**/*', true, true)
+      local visible = {}
+      for _, f in ipairs(all_files) do
+        if vim.fn.isdirectory(f) == 0
+          and not f:find('/.hidden/', 1, true)
+          and not f:find('/ignored/', 1, true) then
+          visible[#visible + 1] = f
+        end
+      end
+      -- Cache with all four key variants used by project-file-list.
+      local cache = {}
+      cache[root .. '|0|0|0'] = visible
+      cache[root .. '|0|0|1'] = all_files
+      cache[root .. '|0|1|0'] = visible
+      cache[root .. '|0|1|1'] = all_files
+      cache[root .. '|1|0|0'] = all_files
+      cache[root .. '|1|0|1'] = all_files
+      cache[root .. '|1|1|0'] = all_files
+      cache[root .. '|1|1|1'] = all_files
+      vim.g.__meta_project_file_list_cache = cache
+
       return root
     end)()
   ]])
@@ -367,18 +558,62 @@ end
 
 function M.open_project_meta_from_file(path)
   local root = project_root_for_tests()
-  M.child.cmd("cd " .. root)
-  M.child.cmd("edit " .. root .. "/" .. path)
-  M.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
-  M.child.type_keys(":", "Meta!", "<CR>")
-  vim.loop.sleep(150)
-  M.child.lua("if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end")
+  M.child.lua(string.format([[
+    vim.cmd("cd %s")
+    vim.cmd("edit %s/%s")
+    _G.__meta_source_buf = vim.api.nvim_get_current_buf()
+    vim.cmd('Meta!')
+    if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end
+  ]], root, root, path))
   M.wait_for(function()
     return M.child.lua_get("require('metabuffer.router')['active-by-source'][_G.__meta_source_buf] ~= nil")
   end, 6000)
 end
 
+function M.open_fixture_file(path)
+  return M.open_project_meta_from_file(path)
+end
+
+function M.edit_fixture_file(path)
+  local root = project_root_for_tests()
+  M.child.lua(string.format([[
+    vim.cmd("cd %s")
+    vim.cmd("edit %s/%s")
+    _G.__meta_source_buf = vim.api.nvim_get_current_buf()
+  ]], root, root, path))
+end
+
+local _temp_project_counter = 0
+
 function M.make_temp_project()
+  local src = vim.env.META_TEST_TEMP_PROJECT_SRC
+  if src and src ~= '' and vim.fn.isdirectory(src) == 1 then
+    _temp_project_counter = _temp_project_counter + 1
+    local dest = vim.fn.tempname() .. '_tp' .. _temp_project_counter
+    vim.fn.system({ 'cp', '-R', src, dest })
+    local root = vim.uv.fs_realpath(dest) or dest
+    M.child.lua(string.format([[
+      (function()
+        local root = %q
+        local files = {
+          root .. "/main.txt",
+          root .. "/doc/readme.md",
+          root .. "/lua/mod.lua",
+          root .. "/README.md",
+        }
+        local prev = vim.g.__meta_project_file_list_cache or {}
+        for _, k in ipairs({
+          root .. "|0|0|0", root .. "|0|0|1", root .. "|0|1|0", root .. "|0|1|1",
+          root .. "|1|0|0", root .. "|1|0|1", root .. "|1|1|0", root .. "|1|1|1",
+        }) do
+          prev[k] = files
+        end
+        vim.g.__meta_project_file_list_cache = prev
+      end)()
+    ]], root))
+    return root
+  end
+
   return M.child.lua_get([[
     (function()
       local root = vim.fn.tempname()
@@ -400,18 +635,39 @@ function M.make_temp_project()
       vim.fn.writefile(main, root .. "/main.txt")
       vim.fn.writefile({ "meta docs", "metam docs", "other" }, root .. "/doc/readme.md")
       vim.fn.writefile({ "local metabuffer = true", "local meta = 1", "return metabuffer" }, root .. "/lua/mod.lua")
+      vim.fn.writefile({ "# Temp project README" }, root .. "/README.md")
+
+      -- Seed rg file-list cache so project-file-list skips rg.
+      local files = {
+        root .. "/main.txt",
+        root .. "/doc/readme.md",
+        root .. "/lua/mod.lua",
+        root .. "/README.md",
+      }
+      local prev = vim.g.__meta_project_file_list_cache or {}
+      prev[root .. "|0|0|0"] = files
+      prev[root .. "|0|0|1"] = files
+      prev[root .. "|0|1|0"] = files
+      prev[root .. "|0|1|1"] = files
+      prev[root .. "|1|0|0"] = files
+      prev[root .. "|1|0|1"] = files
+      prev[root .. "|1|1|0"] = files
+      prev[root .. "|1|1|1"] = files
+      vim.g.__meta_project_file_list_cache = prev
+
       return root
     end)()
   ]])
 end
 
 function M.open_project_meta_in_dir(root, relpath)
-  M.child.cmd("cd " .. root)
-  M.child.cmd("edit " .. root .. "/" .. relpath)
-  M.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
-  M.child.type_keys(":", "Meta!", "<CR>")
-  vim.loop.sleep(150)
-  M.child.lua("if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end")
+  M.child.lua(string.format([[
+    vim.cmd("cd %s")
+    vim.cmd("edit %s/%s")
+    _G.__meta_source_buf = vim.api.nvim_get_current_buf()
+    vim.cmd('Meta!')
+    if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end
+  ]], root, root, relpath))
   M.wait_for(function()
     return M.child.lua_get("require('metabuffer.router')['active-by-source'][_G.__meta_source_buf] ~= nil")
   end, 6000)
@@ -606,21 +862,17 @@ function M.session_prompt_statusline()
 end
 
 function M.session_info_snapshot()
-  local encoded = M.child.lua_get([[
-    (function()
-      local router = require('metabuffer.router')
-      local s = router['active-by-source'][_G.__meta_source_buf]
-      if not s then return nil end
-      local info_win, info_buf = s['info-win'], s['info-buf']
-      if not (info_win and vim.api.nvim_win_is_valid(info_win) and info_buf and vim.api.nvim_buf_is_valid(info_buf)) then
-        return nil
-      end
-      local row = vim.api.nvim_win_get_cursor(info_win)[1]
-      local line = vim.api.nvim_buf_get_lines(info_buf, row - 1, row, false)[1] or ''
-      local count = vim.api.nvim_buf_line_count(info_buf)
-      return vim.json.encode({ row = row, line = line, count = count })
-    end)()
-  ]])
+  local encoded = M.child.lua_get(session_expr([[
+    if not s then return nil end
+    local info_win, info_buf = s['info-win'], s['info-buf']
+    if not (info_win and vim.api.nvim_win_is_valid(info_win) and info_buf and vim.api.nvim_buf_is_valid(info_buf)) then
+      return nil
+    end
+    local row = vim.api.nvim_win_get_cursor(info_win)[1]
+    local line = vim.api.nvim_buf_get_lines(info_buf, row - 1, row, false)[1] or ''
+    local count = vim.api.nvim_buf_line_count(info_buf)
+    return vim.json.encode({ row = row, line = line, count = count })
+  ]]))
   if encoded == nil or encoded == vim.NIL then return nil end
   return vim.json.decode(encoded)
 end
@@ -668,11 +920,11 @@ function M.start_info_blank_watch(duration_ms)
 end
 
 function M.info_blank_watch_done()
-  return M.child.lua_get('return not not _G.__meta_info_blank_watch_done')
+  return M.child.lua_get('not not _G.__meta_info_blank_watch_done')
 end
 
 function M.info_blank_seen()
-  return M.child.lua_get('return not not _G.__meta_info_blank_seen')
+  return M.child.lua_get('not not _G.__meta_info_blank_seen')
 end
 
 function M.session_info_view()
@@ -818,6 +1070,43 @@ function M.session_main_statusline()
   ]])
 end
 
+function M.session_main_wrap()
+  return M.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta and s.meta.win) then
+        return false
+      end
+      local win = s.meta.win.window
+      if not (win and vim.api.nvim_win_is_valid(win)) then
+        return false
+      end
+      local ok, val = pcall(vim.api.nvim_get_option_value, 'wrap', { win = win })
+      return ok and not not val or false
+    end)()
+  ]])
+end
+
+function M.set_session_main_wrap(enabled)
+  M.child.lua(string.format([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      if not (s and s.meta and s.meta.win) then
+        return
+      end
+      local win = s.meta.win.window
+      if not (win and vim.api.nvim_win_is_valid(win)) then
+        return
+      end
+      vim.api.nvim_set_current_win(win)
+      vim.api.nvim_set_option_value('wrap', %s, { win = win })
+      vim.api.nvim_set_option_value('linebreak', %s, { win = win })
+    end)()
+  ]], enabled and 'true' or 'false', enabled and 'true' or 'false'))
+end
+
 function M.set_session_main_view(topline, lnum, height)
   M.child.lua(string.format([[
     (function()
@@ -866,7 +1155,7 @@ function M.scroll_main_and_wait(action, timeout_ms)
       router['scroll-main'](s.prompt_buf, %q)
       return target
     end)()
-  ]], action, action, action, action, action, action))
+  ]], action, action, action, action, action, action, action, action))
   M.wait_for(function()
     local view = M.session_main_view()
     return view and target and view.topline == target.topline and view.lnum == target.lnum
@@ -900,7 +1189,7 @@ function M.compute_main_scroll_target(action)
         return { topline = new_top, lnum = new_lnum }
       end)
     end)()
-  ]], action, action, action, action, action, action))
+  ]], action, action, action, action, action, action, action))
 end
 
 function M.session_preview_contains(needle)
@@ -923,14 +1212,10 @@ function M.session_preview_contains(needle)
 end
 
 function M.session_preview_visible()
-  return M.child.lua_get([[
-    (function()
-      local router = require('metabuffer.router')
-      local s = router['active-by-source'][_G.__meta_source_buf]
-      local win = s and s['preview-win'] or nil
-      return win and vim.api.nvim_win_is_valid(win) or false
-    end)()
-  ]])
+  return M.child.lua_get(session_expr([[
+    local win = s and s['preview-win'] or nil
+    return win and vim.api.nvim_win_is_valid(win) or false
+  ]]))
 end
 
 function M.session_preview_view()
@@ -995,19 +1280,15 @@ function M.resize_editor_columns(columns)
 end
 
 function M.editor_columns()
-  return M.child.lua_get('return vim.o.columns')
+  return M.child.lua_get('vim.o.columns')
 end
 
 function M.session_prompt_win_height()
-  return M.child.lua_get([[
-    (function()
-      local router = require('metabuffer.router')
-      local s = router['active-by-source'][_G.__meta_source_buf]
-      local win = s and s['prompt-win'] or nil
-      if not (win and vim.api.nvim_win_is_valid(win)) then return -1 end
-      return vim.api.nvim_win_get_height(win)
-    end)()
-  ]])
+  return M.child.lua_get(session_expr([[
+    local win = s and s['prompt-win'] or nil
+    if not (win and vim.api.nvim_win_is_valid(win)) then return -1 end
+    return vim.api.nvim_win_get_height(win)
+  ]]))
 end
 
 function M.set_prompt_win_height(h)
@@ -1023,20 +1304,23 @@ function M.set_prompt_win_height(h)
 end
 
 function M.session_active()
-  return M.child.lua_get([[
-    (function()
-      local router = require('metabuffer.router')
-      return router['active-by-source'][_G.__meta_source_buf] ~= nil
-    end)()
-  ]])
+  return M.child.lua_get(session_expr([[
+    return s ~= nil
+  ]]))
 end
 
 function M.session_ui_hidden()
+  return M.child.lua_get(session_expr([[
+    return s and s['ui-hidden'] == true or false
+  ]]))
+end
+
+function M.session_not_visible()
   return M.child.lua_get([[
     (function()
       local router = require('metabuffer.router')
       local s = router['active-by-source'][_G.__meta_source_buf]
-      return s and s['ui-hidden'] == true or false
+      return (s == nil) or (s['ui-hidden'] == true)
     end)()
   ]])
 end
@@ -1126,24 +1410,62 @@ function M.dump_state(tag)
 end
 
 function M.type_prompt(keys)
-  ensure_prompt_insert()
-  local encoded = M.child.api.nvim_replace_termcodes(keys, true, false, true)
-  M.child.api.nvim_input(encoded)
+  M.child.lua(string.format([[
+    (function()
+      local router = require('metabuffer.router')
+      local session = router['active-by-source'][_G.__meta_source_buf]
+      assert(session and session['prompt-win'], 'missing prompt window')
+      if vim.api.nvim_win_is_valid(session['prompt-win']) then
+        vim.api.nvim_set_current_win(session['prompt-win'])
+        local mode = vim.fn.mode(1)
+        if mode ~= 'i' and mode ~= 'ic' and mode ~= 'ix' then
+          vim.cmd('startinsert')
+        end
+      end
+      local encoded = vim.api.nvim_replace_termcodes(%q, true, false, true)
+      vim.api.nvim_input(encoded)
+    end)()
+  ]], keys))
   M.dump_state("type " .. keys)
 end
 
 function M.type_prompt_text(text)
-  ensure_prompt_insert()
-  for i = 1, #text do
-    M.child.api.nvim_input(string.sub(text, i, i))
-  end
+  M.child.lua(string.format([[
+    (function()
+      local router = require('metabuffer.router')
+      local session = router['active-by-source'][_G.__meta_source_buf]
+      assert(session and session['prompt-win'], 'missing prompt window')
+      if vim.api.nvim_win_is_valid(session['prompt-win']) then
+        vim.api.nvim_set_current_win(session['prompt-win'])
+        local mode = vim.fn.mode(1)
+        if mode ~= 'i' and mode ~= 'ic' and mode ~= 'ix' then
+          vim.cmd('startinsert')
+        end
+      end
+      local text = %q
+      for i = 1, #text do
+        vim.api.nvim_input(string.sub(text, i, i))
+      end
+    end)()
+  ]], text))
   M.dump_state("type_text " .. text)
 end
 
 function M.type_prompt_human(text, per_key_ms)
   local delay = per_key_ms or 25
   local slept = 0
-  ensure_prompt_insert()
+  M.child.lua([[
+    local router = require('metabuffer.router')
+    local session = router['active-by-source'][_G.__meta_source_buf]
+    assert(session and session['prompt-win'], 'missing prompt window')
+    if vim.api.nvim_win_is_valid(session['prompt-win']) then
+      vim.api.nvim_set_current_win(session['prompt-win'])
+      local mode = vim.fn.mode(1)
+      if mode ~= 'i' and mode ~= 'ic' and mode ~= 'ix' then
+        vim.cmd('startinsert')
+      end
+    end
+  ]])
   for i = 1, #text do
     M.child.api.nvim_input(string.sub(text, i, i))
     if delay > 0 then
@@ -1158,7 +1480,18 @@ end
 function M.type_prompt_tokens(tokens, per_key_ms)
   local delay = per_key_ms or 25
   local slept = 0
-  ensure_prompt_insert()
+  M.child.lua([[
+    local router = require('metabuffer.router')
+    local session = router['active-by-source'][_G.__meta_source_buf]
+    assert(session and session['prompt-win'], 'missing prompt window')
+    if vim.api.nvim_win_is_valid(session['prompt-win']) then
+      vim.api.nvim_set_current_win(session['prompt-win'])
+      local mode = vim.fn.mode(1)
+      if mode ~= 'i' and mode ~= 'ic' and mode ~= 'ix' then
+        vim.cmd('startinsert')
+      end
+    end
+  ]])
   for _, key in ipairs(tokens) do
     M.child.type_keys(0, key)
     if delay > 0 then

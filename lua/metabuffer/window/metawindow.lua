@@ -15,7 +15,11 @@ M.new = function(nvim, win)
     local winhl = main_winhighlight(middle)
     local text = string.format(M.statusline, (left_extra or ""), middle, (right_extra or ""))
     if (self.window and vim.api.nvim_win_is_valid(self.window)) then
-      pcall(vim.api.nvim_set_option_value, "winhighlight", winhl, {win = self.window})
+      if (self["_last-winhighlight"] ~= winhl) then
+        self["_last-winhighlight"] = winhl
+        pcall(vim.api.nvim_set_option_value, "winhighlight", winhl, {win = self.window})
+      else
+      end
     else
     end
     return self["set-statusline"](text)

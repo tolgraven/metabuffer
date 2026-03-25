@@ -32,10 +32,10 @@ check-lua:
 	@echo "[make] checking lua-language-server..."
 	lua-language-server --check $(LUA_CHECK_ARGS)
 
-# Run tests. Use 'make test' for all tests or 'make test tests/some_test.lua' for specific ones.
+# Run tests. Use 'make test' for all, 'make test -- file.lua' for one, TEST_JOBS=N for parallelism.
 test: compile
 	@echo "[make] running tests..."
-	$(NVIM_ENV) ./scripts/test-mini.sh $(FILE_ARGS)
+	TEST_FILE_TIMEOUT_MS="$${TEST_FILE_TIMEOUT_MS:-30000}" $(NVIM_ENV) ./scripts/test-mini.sh $(FILE_ARGS)
 
 test-then-all: compile
 	@if [ -z "$(strip $(FILE_ARGS))" ]; then \

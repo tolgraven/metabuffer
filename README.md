@@ -118,6 +118,65 @@ Animation controls:
   - `ui.animation.prompt.enabled`, `ui.animation.prompt.time_scale`
   - `ui.animation.preview.enabled`, `ui.animation.preview.time_scale`
   - `ui.animation.info.enabled`, `ui.animation.info.time_scale`
+
+Custom transforms:
+
+- Define them under `options.custom.transforms`.
+- Invoke them as `#transform:name`.
+- Runtime short aliases are derived automatically from the directive registry; completion/help popup will show the current alias if you want a shorter form.
+
+```lua
+require("metabuffer").setup({
+  options = {
+    custom = {
+      transforms = {
+        upper = {
+          from = { "tr", "a-z", "A-Z" },
+          to = { "tr", "A-Z", "a-z" },
+          scope = "line",
+          applies_to = "text",
+          doc = "Uppercase visible lines.",
+        },
+      },
+    },
+  },
+})
+```
+
+- `from`: required shell command, either argv list or shell string, fed through stdin
+- `to`: optional reverse command used on writeback
+- `scope`: `"line"` or `"file"`; defaults to `"line"`
+- `applies_to`: `"text"`, `"binary"`, or `"all"`; defaults to `"text"`
+- `filetypes`: optional list of detected filetypes to limit where the transform applies
+- `filetype_commands`: optional per-filetype command map overriding `from`/`to`
+- `enabled`: optional default on/off state
+- `doc`: help text used by completion/popup docs
+
+Example decompile-style transform:
+
+```lua
+require("metabuffer").setup({
+  options = {
+    custom = {
+      transforms = {
+        decompyle = {
+          filetype_commands = {
+            python = {
+              from = { "decompyle3", "-" },
+            },
+          },
+          scope = "file",
+          applies_to = "binary",
+          filetypes = { "python" },
+          doc = "Decompile Python bytecode files.",
+        },
+      },
+    },
+  },
+})
+```
+
+That keeps the core generic while letting you swap commands by filetype now. Later, the same registry shape can be extended to CLR/JVM/etc. and to other custom provider domains.
   - `ui.animation.loading.enabled`, `ui.animation.loading.time_scale`
   - `ui.animation.scroll.enabled`, `ui.animation.scroll.time_scale`
 - `ui.animation.loading_indicator` controls whether the animated prompt footer loading word is shown at all
@@ -187,16 +246,56 @@ Saved prompts:
 
 Control directives (consumed from prompt):
 
-- bare `#hidden`, `#ignored`, `#deps`, `#prefilter`, `#lazy` toggle current value
-- explicit forms force value:
-  - `#+hidden` / `#-hidden`
-  - `#+ignored` / `#-ignored`
-  - `#+deps` / `#-deps`
-  - `#+prefilter` / `#-prefilter`
-  - `#+lazy` / `#-lazy`
-- aliases:
-  - `#nohidden`, `#noignored`, `#nodeps`, `#noprefilter`, `#nolazy`
-  - `#escape` is equivalent to disabling prefilter
+### All #toggles
+- Options:
+- `#escape` / `#e` Disable prefiltering.
+- `#exp` / `#ex` `{expander}` Set the active expansion mode.
+- `#history` / `#h` Merge persisted history into the current session.
+- `#lazy` / `#l` Enable lazy project loading.
+  - disable with `#-lazy`, `#nolazy`, `#-l`
+- `#prefilter` / `#p` Enable project lazy prefiltering.
+  - disable with `#-prefilter`, `#noprefilter`, `#-p`
+- `#save` / `#s` `{tag}` Save the current prompt under a tag.
+- `##` Open the saved-prompt browser.
+- `##{tag}` Restore a saved prompt inline.
+- Scope:
+- `#binary` / `#b` Include binary files.
+  - disable with `#-binary`, `#nobinary`, `#-b`
+- `#deps` / `#d` Include dependency and vendor paths.
+  - disable with `#-deps`, `#nodeps`, `#-d`
+- `#hidden` / `#hi` Include hidden paths.
+  - disable with `#-hidden`, `#nohidden`, `#-hi`
+- `#ignored` / `#i` Include ignored paths.
+  - disable with `#-ignored`, `#noignored`, `#-i`
+- Transforms:
+- `#b64` / `#b6` Decode obvious base64 text before display and filtering.
+  - disable with `#-b64`, `#nob64`, `#-b6`
+- `#bplist` / `#bp` Pretty-print binary plist files.
+  - disable with `#-bplist`, `#nobplist`, `#-bp`
+- `#css` / `#c` Pretty-print minified CSS lines.
+  - disable with `#-css`, `#nocss`, `#-c`
+- `#hex` / `#he` Render binary files through hex view.
+  - disable with `#-hex`, `#nohex`, `#-he`
+- `#json` / `#j` Pretty-print minified JSON lines.
+  - disable with `#-json`, `#nojson`, `#-j`
+- `#strings` / `#st` Extract printable strings from binary files.
+  - disable with `#-strings`, `#nostrings`, `#-st`
+- `#xml` / `#x` Pretty-print minified XML lines.
+  - disable with `#-xml`, `#noxml`, `#-x`
+- Sources:
+- `#file` / `#f` `{token}` Switch to file-entry source filtering.
+  - disable with `#-file`, `#nofile`, `#-f`
+- `#lgrep` / `#lg` `{query}` Switch the source set to lgrep semantic search hits.
+- `#lgrep:d` / `#lg:d` `{symbol}` Switch the source set to lgrep definitions for a symbol.
+- `#lgrep:u` / `#lg:u` `{symbol}` Switch the source set to lgrep usages for a symbol.
+### End #toggles
+
+Lgrep options:
+
+- `options.default_include_lgrep`: treat the first token on each active prompt line as the lgrep query by default
+- `options.lgrep_bin`: lgrep executable name/path
+- `options.lgrep_limit`: maximum lgrep results requested per query line
+- `options.lgrep_debounce_ms`: minimum prompt debounce while lgrep is active
 
 Persistence:
 

@@ -1,5 +1,20 @@
 -- [nfnl] fnl/metabuffer/util.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
+local mini_icons_cache = nil
+local mini_icons_tried_3f = false
+local function ensure_mini_icons()
+  if not mini_icons_tried_3f then
+    mini_icons_tried_3f = true
+    local ok,mod = pcall(require, "mini.icons")
+    if (ok and mod) then
+      mini_icons_cache = mod
+    else
+    end
+  else
+  end
+  return (_G.MiniIcons or mini_icons_cache)
+end
 M["split-input"] = function(text)
   return vim.split((text or ""), "%s+", {trimempty = true})
 end
@@ -41,7 +56,8 @@ M["delete-transient-unnamed-buffer!"] = function(buf)
       bo["buflisted"] = false
       bo["bufhidden"] = "wipe"
       bo["swapfile"] = false
-      return not not pcall(vim.api.nvim_buf_delete, buf, {force = true})
+      local ok = pcall(vim.api.nvim_buf_delete, buf, {force = true})
+      return ok
     else
       return false
     end
@@ -76,10 +92,10 @@ M["set-buffer-name!"] = function(buf, base_name)
       name = (base .. " [" .. n .. "]")
     end
     local rename_21
-    local function _5_()
+    local function _7_()
       return vim.cmd(("silent noautocmd file " .. vim.fn.fnameescape(name)))
     end
-    rename_21 = _5_
+    rename_21 = _7_
     local ok = pcall(vim.api.nvim_buf_call, buf, rename_21)
     if ok then
       return name
@@ -103,10 +119,10 @@ M["disable-heavy-buffer-features!"] = function(buf)
     if (1 == vim.fn.exists("*rainbow_parentheses#deactivate")) then
       pcall(vim.api.nvim_buf_set_var, buf, "metabuffer_rainbow_parentheses_disabled", true)
       local deactivate_21
-      local function _9_()
+      local function _11_()
         return vim.cmd("silent! call rainbow_parentheses#deactivate()")
       end
-      deactivate_21 = _9_
+      deactivate_21 = _11_
       return pcall(vim.api.nvim_buf_call, buf, deactivate_21)
     else
       return nil
@@ -121,10 +137,10 @@ M["restore-heavy-buffer-features!"] = function(buf)
     if (ok and disabled_3f and (1 == vim.fn.exists("*rainbow_parentheses#activate"))) then
       do
         local activate_21
-        local function _12_()
+        local function _14_()
           return vim.cmd("silent! call rainbow_parentheses#activate()")
         end
-        activate_21 = _12_
+        activate_21 = _14_
         pcall(vim.api.nvim_buf_call, buf, activate_21)
       end
       return pcall(vim.api.nvim_buf_del_var, buf, "metabuffer_rainbow_parentheses_disabled")
@@ -162,37 +178,104 @@ M["ext-from-path"] = function(path)
 end
 M["devicon-info"] = function(path, fallback_hl)
   local file = vim.fn.fnamemodify((path or ""), ":t")
-  local ext = M["ext-from-path"](path)
-  local ok_web,web = pcall(require, "nvim-web-devicons")
-  if (ok_web and web) then
-    local ok_i,icon,icon_hl = pcall(web.get_icon, file, ext, {default = true})
+  local mini = ensure_mini_icons()
+  if (mini and (type(mini.get) == "function")) then
+    local ok_i,icon,icon_hl = pcall(mini.get, "file", file)
     local next_hl
     if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
       next_hl = icon_hl
     else
       next_hl = fallback_hl
     end
-    local _17_
+    local _19_
     if (ok_i and (type(icon) == "string") and (icon ~= "")) then
-      _17_ = icon
+      _19_ = icon
     else
-      _17_ = ""
+      _19_ = ""
     end
-    return {icon = _17_, ["icon-hl"] = next_hl, ["ext-hl"] = next_hl, ["file-hl"] = fallback_hl}
+    return {icon = _19_, ["icon-hl"] = next_hl, ["ext-hl"] = next_hl, ["file-hl"] = fallback_hl}
   else
-    if (1 == vim.fn.exists("*WebDevIconsGetFileTypeSymbol")) then
-      local icon = vim.fn.WebDevIconsGetFileTypeSymbol(file)
-      local _19_
-      if ((type(icon) == "string") and (icon ~= "")) then
-        _19_ = icon
-      else
-        _19_ = ""
-      end
-      return {icon = _19_, ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
+    return {icon = "", ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
+  end
+end
+local function first_visible_glyph(text)
+  local s = (text or "")
+  local val_111_auto = string.find(s, "%S")
+  if val_111_auto then
+    local pos = val_111_auto
+    return vim.fn.strcharpart(s, (pos - 1), 1)
+  else
+    return ""
+  end
+end
+local function marker_sign(glyph, hl)
+  if ((glyph or "") ~= "") then
+    return {text = glyph, hl = hl, highlights = {{start = 0, ["end"] = #glyph, hl = hl}}}
+  else
+    return {text = "  ", hl = "LineNr"}
+  end
+end
+M["icon-sign"] = function(spec)
+  local marker = (spec or {})
+  local mini = ensure_mini_icons()
+  local icon_result
+  if (mini and (type(mini.get) == "function") and ((marker.category or "") ~= "")) then
+    icon_result = {pcall(mini.get, marker.category, marker.name)}
+  else
+    icon_result = {false, nil, nil}
+  end
+  local ok = icon_result[1]
+  local glyph = icon_result[2]
+  local hl = icon_result[3]
+  local text
+  if (ok and (type(glyph) == "string") and (glyph ~= "")) then
+    text = glyph
+  else
+    text = marker.fallback
+  end
+  local sign_hl
+  if (ok and (type(hl) == "string") and (hl ~= "")) then
+    sign_hl = hl
+  else
+    sign_hl = marker.hl
+  end
+  return marker_sign(text, sign_hl)
+end
+M["combine-signs"] = function(primary, secondary)
+  local left = first_visible_glyph((primary and primary.text))
+  local right = first_visible_glyph((secondary and secondary.text))
+  local left_hl = ((primary and primary.hl) or "LineNr")
+  local right_hl = ((secondary and secondary.hl) or "LineNr")
+  local text
+  if (left ~= "") then
+    if ((right == "") or (vim.fn.strdisplaywidth(left) >= 2)) then
+      text = left
     else
-      return {icon = "", ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
+      text = (left .. right)
+    end
+  else
+    if (right ~= "") then
+      text = right
+    else
+      text = "  "
     end
   end
+  local highs = {}
+  if (left ~= "") then
+    table.insert(highs, {start = 0, ["end"] = #left, hl = left_hl})
+  else
+  end
+  if ((right ~= "") and (text ~= left)) then
+    table.insert(highs, {start = #left, ["end"] = (#left + #right), hl = right_hl})
+  else
+  end
+  local _32_
+  if (left ~= "") then
+    _32_ = left_hl
+  else
+    _32_ = right_hl
+  end
+  return {text = text, hl = _32_, highlights = highs}
 end
 M["buf-lines"] = function(buf)
   return vim.api.nvim_buf_get_lines(buf, 0, -1, false)

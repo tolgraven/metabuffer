@@ -1,4 +1,5 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local base (require :metabuffer.matcher.base))
 (local util (require :metabuffer.util))
 
@@ -33,7 +34,7 @@
        ;; Single metachar tokens (e.g. "?") are treated as literals in all-mode.
        (not (string.match token "^[%?%*%+%|%.]$"))
        (not (unclosed-pattern-delims? token))
-       (not (not (string.find token "[\\%[%]%(%)%+%*%?%|%.]")))
+       (not= nil (string.find token "[\\%[%]%(%)%+%*%?%|%.]"))
        (let [[ok] [(pcall vim.regex (.. "\\C" token))]]
          ok)))
 
@@ -139,7 +140,7 @@
                     (vim.startswith literal-probe needle))
                 (if (. term :anchor-end)
                     (vim.endswith literal-probe needle)
-                    (not (not (string.find literal-probe needle 1 true)))))))))
+                    (not= nil (string.find literal-probe needle 1 true))))))))
 
 (fn term-highlight-pattern
   [term]

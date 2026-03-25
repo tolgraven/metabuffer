@@ -1,9 +1,9 @@
-(require-macros :io.gitlab.andreyorst.cljlib.core)
-(import :io.gitlab.andreyorst.cljlib.core)
+(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 
 (local M {})
 (local util (require :metabuffer.util))
 (local source-mod (require :metabuffer.source))
+(local transform-mod (require :metabuffer.transform))
 
 (fn session-by-prompt
   [active-by-prompt prompt-buf]
@@ -154,6 +154,7 @@
                 (router-util-mod.prompt-text session)
                 "")))
       (router-util-mod.persist-prompt-height! session)
+      (router-util-mod.persist-results-wrap! session)
       (when session.augroup
         (pcall vim.api.nvim_del_augroup_by_id session.augroup))
       (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
@@ -230,6 +231,7 @@
         history-api (. history :api)
         active-by-source (. router :active-by-source)]
     (set session.ui-hidden true)
+    (set session._last-prompt-statusline nil)
     (when (and animation-mod animation-mod.cancel-session!)
       (animation-mod.cancel-session! session))
     (restore-startup-cursor! session)
@@ -239,6 +241,7 @@
         (when (and ok (= (type cur) "table"))
           (set session.hidden-prompt-cursor [(or (. cur 1) 1) (or (. cur 2) 0)])))
       (router-util-mod.persist-prompt-height! session)
+      (router-util-mod.persist-results-wrap! session)
       (set session.hidden-prompt-height (vim.api.nvim_win_get_height session.prompt-win))
       (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
         (let [bo (. vim.bo session.prompt-buf)]
@@ -301,6 +304,7 @@
           (set (. bo :filetype) "metabufferprompt"))
         (apply-prompt-window-opts! prompt-win)
         (sync-prompt-buffer-name! session)
+        (set session._last-prompt-statusline nil)
         (set curr.status-win curr.win)
         (set session.ui-hidden false)
         (resume-main-window-opts! deps session)
@@ -831,11 +835,47 @@
        (= (type (. row :lnum)) "number")
        (> (. row :lnum) 0)))
 
+(fn special-projected-row?
+  [row]
+  (and row
+       (. row :source-group-id)
+       (or (> (# (or (. row :transform-chain) [])) 0)
+           (= (or (. row :source-group-kind) "") "file"))))
+
 (fn append-op!
   [ops path op]
   (let [per-file (or (. ops path) [])]
     (table.insert per-file op)
     (set (. ops path) per-file)))
+
+(fn append-group-op!
+  [ops row current-rows processed]
+  (let [group-id (. row :source-group-id)
+        path (. row :path)
+        key (.. path "|" (tostring group-id))
+        group-lines []]
+    (if (. (or processed {}) key)
+        nil
+        (do
+          (set (. processed key) true)
+          (each [_ r (ipairs (or current-rows []))]
+            (when (and (= (. r :path) path)
+                       (= (. r :source-group-id) group-id))
+              (table.insert group-lines (or (. r :text) (. r :line) ""))))
+          (let [reversed (transform-mod.reverse-group row group-lines {:path path :lnum (. row :lnum)})]
+            (if (. reversed :error)
+                {:error (. reversed :error)}
+                (do
+                  (if (= (. reversed :kind) :rewrite-bytes)
+                      (append-op! ops path {:kind :rewrite-bytes
+                                            :bytes (. reversed :bytes)
+                                            :ref-kind (or (. row :kind) "")})
+                      (append-op! ops path {:kind :replace
+                                            :lnum (. row :lnum)
+                                            :text (. reversed :text)
+                                            :old-text (or (. row :source-text) "")
+                                            :ref-kind (or (. row :kind) "")}))
+                  nil)))))))
 
 (fn structural-op-from-current-rows
   [current-rows start count]
@@ -891,7 +931,8 @@
         current-rows (projected-rows-from-edits session baseline-rows baseline-lines current-lines)
         hunks (diff-hunks baseline-lines current-lines)
         ops {}
-        state {:unsafe-structural? false}]
+        state {:unsafe-structural? false
+               :processed-special-groups {}}]
     (set session.live-edit-rows current-rows)
     (each [_ h (ipairs hunks)]
       (let [[a-start a-count b-start b-count] (hunk-indices h)
@@ -904,15 +945,19 @@
                 (let [row (. old-rows i)
                       text (or (. new-lines i) "")]
                   (when (and (valid-row? row) (~= (or (. row :text) "") text))
-                    (append-op! ops (. row :path) {:kind :replace
-                                                   :lnum (. row :lnum)
-                                                   :text text
-                                                   :old-text (or (. row :text) "")
-                                                   :ref-kind (or (. row :kind) "")}))))
+                    (if (special-projected-row? row)
+                        (let [err (append-group-op! ops row current-rows (. state :processed-special-groups))]
+                          (when err
+                            (set (. state :unsafe-structural?) true)))
+                        (append-op! ops (. row :path) {:kind :replace
+                                                       :lnum (. row :lnum)
+                                                       :text text
+                                                       :old-text (or (. row :text) "")
+                                                       :ref-kind (or (. row :kind) "")})))))
               (when (> a-count b-count)
                 (for [i (+ common 1) a-count]
                   (let [row (. old-rows i)]
-                    (if (valid-row? row)
+                    (if (and (valid-row? row) (not (special-projected-row? row)))
                         (append-op! ops (. row :path) {:kind :delete :lnum (. row :lnum) :ref-kind (or (. row :kind) "")})
                         (set (. state :unsafe-structural?) true)))))
               (when (> b-count a-count)
@@ -1016,6 +1061,11 @@
                             :path (or (. ref :path) "")
                             :lnum (or (. ref :lnum) 1)
                             :open-lnum (or (. ref :open-lnum) (. ref :lnum) 1)
+                            :source-lnum (. ref :source-lnum)
+                            :source-text (. ref :source-text)
+                            :source-group-id (. ref :source-group-id)
+                            :source-group-kind (. ref :source-group-kind)
+                            :transform-chain (vim.deepcopy (or (. ref :transform-chain) []))
                             :line (or (. ref :line) "")})
         (table.insert content (or (. ref :line) ""))
         (table.insert idxs idx)))
@@ -1141,8 +1191,7 @@
             results-buf session.meta.buf.buffer
             origin-buf session.origin-buf]
         (when (or force
-                  (= current-buf results-buf)
-                  (= current-buf origin-buf))
+                  (= current-buf results-buf))
           (set session.meta.win.window (vim.api.nvim_get_current_win))
           (restore-session-ui!
             deps
