@@ -978,10 +978,8 @@ M.new = function(opts)
     local startup = startup_layout_pending_3f(session)
     local bootstrap_pending = (session["project-bootstrap-pending"] or false)
     local bootstrapped = (session["project-bootstrapped"] or false)
-    local refresh_pending = (session["lazy-refresh-pending"] or false)
-    local refresh_dirty = (session["lazy-refresh-dirty"] or false)
     local stream_done = (session["lazy-stream-done"] or false)
-    local pending = (session and session["project-mode"] and (startup or bootstrap_pending or not bootstrapped or refresh_pending or refresh_dirty or not stream_done))
+    local pending = (session and session["project-mode"] and (startup or bootstrap_pending or not bootstrapped or not stream_done))
     return pending
   end
   local function render_project_loading_21(session)

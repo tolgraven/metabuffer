@@ -818,21 +818,19 @@
           pending (and session session.project-mode (or initializing animating))]
       pending))
 
+  ;; True only during genuine project bootstrap/stream — not during lazy
+  ;; re-filter refreshes triggered by scroll or query changes.
   (fn project-loading-pending?
     [session]
     (let [startup (startup-layout-pending? session)
           bootstrap-pending (or session.project-bootstrap-pending false)
           bootstrapped (or session.project-bootstrapped false)
-          refresh-pending (or session.lazy-refresh-pending false)
-          refresh-dirty (or session.lazy-refresh-dirty false)
           stream-done (or session.lazy-stream-done false)
           pending (and session
                        session.project-mode
                        (or startup
                            bootstrap-pending
                            (not bootstrapped)
-                           refresh-pending
-                           refresh-dirty
                            (not stream-done)))]
       pending))
 
