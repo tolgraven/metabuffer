@@ -292,31 +292,41 @@
       (let [lines (router_util_mod.prompt-lines session)
             parsed (resolve-parsed-query query-mod session (query-mod.parse-query-lines lines))
             effective-text (table.concat (or (. parsed :lines) []) "\n")
+            no-flag-change? (and (not (source-flags-changed? session parsed))
+                                 (not (render-flags-changed? session parsed)))
             pure-flag-edit? (and (~= effective-text (or session.prompt-last-event-text ""))
                                  (= effective-text (or session.prompt-last-applied-text ""))
                                  (or (source-flags-changed? session parsed)
                                      (render-flags-changed? session parsed)))
+            ;; If parsed text hasn't changed and no flags changed either, skip
+            ;; scheduling any update.  Typing a space the parser strips out is
+            ;; a complete no-op.
+            noop? (and (not force)
+                       no-flag-change?
+                       (= effective-text (or session.prompt-last-applied-text ""))
+                       (= effective-text (or session.prompt-last-event-text "")))
             now (router_prompt_mod.now-ms)
             delay (prompt-delay-ms settings query-mod session)]
-        (when (and (not force) event-tick)
-          (set session.prompt-last-event-tick event-tick))
-        (set session.prompt-update-dirty true)
-        (when-not force
-          (set session.prompt-last-change-ms now)
-          (set session.prompt-force-block-until (+ now (math.max 0 delay))))
-        (when-not force
-          (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0))))
-        (when (and session.project-mode
-                   (not session.project-bootstrapped))
-          (project-source.schedule-project-bootstrap! session settings.project-bootstrap-delay-ms))
-        (if pure-flag-edit?
-            (do
-              (set session.prompt-last-event-text effective-text)
-              (set session.last-prompt-text effective-text)
-              (set session.prompt-last-change-ms now)
-              (set session.prompt-update-dirty false)
-              (router_prompt_mod.cancel-prompt-update! session)
-              (M.apply-prompt-lines! deps session))
-            (queue-update-after-edit! settings prompt-scheduler-ctx session force now delay))))))
+        (when-not noop?
+          (when (and (not force) event-tick)
+            (set session.prompt-last-event-tick event-tick))
+          (set session.prompt-update-dirty true)
+          (when-not force
+            (set session.prompt-last-change-ms now)
+            (set session.prompt-force-block-until (+ now (math.max 0 delay))))
+          (when-not force
+            (set session.prompt-change-seq (+ 1 (or session.prompt-change-seq 0))))
+          (when (and session.project-mode
+                     (not session.project-bootstrapped))
+            (project-source.schedule-project-bootstrap! session settings.project-bootstrap-delay-ms))
+          (if pure-flag-edit?
+              (do
+                (set session.prompt-last-event-text effective-text)
+                (set session.last-prompt-text effective-text)
+                (set session.prompt-last-change-ms now)
+                (set session.prompt-update-dirty false)
+                (router_prompt_mod.cancel-prompt-update! session)
+                (M.apply-prompt-lines! deps session))
+              (queue-update-after-edit! settings prompt-scheduler-ctx session force now delay)))))))
 
 M
