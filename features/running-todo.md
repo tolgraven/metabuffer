@@ -33,7 +33,7 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 24 [] lazy file reading regression, when narrowing a search it does a full re-run and all the sources except the original when Meta! started disappear for a short while then reappear. Remember when narrowing (making word longer, or making negation shorter) we want to keep all the sources loaded and only re-run filter on those lines actually present. 
 - 25 [?] both the floating info window and the preview window get regular statuslines after moving to a different tmux split (and stay as such when go back to focusing nvim split)
 - 26 [x] a small floating window popup showing keybinds, all possible #commands and #toggles and #flags (full names unlike the prompt statusline), options etc. `#?` in prompt should be consumed and open/focus it. q or <Esc> close it.
-- 27 [] even just inserting a space (which does nothing but separate tokens) full filtering re-runs (or at least sources get reloaded). Shouldn't happen.
+- 27 [x] even just inserting a space (which does nothing but separate tokens) full filtering re-runs (or at least sources get reloaded). Shouldn't happen.
 - 28 [] project mode gets opened with only about 2000 total possible lines, but project has many many more (even excluding deps, hidden etc). Something is wrong. Faulty prefilter when doing straight `:Meta!`?
 - 29 [x] fake preview window line number column has line numbers after end of file.
 - 29 [] preview window should anchor one line higher so gets 8 lines by default.
@@ -41,7 +41,7 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 31 [] is there any way to speed up the full screen tests in general? they're now taking 8s or so. can we run more tests in parallell instead?
 - 32 [x] airline continously overwrites statusline, which was not the case earlier. timing change thing?
 - 33 [x] there is a white line dividing prompt window and preview window. it should be removed.
-- 34 [] in project mode, there is a jump once loader inevitably runs into a file longer than 999 lines (which most file we start from will be), so we should pin lineno col to width 3 from start, but then dynamically allow the full 4 _if they are in view_
+- 34 [x] in project mode, there is a jump once loader inevitably runs into a file longer than 999 lines (which most file we start from will be), so we should pin lineno col to width 3 from start, but then dynamically allow the full 4 _if they are in view_
 - 35 [x] when exiting regular `:Meta` mode with `<Esc>`, the viewport jumps. Should stay still.
 - 36 [x] in project mode, selecting a result and trying to jump to it with <CR> just restores the position that existed before starting `:Meta`
 - 37 [x] in project mode, info window gets stuck on "finalizing results" instead of showing the info lines once loaded
@@ -49,9 +49,9 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 39 [] write a wrapper/helper for `vim.api.nvim_create_autocmd` for use in prompt/hooks.fnl and anywhere else appropriate. This will inject the correct group, session, and just be passed the inner function on the callback (to be wrapped in schedule-when-valid).
 - 40 [x] there is sometimes a flash when scrolling with `<C-d>` etc, one frame where the viewport jumps down several hundred lines then back. This appears to be because the nvim selected line and our model of it are out of sync. Ensure they always update in tandem and that what's visible is what we read. Or just always read it directly...
 - 41 [] if changing lines starts lagging behind due to updating info and preview buffers, we should skip directly to the latest directly, "dropping frames" so to speak, and not building up a queue of movements. Bundle them together instead. However, we should also profile what exactly is taking long when changing lines. This entire thing also applies to page scrolling with <C-d> etc.
-- 42 [] <C-d> etc behaves weird at start and end. Should jump to first and last line respectively if that's closer than where it wants to go.
+- 42 [x] <C-d> etc behaves weird at start and end. Should jump to first and last line respectively if that's closer than where it wants to go.
 - 43 [] look into using mini.nvim git stuff, might be faster and more complete than ours.
-- 44 [] linewrap setting should persist across sessions for preview window.
+- 44 [x] linewrap setting should persist across sessions for preview window.
 - 45 [] if i run a query like `(fn \n set \n #file source` it should do what you think: search those files matching "source" for lines matching "(fn" or "set". Currently it only shows the actual files.
 - 46 [x] The "basic launch smoke tests" that run with all other tests should only run on screen tests, not unit tests.
 - 47 [x] when jumping to a hit (at least a `#file search` hit) it's not opened by relative path but instead absolute.
