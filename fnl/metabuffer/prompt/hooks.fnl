@@ -893,10 +893,25 @@
       ;; The reentrancy flag is set synchronously in the autocmd callback
       ;; (before vim.schedule) so that additional events queued before the
       ;; scheduled callback runs are suppressed.
+      ;; On WinResized, capture v:event.windows synchronously — if the preview
+      ;; window is in the list (user dragged a split border), latch
+      ;; preview-user-resized? so ensure-preview-width! respects the manual
+      ;; width.  VimResized (terminal resize) clears the latch.
         (vim.api.nvim_create_autocmd ["VimResized" "WinResized"]
           {:group aug
-           :callback (fn [_]
+           :callback (fn [ev]
                        (when-not session.handling-layout-change?
+                         ;; Synchronous: capture resize info before schedule.
+                         (let [is-vim-resized? (= ev.event "VimResized")]
+                           (when is-vim-resized?
+                             (set session.preview-user-resized? false))
+                           (when (and (not is-vim-resized?)
+                                      session.preview-win
+                                      (vim.api.nvim_win_is_valid session.preview-win))
+                             (let [wins (or (?. vim.v :event :windows) [])]
+                               (each [_ wid (ipairs wins)]
+                                 (when (= wid session.preview-win)
+                                   (set session.preview-user-resized? true))))))
                          (set session.handling-layout-change? true)
                          (schedule-when-valid session
                            (fn []

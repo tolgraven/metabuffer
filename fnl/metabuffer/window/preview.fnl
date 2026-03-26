@@ -344,16 +344,18 @@
 
   (fn ensure-preview-width!
     [session ctx]
-    (let [width (. ctx :width)]
-      (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
-        (when (~= width (or session.preview-width 0))
-          (set session.preview-width width)
-          (if session.preview-float?
-              (let [height (math.max 1 (vim.api.nvim_win_get_height session.preview-win))]
-                (pcall vim.api.nvim_win_set_config
-                       session.preview-win
-                       (preview-float-config session width height)))
-              (pcall vim.api.nvim_win_set_width session.preview-win width))))))
+    "Enforce computed preview width unless the user has manually resized."
+    (when-not session.preview-user-resized?
+      (let [width (. ctx :width)]
+        (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
+          (when (~= width (or session.preview-width 0))
+            (set session.preview-width width)
+            (if session.preview-float?
+                (let [height (math.max 1 (vim.api.nvim_win_get_height session.preview-win))]
+                  (pcall vim.api.nvim_win_set_config
+                         session.preview-win
+                         (preview-float-config session width height)))
+                (pcall vim.api.nvim_win_set_width session.preview-win width)))))))
 
   (fn render-preview-scratch!
     [session ctx]
