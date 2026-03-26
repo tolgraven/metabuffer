@@ -219,14 +219,20 @@
     (fn [session width height]
       (let [host-win (or (session-host-win session) (vim.api.nvim_get_current_win))]
         (if session.window-local-layout
-            {:relative "win"
-             :win host-win
-             :anchor "NW"
-             :row 0
-             :col (vim.api.nvim_win_get_width host-win)
-             :width width
-             :height height
-             :focusable false}
+            (let [[wb-ok wb-val] [(pcall vim.api.nvim_get_option_value "winbar" {:win host-win})]
+                  winbar-row (if (and wb-ok
+                                     (= (type wb-val) "string")
+                                     (~= wb-val ""))
+                                 1
+                                 0)]
+              {:relative "win"
+               :win host-win
+               :anchor "NW"
+               :row winbar-row
+               :col (vim.api.nvim_win_get_width host-win)
+               :width width
+               :height height
+               :focusable false})
             {:relative "editor"
              :anchor "NE"
              :row 1
