@@ -557,7 +557,11 @@
 
 (fn M.start
   [query mode _meta project-mode]
-  "Create a Meta session and wire prompt/result/project orchestration."
+  "Create a Meta session and wire prompt/result/project orchestration.
+  Bails out when invoked from the command-line window (q:, q/, q?)
+  where splits, floats, and nvim_set_current_win are forbidden."
+  (when (~= (vim.fn.getcmdwintype) "")
+    (lua "return nil"))
   (router_session_mod.start! session-deps query mode _meta project-mode))
 
 (fn M.sync

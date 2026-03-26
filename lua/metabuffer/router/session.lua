@@ -339,8 +339,8 @@ local function activate_session_ui_21(deps, session, initial_lines)
         pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, col})
       end
       if not vim.g.meta_test_no_startinsert then
-        vim.api.nvim_set_current_win(session["prompt-win"])
-        vim.cmd("startinsert!")
+        pcall(vim.api.nvim_set_current_win, session["prompt-win"])
+        pcall(vim.cmd, "startinsert!")
       else
       end
     else
