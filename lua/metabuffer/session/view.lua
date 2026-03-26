@@ -1,7 +1,7 @@
 -- [nfnl] fnl/metabuffer/session/view.fnl
 local clj = require("io.gitlab.andreyorst.cljlib.core")
 local state = require("metabuffer.core.state")
-local util = require("metabuffer.util")
+local events = require("metabuffer.events")
 local M = {}
 M["wipe-temp-buffers"] = function(meta)
   if meta then
@@ -9,12 +9,12 @@ M["wipe-temp-buffers"] = function(meta)
     local model_buf = meta.buf.model
     local index_buf = (meta.buf.indexbuf and meta.buf.indexbuf.buffer)
     if (index_buf and not (index_buf == model_buf) and vim.api.nvim_buf_is_valid(index_buf)) then
-      util["restore-heavy-buffer-features!"](index_buf)
+      events.send("on-buf-teardown!", {buf = index_buf, role = "meta"})
       pcall(vim.api.nvim_buf_delete, index_buf, {force = true})
     else
     end
     if (main_buf and not (main_buf == model_buf) and vim.api.nvim_buf_is_valid(main_buf)) then
-      util["restore-heavy-buffer-features!"](main_buf)
+      events.send("on-buf-teardown!", {buf = main_buf, role = "meta"})
       return pcall(vim.api.nvim_buf_delete, main_buf, {force = true})
     else
       return nil

@@ -3,9 +3,9 @@
 (local base (require :metabuffer.window.base))
 (local animation-mod (require :metabuffer.window.animation))
 (local directive-mod (require :metabuffer.query.directive))
+(local events (require :metabuffer.events))
 (local util (require :metabuffer.util))
 (local M {})
-(local disable-airline-statusline! (. base :disable-airline-statusline!))
 (local apply-metabuffer-window-highlights! (. base :apply-metabuffer-window-highlights!))
 (local metabuffer-winhighlight (. base :metabuffer-winhighlight))
 (local with-split-mins (. animation-mod :with-split-mins))
@@ -18,7 +18,7 @@
 (fn prompt-buffer!
   [win]
   (let [buf (vim.api.nvim_win_get_buf win)]
-    (util.disable-heavy-buffer-features! buf)
+    (events.send :on-buf-create! {:buf buf :role :prompt})
     (util.set-buffer-name! buf "[Metabuffer Prompt]")
     (let [bo (. vim.bo buf)]
       (set (. bo :buftype) "nofile")
@@ -32,7 +32,7 @@
 
 (fn prompt-window-opts!
   [win]
-  (disable-airline-statusline! win)
+  (events.send :on-win-create! {:win win :role :prompt})
   (apply-metabuffer-window-highlights! win)
   (let [wo (. vim.wo win)]
     (set (. wo :winfixheight) true)
@@ -107,10 +107,7 @@
           (pcall vim.api.nvim_win_set_config win (float-config origin-win start-height))
           (pcall vim.api.nvim_win_set_height win start-height))
       (let [buf (prompt-buffer! win)]
-      ;; Common nvim-cmp convention: buffer-local opt-out.
-        (let [b (. vim.b buf)]
-          (set (. b :cmp_enabled) false)
-          (prompt-window-opts! win))
+        (prompt-window-opts! win)
         (set self.buffer buf)
         (set self.floating? floating?)
         self)))

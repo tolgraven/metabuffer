@@ -426,6 +426,12 @@
           (set (. out key) nil))))
     out))
 
+(fn M.all-specs
+  []
+  "Return the full resolved directive spec list.
+   Each spec has :token-key, :kind, :provider-type, :long, :short, etc."
+  (all-specs))
+
 (fn M.finalize-parsed!
   [parsed]
   "Decorate parsed state with compat aliases declared by directive specs."

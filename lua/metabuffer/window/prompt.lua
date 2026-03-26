@@ -3,9 +3,9 @@ local clj = require("io.gitlab.andreyorst.cljlib.core")
 local base = require("metabuffer.window.base")
 local animation_mod = require("metabuffer.window.animation")
 local directive_mod = require("metabuffer.query.directive")
+local events = require("metabuffer.events")
 local util = require("metabuffer.util")
 local M = {}
-local disable_airline_statusline_21 = base["disable-airline-statusline!"]
 local apply_metabuffer_window_highlights_21 = base["apply-metabuffer-window-highlights!"]
 local metabuffer_winhighlight = base["metabuffer-winhighlight"]
 local with_split_mins = animation_mod["with-split-mins"]
@@ -14,7 +14,7 @@ local function prompt_winhighlight()
 end
 local function prompt_buffer_21(win)
   local buf = vim.api.nvim_win_get_buf(win)
-  util["disable-heavy-buffer-features!"](buf)
+  events.send("on-buf-create!", {buf = buf, role = "prompt"})
   util["set-buffer-name!"](buf, "[Metabuffer Prompt]")
   do
     local bo = vim.bo[buf]
@@ -29,7 +29,7 @@ local function prompt_buffer_21(win)
   return buf
 end
 local function prompt_window_opts_21(win)
-  disable_airline_statusline_21(win)
+  events.send("on-win-create!", {win = win, role = "prompt"})
   apply_metabuffer_window_highlights_21(win)
   local wo = vim.wo[win]
   wo["winfixheight"] = true
@@ -112,11 +112,7 @@ M.new = function(nvim, opts)
     pcall(vim.api.nvim_win_set_height, win, start_height)
   end
   local buf = prompt_buffer_21(win)
-  do
-    local b = vim.b[buf]
-    b["cmp_enabled"] = false
-    prompt_window_opts_21(win)
-  end
+  prompt_window_opts_21(win)
   self.buffer = buf
   self["floating?"] = floating_3f
   return self

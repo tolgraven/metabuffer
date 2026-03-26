@@ -2,11 +2,6 @@
 (local handle (require :metabuffer.handle))
 (local M {})
 
-(fn disable-airline-statusline!
-  [win]
-  (when (and win (vim.api.nvim_win_is_valid win))
-    (pcall vim.api.nvim_win_set_var win "airline_disable_statusline" 1)))
-
 (fn metabuffer-winhighlight
   []
   "Window-local highlight remap for Meta-owned UI windows."
@@ -49,7 +44,6 @@
 
     self))
 
-(set M.disable-airline-statusline! disable-airline-statusline!)
 (set M.metabuffer-winhighlight metabuffer-winhighlight)
 (set M.apply-metabuffer-window-highlights! apply-metabuffer-window-highlights!)
 

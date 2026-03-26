@@ -6,7 +6,7 @@ local statusline_mod = require("metabuffer.window.statusline")
 local util = require("metabuffer.util")
 local base_window_mod = require("metabuffer.window.base")
 local router_util_mod = require("metabuffer.router.util")
-local disable_airline_statusline_21 = base_window_mod["disable-airline-statusline!"]
+local events = require("metabuffer.events")
 local metabuffer_winhighlight = base_window_mod["metabuffer-winhighlight"]
 local function preview_winhighlight()
   return (metabuffer_winhighlight() .. ",StatusLine:MetaPreviewStatusline,StatusLineNC:MetaPreviewStatusline")
@@ -171,13 +171,7 @@ M.new = function(opts)
   local mark_preview_buffer_21
   local function _23_(buf)
     if (buf and vim.api.nvim_buf_is_valid(buf)) then
-      util["disable-heavy-buffer-features!"](buf)
-      pcall(vim.api.nvim_buf_set_var, buf, "conjure_disable", true)
-      pcall(vim.api.nvim_buf_set_var, buf, "lsp_disabled", 1)
-      pcall(vim.api.nvim_buf_set_var, buf, "gitgutter_enabled", 0)
-      pcall(vim.api.nvim_buf_set_var, buf, "gitsigns_disable", true)
-      pcall(vim.api.nvim_buf_set_var, buf, "meta_preview", true)
-      return pcall(vim.diagnostic.enable, false, {bufnr = buf})
+      return events.send("on-buf-create!", {buf = buf, role = "preview"})
     else
       return nil
     end
@@ -214,7 +208,15 @@ M.new = function(opts)
   local apply_preview_window_opts_21
   local function _31_(session, win)
     if (win and vim.api.nvim_win_is_valid(win)) then
-      disable_airline_statusline_21(win)
+      if not (session["preview-compat-initialized-wins"] or {})[win] then
+        if not session["preview-compat-initialized-wins"] then
+          session["preview-compat-initialized-wins"] = {}
+        else
+        end
+        session["preview-compat-initialized-wins"][win] = true
+        events.send("on-win-create!", {win = win, role = "preview"})
+      else
+      end
       local real_buffer_3f = clj.boolean(session["preview-real-buffer?"])
       local persisted_wrap = router_util_mod["results-wrap-enabled?"]()
       local wrap_3f
@@ -224,19 +226,19 @@ M.new = function(opts)
         wrap_3f = false
       end
       local win_opts
-      local _33_
-      if real_buffer_3f then
-        _33_ = "auto"
-      else
-        _33_ = "no"
-      end
       local _35_
-      if session["preview-float?"] then
-        _35_ = ""
+      if real_buffer_3f then
+        _35_ = "auto"
       else
-        _35_ = (session["preview-statusline-text"] or "")
+        _35_ = "no"
       end
-      win_opts = {number = real_buffer_3f, wrap = wrap_3f, linebreak = wrap_3f, winfixwidth = true, signcolumn = _33_, foldcolumn = "0", statuscolumn = "", cursorline = true, winblend = 0, winhighlight = preview_winhighlight(), statusline = _35_, relativenumber = false, spell = false}
+      local _37_
+      if session["preview-float?"] then
+        _37_ = ""
+      else
+        _37_ = (session["preview-statusline-text"] or "")
+      end
+      win_opts = {number = real_buffer_3f, wrap = wrap_3f, linebreak = wrap_3f, winfixwidth = true, signcolumn = _35_, foldcolumn = "0", statuscolumn = "", cursorline = true, winblend = 0, winhighlight = preview_winhighlight(), statusline = _37_, relativenumber = false, spell = false}
       return set_window_options_21(win, win_opts)
     else
       return nil
@@ -244,7 +246,7 @@ M.new = function(opts)
   end
   apply_preview_window_opts_21 = _31_
   local clear_preview_focus_highlight_21
-  local function _38_(session)
+  local function _40_(session)
     if session["preview-focus-match-id"] then
       delete_window_match_21(session["preview-win"], session["preview-focus-match-id"])
       session["preview-focus-match-id"] = nil
@@ -253,9 +255,9 @@ M.new = function(opts)
       return nil
     end
   end
-  clear_preview_focus_highlight_21 = _38_
+  clear_preview_focus_highlight_21 = _40_
   local apply_preview_focus_highlight_21
-  local function _40_(session, lnum)
+  local function _42_(session, lnum)
     clear_preview_focus_highlight_21(session)
     if (session["preview-win"] and vim.api.nvim_win_is_valid(session["preview-win"]) and lnum and (lnum >= 1)) then
       local pat = ("\\%" .. tostring(lnum) .. "l.*")
@@ -270,7 +272,7 @@ M.new = function(opts)
       return nil
     end
   end
-  apply_preview_focus_highlight_21 = _40_
+  apply_preview_focus_highlight_21 = _42_
   local close_preview_window_21 = nil
   local function ensure_preview_window_21(session)
     if not (session["preview-win"] and vim.api.nvim_win_is_valid(session["preview-win"])) then
@@ -292,11 +294,11 @@ M.new = function(opts)
       if float_start_3f then
         win_id = floating_window_mod.new(vim, buf, preview_float_config(session, width, height)).window
       else
-        local function _45_()
+        local function _47_()
           vim.cmd("rightbelow vsplit")
           return vim.api.nvim_get_current_win()
         end
-        win_id = vim.api.nvim_win_call(session["prompt-win"], _45_)
+        win_id = vim.api.nvim_win_call(session["prompt-win"], _47_)
       end
       session["preview-scratch-buf"] = buf
       session["preview-buf"] = buf
@@ -342,7 +344,7 @@ M.new = function(opts)
       return nil
     end
   end
-  local function _52_(session)
+  local function _54_(session)
     local buf = session["preview-buf"]
     local scratch_buf = session["preview-scratch-buf"]
     if (session["preview-win"] and vim.api.nvim_win_is_valid(session["preview-win"])) then
@@ -369,9 +371,10 @@ M.new = function(opts)
     session["preview-real-buffer?"] = false
     session["preview-scratch-buf"] = nil
     session["preview-buf"] = nil
+    session["preview-compat-initialized-wins"] = nil
     return nil
   end
-  close_preview_window_21 = _52_
+  close_preview_window_21 = _54_
   local function ensure_preview_scratch_buf_21(session)
     if (not session["preview-scratch-buf"] or not vim.api.nvim_buf_is_valid(session["preview-scratch-buf"])) then
       session["preview-scratch-buf"] = vim.api.nvim_create_buf(false, true)
@@ -396,15 +399,15 @@ M.new = function(opts)
     local lines = (preview_data.lines or trim_or_pad_lines({}, p_height))
     local src_lnum = math.max(1, (preview_data["focus-lnum"] or (ref and (ref["preview-lnum"] or ref.lnum)) or 1))
     local start_lnum
-    local or_59_ = preview_data["start-lnum"]
-    if not or_59_ then
+    local or_61_ = preview_data["start-lnum"]
+    if not or_61_ then
       if ref then
-        or_59_ = (src_lnum - 1)
+        or_61_ = (src_lnum - 1)
       else
-        or_59_ = 1
+        or_61_ = 1
       end
     end
-    start_lnum = math.max(1, or_59_)
+    start_lnum = math.max(1, or_61_)
     local focus_row
     if ref then
       local row = ((src_lnum - start_lnum) + 1)
@@ -481,10 +484,10 @@ M.new = function(opts)
       session["preview-real-buffer?"] = true
       session["preview-buf"] = buf
       if (vim.api.nvim_win_get_buf(session["preview-win"]) ~= buf) then
-        local function _69_()
+        local function _71_()
           return pcall(vim.api.nvim_win_set_buf, session["preview-win"], buf)
         end
-        with_file_messages_suppressed(_69_)
+        with_file_messages_suppressed(_71_)
       else
       end
       do
@@ -493,10 +496,10 @@ M.new = function(opts)
       end
       local lnum = math.max(1, ((ref and (ref["preview-lnum"] or ref.lnum)) or 1))
       local topline = math.max(1, (lnum - 2))
-      local function _71_()
+      local function _73_()
         return pcall(vim.fn.winrestview, {lnum = lnum, topline = topline, col = 0, leftcol = 0})
       end
-      pcall(vim.api.nvim_win_call, session["preview-win"], _71_)
+      pcall(vim.api.nvim_win_call, session["preview-win"], _73_)
       return apply_preview_focus_highlight_21(session, lnum)
     else
       return nil
@@ -586,7 +589,7 @@ M.new = function(opts)
       local target_path = selected_preview_path(session)
       local timer = vim.loop.new_timer()
       session["preview-update-timer"] = timer
-      local function _82_()
+      local function _84_()
         if (session["preview-update-timer"] and (session["preview-update-timer"] == timer)) then
           local stopf = timer.stop
           local closef = timer.close
@@ -608,7 +611,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return timer.start(timer, math.max(0, (wait_ms or 0)), 0, vim.schedule_wrap(_82_))
+      return timer.start(timer, math.max(0, (wait_ms or 0)), 0, vim.schedule_wrap(_84_))
     else
       return nil
     end

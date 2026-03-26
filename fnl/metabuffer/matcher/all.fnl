@@ -1,5 +1,4 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
-(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local base (require :metabuffer.matcher.base))
 (local util (require :metabuffer.util))
 

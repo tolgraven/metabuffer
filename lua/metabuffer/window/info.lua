@@ -7,7 +7,7 @@ local path_hl = require("metabuffer.path_highlight")
 local util = require("metabuffer.util")
 local base_window_mod = require("metabuffer.window.base")
 local file_info = require("metabuffer.source.file_info")
-local disable_airline_statusline_21 = base_window_mod["disable-airline-statusline!"]
+local events = require("metabuffer.events")
 local apply_metabuffer_window_highlights_21 = base_window_mod["apply-metabuffer-window-highlights!"]
 local function str(x)
   return tostring(x)
@@ -292,12 +292,12 @@ M.new = function(opts)
         cfg = target
       end
       local win = floating_window_mod.new(vim, buf, cfg)
-      util["disable-heavy-buffer-features!"](buf)
+      events.send("on-buf-create!", {buf = buf, role = "info"})
       util["set-buffer-name!"](buf, "[Metabuffer Info]")
       session["info-buf"] = buf
       session["info-win"] = win.window
       session["info-config-sig"] = info_config_signature(target)
-      disable_airline_statusline_21(session["info-win"])
+      events.send("on-win-create!", {win = session["info-win"], role = "info"})
       apply_metabuffer_window_highlights_21(session["info-win"])
       do
         local bo = vim.bo[buf]

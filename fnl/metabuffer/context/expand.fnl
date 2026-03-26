@@ -1,8 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not : cond} :io.gitlab.andreyorst.cljlib.core)
-(local clj (require :io.gitlab.andreyorst.cljlib.core))
-
 (local M {})
 (local util (require :metabuffer.util))
+(local events (require :metabuffer.events))
 
 (fn buf-for-ref
   [ref]
@@ -49,7 +48,7 @@
           (let [buf (vim.api.nvim_create_buf false true)
                 ft (filetype-for-ref ref)
                 lines (lines-for-ref session ref read-file-lines-cached)]
-            (util.disable-heavy-buffer-features! buf)
+            (events.send :on-buf-create! {:buf buf :role :context})
             (util.set-buffer-name! buf "[Metabuffer Context]")
             (let [bo (. vim.bo buf)]
               (set (. bo :bufhidden) "hide")

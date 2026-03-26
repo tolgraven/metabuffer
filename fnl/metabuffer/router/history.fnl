@@ -1,6 +1,4 @@
 (import-macros {: when-let : when-not} :io.gitlab.andreyorst.cljlib.core)
-(local clj (require :io.gitlab.andreyorst.cljlib.core))
-
 (local M {})
 
 (fn project-setting-token

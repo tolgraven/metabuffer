@@ -509,6 +509,9 @@ M["query-state-init"] = function()
   end
   return out
 end
+M["all-specs"] = function()
+  return all_specs()
+end
 M["finalize-parsed!"] = function(parsed)
   for _, spec in ipairs(all_specs()) do
     local key = spec["token-key"]

@@ -1,5 +1,4 @@
 -- [nfnl] fnl/metabuffer/transform/xml.fnl
-local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 M["transform-key"] = "xml"
 M["query-directive-specs"] = {{kind = "toggle", long = "xml", ["token-key"] = "include-xml", doc = "Pretty-print minified XML lines.", ["compat-key"] = "xml"}}

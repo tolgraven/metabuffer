@@ -7,7 +7,7 @@
 (local util (require :metabuffer.util))
 (local base-window-mod (require :metabuffer.window.base))
 (local file-info (require :metabuffer.source.file_info))
-(local disable-airline-statusline! (. base-window-mod :disable-airline-statusline!))
+(local events (require :metabuffer.events))
 (local apply-metabuffer-window-highlights! (. base-window-mod :apply-metabuffer-window-highlights!))
 
 (fn str
@@ -260,12 +260,12 @@
                         start)
                       target)
               win (floating_window_mod.new vim buf cfg)]
-          (util.disable-heavy-buffer-features! buf)
+          (events.send :on-buf-create! {:buf buf :role :info})
           (util.set-buffer-name! buf "[Metabuffer Info]")
           (set session.info-buf buf)
           (set session.info-win win.window)
           (set session.info-config-sig (info-config-signature target))
-          (disable-airline-statusline! session.info-win)
+          (events.send :on-win-create! {:win session.info-win :role :info})
           (apply-metabuffer-window-highlights! session.info-win)
           (let [bo (. vim.bo buf)]
             (set (. bo :buftype) "nofile")
