@@ -87,7 +87,6 @@ function M.child_setup()
     vim.o.swapfile = false
     vim.cmd("cd %s")
     _G.__meta_debug_dump_path = %q
-    pcall(vim.fn.delete, _G.__meta_debug_dump_path)
     require('tests.support.runtime_guard').clear()
   ]], root, debug_dump_path))
 end
