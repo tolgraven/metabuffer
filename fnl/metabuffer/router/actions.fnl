@@ -356,12 +356,13 @@
               ref (router-util-mod.selected-ref curr)]
           (when (and ref ref.path)
             (let [path (or ref.path "")
-                  rel (vim.fn.fnamemodify path ":.")
+                  rel (vim.fn.fnamemodify path ":~:.")
                   target (if (and (= (type rel) "string") (~= rel ""))
                              rel
                              path)]
               (vim.cmd (.. "edit " (vim.fn.fnameescape target))))
-            (vim.api.nvim_win_set_cursor 0 [(math.max 1 (or ref.open-lnum ref.lnum 1)) 0])))
+            (vim.api.nvim_win_set_cursor 0 [(math.max 1 (or ref.open-lnum ref.lnum 1)) 0])
+            (vim.cmd "normal! ^")))
         (let [row (curr.selected_line)
               vq (curr.vim_query)
               target-buf curr.buf.model
@@ -375,12 +376,13 @@
               target-win
               (fn []
                 (pcall vim.api.nvim_win_set_cursor target-win [row 0])
-                (when (~= vq "")
-                  (let [pos (vim.fn.searchpos vq "cnW" row)
-                        hit-row (. pos 1)
-                        hit-col (. pos 2)]
-                    (when (and (= hit-row row) (> hit-col 0))
-                      (pcall vim.api.nvim_win_set_cursor target-win [row hit-col]))))))
+                (if (~= vq "")
+                    (let [pos (vim.fn.searchpos vq "cnW" row)
+                          hit-row (. pos 1)
+                          hit-col (. pos 2)]
+                      (when (and (= hit-row row) (> hit-col 0))
+                        (pcall vim.api.nvim_win_set_cursor target-win [row hit-col])))
+                    (pcall vim.cmd "normal! ^"))))
             (pcall vim.api.nvim_set_current_win target-win)
             (base-buffer.switch-buf target-buf))))
     (vim.cmd "normal! zv")
@@ -426,6 +428,18 @@
     (set session.results-edit-mode false)
     (hide-session-ui! deps session)
     (handoff-host-window! session.origin-win session.origin-buf)
+    ;; Closing prompt/info windows reshuffles layout and can stomp the
+    ;; winrestview above; reapply once Neovim has settled.
+    (when session.source-view
+      (let [view session.source-view
+            win session.origin-win]
+        (vim.schedule
+          (fn []
+            (when (vim.api.nvim_win_is_valid win)
+              (vim.api.nvim_win_call
+                win
+                (fn []
+                  (pcall vim.fn.winrestview view))))))))
     curr))
 
 (fn M.finish!
