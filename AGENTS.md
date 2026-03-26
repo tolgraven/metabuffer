@@ -82,6 +82,144 @@
 - This repository will later on commit compiled Lua so users do not need nfnl at runtime.
 - Never ever commit on your own without first running the full test suite. Limited/targeted runs are preferable while you are working, but before handing back controls always ensure every single test passes.
 
+## Architecture & Data Flow
+
+### Critical Path
+
+```
+:Meta / :Meta!
+  → init.fnl M.setup registers user commands
+  → router.fnl entry_start (singleton orchestrator)
+    → router/session.fnl start! (creates session, wires dependencies)
+      → meta.fnl M.new (prompt buffer, matchers, callbacks)
+      → prompt/hooks.fnl registers autocmds (TextChanged, CursorMoved, etc.)
+
+User types in prompt →
+  prompt/hooks.fnl on-prompt-changed
+    → router/query_flow.fnl apply-prompt-lines! (debounced)
+      → query.fnl parse prompt lines, extract directives
+      → source module: select/reload source set if directives changed
+      → transform module: apply active transforms
+      → meta.fnl on-update → matcher.filter → buffer/metabuffer.fnl render
+      → window/preview.fnl maybe-update-for-selection!
+      → window/info.fnl update!
+
+User selects result →
+  router/navigation.fnl move-selection!
+    → buffer/metabuffer.fnl set-cursor-line
+    → window/preview.fnl update (shows context around selected hit)
+    → window/info.fnl update (shows file/hit metadata)
+
+User accepts with <CR> →
+  router/actions.fnl accept-hit!
+    → jump to file:line, teardown session windows async
+```
+
+### Module Map
+
+Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `window/`, and `prompt/`. Below is the overview.
+
+**Core orchestration:**
+- `router.fnl` — Singleton orchestrator. Wires all subsystems, dispatches user commands, manages session lifecycle. Delegates to `router/*` submodules.
+- `meta.fnl` — Per-session "model" object. Owns the prompt→matcher→render pipeline. Created by `M.new`, holds matchers, source set, prompt state.
+- `config.fnl` — Default configuration with deep-merge setup. All user options resolve here.
+- `init.fnl` — Plugin entry. `M.setup` merges config and registers `:Meta`, `:MetaResume`, etc.
+
+**Router submodules** (`router/` — see `fnl/metabuffer/router/AGENTS.md`):
+- `session.fnl` — Session lifecycle (start, stop, resume, project-mode bootstrap).
+- `actions.fnl` — Accept/cancel/toggle handlers, window teardown, writeback.
+- `query_flow.fnl` — Debounced prompt→filter pipeline, source/transform switching.
+- `navigation.fnl` — Selection movement, scroll sync, half-page jumps.
+- `prompt.fnl` — Prompt text analysis, debounce timing, directive detection.
+- `history.fnl` — History entry construction, recall, merge, saved-prompt management.
+- `util.fnl` — Shared helpers: state persistence, prompt-line reading, option resolution.
+
+**Window subsystem** (`window/` — see `fnl/metabuffer/window/AGENTS.md`):
+- `base.fnl` — Window wrapper base (stash/restore options, statusline, airline guard).
+- `metawindow.fnl` — Main results window wrapper and statusline renderer.
+- `floating.fnl` — Floating window management (info, keybind popup).
+- `prompt.fnl` — Prompt window (split below results, height persistence).
+- `preview.fnl` — Preview pane (context around selected hit, horizontal scroll, wrap).
+- `info.fnl` — Info float (hit metadata, project loading progress, async highlight).
+- `animation.fnl` — Dual-backend animation system (mini.animate / native frame loop).
+- `context.fnl` — Contextual sidebar window.
+- `lineno.fnl` — Fake line-number column for project-mode (dynamic width).
+- `statusline.fnl` — Statusline content builder (flags, matcher name, counts).
+- `history_browser.fnl` — Floating history/saved-prompt browser.
+- `init.fnl` — Barrel module re-exporting public window modules.
+
+**Prompt subsystem** (`prompt/` — see `fnl/metabuffer/prompt/AGENTS.md`):
+- `hooks.fnl` — Autocmd registration, event dispatch, mode switching, UI sync.
+- `prompt.fnl` — Prompt object (buffer management, text get/set).
+- `action.fnl` — Prompt editing actions (kill, yank, home, end).
+- `keymap.fnl` — Keymap registration and builder.
+- `key.fnl` — Key definition constants.
+- `keystroke.fnl` — Multi-key sequence detection (e.g. `!!`, `!$`).
+- `caret.fnl` — Cursor position tracking within prompt.
+- `history.fnl` — Prompt history navigation (up/down cycling).
+- `digraph.fnl` — Digraph input support.
+- `util.fnl` — Prompt text utilities.
+- `init.fnl` — Barrel module re-exporting prompt modules.
+
+**Source providers** (`source/`):
+- `init.fnl` — Provider index. Each source implements: `active?`, `hit-prefix`, `info-path`, `collect-source-set`, `apply-write-ops!`.
+- `text.fnl` — Default: current buffer lines.
+- `file.fnl` — `#file` directive: file-entry source filtering.
+- `file_info.fnl` — File metadata extraction (size, type, git status).
+- `lgrep.fnl` — `#lgrep` directive: semantic search via lgrep binary.
+
+**Transform registry** (`transform/`):
+- `init.fnl` — Registry and dispatcher. Each transform module implements: `apply-line`, `should-apply-line?`, `apply-file`, `reverse-line`, `reverse-file`, `transform-key`.
+- Built-in transforms: `hex`, `b64`, `json`, `xml`, `css`, `strings`, `bplist`.
+- Custom user transforms registered via `options.custom.transforms` in config.
+
+**Matcher modules** (`matcher/`):
+- `init.fnl` — Barrel module.
+- `base.fnl` — Shared matcher interface (highlight, remove-highlight, filter).
+- Matchers: `all.fnl` (multi-token AND/negation), `fuzzy.fnl`, `regex.fnl`, `attrib.fnl`, `generic.fnl`, `range.fnl`, `textobj.fnl`.
+
+**Buffer modules** (`buffer/`):
+- `base.fnl` — Buffer wrapper base (name, options stash/restore).
+- `metabuffer.fnl` — Main results buffer (render filtered lines, line mapping, cursor management, source separators).
+- `regular.fnl` — Origin buffer tracking.
+- `ui.fnl` — UI buffer helpers (highlights, virtual text).
+- `init.fnl` — Barrel module.
+
+**Query & directives** (`query/`):
+- `query.fnl` (root) — Query parsing entry point.
+- `directive.fnl` — Directive parser/registry (`#file`, `#hex`, `#deps`, `#save`, etc.).
+- `prompt_directives.fnl` — Prompt-specific directive handling.
+- `scope.fnl` — Query scope resolution (hidden, ignored, deps, binary).
+
+**Project mode** (`project/`):
+- `source.fnl` — Lazy streaming project source collection. Walks repo tree, streams files async, respects ignore/deps/hidden scope toggles.
+
+**Other modules:**
+- `action.fnl` — High-level action dispatch (keymap → router function mapping).
+- `modeindexer.fnl` — Matcher/mode cycling.
+- `handle.fnl` — Generic Neovim handle wrapper (window/buffer option stash/restore).
+- `util.fnl` — General utilities.
+- `sign.fnl` — Sign column management.
+- `metaline.fnl` — Line data structure (source line → hit mapping).
+- `metaprompt.fnl` — Prompt data structure.
+- `history_store.fnl` — Persistent prompt history (JSON file in stdpath("data")).
+- `path_highlight.fnl` — File path syntax highlighting.
+- `author_highlight.fnl` — Git blame author highlighting.
+- `debug.fnl` — Debug logging.
+- `session/view.fnl` — Session state view helpers.
+- `context/` — Context window logic.
+- `core/` — Core primitives.
+- `custom/` — Custom user extension support.
+
+### Key Design Patterns
+
+- **Event-driven UI updates**: Selection changes fan out to preview, info, context, and statusline independently via router callbacks. Window modules never call each other directly.
+- **Barrel/index modules**: `window/init.fnl`, `prompt/init.fnl`, `matcher/init.fnl`, `transform/init.fnl`, `source/init.fnl`, `buffer/init.fnl` — return maps of sub-module requires.
+- **Transform registry**: Pluggable modules with a common contract. Each transform can be toggled via `#directive` in the prompt. Custom transforms follow the same interface.
+- **Source provider**: Pluggable backends (text, file, lgrep) with a common contract. Active source determined by prompt directives.
+- **Session isolation**: Each `:Meta` invocation creates a fresh session object with its own prompt buffer, matchers, and state. Multiple concurrent sessions are tracked in `active-by-prompt`.
+- **Animation dual-backend**: `mini.animate` (preferred) or native `vim.uv.new_timer` frame loop. Per-session cancellation tokens prevent animation leaks across sessions.
+
 ## Fennel code style
 
 - Mirror Clojure best practices as close as possible.
