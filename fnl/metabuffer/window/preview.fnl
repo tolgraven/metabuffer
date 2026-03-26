@@ -5,6 +5,7 @@
 (local statusline-mod (require :metabuffer.window.statusline))
 (local util (require :metabuffer.util))
 (local base-window-mod (require :metabuffer.window.base))
+(local router-util-mod (require :metabuffer.router.util))
 (local disable-airline-statusline! (. base-window-mod :disable-airline-statusline!))
 (local metabuffer-winhighlight (. base-window-mod :metabuffer-winhighlight))
 
@@ -183,10 +184,12 @@
       (when (and win (vim.api.nvim_win_is_valid win))
         (disable-airline-statusline! win)
         (let [real-buffer? (clj.boolean session.preview-real-buffer?)
+              persisted-wrap (router-util-mod.results-wrap-enabled?)
+              wrap? (if (~= persisted-wrap nil) (clj.boolean persisted-wrap) false)
               win-opts {:number real-buffer?
                         :relativenumber false
-                        :wrap false
-                        :linebreak false
+                        :wrap wrap?
+                        :linebreak wrap?
                         :winfixwidth true
                         :signcolumn (if real-buffer? "auto" "no")
                         :foldcolumn "0"
