@@ -617,6 +617,11 @@
             (set session.meta.buf.visible-source-syntax-only false)
             (pcall session.meta.buf.apply-source-syntax-regions)
             (when-not (prompt-has-active-query? session)
+              ;; Streaming added content to meta.buf.content but indices was
+              ;; only built at bootstrap time.  Rebuild indices from the full
+              ;; content table and render so all streamed lines appear.
+              (reset-meta-indices! session.meta)
+              (pcall session.meta.buf.render)
               (restore-meta-view! session.meta session.source-view session update-info-window))
             ;; Always force one final UI refresh when streaming settles so the
             ;; info pane leaves its loading/empty state even if the last batch

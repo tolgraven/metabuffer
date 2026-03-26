@@ -627,6 +627,8 @@ M.new = function(opts)
           session.meta.buf["visible-source-syntax-only"] = false
           pcall(session.meta.buf["apply-source-syntax-regions"])
           if not prompt_has_active_query_3f(session) then
+            reset_meta_indices_21(session.meta)
+            pcall(session.meta.buf.render)
             restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
           else
           end
