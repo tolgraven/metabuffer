@@ -1,6 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local handle (require :metabuffer.handle))
 (local util (require :metabuffer.util))
+(local events (require :metabuffer.events))
 
 (local M {})
 
@@ -8,7 +9,7 @@
   []
   "Public API: M.new-buffer."
   (let [buf (vim.api.nvim_create_buf false false)]
-    (util.disable-heavy-buffer-features! buf)
+    (events.send :on-buf-create! {:buf buf :role :meta})
     buf))
 
 (fn M.switch-buf

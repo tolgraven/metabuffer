@@ -1,5 +1,4 @@
 -- [nfnl] fnl/metabuffer/matcher/all.fnl
-local clj = require("io.gitlab.andreyorst.cljlib.core")
 local base = require("metabuffer.matcher.base")
 local util = require("metabuffer.util")
 local M = {}

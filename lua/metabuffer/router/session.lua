@@ -2,6 +2,7 @@
 local clj = require("io.gitlab.andreyorst.cljlib.core")
 local source_mod = require("metabuffer.source")
 local transform_mod = require("metabuffer.transform")
+local events = require("metabuffer.events")
 local M = {}
 local function silent_win_set_buf_21(win, buf)
   if (win and buf and vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(buf)) then
@@ -418,7 +419,7 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
   run_step_21(_64_, _66_)
   curr["status-win"] = curr.win
   local function _68_()
-    return pcall(vim.api.nvim_win_set_var, curr.win.window, "airline_disable_statusline", 1)
+    return events.send("on-win-create!", {win = curr.win.window, role = "main"})
   end
   run_step_21("finish-session-startup!/disable-airline", _68_)
   local function _69_()

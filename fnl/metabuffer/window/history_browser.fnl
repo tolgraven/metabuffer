@@ -1,7 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
-(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
 (local util (require :metabuffer.util))
+(local events (require :metabuffer.events))
 
 (fn ensure-window!
   [floating-window-mod session]
@@ -32,7 +32,7 @@
                      :width width
                      :height height}))
           win (floating-window-mod.new vim buf cfg)]
-      (util.disable-heavy-buffer-features! buf)
+      (events.send :on-buf-create! {:buf buf :role :history-browser})
       (util.set-buffer-name! buf "[Metabuffer History]")
       (set session.history-browser-buf buf)
       (set session.history-browser-win win.window)

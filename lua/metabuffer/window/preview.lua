@@ -6,7 +6,7 @@ local statusline_mod = require("metabuffer.window.statusline")
 local util = require("metabuffer.util")
 local base_window_mod = require("metabuffer.window.base")
 local router_util_mod = require("metabuffer.router.util")
-local disable_airline_statusline_21 = base_window_mod["disable-airline-statusline!"]
+local events = require("metabuffer.events")
 local metabuffer_winhighlight = base_window_mod["metabuffer-winhighlight"]
 local function preview_winhighlight()
   return (metabuffer_winhighlight() .. ",StatusLine:MetaPreviewStatusline,StatusLineNC:MetaPreviewStatusline")
@@ -171,13 +171,7 @@ M.new = function(opts)
   local mark_preview_buffer_21
   local function _23_(buf)
     if (buf and vim.api.nvim_buf_is_valid(buf)) then
-      util["disable-heavy-buffer-features!"](buf)
-      pcall(vim.api.nvim_buf_set_var, buf, "conjure_disable", true)
-      pcall(vim.api.nvim_buf_set_var, buf, "lsp_disabled", 1)
-      pcall(vim.api.nvim_buf_set_var, buf, "gitgutter_enabled", 0)
-      pcall(vim.api.nvim_buf_set_var, buf, "gitsigns_disable", true)
-      pcall(vim.api.nvim_buf_set_var, buf, "meta_preview", true)
-      return pcall(vim.diagnostic.enable, false, {bufnr = buf})
+      return events.send("on-buf-create!", {buf = buf, role = "preview"})
     else
       return nil
     end
@@ -214,7 +208,7 @@ M.new = function(opts)
   local apply_preview_window_opts_21
   local function _31_(session, win)
     if (win and vim.api.nvim_win_is_valid(win)) then
-      disable_airline_statusline_21(win)
+      events.send("on-win-create!", {win = win, role = "preview"})
       local real_buffer_3f = clj.boolean(session["preview-real-buffer?"])
       local persisted_wrap = router_util_mod["results-wrap-enabled?"]()
       local wrap_3f

@@ -4,6 +4,7 @@
 (local util (require :metabuffer.util))
 (local source-mod (require :metabuffer.source))
 (local transform-mod (require :metabuffer.transform))
+(local events (require :metabuffer.events))
 
 (fn session-by-prompt
   [active-by-prompt prompt-buf]
@@ -83,7 +84,7 @@
     (each [_ win (ipairs [(and main-win main-win.window)
                           (and status-win status-win.window)])]
       (when (and win (vim.api.nvim_win_is_valid win))
-        (pcall vim.api.nvim_win_del_var win "airline_disable_statusline")))))
+        (events.send :on-win-teardown! {:win win :role :main})))))
 
 (fn resume-main-window-opts!
   [deps session]
@@ -99,19 +100,19 @@
     (each [_ win (ipairs [(and main-win main-win.window)
                           (and status-win status-win.window)])]
       (when (and win (vim.api.nvim_win_is_valid win))
-        (pcall vim.api.nvim_win_set_var win "airline_disable_statusline" 1)))))
+        (events.send :on-win-create! {:win win :role :main})))))
 
 (fn restore-managed-buffer-effects!
   [session]
   (when session
-    (each [_ buf (ipairs [(and session.meta session.meta.buf session.meta.buf.buffer)
-                          session.prompt-buf
-                          session.info-buf
-                          session.preview-buf
-                          session.history-browser-buf])]
-      (util.restore-heavy-buffer-features! buf))
+    (each [_ [buf role] (ipairs [[(and session.meta session.meta.buf session.meta.buf.buffer) :meta]
+                                 [session.prompt-buf :prompt]
+                                 [session.info-buf :info]
+                                 [session.preview-buf :preview]
+                                 [session.history-browser-buf :history-browser]])]
+      (events.send :on-buf-teardown! {:buf buf :role role}))
     (each [_ buf (pairs (or session.ts-expand-bufs {}))]
-      (util.restore-heavy-buffer-features! buf))))
+      (events.send :on-buf-teardown! {:buf buf :role :context}))))
 
 (fn restore-startup-cursor!
   [session]
@@ -178,7 +179,7 @@
       (when session.instance-id
         (clear-map-entry! instances session.instance-id session))
       (when (and session.origin-win (vim.api.nvim_win_is_valid session.origin-win))
-        (pcall vim.api.nvim_win_del_var session.origin-win "airline_disable_statusline")))))
+        (events.send :on-win-teardown! {:win session.origin-win :role :origin})))))
 
 (local prompt-window-opts {
   :winfixwidth true
@@ -196,7 +197,7 @@
 (fn apply-prompt-window-opts!
   [win]
   (when (and win (vim.api.nvim_win_is_valid win))
-    (pcall vim.api.nvim_win_set_var win "airline_disable_statusline" 1)
+    (events.send :on-win-create! {:win win :role :prompt})
     (each [name value (pairs prompt-window-opts)]
       (pcall vim.api.nvim_set_option_value name value {:win win}))))
 
@@ -318,7 +319,7 @@
           (pcall curr.buf.render))
         (when (and session-view-mod session.source-view)
           (pcall session-view-mod.restore-meta-view! curr session.source-view session update-info-window))
-        (vim.cmd "silent! nohlsearch")
+        (events.send :on-restore-ui! {:session session})
         (let [cursor (or session.hidden-prompt-cursor [1 0])
               row (math.max 1 (or (. cursor 1) 1))
               col (math.max 0 (or (. cursor 2) 0))
@@ -415,7 +416,7 @@
     (clear-hit-highlight! curr)
     (when sign-mod
       (sign-mod.clear-change-signs! curr.buf.buffer))
-    (vim.cmd "silent! nohlsearch")
+    (events.send :on-cancel! {:session session})
     (when (and (vim.api.nvim_win_is_valid session.origin-win)
                (vim.api.nvim_buf_is_valid session.origin-buf))
       (pcall vim.api.nvim_set_current_win session.origin-win)
@@ -1202,8 +1203,7 @@
                session.meta
                session.meta.buf)
       (let [current-buf (vim.api.nvim_get_current_buf)
-            results-buf session.meta.buf.buffer
-            origin-buf session.origin-buf]
+            results-buf session.meta.buf.buffer]
         (when (or force
                   (= current-buf results-buf))
           (set session.meta.win.window (vim.api.nvim_get_current_win))

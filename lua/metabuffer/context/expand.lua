@@ -1,7 +1,7 @@
 -- [nfnl] fnl/metabuffer/context/expand.fnl
-local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local util = require("metabuffer.util")
+local events = require("metabuffer.events")
 local function buf_for_ref(ref)
   if (ref and ref.buf and vim.api.nvim_buf_is_valid(ref.buf)) then
     return ref.buf
@@ -84,7 +84,7 @@ local function ensure_ts_buf(session, ref, read_file_lines_cached)
         local buf = vim.api.nvim_create_buf(false, true)
         local ft = filetype_for_ref(ref)
         local lines = lines_for_ref(session, ref, read_file_lines_cached)
-        util["disable-heavy-buffer-features!"](buf)
+        events.send("on-buf-create!", {buf = buf, role = "context"})
         util["set-buffer-name!"](buf, "[Metabuffer Context]")
         do
           local bo = vim.bo[buf]

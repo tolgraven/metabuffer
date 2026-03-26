@@ -1,4 +1,3 @@
-(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
 
 (set M.transform-key "css")

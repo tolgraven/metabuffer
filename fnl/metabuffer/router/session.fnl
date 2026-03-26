@@ -2,6 +2,7 @@
 (local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local source-mod (require :metabuffer.source))
 (local transform-mod (require :metabuffer.transform))
+(local events (require :metabuffer.events))
 
 (local M {})
 
@@ -393,7 +394,7 @@
             (project-source.apply-source-set! session))))
     (set curr.status-win curr.win)
     (run-step! "finish-session-startup!/disable-airline"
-      (fn [] (pcall vim.api.nvim_win_set_var curr.win.window "airline_disable_statusline" 1)))
+      (fn [] (events.send :on-win-create! {:win curr.win.window :role :main})))
     (run-step! "finish-session-startup!/refresh-statusline"
       (fn [] (pcall curr.refresh_statusline)))
     (run-step! "finish-session-startup!/on-init"
@@ -718,6 +719,6 @@
                     (show-launch-message! session)
                     curr))))))))))))))
 
-(tset M :project-start-selected-index project-start-selected-index)
+(set (. M :project-start-selected-index) project-start-selected-index)
 
 M

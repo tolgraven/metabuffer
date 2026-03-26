@@ -6,7 +6,6 @@
 
 ### `base.fnl` (56 lines)
 - `M.new` — Creates a window wrapper around a Neovim window handle. Stashes/restores window-local options on creation/teardown.
-- `disable-airline-statusline!` — Sets `w:airline_disable_statusline` to prevent Airline from overriding Meta statuslines.
 - `apply-metabuffer-window-highlights!` — Applies `winhighlight` remappings for Meta-owned windows.
 
 ### `metawindow.fnl` (46 lines)
@@ -90,7 +89,7 @@ Window modules receive their update call and act independently. They never impor
 `base.fnl` provides the stash/restore mechanism inherited by all window wrappers. On creation, window-local options are saved; on teardown they are restored to their pre-Meta values. This prevents Meta from permanently altering the user's window configuration.
 
 ### Airline Guard
-Multiple modules call `disable-airline-statusline!` because Airline aggressively re-renders on `WinEnter`/`BufEnter`. The guard must be re-applied after any event that might trigger Airline.
+Airline compatibility is now handled by `compat/airline.fnl` via the event bus. The `compat.on-win-create!` and `compat.on-win-teardown!` calls set/remove `w:airline_disable_statusline`. The guard must fire on every Meta window creation because Airline aggressively re-renders on `WinEnter`/`BufEnter`.
 
 ## Caution Points
 

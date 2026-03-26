@@ -3,6 +3,7 @@
 (local router_prompt_mod (require :metabuffer.router.prompt))
 (local source-mod (require :metabuffer.source))
 (local transform-mod (require :metabuffer.transform))
+(local events (require :metabuffer.events))
 (local M {})
 
 (fn choose-current-when-nil
@@ -80,6 +81,31 @@
     (or (~= next-prefilter session.prefilter-mode)
         (~= next-lazy session.lazy-mode)
         (~= next-expansion session.expansion-mode))))
+
+(fn dispatch-directive-changes!
+  [session parsed]
+  "Compare parsed directives against session.last-parsed-query and fire
+   :on-directive! for each changed key."
+  (let [directive-mod (require :metabuffer.query.directive)
+        prev (or session.last-parsed-query {})
+        seen {}]
+    (each [_ spec (ipairs (directive-mod.all-specs))]
+      (let [key (. spec :token-key)]
+        (when (and key (not (. seen key)))
+          (set (. seen key) true)
+          (let [old-val (. prev key)
+                new-val (. parsed key)]
+            (when (~= old-val new-val)
+              (events.send :on-directive!
+                {:session session
+                 :key key
+                 :value new-val
+                 :change {:old old-val
+                          :new new-val
+                          :activated? (and (= old-val nil) (~= new-val nil))
+                          :deactivated? (and (~= old-val nil) (= new-val nil))
+                          :kind (or (. spec :kind) "")
+                          :provider-type (or (. spec :provider-type) "")}}))))))))
 
 (fn refresh-session-ui!
   [session update-preview-window update-info-window context-window refresh-change-signs! capture-sign-baseline!]
@@ -217,6 +243,7 @@
           (when (and (. parsed :saved-browser)
                      open-saved-browser!)
             (open-saved-browser! session))
+          (dispatch-directive-changes! session parsed)
           (set session.effective-include-hidden next-hidden)
           (set session.effective-include-ignored next-ignored)
           (set session.effective-include-deps next-deps)

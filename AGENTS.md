@@ -135,7 +135,7 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 - `util.fnl` — Shared helpers: state persistence, prompt-line reading, option resolution.
 
 **Window subsystem** (`window/` — see `fnl/metabuffer/window/AGENTS.md`):
-- `base.fnl` — Window wrapper base (stash/restore options, statusline, airline guard).
+- `base.fnl` — Window wrapper base (stash/restore options, statusline, highlights).
 - `metawindow.fnl` — Main results window wrapper and statusline renderer.
 - `floating.fnl` — Floating window management (info, keybind popup).
 - `prompt.fnl` — Prompt window (split below results, height persistence).
@@ -172,6 +172,17 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 - `init.fnl` — Registry and dispatcher. Each transform module implements: `apply-line`, `should-apply-line?`, `apply-file`, `reverse-line`, `reverse-file`, `transform-key`.
 - Built-in transforms: `hex`, `b64`, `json`, `xml`, `css`, `strings`, `bplist`.
 - Custom user transforms registered via `options.custom.transforms` in config.
+
+**Event bus** (`events.fnl`):
+- `events.fnl` — Standalone generic lifecycle event dispatcher. Collects handler specs from registered modules, sorts by priority, filters by `:role-filter`, pcall-dispatches. Public API: `events.send`, `events.register!`, `events.registered-events`, `events.handlers-for`, `events.set-profile!`. All subsystems use `(events.send :event-key {:key val ...})`.
+
+**Compat / Plugin shims** (`compat/` — see `fnl/metabuffer/compat/AGENTS.md`):
+- `init.fnl` — Pure side-effect loader. Requires the 5 builtin compat sub-modules and registers each into the event bus via `events.register!`. Returns `{}`.
+- `airline.fnl` — Airline statusline disable/re-enable on Meta windows.
+- `buffer_plugins.fnl` — Disables conjure, LSP, gitgutter, gitsigns, diagnostics, auto-pairs on Meta buffers (role-filtered).
+- `cmp.fnl` — Disables nvim-cmp on prompt buffer, re-disables on InsertEnter.
+- `hlsearch.fnl` — Clears hlsearch on session start/cancel/restore, restores on accept.
+- `rainbow.fnl` — Deactivates rainbow_parentheses on Meta buffers, reactivates on teardown.
 
 **Matcher modules** (`matcher/`):
 - `init.fnl` — Barrel module.
@@ -214,6 +225,7 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 ### Key Design Patterns
 
 - **Event-driven UI updates**: Selection changes fan out to preview, info, context, and statusline independently via router callbacks. Window modules never call each other directly.
+- **Compat event bus**: Generic lifecycle dispatcher (`compat/init.fnl`). Modules declare `{:events {:<event> <spec>}}` with priority + role filters. The bus collects, sorts, and pcall-dispatches. See `fnl/metabuffer/compat/AGENTS.md` for the full event schema.
 - **Barrel/index modules**: `window/init.fnl`, `prompt/init.fnl`, `matcher/init.fnl`, `transform/init.fnl`, `source/init.fnl`, `buffer/init.fnl` — return maps of sub-module requires.
 - **Transform registry**: Pluggable modules with a common contract. Each transform can be toggled via `#directive` in the prompt. Custom transforms follow the same interface.
 - **Source provider**: Pluggable backends (text, file, lgrep) with a common contract. Active source determined by prompt directives.

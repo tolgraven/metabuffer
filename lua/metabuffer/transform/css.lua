@@ -1,5 +1,4 @@
 -- [nfnl] fnl/metabuffer/transform/css.fnl
-local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 M["transform-key"] = "css"
 M["query-directive-specs"] = {{kind = "toggle", long = "css", ["token-key"] = "include-css", doc = "Pretty-print minified CSS lines.", ["compat-key"] = "css"}}

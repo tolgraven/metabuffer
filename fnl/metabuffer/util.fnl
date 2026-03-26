@@ -4,7 +4,6 @@
                  : if-some
                  : when-not}
   :io.gitlab.andreyorst.cljlib.core)
-(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
 (var mini-icons-cache nil)
 (var mini-icons-tried? false)
@@ -106,32 +105,6 @@
                 (if ok-api
                     name
                     (.. base " [" buf "]"))))))))
-
-(fn M.disable-heavy-buffer-features!
-  [buf]
-  "Best-effort opt-out of heavy buffer-local helpers on Meta-owned buffers."
-  (when (M.buf-valid? buf)
-    (pcall vim.api.nvim_buf_set_var buf "conjure_disable" true)
-    (pcall vim.api.nvim_buf_set_var buf "lsp_disabled" 1)
-    (pcall vim.api.nvim_buf_set_var buf "gitgutter_enabled" 0)
-    (pcall vim.api.nvim_buf_set_var buf "gitsigns_disable" true)
-    (pcall vim.diagnostic.enable false {:bufnr buf})
-    (when (= 1 (vim.fn.exists "*rainbow_parentheses#deactivate"))
-      (pcall vim.api.nvim_buf_set_var buf "metabuffer_rainbow_parentheses_disabled" true)
-      (let [deactivate! (fn []
-                          (vim.cmd "silent! call rainbow_parentheses#deactivate()"))]
-        (pcall vim.api.nvim_buf_call buf deactivate!)))))
-
-(fn M.restore-heavy-buffer-features!
-  [buf]
-  "Undo Meta's best-effort heavy-helper opt-outs on surviving buffers."
-  (when (M.buf-valid? buf)
-    (let [[ok disabled?] [(pcall vim.api.nvim_buf_get_var buf "metabuffer_rainbow_parentheses_disabled")]]
-      (when (and ok disabled? (= 1 (vim.fn.exists "*rainbow_parentheses#activate")))
-        (let [activate! (fn []
-                          (vim.cmd "silent! call rainbow_parentheses#activate()"))]
-          (pcall vim.api.nvim_buf_call buf activate!))
-        (pcall vim.api.nvim_buf_del_var buf "metabuffer_rainbow_parentheses_disabled")))))
 
 (fn M.win-valid?
   [win]

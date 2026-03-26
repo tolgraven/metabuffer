@@ -1,5 +1,4 @@
 -- [nfnl] fnl/metabuffer/router/history.fnl
-local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local function project_setting_token(name, enabled)
   local _1_

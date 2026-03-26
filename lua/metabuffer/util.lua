@@ -1,5 +1,4 @@
 -- [nfnl] fnl/metabuffer/util.fnl
-local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local mini_icons_cache = nil
 local mini_icons_tried_3f = false
@@ -109,48 +108,6 @@ M["set-buffer-name!"] = function(buf, base_name)
     end
   end
 end
-M["disable-heavy-buffer-features!"] = function(buf)
-  if M["buf-valid?"](buf) then
-    pcall(vim.api.nvim_buf_set_var, buf, "conjure_disable", true)
-    pcall(vim.api.nvim_buf_set_var, buf, "lsp_disabled", 1)
-    pcall(vim.api.nvim_buf_set_var, buf, "gitgutter_enabled", 0)
-    pcall(vim.api.nvim_buf_set_var, buf, "gitsigns_disable", true)
-    pcall(vim.diagnostic.enable, false, {bufnr = buf})
-    if (1 == vim.fn.exists("*rainbow_parentheses#deactivate")) then
-      pcall(vim.api.nvim_buf_set_var, buf, "metabuffer_rainbow_parentheses_disabled", true)
-      local deactivate_21
-      local function _11_()
-        return vim.cmd("silent! call rainbow_parentheses#deactivate()")
-      end
-      deactivate_21 = _11_
-      return pcall(vim.api.nvim_buf_call, buf, deactivate_21)
-    else
-      return nil
-    end
-  else
-    return nil
-  end
-end
-M["restore-heavy-buffer-features!"] = function(buf)
-  if M["buf-valid?"](buf) then
-    local ok,disabled_3f = pcall(vim.api.nvim_buf_get_var, buf, "metabuffer_rainbow_parentheses_disabled")
-    if (ok and disabled_3f and (1 == vim.fn.exists("*rainbow_parentheses#activate"))) then
-      do
-        local activate_21
-        local function _14_()
-          return vim.cmd("silent! call rainbow_parentheses#activate()")
-        end
-        activate_21 = _14_
-        pcall(vim.api.nvim_buf_call, buf, activate_21)
-      end
-      return pcall(vim.api.nvim_buf_del_var, buf, "metabuffer_rainbow_parentheses_disabled")
-    else
-      return nil
-    end
-  else
-    return nil
-  end
-end
 M["win-valid?"] = function(win)
   return (win and vim.api.nvim_win_is_valid(win))
 end
@@ -187,13 +144,13 @@ M["devicon-info"] = function(path, fallback_hl)
     else
       next_hl = fallback_hl
     end
-    local _19_
+    local _13_
     if (ok_i and (type(icon) == "string") and (icon ~= "")) then
-      _19_ = icon
+      _13_ = icon
     else
-      _19_ = ""
+      _13_ = ""
     end
-    return {icon = _19_, ["icon-hl"] = next_hl, ["ext-hl"] = next_hl, ["file-hl"] = fallback_hl}
+    return {icon = _13_, ["icon-hl"] = next_hl, ["ext-hl"] = next_hl, ["file-hl"] = fallback_hl}
   else
     return {icon = "", ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
   end
@@ -269,13 +226,13 @@ M["combine-signs"] = function(primary, secondary)
     table.insert(highs, {start = #left, ["end"] = (#left + #right), hl = right_hl})
   else
   end
-  local _32_
+  local _26_
   if (left ~= "") then
-    _32_ = left_hl
+    _26_ = left_hl
   else
-    _32_ = right_hl
+    _26_ = right_hl
   end
-  return {text = text, hl = _32_, highlights = highs}
+  return {text = text, hl = _26_, highlights = highs}
 end
 M["buf-lines"] = function(buf)
   return vim.api.nvim_buf_get_lines(buf, 0, -1, false)

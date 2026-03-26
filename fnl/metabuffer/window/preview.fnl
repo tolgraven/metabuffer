@@ -6,7 +6,7 @@
 (local util (require :metabuffer.util))
 (local base-window-mod (require :metabuffer.window.base))
 (local router-util-mod (require :metabuffer.router.util))
-(local disable-airline-statusline! (. base-window-mod :disable-airline-statusline!))
+(local events (require :metabuffer.events))
 (local metabuffer-winhighlight (. base-window-mod :metabuffer-winhighlight))
 
 (fn preview-winhighlight
@@ -152,14 +152,7 @@
   (local mark-preview-buffer!
     (fn [buf]
       (when (and buf (vim.api.nvim_buf_is_valid buf))
-        (util.disable-heavy-buffer-features! buf)
-        ;; Keep syntax/filetype, but hint heavy tooling to skip preview-only buffers.
-        (pcall vim.api.nvim_buf_set_var buf "conjure_disable" true)
-        (pcall vim.api.nvim_buf_set_var buf "lsp_disabled" 1)
-        (pcall vim.api.nvim_buf_set_var buf "gitgutter_enabled" 0)
-        (pcall vim.api.nvim_buf_set_var buf "gitsigns_disable" true)
-        (pcall vim.api.nvim_buf_set_var buf "meta_preview" true)
-        (pcall vim.diagnostic.enable false {:bufnr buf}))))
+        (events.send :on-buf-create! {:buf buf :role :preview}))))
 
   (local file-backed-preview-ref?
     (fn [ref]
@@ -182,7 +175,7 @@
   (local apply-preview-window-opts!
     (fn [session win]
       (when (and win (vim.api.nvim_win_is_valid win))
-        (disable-airline-statusline! win)
+        (events.send :on-win-create! {:win win :role :preview})
         (let [real-buffer? (clj.boolean session.preview-real-buffer?)
               persisted-wrap (router-util-mod.results-wrap-enabled?)
               wrap? (if (~= persisted-wrap nil) (clj.boolean persisted-wrap) false)
