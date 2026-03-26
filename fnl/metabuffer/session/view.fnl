@@ -99,6 +99,8 @@
          : update-context-window!}
         (or opts {})]
     (when (and session
+               (not session.ui-hidden)
+               (not session.closing)
                (or (not session.startup-initializing)
                    session.project-mode)
                (vim.api.nvim_win_is_valid session.meta.win.window)

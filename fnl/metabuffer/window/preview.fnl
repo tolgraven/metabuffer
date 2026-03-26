@@ -223,7 +223,8 @@
 
   (fn ensure-preview-window!
     [session]
-    (when-not (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
+    (when-not (or session.ui-hidden session.closing
+                  (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win)))
       (let [buf (if (and session.preview-scratch-buf (vim.api.nvim_buf_is_valid session.preview-scratch-buf))
                     session.preview-scratch-buf
                     (vim.api.nvim_create_buf false true))

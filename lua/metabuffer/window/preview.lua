@@ -275,7 +275,7 @@ M.new = function(opts)
   apply_preview_focus_highlight_21 = _42_
   local close_preview_window_21 = nil
   local function ensure_preview_window_21(session)
-    if not (session["preview-win"] and vim.api.nvim_win_is_valid(session["preview-win"])) then
+    if not (session["ui-hidden"] or session.closing or (session["preview-win"] and vim.api.nvim_win_is_valid(session["preview-win"]))) then
       local buf
       if (session["preview-scratch-buf"] and vim.api.nvim_buf_is_valid(session["preview-scratch-buf"])) then
         buf = session["preview-scratch-buf"]

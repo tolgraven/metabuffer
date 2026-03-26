@@ -129,7 +129,7 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
   local update_info_window = _let_20_["update-info-window"]
   local update_preview_window_21 = _let_20_["update-preview-window!"]
   local update_context_window_21 = _let_20_["update-context-window!"]
-  if (session and (not session["startup-initializing"] or session["project-mode"]) and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
+  if (session and not session["ui-hidden"] and not session.closing and (not session["startup-initializing"] or session["project-mode"]) and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
     local before = session.meta.selected_index
     M["sync-selected-from-main-cursor!"](session)
     if force_refresh then
