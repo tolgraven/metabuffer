@@ -737,11 +737,12 @@ M.new = function(opts)
   local function build_info_lines(session, refs, idxs, target_width, start_index, stop_index, _visible_start, _visible_stop, read_file_lines_cached0)
     local lnum_digit_width
     do
-      local limit = math.min(#idxs, info_max_lines)
+      local vis_lo = math.max(1, (_visible_start or start_index))
+      local vis_hi = math.min(#idxs, (_visible_stop or stop_index))
       local max_lnum_len
-      if (limit > 0) then
+      if (vis_hi > 0) then
         local lens = {}
-        for i = 1, limit do
+        for i = vis_lo, vis_hi do
           local src_idx = idxs[i]
           local ref = refs[src_idx]
           local lnum = tostring(((ref and ref.lnum) or src_idx))

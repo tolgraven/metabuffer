@@ -593,10 +593,14 @@
 
   (fn build-info-lines
     [session refs idxs target-width start-index stop-index _visible-start _visible-stop read_file_lines_cached]
-    (let [lnum-digit-width (let [limit (math.min (# idxs) info_max_lines)
-                           max-lnum-len (if (> limit 0)
+    "Build info rows for the visible slice.  Digit-width is computed only
+     over the visible range so a distant 4-digit lnum doesn't cause a
+     column jump for entries currently on screen."
+    (let [lnum-digit-width (let [vis-lo (math.max 1 (or _visible-start start-index))
+                           vis-hi (math.min (# idxs) (or _visible-stop stop-index))
+                           max-lnum-len (if (> vis-hi 0)
                                             (let [lens []]
-                                              (for [i 1 limit]
+                                              (for [i vis-lo vis-hi]
                                                 (let [src-idx (. idxs i)
                                                       ref (. refs src-idx)
                                                       lnum (tostring (or (and ref ref.lnum) src-idx))]

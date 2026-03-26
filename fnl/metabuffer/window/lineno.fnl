@@ -3,11 +3,13 @@
 
 (fn M.digit-width-from-max-value
   [max-value]
-  (math.max 2 (# (tostring (math.max 1 (or max-value 1))))))
+  "Min width 3 so project-mode doesn't jump when a 3-digit lnum first appears."
+  (math.max 3 (# (tostring (math.max 1 (or max-value 1))))))
 
 (fn M.digit-width-from-max-len
   [max-len]
-  (math.max 2 (or max-len 1)))
+  "Min width 3 to prevent column jump on first 3-digit line number."
+  (math.max 3 (or max-len 1)))
 
 (fn M.field-width-from-max-value
   [max-value]
