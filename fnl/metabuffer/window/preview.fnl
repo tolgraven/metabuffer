@@ -175,7 +175,11 @@
   (local apply-preview-window-opts!
     (fn [session win]
       (when (and win (vim.api.nvim_win_is_valid win))
-        (events.send :on-win-create! {:win win :role :preview})
+        (when-not (. (or session.preview-compat-initialized-wins {}) win)
+          (when (not session.preview-compat-initialized-wins)
+            (set session.preview-compat-initialized-wins {}))
+          (tset session.preview-compat-initialized-wins win true)
+          (events.send :on-win-create! {:win win :role :preview}))
         (let [real-buffer? (clj.boolean session.preview-real-buffer?)
               persisted-wrap (router-util-mod.results-wrap-enabled?)
               wrap? (if (~= persisted-wrap nil) (clj.boolean persisted-wrap) false)
@@ -296,7 +300,8 @@
       (set session.preview-float? false)
       (set session.preview-real-buffer? false)
       (set session.preview-scratch-buf nil)
-	      (set session.preview-buf nil))))
+	      (set session.preview-buf nil)
+        (set session.preview-compat-initialized-wins nil))))
 
   (fn ensure-preview-scratch-buf!
     [session]
