@@ -1044,6 +1044,37 @@
                                            (router.cancel session.prompt-buf))))))))))})
         (apply-main-keymaps router session)
         (apply-results-edit-keymaps session)
+      ;; External file writes: invalidate cached file data and rebuild sources
+      ;; so the info sidebar reflects the latest on-disk state.
+        (vim.api.nvim_create_autocmd "BufWritePost"
+          {:group aug
+           :callback (fn [ev]
+                       (vim.schedule
+                         (fn []
+                           (when (and session.prompt-buf
+                                      (= (. active-by-prompt session.prompt-buf) session)
+                                      (not session.closing))
+                             (let [buf (or ev.buf (vim.api.nvim_get_current_buf))]
+                               (when (and (vim.api.nvim_buf_is_valid buf)
+                                          (not= buf session.meta.buf.buffer))
+                                 (let [raw (vim.api.nvim_buf_get_name buf)
+                                       path (when (and raw (~= raw ""))
+                                              (vim.fn.fnamemodify raw ":p"))]
+                                   (when path
+                                     ;; Clear per-session caches for this path.
+                                     (when session.preview-file-cache
+                                       (set (. session.preview-file-cache path) nil))
+                                     (when session.info-file-head-cache
+                                       (set (. session.info-file-head-cache path) nil))
+                                     (when session.info-file-meta-cache
+                                       (set (. session.info-file-meta-cache path) nil))
+                                     ;; Clear router-level project file cache entry.
+                                     (when router.project-file-cache
+                                       (set (. router.project-file-cache path) nil))
+                                     ;; Rebuild project source set and refresh info window.
+                                     (when rebuild-source-set!
+                                       (pcall rebuild-source-set! session))
+                                      (pcall update-info-window session true)))))))))})
         (vim.api.nvim_create_autocmd "WinScrolled"
           {:group aug
            :callback (fn [_]

@@ -1258,33 +1258,80 @@ M.new = function(opts)
     vim.api.nvim_create_autocmd("BufLeave", {group = aug, buffer = session.meta.buf.buffer, callback = _192_})
     apply_main_keymaps(router, session)
     apply_results_edit_keymaps(session)
-    local function _198_(_)
+    local function _198_(ev)
+      local function _199_()
+        if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session) and not session.closing) then
+          local buf = (ev.buf or vim.api.nvim_get_current_buf())
+          if (vim.api.nvim_buf_is_valid(buf) and (buf ~= session.meta.buf.buffer)) then
+            local raw = vim.api.nvim_buf_get_name(buf)
+            local path
+            if (raw and (raw ~= "")) then
+              path = vim.fn.fnamemodify(raw, ":p")
+            else
+              path = nil
+            end
+            if path then
+              if session["preview-file-cache"] then
+                session["preview-file-cache"][path] = nil
+              else
+              end
+              if session["info-file-head-cache"] then
+                session["info-file-head-cache"][path] = nil
+              else
+              end
+              if session["info-file-meta-cache"] then
+                session["info-file-meta-cache"][path] = nil
+              else
+              end
+              if router["project-file-cache"] then
+                router["project-file-cache"][path] = nil
+              else
+              end
+              if rebuild_source_set_21 then
+                pcall(rebuild_source_set_21, session)
+              else
+              end
+              return pcall(update_info_window, session, true)
+            else
+              return nil
+            end
+          else
+            return nil
+          end
+        else
+          return nil
+        end
+      end
+      return vim.schedule(_199_)
+    end
+    vim.api.nvim_create_autocmd("BufWritePost", {group = aug, callback = _198_})
+    local function _209_(_)
       return schedule_scroll_sync_21(session)
     end
-    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _198_})
-    local function _199_(_)
+    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _209_})
+    local function _210_(_)
       return router["write-results"](session["prompt-buf"])
     end
-    vim.api.nvim_create_autocmd("BufWriteCmd", {group = aug, buffer = session.meta.buf.buffer, callback = _199_})
-    local function _200_(_)
-      local function _201_()
+    vim.api.nvim_create_autocmd("BufWriteCmd", {group = aug, buffer = session.meta.buf.buffer, callback = _210_})
+    local function _211_(_)
+      local function _212_()
         return router["results-buffer-wiped"](session.meta.buf.buffer)
       end
-      return vim.schedule(_201_)
+      return vim.schedule(_212_)
     end
-    vim.api.nvim_create_autocmd("BufWipeout", {group = aug, buffer = session.meta.buf.buffer, callback = _200_})
+    vim.api.nvim_create_autocmd("BufWipeout", {group = aug, buffer = session.meta.buf.buffer, callback = _211_})
     disable_cmp(session)
     mark_prompt_buffer_21(session["prompt-buf"])
     refresh_prompt_highlights_21(session)
     maybe_show_directive_help_21(session)
-    local function _202_()
+    local function _213_()
       if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
         return pcall(refresh_prompt_highlights_21, session)
       else
         return nil
       end
     end
-    vim.defer_fn(_202_, prompt_animation_delay_ms(session))
+    vim.defer_fn(_213_, prompt_animation_delay_ms(session))
     apply_keymaps(router, session)
     return apply_emacs_insert_fallbacks(router, session)
   end
