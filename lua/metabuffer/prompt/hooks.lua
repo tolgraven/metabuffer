@@ -1071,65 +1071,75 @@ M.new = function(opts)
     end
     vim.api.nvim_create_autocmd({"BufEnter", "WinEnter", "FocusGained"}, {group = aug, buffer = session["prompt-buf"], callback = _153_})
     local function _156_(_)
-      local function _157_()
-        do
-          local results_wrap_3f = (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_get_option_value("wrap", {win = session.meta.win.window}))
-          if (results_wrap_3f and rebuild_source_set_21) then
-            pcall(rebuild_source_set_21, session)
-            pcall(session.meta["on-update"], 0)
+      if not session["handling-layout-change?"] then
+        session["handling-layout-change?"] = true
+        local function _157_()
+          do
+            local results_wrap_3f = (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_get_option_value("wrap", {win = session.meta.win.window}))
+            if (results_wrap_3f and rebuild_source_set_21) then
+              pcall(rebuild_source_set_21, session)
+              pcall(session.meta["on-update"], 0)
+            else
+            end
+          end
+          if not session["prompt-animating?"] then
+            pcall(refresh_prompt_highlights_21, session)
+            if update_preview_window then
+              pcall(update_preview_window, session)
+            else
+            end
+            pcall(update_info_window, session)
           else
           end
-        end
-        if not session["prompt-animating?"] then
-          pcall(refresh_prompt_highlights_21, session)
-          if update_preview_window then
-            pcall(update_preview_window, session)
-          else
-          end
-          return pcall(update_info_window, session)
-        else
+          session["handling-layout-change?"] = false
           return nil
         end
+        return schedule_when_valid(session, _157_)
+      else
+        return nil
       end
-      return schedule_when_valid(session, _157_)
     end
     vim.api.nvim_create_autocmd({"VimResized", "WinResized"}, {group = aug, callback = _156_})
-    local function _161_(_)
-      local function _162_()
-        if (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window) and (vim.api.nvim_get_current_win() == session.meta.win.window)) then
-          local wrap_3f = clj.boolean(vim.api.nvim_get_option_value("wrap", {win = session.meta.win.window}))
-          pcall(vim.api.nvim_set_option_value, "linebreak", wrap_3f, {win = session.meta.win.window})
-          if rebuild_source_set_21 then
-            pcall(rebuild_source_set_21, session)
-            pcall(session.meta["on-update"], 0)
-            pcall(update_info_window, session, true)
-            if update_preview_window then
-              return pcall(update_preview_window, session)
+    local function _162_(_)
+      if not session["handling-layout-change?"] then
+        session["handling-layout-change?"] = true
+        local function _163_()
+          if (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window) and (vim.api.nvim_get_current_win() == session.meta.win.window)) then
+            local wrap_3f = clj.boolean(vim.api.nvim_get_option_value("wrap", {win = session.meta.win.window}))
+            pcall(vim.api.nvim_set_option_value, "linebreak", wrap_3f, {win = session.meta.win.window})
+            if rebuild_source_set_21 then
+              pcall(rebuild_source_set_21, session)
+              pcall(session.meta["on-update"], 0)
+              pcall(update_info_window, session, true)
+              if update_preview_window then
+                pcall(update_preview_window, session)
+              else
+              end
             else
-              return nil
             end
           else
-            return nil
           end
-        else
+          session["handling-layout-change?"] = false
           return nil
         end
+        return schedule_when_valid(session, _163_)
+      else
+        return nil
       end
-      return schedule_when_valid(session, _162_)
     end
-    vim.api.nvim_create_autocmd("OptionSet", {group = aug, pattern = "wrap", callback = _161_})
-    local function _166_(_)
-      local function _167_()
+    vim.api.nvim_create_autocmd("OptionSet", {group = aug, pattern = "wrap", callback = _162_})
+    local function _168_(_)
+      local function _169_()
         return maybe_sync_from_main_21(session)
       end
-      return schedule_when_valid(session, _167_)
+      return schedule_when_valid(session, _169_)
     end
-    vim.api.nvim_create_autocmd({"CursorMoved", "CursorMovedI"}, {group = aug, buffer = session.meta.buf.buffer, callback = _166_})
-    local function _168_(_)
+    vim.api.nvim_create_autocmd({"CursorMoved", "CursorMovedI"}, {group = aug, buffer = session.meta.buf.buffer, callback = _168_})
+    local function _170_(_)
       return begin_direct_results_edit_21(session)
     end
-    vim.api.nvim_create_autocmd({"BufEnter", "WinEnter", "FocusGained"}, {group = aug, buffer = session.meta.buf.buffer, callback = _168_})
-    local function _169_(_)
+    vim.api.nvim_create_autocmd({"BufEnter", "WinEnter", "FocusGained"}, {group = aug, buffer = session.meta.buf.buffer, callback = _170_})
+    local function _171_(_)
       if (sign_mod and session.meta and session.meta.buf) then
         local buf = session.meta.buf.buffer
         local internal_3f
@@ -1141,7 +1151,7 @@ M.new = function(opts)
           begin_direct_results_edit_21(session)
         else
         end
-        local function _171_()
+        local function _173_()
           if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
             pcall(router["sync-live-edits"], session["prompt-buf"])
             pcall(maybe_sync_from_main_21, session, true)
@@ -1151,13 +1161,13 @@ M.new = function(opts)
             return nil
           end
         end
-        return vim.schedule(_171_)
+        return vim.schedule(_173_)
       else
         return nil
       end
     end
-    vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {group = aug, buffer = session.meta.buf.buffer, callback = _169_})
-    local function _174_(_)
+    vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {group = aug, buffer = session.meta.buf.buffer, callback = _171_})
+    local function _176_(_)
       if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
         local bo = vim.bo[session.meta.buf.buffer]
         bo["buftype"] = "acwrite"
@@ -1167,21 +1177,21 @@ M.new = function(opts)
       else
       end
       if maybe_restore_hidden_ui_21 then
-        local function _176_()
+        local function _178_()
           if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
             return pcall(maybe_restore_hidden_ui_21, session)
           else
             return nil
           end
         end
-        return vim.schedule(_176_)
+        return vim.schedule(_178_)
       else
         return nil
       end
     end
-    vim.api.nvim_create_autocmd({"BufEnter", "WinEnter", "FocusGained"}, {group = aug, buffer = session.meta.buf.buffer, callback = _174_})
-    local function _179_(_)
-      local function _180_()
+    vim.api.nvim_create_autocmd({"BufEnter", "WinEnter", "FocusGained"}, {group = aug, buffer = session.meta.buf.buffer, callback = _176_})
+    local function _181_(_)
+      local function _182_()
         if (hide_visible_ui_21 and not session["ui-hidden"] and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
           local win = vim.api.nvim_get_current_win()
           if covered_by_new_window_3f(session, win) then
@@ -1193,11 +1203,11 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_180_, 20)
+      return vim.defer_fn(_182_, 20)
     end
-    vim.api.nvim_create_autocmd("WinNew", {group = aug, callback = _179_})
-    local function _183_(ev)
-      local function _184_()
+    vim.api.nvim_create_autocmd("WinNew", {group = aug, callback = _181_})
+    local function _185_(ev)
+      local function _186_()
         if (hide_visible_ui_21 and not session["ui-hidden"] and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
           local buf = (ev.buf or vim.api.nvim_get_current_buf())
           local win = (first_window_for_buffer(buf) or vim.api.nvim_get_current_win())
@@ -1210,29 +1220,29 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_184_, 20)
+      return vim.defer_fn(_186_, 20)
     end
-    vim.api.nvim_create_autocmd("BufWinEnter", {group = aug, callback = _183_})
-    local function _187_(_)
-      local function _188_()
-        return pcall(session.meta.refresh_statusline)
-      end
-      return schedule_when_valid(session, _188_)
-    end
-    vim.api.nvim_create_autocmd({"BufEnter", "WinEnter", "FocusGained"}, {group = aug, buffer = session.meta.buf.buffer, callback = _187_})
+    vim.api.nvim_create_autocmd("BufWinEnter", {group = aug, callback = _185_})
     local function _189_(_)
       local function _190_()
+        return pcall(session.meta.refresh_statusline)
+      end
+      return schedule_when_valid(session, _190_)
+    end
+    vim.api.nvim_create_autocmd({"BufEnter", "WinEnter", "FocusGained"}, {group = aug, buffer = session.meta.buf.buffer, callback = _189_})
+    local function _191_(_)
+      local function _192_()
         if (session["ui-hidden"] and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session) and not hidden_session_reachable_3f(session)) then
           return pcall(router["remove-session"], session)
         else
           return nil
         end
       end
-      return vim.schedule(_190_)
+      return vim.schedule(_192_)
     end
-    vim.api.nvim_create_autocmd({"BufEnter", "WinEnter", "FocusGained"}, {group = aug, callback = _189_})
-    local function _192_(_)
-      local function _193_()
+    vim.api.nvim_create_autocmd({"BufEnter", "WinEnter", "FocusGained"}, {group = aug, callback = _191_})
+    local function _194_(_)
+      local function _195_()
         if (not session["ui-hidden"] and session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
           local win = session.meta.win.window
           if not vim.api.nvim_win_is_valid(win) then
@@ -1253,13 +1263,13 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.schedule(_193_)
+      return vim.schedule(_195_)
     end
-    vim.api.nvim_create_autocmd("BufLeave", {group = aug, buffer = session.meta.buf.buffer, callback = _192_})
+    vim.api.nvim_create_autocmd("BufLeave", {group = aug, buffer = session.meta.buf.buffer, callback = _194_})
     apply_main_keymaps(router, session)
     apply_results_edit_keymaps(session)
-    local function _198_(ev)
-      local function _199_()
+    local function _200_(ev)
+      local function _201_()
         if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session) and not session.closing) then
           local buf = (ev.buf or vim.api.nvim_get_current_buf())
           if (vim.api.nvim_buf_is_valid(buf) and (buf ~= session.meta.buf.buffer)) then
@@ -1302,36 +1312,36 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.schedule(_199_)
+      return vim.schedule(_201_)
     end
-    vim.api.nvim_create_autocmd("BufWritePost", {group = aug, callback = _198_})
-    local function _209_(_)
+    vim.api.nvim_create_autocmd("BufWritePost", {group = aug, callback = _200_})
+    local function _211_(_)
       return schedule_scroll_sync_21(session)
     end
-    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _209_})
-    local function _210_(_)
+    vim.api.nvim_create_autocmd("WinScrolled", {group = aug, callback = _211_})
+    local function _212_(_)
       return router["write-results"](session["prompt-buf"])
     end
-    vim.api.nvim_create_autocmd("BufWriteCmd", {group = aug, buffer = session.meta.buf.buffer, callback = _210_})
-    local function _211_(_)
-      local function _212_()
+    vim.api.nvim_create_autocmd("BufWriteCmd", {group = aug, buffer = session.meta.buf.buffer, callback = _212_})
+    local function _213_(_)
+      local function _214_()
         return router["results-buffer-wiped"](session.meta.buf.buffer)
       end
-      return vim.schedule(_212_)
+      return vim.schedule(_214_)
     end
-    vim.api.nvim_create_autocmd("BufWipeout", {group = aug, buffer = session.meta.buf.buffer, callback = _211_})
+    vim.api.nvim_create_autocmd("BufWipeout", {group = aug, buffer = session.meta.buf.buffer, callback = _213_})
     disable_cmp(session)
     mark_prompt_buffer_21(session["prompt-buf"])
     refresh_prompt_highlights_21(session)
     maybe_show_directive_help_21(session)
-    local function _213_()
+    local function _215_()
       if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
         return pcall(refresh_prompt_highlights_21, session)
       else
         return nil
       end
     end
-    vim.defer_fn(_213_, prompt_animation_delay_ms(session))
+    vim.defer_fn(_215_, prompt_animation_delay_ms(session))
     apply_keymaps(router, session)
     return apply_emacs_insert_fallbacks(router, session)
   end

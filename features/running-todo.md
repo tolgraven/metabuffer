@@ -37,7 +37,7 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 28 [] project mode gets opened with only about 2000 total possible lines, but project has many many more (even excluding deps, hidden etc). Something is wrong. Faulty prefilter when doing straight `:Meta!`?
 - 29 [x] fake preview window line number column has line numbers after end of file.
 - 29 [x] preview window should anchor one line higher so gets 8 lines by default.
-- 30 [] we should properly document all required and optional dependencies, and document what having those entails.
+- 30 [] we should properly document all required (rg etc) and optional dependencies, and document what having those entails.
 - 31 [] is there any way to speed up the full screen tests in general? they're now taking 8s or so. can we run more tests in parallell instead?
 - 32 [x] airline continously overwrites statusline, which was not the case earlier. timing change thing?
 - 33 [x] there is a white line dividing prompt window and preview window. it should be removed.
@@ -59,12 +59,14 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 49 [] if windows are resized not due to user resizing height of prompt manually, but by something like :messages opening, they should be restored to where they were automatically once offender is gone.
 - 50 [] should be able to insert a new line in prompt from insert with <S-CR> or something like that, to not jump to hit.
 - 51 [] once again meta sometimes reopens just after having closed it.
-- 52 [] in addition to #hex we should have #b64 that first decodes from base64 before displaying/filtering. (only for strings that are obviously base64). We should not have #hex and #b64 as separate sources, but another category, perhaps "transforms". #bplist would be another example of a transform to implement. Pretty-print json/xml/css yet another good one.
+- 52 [x] in addition to #hex we should have #b64 that first decodes from base64 before displaying/filtering. (only for strings that are obviously base64). We should not have #hex and #b64 as separate sources, but another category, perhaps "transforms". #bplist would be another example of a transform to implement. Pretty-print json/xml/css yet another good one.
 - 53 [] db sources. would run sql query instead of regular filter, and edits would UPDATE etc on write? especially if you don't even need to properly write the query but can hot-swap it in through LLM interop.
 - 54 [] we need an alternative project mode that searches only all loaded buffers (this will also allow stuff like filtering terminal output, other plugin windows' output etc without building specific support in)
 - 55 [x] the info window is now one line too tall and covers the main statusline.
 - 56 [x] the filter has completely stopped working, and the info window doesn't show anything
 - 57 [x] when jumping to line/file with <CR> and no active filter, move cursor to first char on line.
-- 58 [] can't move around results buffer when it's actually focused, keeps jumping back to origin.
+- 58 [x] can't move around results buffer when it's actually focused, keeps jumping back to origin.
 - 59 [] can't resize preview window width without UI lockup and strange behavior
 - 60 [] project mode :Meta! no longer pulling in other sources/files than the one started in
+- 61 [] after typing `#file` and space files load properly, but then typing something after the space doesn't actually filter.
+- 62 [] the completion popup sometimes gets in the way of seeing the prompt cursorline, and sometimes doesn't close as it should.
