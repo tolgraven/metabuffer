@@ -191,6 +191,20 @@ if (( INCLUDE_ANIMATION == 0 )); then
   TEST_FILES=("${NON_ANIM[@]}")
 fi
 
+# Auto-skip smoke tests when no screen tests are selected (unit-only runs).
+if (( SKIP_SMOKE == 0 )); then
+  _has_screen=0
+  for _f in "${TEST_FILES[@]}"; do
+    if [[ "$_f" == tests/screen/* ]]; then
+      _has_screen=1
+      break
+    fi
+  done
+  if (( _has_screen == 0 )); then
+    SKIP_SMOKE=1
+  fi
+fi
+
 ORDERED_TEST_FILES=()
 if (( SKIP_SMOKE == 0 )); then
   for smoke in "${SMOKE_TESTS[@]}"; do
