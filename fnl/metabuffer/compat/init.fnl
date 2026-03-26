@@ -1,21 +1,14 @@
-;;; Compat module — registers third-party plugin shims into the event bus.
+;;; Compat providers — builtin third-party plugin shims.
 ;;;
-;;; This module is a side-effect-only loader.  Requiring it ensures all
-;;; builtin compat handlers (airline, nvim-cmp, hlsearch, etc.) are
-;;; registered in the event bus before any session starts.
+;;; Returns a sequential list of provider modules for the event bus.
+;;; Registration is performed explicitly by the caller via events.load-providers!.
 ;;;
-;;; The event bus itself lives at metabuffer.events.
-;;; Compat sub-modules live under metabuffer.compat.*.
+;;; Each provider module returns {:name str :domain str :events {:<event> <spec>}}.
 
-(local events (require :metabuffer.events))
-
-(local airline       (require :metabuffer.compat.airline))
+(local airline        (require :metabuffer.compat.airline))
 (local buffer-plugins (require :metabuffer.compat.buffer_plugins))
-(local cmp           (require :metabuffer.compat.cmp))
-(local hlsearch      (require :metabuffer.compat.hlsearch))
-(local rainbow       (require :metabuffer.compat.rainbow))
+(local cmp            (require :metabuffer.compat.cmp))
+(local hlsearch       (require :metabuffer.compat.hlsearch))
+(local rainbow        (require :metabuffer.compat.rainbow))
 
-(each [_ mod (ipairs [airline buffer-plugins cmp hlsearch rainbow])]
-  (events.register! mod))
-
-{}
+[airline buffer-plugins cmp hlsearch rainbow]

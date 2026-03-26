@@ -122,6 +122,12 @@ M["register!"] = function(mod)
   register_module_21(mod)
   return sort_handlers_21()
 end
+M["load-providers!"] = function(providers)
+  for _, mod in ipairs((providers or {})) do
+    register_module_21(mod)
+  end
+  return sort_handlers_21()
+end
 M["registered-events"] = function()
   local names = {}
   for k, _ in pairs(handlers_by_event) do

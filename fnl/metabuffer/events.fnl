@@ -178,6 +178,15 @@
   (register-module! mod)
   (sort-handlers!))
 
+(fn M.load-providers!
+  [providers]
+  "Register a list of provider modules into the event bus.
+   Registers all modules first, then sorts once — more efficient than
+   calling register! N times."
+  (each [_ mod (ipairs (or providers []))]
+    (register-module! mod))
+  (sort-handlers!))
+
 (fn M.registered-events
   []
   "Return a sorted list of event keys that have at least one handler."

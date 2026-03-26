@@ -1,6 +1,8 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local router (require :metabuffer.router))
 (local config (require :metabuffer.config))
+(local events (require :metabuffer.events))
+(local compat-providers (require :metabuffer.compat))
 (local PRIMARY_LINE_GROUPS ["Title" "String" "Number" "Special" "Type" "Identifier"])
 
 (local M {})
@@ -589,6 +591,7 @@
 (fn M.setup
   [opts]
   "Public API: M.setup."
+  (events.load-providers! compat-providers)
   (set last-setup-opts opts)
   (router.configure opts)
   (ensure-defaults-and-highlights! opts)
