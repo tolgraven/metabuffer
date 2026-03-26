@@ -1,3 +1,4 @@
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local path-hl (require :metabuffer.path_highlight))
 (local util (require :metabuffer.util))
 (local file-info (require :metabuffer.source.file_info))
@@ -95,18 +96,27 @@
             (vim.fn.fnamemodify path0 ":~:.")))))
 
 (fn M.info-suffix
-  [_session _ref _mode _read-file-lines-cached]
+  [_session _ref _mode _read-file-lines-cached _read-file-view-cached]
   "")
 
 (fn M.info-meta
   [_session _ref]
   nil)
 
+(fn source-sign
+  [_ref]
+  (util.icon-sign {:category ""
+                   :name ""
+                   :fallback "󰈔"
+                   :hl "MetaSourceFile"}))
+
 (fn M.info-view
   [session ref ctx]
   (let [mode (or (and ctx ctx.mode) "meta")
         read-file-lines-cached (and ctx ctx.read-file-lines-cached)
-        single-source? (not (not (and ctx ctx.single-source?)))]
+        read-file-view-cached (and ctx ctx.read-file-view-cached)
+        single-source? (clj.boolean (and ctx ctx.single-source?))
+        sign (source-sign ref)]
     (if single-source?
         (let [path (ref-path session ref)]
           (if (and session.single-file-info-ready
@@ -114,14 +124,16 @@
                    (~= path "")
                    ref.lnum
                    (= 1 (vim.fn.filereadable path)))
-              (file-info.line-meta-info-view session path ref.lnum 1)
+              (let [view (file-info.line-meta-info-view session path ref.lnum 1)]
+                (set (. view :sign) sign)
+                view)
               {:path ""
                :icon-path ""
                :show-icon false
                :highlight-dir false
                :highlight-file false
-               :sign {:text "  " :hl "LineNr"}
-               :suffix (M.info-suffix session ref mode read-file-lines-cached)
+               :sign sign
+               :suffix (M.info-suffix session ref mode read-file-lines-cached read-file-view-cached)
                :suffix-prefix ""
                :suffix-highlights []}))
         {:path (M.info-path ref false)
@@ -129,8 +141,8 @@
          :show-icon true
          :highlight-dir true
          :highlight-file true
-         :sign {:text "  " :hl "LineNr"}
-         :suffix (M.info-suffix session ref mode read-file-lines-cached)
+         :sign sign
+         :suffix (M.info-suffix session ref mode read-file-lines-cached read-file-view-cached)
          :suffix-prefix "  "
          :suffix-highlights []})))
 
@@ -154,43 +166,62 @@
     out))
 
 (fn M.preview-lines
-  [session ref height read-file-lines-cached]
+  [session ref height read-file-lines-cached read-file-view-cached]
   (let [h (math.max 1 height)
         lnum (math.max 1 (or (and ref ref.preview-lnum) (and ref ref.lnum) 1))
-        start (math.max 1 (- lnum 1))
-        stop (+ start h -1)]
+        start (math.max 1 (- lnum 1))]
     (if (and ref ref.buf (vim.api.nvim_buf_is_valid ref.buf))
+        (let [stop (+ start h -1)]
         {:start-lnum start
          :focus-lnum lnum
          :lines (trim-or-pad-lines
                  (vim.api.nvim_buf_get_lines ref.buf (- start 1) stop false)
-                 h)}
+                 h)})
         (if (and ref ref.path (= 1 (vim.fn.filereadable ref.path)))
-            (let [cache (or session.preview-file-cache {})
-                  _ (set session.preview-file-cache cache)
-                  all0 (. cache ref.path)
-                  all (if (= (type all0) "table")
-                          all0
-                          (let [lines (read-file-lines-cached
-                                        ref.path
-                                        {:include-binary (and session session.effective-include-binary)
-                                         :hex-view (and session session.effective-include-hex)})]
-                            (if (= (type lines) "table")
-                                (do
-                                  (set (. cache ref.path) lines)
-                                  lines)
-                                [])))
+            (let [view (or (and read-file-view-cached
+                                (read-file-view-cached
+                                  ref.path
+                                  {:include-binary (and session session.effective-include-binary)
+                                   :transforms (or (and session session.effective-transforms)
+                                                   (and session session.transform-flags)
+                                                   {})}))
+                           {:lines (or (read-file-lines-cached
+                                         ref.path
+                                         {:include-binary (and session session.effective-include-binary)
+                                          :hex-view (and session session.effective-include-hex)}) [])
+                            :line-map []})
+                  all (or (. view :lines) [])
+                  line-map (or (. view :line-map) [])
+                  start-idx0 nil]
+              (var start-idx start-idx0)
+              (each [idx mapped (ipairs line-map)]
+                (when (and (not start-idx) (= mapped lnum))
+                  (set start-idx idx)))
+              (let [start-idx (or start-idx start)
+                    stop (+ start-idx h -1)
                   slice []]
-              (for [i start stop]
+              (for [i start-idx stop]
                 (table.insert slice (or (. all i) "")))
               {:start-lnum start
                :focus-lnum lnum
-               :lines (trim-or-pad-lines slice h)})
+               :lines (trim-or-pad-lines slice h)}))
             {:start-lnum 1 :focus-lnum 1 :lines (trim-or-pad-lines [] h)}))))
 
 (fn apply-op-to-loaded-buffer!
   [buf op delta]
-  (if (= (. op :kind) :replace)
+  (if (= (. op :kind) :rewrite-bytes)
+      (let [path (vim.api.nvim_buf_get_name buf)
+            uv (or vim.uv vim.loop)
+            bytes (or (. op :bytes) "")
+            ok? (and uv uv.fs_open uv.fs_write uv.fs_close path)]
+        (if ok?
+            (let [[ok-open fd] [(pcall uv.fs_open path "w" 420)]]
+              (when (and ok-open fd)
+                (pcall uv.fs_write fd bytes 0)
+                (pcall uv.fs_close fd))
+              [delta 1])
+            [delta 0]))
+      (= (. op :kind) :replace)
       (let [lnum (+ (. op :lnum) delta)
             line-count (vim.api.nvim_buf_line_count buf)]
         (if (and (>= lnum 1) (<= lnum line-count))
@@ -230,7 +261,9 @@
 
 (fn apply-op-to-lines!
   [lines op delta]
-  (if (= (. op :kind) :replace)
+  (if (= (. op :kind) :rewrite-bytes)
+      [delta 0]
+      (= (. op :kind) :replace)
       (let [lnum (+ (. op :lnum) delta)]
         (if (and (>= lnum 1) (<= lnum (# lines))
                  (~= (. lines lnum) (. op :text)))
@@ -304,21 +337,39 @@
                               (set (. touched-paths path) true)
                               (set (. post-lines path) lines0)))))))))
             (let [[ok-read lines0] [(pcall vim.fn.readfile path)]]
-              (when (and ok-read (= (type lines0) "table"))
+              (when (or (and ok-read (= (type lines0) "table"))
+                        (and (> (# (or per-file [])) 0)
+                             (= (. (. per-file 1) :kind) :rewrite-bytes)))
                 (let [lines (vim.deepcopy lines0)]
                   (var delta 0)
                   (var changed 0)
                   (each [_ op (ipairs (or per-file []))]
-                    (let [[next-delta bump] (apply-op-to-lines! lines op delta)]
-                      (set delta next-delta)
-                      (set changed (+ changed bump))))
+                    (if (= (. op :kind) :rewrite-bytes)
+                        (let [uv (or vim.uv vim.loop)
+                              bytes (or (. op :bytes) "")]
+                          (when (and uv uv.fs_open uv.fs_write uv.fs_close)
+                            (let [[ok-open fd] [(pcall uv.fs_open path "w" 420)]]
+                              (when (and ok-open fd)
+                                (pcall uv.fs_write fd bytes 0)
+                                (pcall uv.fs_close fd)
+                                (set changed (+ changed 1))))))
+                        (let [[next-delta bump] (apply-op-to-lines! lines op delta)]
+                          (set delta next-delta)
+                          (set changed (+ changed bump)))))
                   (when (> changed 0)
-                    (let [[ok-write] [(pcall vim.fn.writefile lines path)]]
-                      (when ok-write
-                        (set any-write true)
-                        (set total (+ total changed))
-                        (set (. touched-paths path) true)
-                        (set (. post-lines path) lines))))))))))
+                    (if (and (> (# (or per-file [])) 0)
+                             (= (. (. per-file 1) :kind) :rewrite-bytes))
+                        (do
+                          (set any-write true)
+                          (set total (+ total changed))
+                          (set (. touched-paths path) true)
+                          (set (. post-lines path) (vim.fn.readfile path)))
+                        (let [[ok-write] [(pcall vim.fn.writefile lines path)]]
+                          (when ok-write
+                            (set any-write true)
+                            (set total (+ total changed))
+                            (set (. touched-paths path) true)
+                            (set (. post-lines path) lines)))))))))))
     {:wrote any-write :changed total :post-lines post-lines :paths touched-paths :renames {}}))
 
 M

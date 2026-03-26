@@ -1,4 +1,5 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
 (local util (require :metabuffer.util))
 
@@ -76,7 +77,7 @@
             (let [label (or (. item :label) "")
                   mark (if (= i idx) "> " "  ")]
               (table.insert lines (.. mark label))
-              (when (and (~= filter "") (not (not (string.find (string.lower label) (string.lower filter) 1 true))))
+              (when (and (~= filter "") (not= nil (string.find (string.lower label) (string.lower filter) 1 true)))
                 (var pos 1)
                 (while (<= pos (# label))
                   (let [[s e] [(string.find (string.lower label) (string.lower filter) pos true)]]

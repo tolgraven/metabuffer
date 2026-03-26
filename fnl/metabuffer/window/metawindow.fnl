@@ -36,7 +36,9 @@
             winhl (main-winhighlight middle)
             text (string.format M.statusline (or left-extra "") middle (or right-extra ""))]
         (when (and self.window (vim.api.nvim_win_is_valid self.window))
-          (pcall vim.api.nvim_set_option_value "winhighlight" winhl {:win self.window}))
+          (when (~= self._last-winhighlight winhl)
+            (set self._last-winhighlight winhl)
+            (pcall vim.api.nvim_set_option_value "winhighlight" winhl {:win self.window})))
         (self.set-statusline text)))
 
     self))

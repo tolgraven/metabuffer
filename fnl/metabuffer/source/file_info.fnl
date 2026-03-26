@@ -1,6 +1,8 @@
 (import-macros {: when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 
 (local author-hl (require :metabuffer.author_highlight))
+(local transform-mod (require :metabuffer.transform))
 
 (local M {})
 (var line_meta_key nil)
@@ -11,27 +13,35 @@
 (var parse_range_blame_stdout nil)
 
 (fn M.file-first-line
-  [session read-file-lines-cached path]
+  [session read-file-lines-cached read-file-view-cached path]
   (let [cache (or session.info-file-head-cache {})
         mtime (vim.fn.getftime path)
-        include-binary (not (not (and session session.effective-include-binary)))
-        include-hex (not (not (and session session.effective-include-hex)))
+        include-binary (clj.boolean (and session session.effective-include-binary))
+        transform-sig (transform-mod.signature (or (and session session.effective-transforms) {}))
         found (. cache path)]
     (if (and (= (type found) "table")
              (= (. found :mtime) mtime)
              (= (. found :include-binary) include-binary)
-             (= (. found :include-hex) include-hex)
+             (= (. found :transform-sig) transform-sig)
              (= (type (. found :line)) "string"))
         (. found :line)
-        (let [line0 (or (. (or (read-file-lines-cached
-                                path
-                                {:include-binary include-binary
-                                 :hex-view include-hex}) []) 1) "")
+        (let [view (or (and read-file-view-cached
+                            (read-file-view-cached
+                              path
+                              {:include-binary include-binary
+                               :transforms (or (and session session.effective-transforms)
+                                               (and session session.transform-flags)
+                                               {})}))
+                       {:lines (or (read-file-lines-cached
+                                     path
+                                     {:include-binary include-binary
+                                      :hex-view (and session session.effective-include-hex)}) [])})
+              line0 (or (. (or (. view :lines) []) 1) "")
               line (tostring line0)]
           (set (. cache path)
                {:mtime mtime
                 :include-binary include-binary
-                :include-hex include-hex
+                :transform-sig transform-sig
                 :line line})
           (set session.info-file-head-cache cache)
           line))))

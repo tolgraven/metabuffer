@@ -1,15 +1,39 @@
 -- [nfnl] fnl/metabuffer/source/file.fnl
 local text = require("metabuffer.source.text")
 local file_info = require("metabuffer.source.file_info")
+local util = require("metabuffer.util")
 local M = {}
 M["provider-key"] = "file-entry"
+M["query-directive-specs"] = {{kind = "toggle", long = "file", ["token-key"] = "include-files", arg = "{token}", doc = "Switch to file-entry source filtering.", ["await-when-true"] = true, await = {kind = "file"}}}
+M["parse-bare-token"] = function(state, tok, unquote_token)
+  local t = (tok or "")
+  if (t == "./") then
+    local next = vim.deepcopy(state)
+    next["include-files"] = true
+    next["file-await-token"] = true
+    next["await-directive"] = {kind = "file"}
+    return next
+  else
+    local val_111_auto = string.match(t, "^%./(.+)$")
+    if val_111_auto then
+      local matched = val_111_auto
+      local next = vim.deepcopy(state)
+      next["include-files"] = true
+      table.insert(next["file-lines"], unquote_token(matched))
+      next["file-await-token"] = false
+      return next
+    else
+      return nil
+    end
+  end
+end
 M["hit-prefix"] = function(ref)
   return text["path-prefix"](ref)
 end
 M["info-path"] = function(ref, full_path_3f)
   return text["info-path"](ref, full_path_3f)
 end
-M["info-suffix"] = function(session, ref, mode, read_file_lines_cached)
+M["info-suffix"] = function(session, ref, mode, read_file_lines_cached, read_file_view_cached)
   local path = (ref and ref.path)
   if not (path and (1 == vim.fn.filereadable(path))) then
     return ""
@@ -17,7 +41,7 @@ M["info-suffix"] = function(session, ref, mode, read_file_lines_cached)
     if ((mode or "meta") == "meta") then
       return file_info["file-meta-data"](session, path).text
     else
-      return file_info["file-first-line"](session, read_file_lines_cached, path)
+      return file_info["file-first-line"](session, read_file_lines_cached, read_file_view_cached, path)
     end
   end
 end
@@ -29,15 +53,21 @@ M["info-meta"] = function(session, ref)
     return nil
   end
 end
+local function source_sign(_ref)
+  return util["icon-sign"]({category = "directory", name = ".", fallback = "\243\176\137\139", hl = "MiniIconsAzure"})
+end
 M["info-view"] = function(session, ref, ctx)
   local mode = ((ctx and ctx.mode) or "meta")
   local path_width = ((ctx and ctx["path-width"]) or 1)
   local read_file_lines_cached = (ctx and ctx["read-file-lines-cached"])
-  local suffix0 = M["info-suffix"](session, ref, mode, read_file_lines_cached)
+  local suffix0 = M["info-suffix"](session, ref, mode, read_file_lines_cached, nil)
+  local sign = source_sign(ref)
   if (mode == "meta") then
-    return file_info["meta-info-view"](session, ((ref and ref.path) or ""), path_width)
+    local view = file_info["meta-info-view"](session, ((ref and ref.path) or ""), path_width)
+    view["sign"] = sign
+    return view
   else
-    return {path = "", ["icon-path"] = ((ref and ref.path) or ""), sign = file_info["file-status-sign"](((M["info-meta"](session, ref) and M["info-meta"](session, ref).status) or "")), suffix = suffix0, ["suffix-prefix"] = "", ["suffix-highlights"] = {}, ["highlight-dir"] = false, ["highlight-file"] = false, ["show-icon"] = false}
+    return {path = "", ["icon-path"] = ((ref and ref.path) or ""), sign = sign, suffix = suffix0, ["suffix-prefix"] = "", ["suffix-highlights"] = {}, ["highlight-dir"] = false, ["highlight-file"] = false, ["show-icon"] = false}
   end
 end
 M["preview-filetype"] = function(ref)
@@ -53,14 +83,14 @@ M["preview-filetype"] = function(ref)
     return "text"
   end
 end
-M["preview-lines"] = function(session, ref, height, read_file_lines_cached)
+M["preview-lines"] = function(session, ref, height, read_file_lines_cached, read_file_view_cached)
   local r = vim.deepcopy((ref or {}))
   r.buf = nil
   if not r["preview-lnum"] then
     r["preview-lnum"] = 1
   else
   end
-  return text["preview-lines"](session, r, height, read_file_lines_cached)
+  return text["preview-lines"](session, r, height, read_file_lines_cached, read_file_view_cached)
 end
 local function normalize_target_path(old_path, text0)
   local trimmed = vim.trim((text0 or ""))

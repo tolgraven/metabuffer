@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/context/expand.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local util = require("metabuffer.util")
 local function buf_for_ref(ref)
@@ -117,11 +118,11 @@ end
 local function node_type_matches_3f(mode, node_type)
   local t = string.lower((node_type or ""))
   if (mode == "fn") then
-    return ((t == "fn_form") or (t == "lambda_form") or (t == "macro_form") or not not string.find(t, "function", 1, true) or not not string.find(t, "method", 1, true) or not not string.find(t, "func", 1, true) or not not string.find(t, "lambda", 1, true))
+    return ((t == "fn_form") or (t == "lambda_form") or (t == "macro_form") or (nil ~= string.find(t, "function", 1, true)) or (nil ~= string.find(t, "method", 1, true)) or (nil ~= string.find(t, "func", 1, true)) or (nil ~= string.find(t, "lambda", 1, true)))
   elseif (mode == "class") then
-    return (not not string.find(t, "class", 1, true) or not not string.find(t, "interface", 1, true) or not not string.find(t, "struct", 1, true) or not not string.find(t, "impl", 1, true) or not not string.find(t, "module", 1, true))
+    return ((nil ~= string.find(t, "class", 1, true)) or (nil ~= string.find(t, "interface", 1, true)) or (nil ~= string.find(t, "struct", 1, true)) or (nil ~= string.find(t, "impl", 1, true)) or (nil ~= string.find(t, "module", 1, true)))
   elseif (mode == "scope") then
-    return (node_type_matches_3f("fn", t) or node_type_matches_3f("class", t) or (t == "let_form") or (t == "when_form") or (t == "each_form") or (t == "for_form") or (t == "while_form") or (t == "accumulate_form") or (t == "do_form") or not not string.find(t, "block", 1, true) or (t == "chunk") or (t == "program") or (t == "source_file"))
+    return (node_type_matches_3f("fn", t) or node_type_matches_3f("class", t) or (t == "let_form") or (t == "when_form") or (t == "each_form") or (t == "for_form") or (t == "while_form") or (t == "accumulate_form") or (t == "do_form") or (nil ~= string.find(t, "block", 1, true)) or (t == "chunk") or (t == "program") or (t == "source_file"))
   else
     return false
   end
@@ -172,7 +173,7 @@ local function identifier_at_ref(session, ref, read_file_lines_cached)
 end
 local function exact_word_find_3f(line, word)
   local pat = ("%f[%w_]" .. vim.pesc((word or "")) .. "%f[^%w_]")
-  return (((word or "") ~= "") and not not string.find((line or ""), pat))
+  return (((word or "") ~= "") and (nil ~= string.find((line or ""), pat)))
 end
 local function around_range(ref, total, around)
   local lnum = math.max(1, (ref.lnum or 1))

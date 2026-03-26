@@ -13,19 +13,25 @@ T['project info window repopulates after deleting prompt back to empty'] = H.tim
     return snap and snap.line ~= ''
   end, 6000)
 
+  H.start_info_blank_watch(900)
   H.type_prompt_human('metabuffer', 25)
   H.wait_for(function() return H.session_query_text() == 'metabuffer' end, 6000)
   H.wait_for(function()
     local snap = H.session_info_snapshot()
     return snap and snap.line ~= ''
   end, 6000)
+  H.wait_for(function() return H.info_blank_watch_done() end, 2000)
+  eq(H.info_blank_seen(), false)
 
+  H.start_info_blank_watch(900)
   H.type_prompt_tokens({ '<BS>', '<BS>', '<BS>', '<BS>', '<BS>', '<BS>', '<BS>', '<BS>', '<BS>', '<BS>' }, 50)
   H.wait_for(function() return H.session_query_text() == '' end, 6000)
   H.wait_for(function()
     local snap = H.session_info_snapshot()
     return snap and snap.count > 0 and snap.line ~= ''
   end, 6000)
+  H.wait_for(function() return H.info_blank_watch_done() end, 2000)
+  eq(H.info_blank_seen(), false)
 
   local ref = H.session_selected_ref()
   local snap = H.session_info_snapshot()

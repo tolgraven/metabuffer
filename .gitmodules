@@ -3,4 +3,5 @@
 	url = https://github.com/Olical/nfnl.git
 [submodule "deps/mini.nvim"]
 	path = deps/mini.nvim
-	url = https://github.com/nvim-mini/mini.nvim
+	url = https://github.com/tolgraven/mini.nvim
+	branch = metabuffer-perf

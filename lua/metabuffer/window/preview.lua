@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/window/preview.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local source_mod = require("metabuffer.source")
 local statusline_mod = require("metabuffer.window.statusline")
@@ -93,6 +94,7 @@ end
 M.new = function(opts)
   local selected_ref = opts["selected-ref"]
   local read_file_lines_cached = opts["read-file-lines-cached"]
+  local read_file_view_cached = opts["read-file-view-cached"]
   local floating_window_mod = opts["floating-window-mod"]
   local is_active_session = opts["is-active-session"]
   local debug_log = opts["debug-log"]
@@ -212,7 +214,7 @@ M.new = function(opts)
   local function _31_(session, win)
     if (win and vim.api.nvim_win_is_valid(win)) then
       disable_airline_statusline_21(win)
-      local real_buffer_3f = not not session["preview-real-buffer?"]
+      local real_buffer_3f = clj.boolean(session["preview-real-buffer?"])
       local win_opts
       local _32_
       if real_buffer_3f then
@@ -271,7 +273,7 @@ M.new = function(opts)
         buf = vim.api.nvim_create_buf(false, true)
       end
       local width = target_preview_width(session)
-      local float_start_3f = not not session["prompt-animating?"]
+      local float_start_3f = clj.boolean(session["prompt-animating?"])
       local height
       if float_start_3f then
         height = 1
@@ -381,7 +383,7 @@ M.new = function(opts)
       p_height = vim.api.nvim_win_get_height(session.meta.win.window)
     end
     local width = target_preview_width(session)
-    local preview_data = source_mod["preview-lines"](session, ref, p_height, read_file_lines_cached)
+    local preview_data = source_mod["preview-lines"](session, ref, p_height, read_file_lines_cached, read_file_view_cached)
     local ft = source_mod["preview-filetype"](ref)
     local lines = (preview_data.lines or trim_or_pad_lines({}, p_height))
     local src_lnum = math.max(1, (preview_data["focus-lnum"] or (ref and (ref["preview-lnum"] or ref.lnum)) or 1))

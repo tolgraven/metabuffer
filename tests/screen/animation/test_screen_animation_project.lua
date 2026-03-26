@@ -34,7 +34,7 @@ T['project Meta uses animated mini backend during launch and scroll'] = H.timed_
   H.feed_prompt_key('<C-d><C-d><C-d>', 'normal')
   H.wait_for(function()
     return H.child.lua_get([[
-      return _G.MiniAnimate and MiniAnimate.is_active('scroll')
+      _G.MiniAnimate and MiniAnimate.is_active('scroll')
     ]]) == true
   end, 1500)
   eq(H.session_main_view().topline == target.topline, false)

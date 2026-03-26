@@ -1,5 +1,9 @@
 -- [nfnl] fnl/metabuffer/handle.fnl
 local M = {}
+local function nvim_exiting_3f()
+  local v = (vim.v and vim.v.exiting)
+  return ((v ~= nil) and (v ~= vim.NIL) and (v ~= 0) and (v ~= ""))
+end
 local function valid_buf_3f(x)
   return ((type(x) == "number") and pcall(vim.api.nvim_buf_is_valid, x) and vim.api.nvim_buf_is_valid(x))
 end
@@ -37,33 +41,42 @@ local function get_local_opt(name, target)
   end
 end
 local function set_local_opt(name, value, target)
-  if valid_buf_3f(target) then
-    local ok,_ = pcall(vim.api.nvim_set_option_value, name, value, {buf = target})
-    if not ok then
-      if valid_win_3f(target) then
-        local wok,_w = pcall(vim.api.nvim_set_option_value, name, value, {win = target})
-        if not wok then
-          return pcall(vim.api.nvim_set_option_value, name, value, {scope = "local"})
+  if not nvim_exiting_3f() then
+    local got_3f,current = pcall(get_local_opt, name, target)
+    if not (got_3f and (current == value)) then
+      if valid_buf_3f(target) then
+        local ok,_ = pcall(vim.api.nvim_set_option_value, name, value, {buf = target})
+        if not ok then
+          if valid_win_3f(target) then
+            local wok,_w = pcall(vim.api.nvim_set_option_value, name, value, {win = target})
+            if not wok then
+              return pcall(vim.api.nvim_set_option_value, name, value, {scope = "local"})
+            else
+              return nil
+            end
+          else
+            return pcall(vim.api.nvim_set_option_value, name, value, {scope = "local"})
+          end
         else
           return nil
         end
       else
-        return pcall(vim.api.nvim_set_option_value, name, value, {scope = "local"})
+        if valid_win_3f(target) then
+          local ok,_ = pcall(vim.api.nvim_set_option_value, name, value, {win = target})
+          if not ok then
+            return pcall(vim.api.nvim_set_option_value, name, value, {scope = "local"})
+          else
+            return nil
+          end
+        else
+          return pcall(vim.api.nvim_set_option_value, name, value, {scope = "local"})
+        end
       end
     else
       return nil
     end
   else
-    if valid_win_3f(target) then
-      local ok,_ = pcall(vim.api.nvim_set_option_value, name, value, {win = target})
-      if not ok then
-        return pcall(vim.api.nvim_set_option_value, name, value, {scope = "local"})
-      else
-        return nil
-      end
-    else
-      return pcall(vim.api.nvim_set_option_value, name, value, {scope = "local"})
-    end
+    return nil
   end
 end
 M.new = function(nvim, target, model, opts_from_model, opts)

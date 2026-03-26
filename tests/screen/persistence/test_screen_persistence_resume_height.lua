@@ -13,7 +13,7 @@ T['prompt height persists between invocations'] = H.timed_case(function()
   H.wait_for(function() return H.session_prompt_win_height() == target_h end)
 
   H.close_meta_prompt()
-  H.wait_for(function() return not H.session_active() end)
+  H.wait_for(H.session_not_visible)
 
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_prompt_win_height() == target_h end)

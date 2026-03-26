@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/window/history_browser.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local util = require("metabuffer.util")
 local function ensure_window_21(floating_window_mod, session)
@@ -75,7 +76,7 @@ local function render_21(session)
           mark = "  "
         end
         table.insert(lines, (mark .. label))
-        if ((filter ~= "") and not not string.find(string.lower(label), string.lower(filter), 1, true)) then
+        if ((filter ~= "") and (nil ~= string.find(string.lower(label), string.lower(filter), 1, true))) then
           local pos = 1
           while (pos <= #label) do
             local s,e = string.find(string.lower(label), string.lower(filter), pos, true)

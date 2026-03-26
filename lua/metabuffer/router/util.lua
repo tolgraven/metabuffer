@@ -1,6 +1,10 @@
 -- [nfnl] fnl/metabuffer/router/util.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
+local transform_mod = require("metabuffer.transform")
+local config_mod = require("metabuffer.config")
 local M = {}
 local prompt_height_state_file = (vim.fn.stdpath("state") .. "/metabuffer_prompt_height")
+local results_wrap_state_file = (vim.fn.stdpath("state") .. "/metabuffer_results_wrap")
 local function read_prompt_height_state()
   local ok,fh = pcall(io.open, prompt_height_state_file, "r")
   if (ok and fh) then
@@ -29,6 +33,42 @@ local function write_prompt_height_state_21(h)
     return nil
   end
 end
+local function read_results_wrap_state()
+  local ok,fh = pcall(io.open, results_wrap_state_file, "r")
+  if (ok and fh) then
+    local line = vim.trim((fh:read("*l") or ""))
+    local _ = fh:close()
+    if ((line == "1") or (line == "true")) then
+      return true
+    elseif (line == "0") then
+      return false
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+local function write_results_wrap_state_21(enabled)
+  if (enabled ~= nil) then
+    local ok,fh = pcall(io.open, results_wrap_state_file, "w")
+    if (ok and fh) then
+      local function _7_()
+        if enabled then
+          return "1"
+        else
+          return "0"
+        end
+      end
+      fh:write(_7_())
+      return fh:close()
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
 M["prompt-height"] = function()
   return (tonumber(vim.g.meta_prompt_height) or tonumber(vim.g["meta#prompt_height"]) or read_prompt_height_state() or 7)
 end
@@ -39,6 +79,26 @@ M["persist-prompt-height!"] = function(session)
       vim.g.meta_prompt_height = h
       vim.g["meta#prompt_height"] = h
       return write_prompt_height_state_21(h)
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+M["results-wrap-enabled?"] = function()
+  local v = read_results_wrap_state()
+  if (v == nil) then
+    return nil
+  else
+    return v
+  end
+end
+M["persist-results-wrap!"] = function(session)
+  if (session and session.meta and session.meta.win and session.meta.win.window and vim.api.nvim_win_is_valid(session.meta.win.window)) then
+    local ok,wrap_3f = pcall(vim.api.nvim_get_option_value, "wrap", {win = session.meta.win.window})
+    if ok then
+      return write_results_wrap_state_21(clj.boolean(wrap_3f))
     else
       return nil
     end
@@ -108,16 +168,16 @@ M["set-prompt-text!"] = function(session, text)
   end
 end
 M["current-buffer-path"] = function(buf)
-  local and_13_ = buf and vim.api.nvim_buf_is_valid(buf)
-  if and_13_ then
+  local and_21_ = buf and vim.api.nvim_buf_is_valid(buf)
+  if and_21_ then
     local ok,name = pcall(vim.api.nvim_buf_get_name, buf)
     if (ok and (type(name) == "string") and (name ~= "")) then
-      and_13_ = name
+      and_21_ = name
     else
-      and_13_ = nil
+      and_21_ = nil
     end
   end
-  return and_13_
+  return and_21_
 end
 M["meta-buffer-name"] = function(session)
   if session["project-mode"] then
@@ -197,46 +257,74 @@ M["allow-project-path?"] = function(settings, rel, include_hidden, include_deps)
   end
 end
 M["project-file-list"] = function(settings, root, include_hidden, include_ignored, include_deps)
-  local rg_bin = (settings["project-rg-bin"] or "rg")
-  if (1 == vim.fn.executable(rg_bin)) then
-    local cmd = {rg_bin}
-    local _
-    for _0, arg in ipairs((settings["project-rg-base-args"] or {})) do
-      table.insert(cmd, arg)
-    end
-    _ = nil
-    local _0
+  local cache
+  local and_31_ = vim.g.__meta_project_file_list_cache
+  if and_31_ then
+    local _32_
     if include_hidden then
-      _0 = table.insert(cmd, "--hidden")
+      _32_ = "1"
     else
-      _0 = nil
+      _32_ = "0"
     end
-    local _1
+    local _34_
     if include_ignored then
-      for _2, arg in ipairs((settings["project-rg-include-ignored-args"] or {})) do
+      _34_ = "1"
+    else
+      _34_ = "0"
+    end
+    local _36_
+    if include_deps then
+      _36_ = "1"
+    else
+      _36_ = "0"
+    end
+    and_31_ = vim.g.__meta_project_file_list_cache[(root .. "|" .. _32_ .. "|" .. _34_ .. "|" .. _36_)]
+  end
+  cache = and_31_
+  if cache then
+    return cache
+  else
+    local rg_bin = (settings["project-rg-bin"] or "rg")
+    if (1 == vim.fn.executable(rg_bin)) then
+      local cmd = {rg_bin}
+      local _
+      for _0, arg in ipairs((settings["project-rg-base-args"] or {})) do
         table.insert(cmd, arg)
       end
-      _1 = nil
-    else
-      _1 = nil
-    end
-    local _2
-    if not include_deps then
-      for _3, glob in ipairs((settings["project-rg-deps-exclude-globs"] or {})) do
-        table.insert(cmd, "--glob")
-        table.insert(cmd, glob)
+      _ = nil
+      local _0
+      if include_hidden then
+        _0 = table.insert(cmd, "--hidden")
+      else
+        _0 = nil
       end
-      _2 = nil
+      local _1
+      if include_ignored then
+        for _2, arg in ipairs((settings["project-rg-include-ignored-args"] or {})) do
+          table.insert(cmd, arg)
+        end
+        _1 = nil
+      else
+        _1 = nil
+      end
+      local _2
+      if not include_deps then
+        for _3, glob in ipairs((settings["project-rg-deps-exclude-globs"] or {})) do
+          table.insert(cmd, "--glob")
+          table.insert(cmd, glob)
+        end
+        _2 = nil
+      else
+        _2 = nil
+      end
+      local rel = vim.fn.systemlist(cmd)
+      local function _41_(p)
+        return vim.fn.fnamemodify((root .. "/" .. p), ":p")
+      end
+      return vim.tbl_map(_41_, (rel or {}))
     else
-      _2 = nil
+      return vim.fn.globpath(root, (settings["project-fallback-glob-pattern"] or "**/*"), true, true)
     end
-    local rel = vim.fn.systemlist(cmd)
-    local function _26_(p)
-      return vim.fn.fnamemodify((root .. "/" .. p), ":p")
-    end
-    return vim.tbl_map(_26_, (rel or {}))
-  else
-    return vim.fn.globpath(root, (settings["project-fallback-glob-pattern"] or "**/*"), true, true)
   end
 end
 local function ui_attached_3f()
@@ -261,21 +349,22 @@ M["path-under-root?"] = function(path, root)
   return (p and r and vim.startswith(p, r))
 end
 local function contains_nul_byte_3f(s)
-  return ((type(s) == "string") and not not string.find(s, "\0", 1, true))
+  local ok,match_3f = pcall(string.find, s, "\0", 1, true)
+  return (ok and clj.boolean((match_3f ~= nil)))
 end
 local function suspicious_binary_head_3f(s)
-  if not (type(s) == "string") then
+  local ok_n,n = pcall(string.len, s)
+  if (not ok_n or not (type(n) == "number")) then
     return false
   else
-    local n = #s
     if (n == 0) then
       return false
     else
       local bad0 = 0
       local bad = bad0
       for i = 1, n do
-        local b = string.byte(s, i)
-        if ((b < 9) or (b == 11) or (b == 12) or ((b > 13) and (b < 32)) or (b == 127)) then
+        local ok_b,b = pcall(string.byte, s, i)
+        if (ok_b and b and ((b < 9) or (b == 11) or (b == 12) or ((b > 13) and (b < 32)) or (b == 127))) then
           bad = (bad + 1)
         else
         end
@@ -285,7 +374,12 @@ local function suspicious_binary_head_3f(s)
   end
 end
 local function binary_head_3f(head)
-  return (contains_nul_byte_3f(head) or suspicious_binary_head_3f(head))
+  return ((type(head) == "string") and (contains_nul_byte_3f(head) or suspicious_binary_head_3f(head)))
+end
+local function settings_project_max_file_bytes(settings)
+  local fallback = config_mod.defaults.options
+  local fallback_max = ((fallback and fallback.project_max_file_bytes) or 1048576)
+  return ((settings and settings["project-max-file-bytes"]) or (settings and settings.project_max_file_bytes) or fallback_max)
 end
 local function read_file_head_bytes(path, n)
   local uv = (vim.uv or vim.loop)
@@ -306,178 +400,188 @@ local function read_file_head_bytes(path, n)
     return nil
   end
 end
+local function read_file_bytes(path)
+  local uv = (vim.uv or vim.loop)
+  if (uv and uv.fs_open and uv.fs_read and uv.fs_close and path) then
+    local ok_open,fd = pcall(uv.fs_open, path, "r", 438)
+    if (ok_open and fd) then
+      local ok_stat,stat = pcall(uv.fs_fstat, fd)
+      local size
+      if (ok_stat and (type(stat) == "table")) then
+        size = stat.size
+      else
+        size = nil
+      end
+      local ok_read,chunk = pcall(uv.fs_read, fd, (size or 0), 0)
+      pcall(uv.fs_close, fd)
+      if (ok_read and (type(chunk) == "string")) then
+        return chunk
+      else
+        return nil
+      end
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+local function bytes__3elines(s)
+  if not (type(s) == "string") then
+    return {}
+  else
+    local norm = string.gsub(s, "\r\n", "\n")
+    local lines = vim.split(norm, "\n", {plain = true})
+    if ((#lines > 0) and (lines[#lines] == "")) then
+      table.remove(lines)
+    else
+    end
+    return lines
+  end
+end
 M["binary-file?"] = function(settings, path)
   if (not path or (0 == vim.fn.filereadable(path))) then
     return false
   else
     local size = vim.fn.getfsize(path)
     local mtime = vim.fn.getftime(path)
+    local max_bytes = settings_project_max_file_bytes(settings)
     local cache = (settings["project-file-cache"] or {})
     local _
     settings["project-file-cache"] = cache
     _ = nil
     local cached = cache[path]
-    if ((size < 0) or (size > settings["project-max-file-bytes"])) then
+    if ((size < 0) or (size > max_bytes)) then
       return false
     else
       if ((type(cached) == "table") and (cached.size == size) and (cached.mtime == mtime) and (cached.binary ~= nil)) then
-        return not not cached.binary
+        return clj.boolean(cached.binary)
       else
         local head = read_file_head_bytes(path, 256)
         local bin_3f = binary_head_3f(head)
         local prev_lines = ((type(cached) == "table") and cached.lines)
-        local _35_
+        local _57_
         if (type(prev_lines) == "table") then
-          _35_ = prev_lines
+          _57_ = prev_lines
         else
-          _35_ = nil
+          _57_ = nil
         end
-        cache[path] = {size = size, mtime = mtime, binary = not not bin_3f, lines = _35_}
-        return not not bin_3f
+        cache[path] = {size = size, mtime = mtime, binary = clj.boolean(bin_3f), lines = _57_}
+        return clj.boolean(bin_3f)
       end
     end
   end
 end
-M["read-file-lines-cached"] = function(settings, path, opts)
+M["read-file-view-cached"] = function(settings, path, opts)
   local function binary_header_line(size)
     local kb = math.max(1, math.floor((math.max(0, (size or 0)) / 1024)))
     return ("binary " .. tostring(kb) .. " KB")
   end
-  local function chunk_line(s, width)
-    local txt = (s or "")
-    local w = math.max(1, (width or 80))
-    local out = {}
-    local n = #txt
-    if (n <= w) then
-      return {txt}
-    else
-      local i = 1
-      while (i <= n) do
-        table.insert(out, string.sub(txt, i, math.min(n, (i + w + -1))))
-        i = (i + w)
-      end
-      return out
-    end
-  end
-  local function strings_lines(path0, size)
-    if (1 == vim.fn.executable("strings")) then
-      local out = vim.fn.systemlist({"strings", "-a", path0})
-      if (vim.v.shell_error == 0) then
-        local joined = table.concat((out or {}), " ")
-        local chunks = chunk_line(joined, 80)
-        local with_head = {binary_header_line(size)}
-        for _, line in ipairs(chunks) do
-          table.insert(with_head, line)
-        end
-        return with_head
-      else
-        return nil
-      end
-    else
-      return nil
-    end
-  end
-  local function hex_lines(path0, size)
-    if (1 == vim.fn.executable("xxd")) then
-      local out = vim.fn.systemlist({"xxd", "-g", "1", "-u", path0})
-      if (vim.v.shell_error == 0) then
-        local with_head = {binary_header_line(size)}
-        for _, line in ipairs((out or {})) do
-          table.insert(with_head, line)
-        end
-        return with_head
-      else
-        return nil
-      end
-    else
-      if (1 == vim.fn.executable("hexdump")) then
-        local out = vim.fn.systemlist({"hexdump", "-C", path0})
-        if (vim.v.shell_error == 0) then
-          local with_head = {binary_header_line(size)}
-          for _, line in ipairs((out or {})) do
-            table.insert(with_head, line)
-          end
-          return with_head
-        else
-          return nil
-        end
-      else
-        return nil
-      end
-    end
+  local function binary_default_lines(size)
+    return {binary_header_line(size)}
   end
   local include_binary = (opts and opts["include-binary"])
-  local hex_view = (opts and opts["hex-view"])
+  local transforms0 = ((opts and opts.transforms) or {})
+  local transforms
+  if (opts and opts["hex-view"] and (transforms0.hex == nil)) then
+    transforms = vim.tbl_extend("force", transforms0, {hex = true})
+  else
+    transforms = transforms0
+  end
+  local wrap_width = (opts and opts["wrap-width"])
+  local linebreak_3f
+  if ((opts and opts.linebreak) == nil) then
+    linebreak_3f = true
+  else
+    linebreak_3f = clj.boolean(opts.linebreak)
+  end
+  local transform_sig
+  local _64_
+  if linebreak_3f then
+    _64_ = "1"
+  else
+    _64_ = "0"
+  end
+  transform_sig = (transform_mod.signature(transforms) .. "|w:" .. tostring((wrap_width or 0)) .. "|lb:" .. _64_)
   if (not path or (0 == vim.fn.filereadable(path))) then
     return nil
   else
     local size = vim.fn.getfsize(path)
     local mtime = vim.fn.getftime(path)
+    local max_bytes = settings_project_max_file_bytes(settings)
     local cache = (settings["project-file-cache"] or {})
     local _
     settings["project-file-cache"] = cache
     _ = nil
     local cached = cache[path]
-    if ((size < 0) or (size > settings["project-max-file-bytes"])) then
+    if ((size < 0) or (size > max_bytes)) then
       return nil
     else
       if ((type(cached) == "table") and (cached.size == size) and (cached.mtime == mtime)) then
         if cached.binary then
           if include_binary then
-            local key
-            if hex_view then
-              key = "hex-lines"
+            local views = (cached.views or {})
+            local found = views[transform_sig]
+            if (type(found) == "table") then
+              return found
             else
-              key = "strings-lines"
-            end
-            if (type(cached[key]) == "table") then
-              return cached[key]
-            else
-              return nil
+              local raw_lines = (cached["raw-lines"] or binary_default_lines(size))
+              local ctx = {binary = true, size = size, head = cached.head, transforms = transforms}
+              local view = transform_mod["apply-view"](path, raw_lines, ctx)
+              views[transform_sig] = view
+              cached["views"] = views
+              return view
             end
           else
             return nil
           end
         else
-          if (type(cached.lines) == "table") then
-            return cached.lines
+          local views = (cached.views or {})
+          local found = views[transform_sig]
+          if (type(found) == "table") then
+            return found
           else
-            return nil
+            local raw_lines = (cached.lines or {})
+            local ctx = {size = size, head = cached.head, transforms = transforms, binary = false}
+            local view = transform_mod["apply-view"](path, raw_lines, ctx)
+            views[transform_sig] = view
+            cached["views"] = views
+            return view
           end
         end
       else
         local head = read_file_head_bytes(path, 4096)
         if binary_head_3f(head) then
-          local entry = {size = size, mtime = mtime, binary = true}
+          local entry = {size = size, mtime = mtime, binary = true, head = head}
           if include_binary then
-            local lines
-            if hex_view then
-              lines = hex_lines(path, size)
+            local raw_lines = binary_default_lines(size)
+            local ctx = {binary = true, size = size, head = head, transforms = transforms}
+            local view = transform_mod["apply-view"](path, raw_lines, ctx)
+            local views = {}
+            if (type(raw_lines) == "table") then
+              entry["raw-lines"] = raw_lines
             else
-              lines = strings_lines(path, size)
+              entry["raw-lines"] = {}
             end
-            local key
-            if hex_view then
-              key = "hex-lines"
-            else
-              key = "strings-lines"
-            end
-            if (type(lines) == "table") then
-              entry[key] = lines
-            else
-              entry[key] = {}
-            end
+            views[transform_sig] = view
+            entry["views"] = views
             cache[path] = entry
-            return entry[key]
+            return view
           else
             cache[path] = entry
             return nil
           end
         else
-          local ok,lines = pcall(vim.fn.readfile, path)
-          if (ok and (type(lines) == "table")) then
-            cache[path] = {size = size, mtime = mtime, lines = lines, binary = false}
-            return lines
+          local text = read_file_bytes(path)
+          local lines = bytes__3elines(text)
+          if (type(lines) == "table") then
+            local entry = {size = size, mtime = mtime, head = head, lines = lines, views = {}, binary = false}
+            local view = transform_mod["apply-view"](path, lines, {size = size, head = head, transforms = transforms, binary = false})
+            local views = {}
+            views[transform_sig] = view
+            entry["views"] = views
+            cache[path] = entry
+            return view
           else
             return nil
           end
@@ -485,5 +589,9 @@ M["read-file-lines-cached"] = function(settings, path, opts)
       end
     end
   end
+end
+M["read-file-lines-cached"] = function(settings, path, opts)
+  local view = M["read-file-view-cached"](settings, path, opts)
+  return (view and view.lines)
 end
 return M

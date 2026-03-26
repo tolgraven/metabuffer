@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/matcher/all.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local base = require("metabuffer.matcher.base")
 local util = require("metabuffer.util")
 local M = {}
@@ -30,7 +31,7 @@ local function unclosed_pattern_delims_3f(token)
   return ((paren > 0) or (bracket > 0))
 end
 local function regex_token_3f(token)
-  local and_4_ = (type(token) == "string") and (token ~= "") and not string.match(token, "^[%?%*%+%|%.]$") and not unclosed_pattern_delims_3f(token) and not not string.find(token, "[\\%[%]%(%)%+%*%?%|%.]")
+  local and_4_ = (type(token) == "string") and (token ~= "") and not string.match(token, "^[%?%*%+%|%.]$") and not unclosed_pattern_delims_3f(token) and (nil ~= string.find(token, "[\\%[%]%(%)%+%*%?%|%.]"))
   if and_4_ then
     local ok = pcall(vim.regex, ("\\C" .. token))
     and_4_ = ok
@@ -156,7 +157,7 @@ local function term_match_3f(term, line, literal_probe, ignorecase)
         if term["anchor-end"] then
           return vim.endswith(literal_probe, needle)
         else
-          return not not string.find(literal_probe, needle, 1, true)
+          return (nil ~= string.find(literal_probe, needle, 1, true))
         end
       end
     end

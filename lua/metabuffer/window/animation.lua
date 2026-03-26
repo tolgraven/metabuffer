@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/window/animation.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local target_frame_ms = 17
 local mini_animate_cache = nil
@@ -103,7 +104,7 @@ local function animation_backend(session, kind)
 end
 local function supports_backend_3f(backend)
   if (backend == "mini") then
-    return not not mini_animate_mod()
+    return clj.boolean(mini_animate_mod())
   else
     return true
   end
@@ -114,7 +115,7 @@ local function mini_autocmds_present_3f()
 end
 local function mini_managed_buf_3f(buf)
   local ok,v = pcall(vim.api.nvim_buf_get_var, buf, "metabuffer_minianimate_enable")
-  return (ok and not not v)
+  return (ok and clj.boolean(v))
 end
 local function apply_mini_scope_21(buf)
   if (buf and vim.api.nvim_buf_is_valid(buf)) then

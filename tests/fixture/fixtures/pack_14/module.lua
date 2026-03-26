@@ -1,0 +1,27 @@
+local module_14 = "meta"
+local local_value_14 = "lua"
+return module_14
+local fixture_pack_14 = "meta local lua" 001
+local fixture_pack_14 = "meta local lua" 002
+local fixture_pack_14 = "meta local lua" 003
+local fixture_pack_14 = "meta local lua" 004
+local fixture_pack_14 = "meta local lua" 005
+local fixture_pack_14 = "meta local lua" 006
+local fixture_pack_14 = "meta local lua" 007
+local fixture_pack_14 = "meta local lua" 008
+local fixture_pack_14 = "meta local lua" 009
+local fixture_pack_14 = "meta local lua" 010
+local fixture_pack_14 = "meta local lua" 011
+local fixture_pack_14 = "meta local lua" 012
+local fixture_pack_14 = "meta local lua" 013
+local fixture_pack_14 = "meta local lua" 014
+local fixture_pack_14 = "meta local lua" 015
+local fixture_pack_14 = "meta local lua" 016
+local fixture_pack_14 = "meta local lua" 017
+local fixture_pack_14 = "meta local lua" 018
+local fixture_pack_14 = "meta local lua" 019
+local fixture_pack_14 = "meta local lua" 020
+local fixture_pack_14 = "meta local lua" 021
+local fixture_pack_14 = "meta local lua" 022
+local fixture_pack_14 = "meta local lua" 023
+local fixture_pack_14 = "meta local lua" 024

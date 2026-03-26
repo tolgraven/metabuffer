@@ -1,6 +1,8 @@
 -- [nfnl] fnl/metabuffer/router/query_flow.fnl
 local router_util_mod = require("metabuffer.router.util")
 local router_prompt_mod = require("metabuffer.router.prompt")
+local source_mod = require("metabuffer.source")
+local transform_mod = require("metabuffer.transform")
 local M = {}
 local function choose_current_when_nil(value, current)
   local val_113_auto = value
@@ -41,14 +43,19 @@ local function invalidate_filter_cache_21(session)
     return nil
   end
 end
+local function resolve_parsed_query(query_mod, session, parsed)
+  return query_mod["apply-default-source"](parsed, (session and query_mod["truthy?"](session["default-include-lgrep"])))
+end
 local function source_flags_changed_3f(session, parsed)
   local next_hidden = choose_current_when_nil(parsed["include-hidden"], session["include-hidden"])
   local next_ignored = choose_current_when_nil(parsed["include-ignored"], session["include-ignored"])
   local next_deps = choose_current_when_nil(parsed["include-deps"], session["include-deps"])
   local next_binary = choose_current_when_nil(parsed["include-binary"], session["include-binary"])
-  local next_hex = choose_current_when_nil(parsed["include-hex"], session["include-hex"])
   local next_files = choose_current_when_nil(parsed["include-files"], session["include-files"])
-  return ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_binary ~= session["effective-include-binary"]) or (next_hex ~= session["effective-include-hex"]) or (next_files ~= session["effective-include-files"]))
+  local next_transforms = transform_mod["enabled-map"](parsed, session, nil)
+  local next_source = source_mod["query-source-signature"](parsed)
+  local cur_source = source_mod["query-source-signature"]((session["last-parsed-query"] or {}))
+  return ((next_hidden ~= session["effective-include-hidden"]) or (next_ignored ~= session["effective-include-ignored"]) or (next_deps ~= session["effective-include-deps"]) or (next_binary ~= session["effective-include-binary"]) or (next_files ~= session["effective-include-files"]) or (transform_mod.signature(next_transforms) ~= transform_mod.signature((session["effective-transforms"] or {}))) or (next_source ~= cur_source))
 end
 local function render_flags_changed_3f(session, parsed)
   local next_prefilter = choose_current_when_nil(parsed.prefilter, session["prefilter-mode"])
@@ -102,7 +109,7 @@ local function run_meta_update_21(session, update_preview_window, update_info_wi
 end
 local function consume_visible_control_token_3f(query_mod, tok)
   local parsed = query_mod["parse-query-lines"]({(tok or "")})
-  return (((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed["include-binary"] ~= nil) or (parsed["include-hex"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= ""))) and (parsed["include-files"] == nil) and (parsed["include-binary"] == nil) and (parsed["include-hex"] == nil))
+  return (((parsed["include-hidden"] ~= nil) or (parsed["include-ignored"] ~= nil) or (parsed["include-deps"] ~= nil) or (parsed["include-binary"] ~= nil) or (parsed.prefilter ~= nil) or (parsed.lazy ~= nil) or parsed.history or parsed["saved-browser"] or ((type(parsed["save-tag"]) == "string") and (vim.trim(parsed["save-tag"]) ~= "")) or ((type(parsed["saved-tag"]) == "string") and (vim.trim(parsed["saved-tag"]) ~= ""))) and (parsed["include-files"] == nil) and (parsed["include-binary"] == nil) and (transform_mod.signature(transform_mod["enabled-map"](parsed, nil, nil)) == ""))
 end
 local function consume_visible_controls_lines(query_mod, raw_lines)
   local out = {}
@@ -138,7 +145,7 @@ M["apply-prompt-lines!"] = function(deps, session)
   local open_saved_browser_21 = history["open-saved-browser!"]
   if (session and not session.closing and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and not session["_rewriting-visible-controls"]) then
     local raw_lines = vim.api.nvim_buf_get_lines(session["prompt-buf"], 0, -1, false)
-    local parsed = query_mod["parse-query-lines"](raw_lines)
+    local parsed = resolve_parsed_query(query_mod, session, query_mod["parse-query-lines"](raw_lines))
     local lines = parsed.lines
     local consume_visible_controls_3f = false
     local effective_lines = lines
@@ -147,8 +154,8 @@ M["apply-prompt-lines!"] = function(deps, session)
     local next_ignored = choose_current_when_nil(parsed["include-ignored"], session["include-ignored"])
     local next_deps = choose_current_when_nil(parsed["include-deps"], session["include-deps"])
     local next_binary = choose_current_when_nil(parsed["include-binary"], session["include-binary"])
-    local next_hex = choose_current_when_nil(parsed["include-hex"], session["include-hex"])
     local next_files = choose_current_when_nil(parsed["include-files"], session["include-files"])
+    local next_transforms = transform_mod["enabled-map"](parsed, session, nil)
     local next_prefilter = choose_current_when_nil(parsed.prefilter, session["prefilter-mode"])
     local next_lazy = choose_current_when_nil(parsed.lazy, session["lazy-mode"])
     local next_expansion = choose_current_when_nil(parsed.expansion, session["expansion-mode"])
@@ -179,14 +186,13 @@ M["apply-prompt-lines!"] = function(deps, session)
     session["effective-include-ignored"] = next_ignored
     session["effective-include-deps"] = next_deps
     session["effective-include-binary"] = next_binary
-    session["effective-include-hex"] = next_hex
     session["effective-include-files"] = next_files
     session["include-hidden"] = next_hidden
     session["include-ignored"] = next_ignored
     session["include-deps"] = next_deps
     session["include-binary"] = next_binary
-    session["include-hex"] = next_hex
     session["include-files"] = next_files
+    transform_mod["apply-flags!"](session, next_transforms)
     session["prefilter-mode"] = next_prefilter
     session["lazy-mode"] = next_lazy
     session["expansion-mode"] = next_expansion
@@ -196,8 +202,8 @@ M["apply-prompt-lines!"] = function(deps, session)
     session["prompt-last-applied-text"] = effective_text
     session.meta["file-query-lines"] = (parsed["file-lines"] or {})
     session.meta["include-binary"] = next_binary
-    session.meta["include-hex"] = next_hex
     session.meta["include-files"] = next_files
+    transform_mod["apply-flags!"](session.meta, next_transforms)
     if consume_visible_controls_3f then
       local visible_lines = consume_visible_controls_lines(query_mod, raw_lines)
       local visible_text = table.concat(visible_lines, "\n")
@@ -219,7 +225,7 @@ M["apply-prompt-lines!"] = function(deps, session)
       pcall(vim.api.nvim_buf_set_var, session.meta.buf.buffer, "meta_manual_edit_active", false)
     else
     end
-    if (session["project-mode"] and source_changed_3f) then
+    if ((session["project-mode"] or session["active-source-key"] or source_mod["query-source-active?"](parsed)) and source_changed_3f) then
       if schedule_source_set_rebuild_21 then
         schedule_source_set_rebuild_21(session, 0)
       else
@@ -253,7 +259,7 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
   local session = active_by_prompt[prompt_buf]
   if (session and not session.closing) then
     local lines = router_util_mod["prompt-lines"](session)
-    local parsed = query_mod["parse-query-lines"](lines)
+    local parsed = resolve_parsed_query(query_mod, session, query_mod["parse-query-lines"](lines))
     local effective_text = table.concat((parsed.lines or {}), "\n")
     local pure_flag_edit_3f = ((effective_text ~= (session["prompt-last-event-text"] or "")) and (effective_text == (session["prompt-last-applied-text"] or "")) and (source_flags_changed_3f(session, parsed) or render_flags_changed_3f(session, parsed)))
     local now = router_prompt_mod["now-ms"]()

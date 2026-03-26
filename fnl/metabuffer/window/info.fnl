@@ -1,4 +1,5 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
 (local lineno-mod (require :metabuffer.window.lineno))
 (local source-mod (require :metabuffer.source))
@@ -22,6 +23,19 @@
     (each [_ x (ipairs (or xs []))]
       (table.insert out (str x)))
     (table.concat out (or sep ""))))
+
+(fn indices-slice-sig
+  [idxs start-index stop-index]
+  "Return a stable signature string for a visible indices slice. Expected output: \"1,4,7\"."
+  (let [out []
+        idxs (or idxs [])
+        start-index (math.max 1 (or start-index 1))
+        stop-index (math.max 0 (or stop-index 0))]
+    (for [i start-index stop-index]
+      (let [v (. idxs i)]
+        (when-not (= v nil)
+          (table.insert out (tostring v)))))
+    (table.concat out ",")))
 
 (fn valid-info-win?
   [session]
@@ -175,6 +189,7 @@
         info_height (. deps :info-height)
         debug_log (. deps :debug-log)
         read_file_lines_cached (. deps :read-file-lines-cached)
+        read_file_view_cached (. deps :read-file-view-cached)
         animation_mod (. deps :animation-mod)
         animate_enter? (. deps :animate-enter?)
         info_fade_ms (. deps :info-fade-ms)]
@@ -190,7 +205,7 @@
                (or (. cfg :col) 0)
                (or (. cfg :width) 0)
                (or (. cfg :height) 0)
-               (str (not (not (. cfg :focusable))))]))
+               (str (clj.boolean (. cfg :focusable)))]))
 
   (fn apply-info-config-if-changed!
     [session cfg]
@@ -358,13 +373,16 @@
                           ref
                           {:mode (or session.info-file-entry-view "meta")
                            :path-width path-width
-                           :single-source? (not session.project-mode)
-                           :read-file-lines-cached read_file_lines_cached}))
+                           :single-source? (and (not session.project-mode)
+                                                (not session.active-source-key))
+                           :read-file-lines-cached read_file_lines_cached
+                           :read-file-view-cached read_file_view_cached}))
           sign (or (. info-view :sign) {:text "  " :hl "LineNr"})
           sign-raw (or (. sign :text) "")
           sign-pad (math.max 0 (- signcol-display-width (vim.fn.strdisplaywidth sign-raw)))
           sign-prefix (.. sign-raw (string.rep " " sign-pad))
           sign-hl (or (. sign :hl) "LineNr")
+          sign-highlights (or (. sign :highlights) [])
           sign-width (# sign-prefix)
           sign-glyph-start1 (or (string.find sign-prefix "%S") 0)
           sign-glyph (vim.trim sign-prefix)
@@ -384,7 +402,8 @@
           icon (or (. icon-info :icon) "")
           iconf (icon-field icon)
           icon-prefix (if show-icon? (. iconf :text) "")
-          icon-hl (or (. icon-info :icon-hl) file-hl)
+          ext-hl (or (. icon-info :ext-hl) (. icon-info :icon-hl) file-hl)
+          icon-hl ext-hl
           icon-width (if show-icon? (. iconf :width) 0)
           [dir file0 dir-original] (fit-path-into-width path (math.max 1 (- path-width icon-width)))
           this-file-hl (or (. icon-info :file-hl) file-hl)
@@ -401,8 +420,14 @@
           highlights []]
       (when (> sign-width 0)
         (table.insert highlights ["SignColumn" sign-start sign-end]))
-      (when (and (> sign-glyph-end sign-glyph-start) (> sign-width 0))
-        (table.insert highlights [sign-hl (+ sign-start sign-glyph-start) (+ sign-start sign-glyph-end)]))
+      (if (> (# sign-highlights) 0)
+          (each [_ part (ipairs sign-highlights)]
+            (let [s (+ sign-start (or (. part :start) 0))
+                  e (+ sign-start (or (. part :end) 0))]
+              (when (> e s)
+                (table.insert highlights [(or (. part :hl) sign-hl) s e]))))
+          (when (and (> sign-glyph-end sign-glyph-start) (> sign-width 0))
+            (table.insert highlights [sign-hl (+ sign-start sign-glyph-start) (+ sign-start sign-glyph-end)])))
       (table.insert highlights [line-hl num-start num-end])
       (when (> (# icon-prefix) 0)
         (table.insert highlights [icon-hl icon-start icon-end]))
@@ -414,7 +439,7 @@
       (when (and highlight-file? (> (# file0) 0))
         (let [dot (ext-start-in-file file0)]
           (when (> dot 0)
-            (table.insert highlights [icon-hl (+ file-start (- dot 1)) (+ file-start (# file0))]))))
+            (table.insert highlights [ext-hl (+ file-start (- dot 1)) (+ file-start (# file0))]))))
       (when (> (# suffix0) 0)
         (table.insert highlights ["Comment" suffix-start (+ suffix-start (# suffix0))]))
       (each [_ sh (ipairs suffix-hls)]
@@ -490,12 +515,19 @@
         (when (~= current needed)
           (let [bo (. vim.bo session.info-buf)]
             (set (. bo :modifiable) true))
-          (vim.api.nvim_buf_set_lines
-            session.info-buf
-            0
-            -1
-            false
-            (vim.tbl_map (fn [_] "") (vim.fn.range 1 needed)))
+          (if (< current needed)
+              (vim.api.nvim_buf_set_lines
+                session.info-buf
+                current
+                current
+                false
+                (vim.tbl_map (fn [_] "") (vim.fn.range (+ current 1) needed)))
+              (vim.api.nvim_buf_set_lines
+                session.info-buf
+                needed
+                -1
+                false
+                []))
           (let [bo (. vim.bo session.info-buf)]
             (set (. bo :modifiable) false))))))
 
@@ -744,15 +776,15 @@
                                       (~= render-stop rendered-stop))
             sig (join-str
                   "|"
-                  [idxs
-                   (# idxs)
+                  [(# idxs)
+                   (indices-slice-sig idxs render-start render-stop)
                    render-start
                    render-stop
                    (info-max-width-now session)
                    (info_height session)
                    vim.o.columns
-                   (str (not (not session.single-file-info-ready)))
-                   (str (not (not session.single-file-info-fetch-ready)))])]
+                   (str (clj.boolean session.single-file-info-ready))
+                   (str (clj.boolean session.single-file-info-fetch-ready))])]
         (if (or force-refresh?
                 refresh-lines
                 out-of-range
@@ -776,12 +808,6 @@
           pending (and session session.project-mode (or initializing animating))]
       pending))
 
-  (fn project-has-renderable-results?
-    [session]
-    (let [meta (and session session.meta)
-          idxs (and meta meta.buf meta.buf.indices)]
-      (> (# (or idxs [])) 0)))
-
   (fn project-loading-pending?
     [session]
     (let [startup (startup-layout-pending? session)
@@ -795,10 +821,9 @@
                        (or startup
                            bootstrap-pending
                            (not bootstrapped)
-                           (and (not (project-has-renderable-results? session))
-                                (or refresh-pending
-                                    refresh-dirty
-                                    (not stream-done)))))]
+                           refresh-pending
+                           refresh-dirty
+                           (not stream-done)))]
       pending))
 
   (fn render-project-loading!
@@ -810,20 +835,20 @@
           bootstrapped (or session.project-bootstrapped false)
           stream-done (or session.lazy-stream-done false)
           stage (if (or session.project-bootstrap-pending (not bootstrapped))
-                    "bootstrapping"
-                    (if session.prompt-animating?
-                        "opening"
+                    "bootstrapping project sources"
+                     (if session.prompt-animating?
+                        "opening project mode"
                         (if stream-done
-                            "finalizing"
-                            "streaming")))
+                            "finalizing project sources"
+                            "streaming project sources")))
           progress (if (> total-files 0)
                        (.. streamed "/" total-files " files")
                        "scanning files")
-          lines [(.. "Project  " stage)
+          lines [(.. "Project Mode  " stage)
                  ""
-                 (.. "Files    " progress)
-                 (.. "Hits     " hits)
-                 (.. "Lines    " total-lines)]
+                 (.. "Progress  " progress)
+                 (.. "Hits      " hits)
+                 (.. "Lines     " total-lines)]
           ns info-content-ns]
       (set session.info-start-index 1)
       (set session.info-stop-index (# lines))
@@ -837,9 +862,9 @@
       (vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)
       (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
       (vim.api.nvim_buf_add_highlight session.info-buf ns "Title" 0 0 -1)
-      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 2 0 8)
-      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 3 0 8)
-      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 4 0 8)
+      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 2 0 10)
+      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 3 0 10)
+      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 4 0 10)
       (let [bo (. vim.bo session.info-buf)]
         (set bo.modifiable false))))
 
@@ -885,9 +910,9 @@
                        session.info-buf
                        (vim.api.nvim_buf_is_valid session.info-buf))
               (let [meta session.meta
-                    loading-finished? (not (not session.info-project-loading-active?))
+                    loading-finished? (clj.boolean session.info-project-loading-active?)
                     force-refresh? (or loading-finished?
-                                       (not (not session.info-showing-project-loading?))
+                                       (clj.boolean session.info-showing-project-loading?)
                                        refresh-lines
                                        (= session.info-render-sig nil)
                                        (= session.info-start-index nil)
@@ -907,8 +932,8 @@
                   (let [idxs (or meta.buf.indices [])
                         sig (join-str
                               "|"
-                              [idxs
-                               (# idxs)
+                              [(# idxs)
+                               (indices-slice-sig idxs wanted-start wanted-stop)
                                wanted-start
                                wanted-stop
                                (info-max-width-now session)

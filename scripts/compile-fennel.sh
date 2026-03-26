@@ -115,6 +115,30 @@ run_nvim_compile() {
   fi
 }
 
+run_nvim_lua_script() {
+  script_path="$1"
+  if [ "$VERBOSE" -eq 1 ]; then
+    NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" \
+    nvim --headless -u NONE -n \
+      -i NONE \
+      --cmd "set runtimepath^=." \
+      -l "$script_path"
+  else
+    run_log="$(mktemp $tmp_dir/metabuffer-script.log.XXXXXX)"
+    if ! NVIM_LOG_FILE="${NVIM_LOG_FILE:-/dev/null}" \
+      nvim --headless -u NONE -n \
+        -i NONE \
+        --cmd "set runtimepath^=." \
+        -l "$script_path" >"$run_log" 2>&1; then
+      cat "$run_log" >&2
+      rm -f "$run_log"
+      rm -f "$compile_script"
+      exit 1
+    fi
+    rm -f "$run_log"
+  fi
+}
+
 run_luals_check() {
   check_dir="$1"
   if [ "$VERBOSE" -eq 1 ]; then
@@ -147,6 +171,13 @@ run_luals_check() {
 #   eval "$(deps --path)" # ensured deps are pulled (from deps.fnl)
 # fi
 run_nvim_compile
+run_nvim_lua_script "./scripts/update-directive-docs.lua"
+
+if [ "${META_COMPILE_MINIMAL:-0}" = "1" ]; then
+  rm -f "$compile_script"
+  echo "Compile successful."
+  exit 0
+fi
 
 # Copy .lua files from dependencies to lua/ directory
 echo "Bundling .lua dependencies..."

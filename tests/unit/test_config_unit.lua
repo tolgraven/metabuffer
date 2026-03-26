@@ -1,4 +1,5 @@
 local config = require('metabuffer.config')
+local custom = require('metabuffer.custom')
 local animation = require('metabuffer.window.animation')
 local eq = MiniTest.expect.equality
 
@@ -39,6 +40,32 @@ T['resolve preserves debounce defaults when options absent'] = function()
   eq(resolved.options.ui_animation_info_backend, 'mini')
   eq(resolved.options.ui_animation_scroll_backend, 'mini')
   eq(resolved.options.ui_animation_scroll_ms, 100)
+  eq(resolved.options.default_include_lgrep, false)
+  eq(resolved.options.lgrep_bin, 'lgrep')
+  eq(resolved.options.lgrep_limit, 80)
+  eq(resolved.options.lgrep_debounce_ms, 260)
+  eq(type(resolved.options.custom), 'table')
+  eq(type(resolved.options.custom.transforms), 'table')
+end
+
+T['resolve keeps custom transform config under options.custom'] = function()
+  local resolved = config.resolve({
+    options = {
+      custom = {
+        transforms = {
+          upper = {
+            from = { 'tr', 'a-z', 'A-Z' },
+            to = { 'tr', 'A-Z', 'a-z' },
+            doc = 'Uppercase lines.',
+          },
+        },
+      },
+    },
+  })
+
+  eq(type(resolved.options.custom.transforms.upper), 'table')
+  eq(type(resolved.options.custom.transforms.upper.from), 'table')
+  eq(resolved.options.custom.transforms.upper.doc, 'Uppercase lines.')
 end
 
 T['defaults treat deps directory as dependency content'] = function()
@@ -116,6 +143,31 @@ T['animation helper applies master and local time scales'] = function()
   eq(animation['scroll-backend'](session), 'mini')
   eq(animation['supports-backend?']('native'), true)
   eq(animation['supports-scroll-backend?']('native'), true)
+end
+
+T['apply-router-defaults configures custom transform registry'] = function()
+  local router = {}
+  local prev = custom.config()
+  config['apply-router-defaults'](router, vim, {
+    options = {
+      custom = {
+        transforms = {
+          upper = {
+            from = { 'tr', 'a-z', 'A-Z' },
+            doc = 'Uppercase lines.',
+          },
+        },
+      },
+    },
+  })
+
+  local mods = custom.modules('transform')
+  custom['configure!'](prev)
+
+  eq(type(router["custom-config"]), 'table')
+  eq(type(mods), 'table')
+  eq(#mods > 0, true)
+  eq(mods[1]['transform-key'], 'custom-transform:upper')
 end
 
 return T

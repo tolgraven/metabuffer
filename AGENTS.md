@@ -95,17 +95,22 @@
   - keep screen files grouped by dir (`context/`, `history/`, `matchers/`, `persistence/`, `project/`) and split any file trending above ~2-3s.
   - keep `tests/testing.md` synchronized with current test coverage and rerun workflows.
   - when multiple tests fail, use `.cache/metabuffer-tests/failed-files.txt` and parallel sub-agents (one per failing file) to investigate/fix in parallel, then run a full suite check.
+  - test runs must not leave orphaned or spinning `nvim` processes behind; if a test run hangs or times out, immediately kill the leaked child Neovims before continuing.
 
 ## Agent behavior
 
 - Never stop work unnecessarily. User should never have to simply type "go", unless you make an optional and unlikely suggestion. If you identify a clear bug or architectural issue and the next corrective step is obvious, implement it immediately instead of stopping at diagnosis.
+- Treat "do not stop" as a hard rule for all ongoing work: if there is a reasonable next investigative or implementation step, take it without pausing for confirmation. The user should never need to send a follow-up like "go", "continue", or similar just to make progress resume.
+- If the user sends an interjection while work is in progress, treat it as additional guidance to incorporate immediately, then continue the current task without pausing unless the new message creates a real blocker. Do not hand control back just because the user commented mid-stream.
 - Do not hand control back just to describe what should be changed next when that change is local, concrete, and within scope. Fix it, then report the result.
+- Do not stop after an intermediate checkpoint (diagnosis, partial repro, isolated failing test, compile success, or one fixed bug) when the broader requested task is still unfinished. Use those only to choose the next step and keep going.
 - Prefer a single shared event source with independent listeners over one UI subsystem driving another. For example, selection changes should fan out to preview/info/context/status independently; one window module should not call another window module to keep it in sync.
 - Features in `features` should always result in feature branches in git. Commit each step when doing that, without asking. Don't push unless asked. Other work can be done straight on mainline, and then you should defer committing until told.
 - Try to avoid commands that need escalated permissions and hence user input (to confirm), since these disrupt work. Always see if there is an in-sandbox alternative.
 - Since you lack full access to `~/.local/state/nvim`, always route ad hoc Neovim state through `/tmp` to avoid `shada`/state permission errors. For manual/headless runs, set `XDG_STATE_HOME=/tmp`, `XDG_DATA_HOME=/tmp`, `XDG_CACHE_HOME=/tmp`, and if needed `NVIM_APPNAME` to a tmp-specific value instead of touching the real local state dirs.
 - Remember `fennel-ls` should be run directly after any file edit.
 - Fix `fennel-ls` warnings you encounter while working, not just hard errors. Keep those cleanup fixes as their own commits when they are distinct from the feature change.
+- Treat stuck test cleanup as part of the task, not an optional follow-up. If a test appears wedged, stop the leaked processes, then continue debugging why teardown failed.
 
 ## Symbol Index
 
@@ -122,3 +127,5 @@
 
 - When making changes, run `fennel-ls` to check for issues. Once that is ok, run `scripts/compile-fennel.sh`. If that is ok, run unit and integration tests. Only once all these are clear should you return to user.
 - Treat a successful compile, targeted repro, or targeted test as a checkpoint, not an excuse to stop. Keep going until the full requested fix is implemented end-to-end unless the user must choose between materially different paths.
+- Before handing control back, ask: "Is there an obvious next step I can execute myself right now?" If yes, do it first. Only stop when blocked by ambiguity, missing secrets/access, or when the requested work is actually complete.
+- After any timed-out or interrupted test command, explicitly verify that no stray headless `nvim` test processes remain. If any do, kill them before the next run.

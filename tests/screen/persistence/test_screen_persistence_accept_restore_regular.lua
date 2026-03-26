@@ -1,7 +1,7 @@
 local H = require('tests.screen.support.screen_helpers')
 local child, eq = H.child, H.eq
 
-local T = MiniTest.new_set({ hooks = H.case_hooks() })
+local T = MiniTest.new_set({ hooks = H.shared_child_hooks() })
 
 T['regular <CR> hides Meta UI and remains resumable across back-forward traversal'] = H.timed_case(function()
   H.open_meta_with_lines({

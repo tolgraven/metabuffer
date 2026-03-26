@@ -3,103 +3,43 @@ local child, eq = H.child, H.eq
 
 local T = MiniTest.new_set({ hooks = H.case_hooks() })
 
-local function project_text_line_total(root)
-  return child.lua_get(string.format([[
-    (function()
-      local total = 0
-      for _, path in ipairs(vim.fn.glob(%q, true, true)) do
-        if vim.fn.isdirectory(path) == 0 and path:sub(-4) ~= '.png' then
-          total = total + #vim.fn.readfile(path)
-        end
-      end
-      return total
-    end)()
-  ]], root .. '/**/*'))
-end
-
 T['editing results buffer directly and :write propagates edits to source files'] = H.timed_case(function()
   local root = H.make_temp_project()
+
   H.open_project_meta_in_dir(root, 'main.txt')
-  local total_before = project_text_line_total(root)
+  H.wait_for(function() return H.session_active() end, 6000)
 
-  H.type_prompt_text('meta')
-  H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
-  H.wait_for(function() return type(H.session_info_snapshot()) == 'table' end, 3000)
-
-  local info_before = H.session_info_snapshot()
-  eq(type(info_before), 'table')
-
-  child.cmd('stopinsert')
-  child.lua([[
-    (function()
-      local router = require('metabuffer.router')
-      local s = router['active-by-source'][_G.__meta_source_buf]
-      if s and s.meta and s.meta.win and vim.api.nvim_win_is_valid(s.meta.win.window) then
-        vim.api.nvim_set_current_win(s.meta.win.window)
-      end
-    end)()
-  ]])
-
+  H.type_prompt_text('other')
   H.wait_for(function()
-    return type(H.session_info_snapshot()) == 'table'
+    return H.session_hit_count() == 1
+  end, 6000)
+
+  H.type_prompt('<M-CR>')
+  H.wait_for(function()
+    return child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not s then return false end
+        return vim.api.nvim_get_current_win() == s.meta.win.window
+      end)()
+    ]])
   end, 3000)
-  local info_after = H.session_info_snapshot()
-  eq(type(info_after), 'table')
 
-  local target = child.lua_get([[
-    (function()
-      local router = require('metabuffer.router')
-      local s = router['active-by-source'][_G.__meta_source_buf]
-      local meta = s and s.meta or nil
-      if not meta then return nil end
-      local idx = (meta.buf.indices or {})[1]
-      local ref = idx and (meta.buf['source-refs'] or {})[idx] or nil
-      if not ref then return nil end
-      return { path = ref.path or '', lnum = ref.lnum or 0, old = meta.buf.content[idx] or '' }
-    end)()
-  ]])
-  eq(type(target), 'table')
-  eq(type(target.path), 'string')
-
-  local replacement = target.old .. ' [edited-by-meta] meta'
-  child.lua(string.format([[
-    (function()
-      local router = require('metabuffer.router')
-      local s = router['active-by-source'][_G.__meta_source_buf]
-      local buf = s.meta.buf.buffer
-      vim.api.nvim_buf_set_lines(buf, 0, 1, false, { %q })
-    end)()
-  ]], replacement))
-
+  local target = root .. '/doc/readme.md'
+  child.type_keys('o')
+  child.type_keys('insert-after-other')
+  child.type_keys('<Esc>')
   child.cmd('write')
 
-  local file_line = child.lua_get(string.format([[
-    (function()
-      local lines = vim.fn.readfile(%q)
-      return lines[%d] or ''
-    end)()
-  ]], target.path, target.lnum))
-  eq(file_line, replacement)
-  eq(project_text_line_total(root), total_before)
-  H.wait_for(function() return H.session_preview_contains('[edited-by-meta]') end, 3000)
-
-  child.lua(string.format([[
-    (function()
-      local router = require('metabuffer.router')
-      local s = router['active-by-source'][_G.__meta_source_buf]
-      local buf = s.meta.buf.buffer
-      vim.api.nvim_buf_set_lines(buf, 0, 1, false, { %q })
-    end)()
-  ]], target.old))
-  child.cmd('write')
-  local reverted = child.lua_get(string.format([[
-    (function()
-      local lines = vim.fn.readfile(%q)
-      return lines[%d] or ''
-    end)()
-  ]], target.path, target.lnum))
-  eq(reverted, target.old)
-  eq(project_text_line_total(root), total_before)
+  eq(child.lua_get(string.format([[
+    vim.fn.readfile(%q)
+  ]], target)), {
+    'meta docs',
+    'metam docs',
+    'other',
+    'insert-after-other',
+  })
 end)
 
 return T

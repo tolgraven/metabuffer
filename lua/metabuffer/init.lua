@@ -493,6 +493,7 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaSearchHitFuzzy", hit_hl("Number", "WarningMsg"))
   hi(0, "MetaSearchHitFuzzyBetween", hit_hl("IncSearch", "Question"))
   hi(0, "MetaSearchHitRegex", hit_hl("Special", "Type"))
+  hi(0, "MetaSearchHitLgrep", hit_hl("String", "Type"))
   hi(0, "MetaPromptText", prompt_text_hl())
   for i, src in ipairs(PRIMARY_LINE_GROUPS) do
     local suffix = tostring(i)
@@ -504,6 +505,7 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaPromptNeg", {default = true, link = "ErrorMsg"})
   hi(0, "MetaPromptAnchor", {default = true, link = "SpecialChar"})
   hi(0, "MetaPromptRegex", {default = true, link = "MetaSearchHitRegex", underline = true})
+  hi(0, "MetaPromptLgrep", {default = true, link = "MetaSearchHitLgrep"})
   hi(0, "MetaPromptFlagHashOn", statusline_color_from("String"))
   hi(0, "MetaPromptFlagHashOff", statusline_color_from("ErrorMsg"))
   hi(0, "MetaPromptFlagTextOn", fg_only_hl_from("String"))
@@ -610,7 +612,7 @@ local function maybe_compile_21()
   local root = plugin_root()
   local script = (root .. "/scripts/compile-fennel.sh")
   if (1 == vim.fn.filereadable(script)) then
-    local out = vim.fn.system({"sh", script})
+    local out = vim.fn.system({"env", "META_COMPILE_MINIMAL=1", "sh", script})
     if (vim.v.shell_error == 0) then
       return true
     else

@@ -1,12 +1,15 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
+(local source-mod (require :metabuffer.source))
+(local transform-mod (require :metabuffer.transform))
 
 (fn M.new
   [opts]
   "Build project-source orchestrator for eager/lazy pool construction."
   (let [{: settings : truthy? : selected-ref : canonical-path
          : current-buffer-path : path-under-root? : allow-project-path?
-         : project-file-list : binary-file? : read-file-lines-cached : session-active?
+         : project-file-list : binary-file? : read-file-view-cached : session-active?
          : lazy-streaming-allowed? : on-prompt-changed : apply-prompt-lines-now!
          : prompt-has-active-query? : now-ms : prompt-update-delay-ms
          : schedule-prompt-update! : restore-meta-view! : update-info-window} opts]
@@ -43,7 +46,7 @@
            ;; keep single metachar tokens literal in all-mode/prefilter
            (not (string.match token "^[%?%*%+%|%.]$"))
            (not (unclosed-pattern-delims? token))
-           (not (not (string.find token "[\\%[%]%(%)%+%*%?%|%.]")))
+           (not= nil (string.find token "[\\%[%]%(%)%+%*%?%|%.]"))
            (let [[ok] [(pcall vim.regex (.. "\\C" token))]]
              ok)))
 
@@ -114,6 +117,10 @@
       (set meta.buf.all-indices all-indices)
       (set meta.buf.indices (vim.deepcopy all-indices))))
 
+  (fn bump-content-version!
+    [meta]
+    (set meta.buf.content-version (+ 1 (or meta.buf.content-version 0))))
+
   (fn push-file-entry-into-pool!
     [session path]
     (let [meta session.meta
@@ -147,11 +154,65 @@
             (table.insert out path))))
       out))
 
+  (fn results-wrap-width
+    [session]
+    (let [win (and session session.meta session.meta.win session.meta.win.window)]
+      (when (and win (vim.api.nvim_win_is_valid win))
+        (let [wrap? (clj.boolean (vim.api.nvim_get_option_value "wrap" {:win win}))]
+          (when wrap?
+            (let [wininfo (. (vim.fn.getwininfo win) 1)
+                  textoff (or (and wininfo (. wininfo :textoff)) 0)
+                  info-width (if (and session.info-win
+                                      (vim.api.nvim_win_is_valid session.info-win))
+                                 (vim.api.nvim_win_get_width session.info-win)
+                                 0)]
+              (math.max 12 (- (vim.api.nvim_win_get_width win) textoff info-width))))))))
+
+  (fn single-source-view
+    [session]
+    (let [path (current-buffer-path session.source-buf)
+          transforms (or session.effective-transforms session.transform-flags {})
+          binary? (and path (= 1 (vim.fn.filereadable path)) (binary-file? path))
+          wrap-width (results-wrap-width session)]
+      (if binary?
+          (if session.effective-include-binary
+              (or (read-file-view-cached
+                    path
+                    {:include-binary true
+                     :transforms transforms
+                     :wrap-width wrap-width
+                     :linebreak true})
+                  {:lines [] :line-map []})
+              {:lines [] :line-map [] :row-meta []})
+          (let [raw-lines (if (and session.source-buf (vim.api.nvim_buf_is_valid session.source-buf))
+                              (vim.api.nvim_buf_get_lines session.source-buf 0 -1 false)
+                              (or session.single-content []))]
+            (transform-mod.apply-view
+              path
+              raw-lines
+              {:binary false
+               :path path
+               :transforms transforms
+               :wrap-width wrap-width
+               :linebreak true})))))
+
   (fn set-single-source-content!
     [session show-separators]
-    (let [meta session.meta]
-      (set meta.buf.content (vim.deepcopy session.single-content))
-      (set meta.buf.source-refs (vim.deepcopy session.single-refs))
+    (let [meta session.meta
+          path (or (current-buffer-path session.source-buf)
+                   (and (> (# (or session.single-refs [])) 0) (. (. session.single-refs 1) :path))
+                   "[Current Buffer]")
+          view (single-source-view session)
+          content []
+          refs []]
+      (each [idx line (ipairs (or (. view :lines) []))]
+        (let [lnum (or (. (or (. view :line-map) []) idx) idx)
+              meta0 (or (. (or (. view :row-meta) []) idx) {})]
+          (table.insert content (or line ""))
+          (table.insert refs (vim.tbl_extend "force" {:path path :lnum lnum :line line} meta0))))
+      (set meta.buf.content content)
+      (set meta.buf.source-refs refs)
+      (bump-content-version! meta)
       (set meta.buf.show-source-prefix false)
       (set meta.buf.show-source-separators show-separators)
       (reset-meta-indices! meta)))
@@ -167,6 +228,21 @@
          session.effective-include-files
          (not (normal-query-active? session))))
 
+  (fn set-query-source-content!
+    [session]
+    (let [meta session.meta
+          pool (or (source-mod.collect-query-source-set
+                     settings
+                     session.last-parsed-query
+                     canonical-path)
+                   {:content [] :refs []})]
+      (set meta.buf.content pool.content)
+      (set meta.buf.source-refs pool.refs)
+      (bump-content-version! meta)
+      (set meta.buf.show-source-prefix false)
+      (set meta.buf.show-source-separators true)
+      (reset-meta-indices! meta)))
+
   (fn set-file-entry-source-content!
     [session include-hidden include-ignored include-deps include-binary]
     (let [meta session.meta]
@@ -179,6 +255,7 @@
                               include-deps
                               include-binary))]
         (push-file-entry-into-pool! session path))
+      (bump-content-version! meta)
       (set meta.buf.show-source-prefix true)
       (set meta.buf.show-source-separators true)
       (reset-meta-indices! meta)))
@@ -263,7 +340,10 @@
             settings.project-lazy-refresh-debounce-ms)))))
 
   (fn push-file-into-pool!
-    [session path lines prefilter]
+    [session path view prefilter]
+    (let [lines (and view (. view :lines))
+          line-map (or (and view (. view :line-map)) [])
+          row-meta (or (and view (. view :row-meta)) [])]
     (if (or (not lines) (= (type lines) "nil"))
         0
         (let [meta session.meta
@@ -281,17 +361,21 @@
                       (when (and (< added take)
                                  (line-matches-prefilter? line prefilter))
                         (table.insert content line)
-                        (table.insert refs {:path path :lnum lnum :line line})
+                        (table.insert refs (vim.tbl_extend "force"
+                                                           {:path path :lnum (or (. line-map lnum) lnum) :line line}
+                                                           (or (. row-meta lnum) {})))
                         (set added (+ added 1))))
                     (each [lnum line (ipairs lines)]
                       (when (< added take)
                         (table.insert content line)
-                        (table.insert refs {:path path :lnum lnum :line line})
+                        (table.insert refs (vim.tbl_extend "force"
+                                                           {:path path :lnum (or (. line-map lnum) lnum) :line line}
+                                                           (or (. row-meta lnum) {})))
                         (set added (+ added 1)))))
                 (when (> added 0)
                   (for [i (+ start-n 1) (# content)]
                     (table.insert meta.buf.all-indices i)))
-                added)))))
+                added))))))
 
   (fn current-project-prefilter
     [session]
@@ -303,7 +387,7 @@
         (let [query-lines (or (and session.last-parsed-query session.last-parsed-query.lines)
                               (and session.meta session.meta.query-lines)
                               [])
-              ignorecase (not (not (session.meta.ignorecase)))
+              ignorecase (clj.boolean (session.meta.ignorecase))
               groups (parse-prefilter-terms query-lines ignorecase)]
           (when (> (# groups) 0)
             {:groups groups
@@ -343,10 +427,11 @@
     (math.floor (/ bytes 80)))
 
   (fn collect-project-sources
-    [session include-hidden include-ignored include-deps include-binary include-hex include-files prefilter]
+    [session include-hidden include-ignored include-deps include-binary include-files prefilter]
     "Collect eager project-mode content/ref pools. Returns {:content [] :refs []}."
     (let [root (vim.fn.getcwd)
           current-path (current-buffer-path session.source-buf)
+          wrap-width (results-wrap-width session)
           file-cache (or session.preview-file-cache {})
           _ (set session.preview-file-cache file-cache)
           content []
@@ -377,10 +462,10 @@
             (push-file-into-pool!
               pool-session
               (or current-path "[Current Buffer]")
-              (or session.single-content [])
+              (single-source-view session)
               prefilter)
-            (when (and current-path (= (type session.single-content) "table"))
-              (set (. file-cache current-path) (vim.deepcopy session.single-content)))
+            (when current-path
+              (set (. file-cache current-path) (single-source-view session)))
             (when include-files
               (each [_ path (ipairs (all-project-file-paths
                                       session
@@ -393,14 +478,21 @@
               (let [rel (vim.fn.fnamemodify path ":.")]
                 (when (and (< (# content) settings.project-max-total-lines)
                            (allow-project-path? rel include-hidden include-deps)
+                           (or include-binary
+                               (not (binary-file? path)))
                            (or (not current-path) (~= (vim.fn.fnamemodify path ":p") (vim.fn.fnamemodify current-path ":p")))
                            (= 1 (vim.fn.filereadable path)))
                   (let [size (vim.fn.getfsize path)]
                     (when (and (>= size 0) (<= size settings.project-max-file-bytes))
-                      (let [lines (read-file-lines-cached path {:include-binary include-binary :hex-view include-hex})]
-                        (when (= (type lines) "table")
-                          (set (. file-cache path) lines)
-                          (push-file-into-pool! pool-session path lines prefilter))))))))
+                      (let [view (read-file-view-cached
+                                   path
+                                   {:include-binary include-binary
+                                    :transforms (or session.effective-transforms {})
+                                    :wrap-width wrap-width
+                                    :linebreak true})]
+                        (when (= (type view) "table")
+                          (set (. file-cache path) view)
+                          (push-file-into-pool! pool-session path view prefilter))))))))
             {:content content :refs refs}))))
 
   (fn init-project-pool!
@@ -410,7 +502,7 @@
           include-ignored session.effective-include-ignored
           include-deps session.effective-include-deps
           include-binary session.effective-include-binary
-          include-hex session.effective-include-hex
+          wrap-width (results-wrap-width session)
           include-files session.effective-include-files
           current (canonical-path (current-buffer-path session.source-buf))
           open-paths (open-project-buffer-paths session root include-hidden include-deps)
@@ -446,12 +538,19 @@
             (push-file-into-pool!
               session
               p
-              (read-file-lines-cached p {:include-binary include-binary :hex-view include-hex})
+              (read-file-view-cached
+                p
+                {:include-binary include-binary
+                 :transforms (or session.effective-transforms {})
+                 :wrap-width wrap-width
+                 :linebreak true})
               prefilter))))
       (each [_ path (ipairs all-paths)]
         (let [p (canonical-path path)]
           (when (and p
                      (not (. deferred-seen p))
+                     (or include-binary
+                         (not (binary-file? p)))
                      (or (not current) (~= p current)))
             (set (. deferred-seen p) true)
             (table.insert deferred p))))
@@ -493,14 +592,16 @@
                       (<= session.lazy-stream-next total)
                       (< (# session.meta.buf.content) settings.project-max-total-lines))
             (let [path (. paths session.lazy-stream-next)
-                  lines (and path
-                             (read-file-lines-cached
-                               path
-                               {:include-binary session.effective-include-binary
-                                :hex-view session.effective-include-hex}))
+                  view (and path
+                            (read-file-view-cached
+                              path
+                              {:include-binary session.effective-include-binary
+                               :transforms (or session.effective-transforms {})
+                               :wrap-width (results-wrap-width session)
+                               :linebreak true}))
                   before (# session.meta.buf.content)]
-              (when lines
-                (push-file-into-pool! session path lines prefilter)
+              (when view
+                (push-file-into-pool! session path view prefilter)
                 (when (> (# session.meta.buf.content) before)
                   (set touched true)))
               (set consumed (+ consumed 1))
@@ -534,6 +635,8 @@
     [session]
     "Apply full single/project source set based on current session flags."
     (let [meta session.meta
+          query-source-key (source-mod.query-source-key session.last-parsed-query)
+          query-source? (clj.boolean query-source-key)
           old-ref (and session.project-mode (selected-ref meta))
           prefilter (current-project-prefilter session)
           old-line (if (and meta.selected_index
@@ -541,7 +644,12 @@
                             (<= (+ meta.selected_index 1) (# meta.buf.indices)))
                        (math.max 1 (meta.selected_line))
                        (math.max 1 (or session.initial-source-line 1)))]
-    (if session.project-mode
+    (if query-source?
+        (do
+          (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
+          (set session.lazy-stream-done true)
+          (set-query-source-content! session))
+        session.project-mode
         (let [init (init-project-pool! session prefilter)]
           (if (lazy-preferred? session (or (. init :estimated-lines) 0))
               (start-project-stream! session prefilter init)
@@ -550,11 +658,11 @@
                                                   session.effective-include-ignored
                                                   session.effective-include-deps
                                                   session.effective-include-binary
-                                                  session.effective-include-hex
                                                   session.effective-include-files
                                                   prefilter)]
                 (set meta.buf.content pool.content)
                 (set meta.buf.source-refs pool.refs)
+                (bump-content-version! meta)
                 (set session.lazy-stream-done true)
                 (when (and session.meta
                            session.meta.buf
@@ -567,10 +675,15 @@
           (set session.lazy-stream-done true)
           (set-single-source-content! session false)))
     ;; Show source prefixes only when explicit file mode is enabled.
-    (set meta.buf.show-source-prefix (and session.project-mode session.effective-include-files))
-    (set meta.buf.show-source-separators session.project-mode)
+    (when-not query-source?
+      (set meta.buf.show-source-prefix (and session.project-mode session.effective-include-files))
+      (set meta.buf.show-source-separators session.project-mode))
+    (set session.active-source-key query-source-key)
+    (set meta.buf.visible-source-syntax-only (clj.boolean (or session.project-mode query-source?)))
     (reset-meta-indices! meta)
-    (if session.project-mode
+    (if query-source?
+        (set meta.selected_index (if (> (# meta.buf.indices) 0) 0 0))
+        session.project-mode
         (set meta.selected_index (best-project-selection-index session old-ref old-line))
         (set meta.selected_index
              (math.max 0
@@ -582,7 +695,7 @@
   (fn schedule-source-set-rebuild!
     [session wait-ms]
     "Cancel previous pending source-set rebuild and run latest one asynchronously."
-    (when (and session session.project-mode (not session.closing))
+    (when (and session (not session.closing))
       (set session.source-set-rebuild-token (+ 1 (or session.source-set-rebuild-token 0)))
       (let [token session.source-set-rebuild-token]
         (set session.source-set-rebuild-pending true)
@@ -592,7 +705,6 @@
               (set session.source-set-rebuild-pending false))
             (when (and session
                        (= token session.source-set-rebuild-token)
-                       session.project-mode
                        session.prompt-buf
                        (session-active? session)
                        (not session.closing))

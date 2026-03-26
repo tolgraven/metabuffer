@@ -327,6 +327,8 @@ T['scroll-main keeps advancing selection after viewport reaches bottom'] = funct
 end
 
 T['move-selection coalesces refresh work to the latest selection'] = function()
+  vim.o.lines = math.max(vim.o.lines, 40)
+  vim.o.columns = math.max(vim.o.columns, 120)
   vim.cmd('enew')
   local meta_buf = vim.api.nvim_get_current_buf()
   local lines = {}

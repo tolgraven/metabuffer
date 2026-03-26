@@ -454,6 +454,7 @@
     (hi 0 "MetaSearchHitFuzzy" (hit-hl "Number" "WarningMsg"))
     (hi 0 "MetaSearchHitFuzzyBetween" (hit-hl "IncSearch" "Question"))
     (hi 0 "MetaSearchHitRegex" (hit-hl "Special" "Type"))
+    (hi 0 "MetaSearchHitLgrep" (hit-hl "String" "Type"))
     (hi 0 "MetaPromptText" (prompt-text-hl))
     (each [i src (ipairs PRIMARY_LINE_GROUPS)]
       (let [suffix (tostring i)]
@@ -464,6 +465,7 @@
     (hi 0 "MetaPromptNeg" {:default true :link "ErrorMsg"})
     (hi 0 "MetaPromptAnchor" {:default true :link "SpecialChar"})
     (hi 0 "MetaPromptRegex" {:default true :link "MetaSearchHitRegex" :underline true})
+    (hi 0 "MetaPromptLgrep" {:default true :link "MetaSearchHitLgrep"})
     (hi 0 "MetaPromptFlagHashOn" (statusline-color-from "String"))
     (hi 0 "MetaPromptFlagHashOff" (statusline-color-from "ErrorMsg"))
     (hi 0 "MetaPromptFlagTextOn" (fg-only-hl-from "String"))
@@ -564,7 +566,8 @@
   (let [root (plugin-root)
         script (.. root "/scripts/compile-fennel.sh")]
     (if (= 1 (vim.fn.filereadable script))
-        (let [out (vim.fn.system ["sh" script])]
+        ;; Reload only needs fresh generated Lua; skip heavy maintenance work.
+        (let [out (vim.fn.system ["env" "META_COMPILE_MINIMAL=1" "sh" script])]
           (if (= vim.v.shell_error 0)
               true
               (error (.. "compile failed:\n" out))))

@@ -52,7 +52,7 @@ T['focused results insert writes persists through accept and jump traversal'] = 
   H.dump_state('after write')
 
   eq(child.lua_get(string.format([[
-    return vim.fn.readfile(%q)
+    vim.fn.readfile(%q)
   ]], path)), {
     'alpha one',
     'alpha two',
@@ -66,7 +66,7 @@ T['focused results insert writes persists through accept and jump traversal'] = 
   H.dump_state('after accept')
   H.wait_for(function()
     return child.lua_get(string.format([[
-      return vim.api.nvim_buf_get_name(0) == %q and vim.fn.line('.') == 4
+      vim.api.nvim_buf_get_name(0) == %q and vim.fn.line('.') == 4
     ]], path))
   end, 4000)
 
@@ -87,7 +87,7 @@ T['focused results insert writes persists through accept and jump traversal'] = 
   H.wait_for(function() return not H.session_ui_hidden() end, 4000)
 
   eq(child.lua_get(string.format([[
-    return vim.fn.readfile(%q)
+    vim.fn.readfile(%q)
   ]], path)), {
     'alpha one',
     'alpha two',

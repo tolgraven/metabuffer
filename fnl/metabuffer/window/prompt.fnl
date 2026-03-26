@@ -1,6 +1,8 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local base (require :metabuffer.window.base))
 (local animation-mod (require :metabuffer.window.animation))
+(local directive-mod (require :metabuffer.query.directive))
 (local util (require :metabuffer.util))
 (local M {})
 (local disable-airline-statusline! (. base :disable-airline-statusline!))
@@ -23,6 +25,8 @@
       (set (. bo :bufhidden) "wipe")
       (set (. bo :swapfile) false)
       (set (. bo :modifiable) true)
+      (set _G.__meta_directive_completefunc (. directive-mod :completefunc))
+      (set (. bo :completefunc) "v:lua.__meta_directive_completefunc")
       (set (. bo :filetype) "metabufferprompt"))
     buf))
 
@@ -94,7 +98,7 @@
         start-height (math.max 1 (or cfg.start-height height))
         local-layout? (if (= cfg.window-local-layout nil) true cfg.window-local-layout)
         origin-win cfg.origin-win
-        floating? (not (not cfg.floating?))
+        floating? (clj.boolean cfg.floating?)
         win (if floating?
                 (vim.api.nvim_open_win (vim.api.nvim_create_buf false true) false (float-config origin-win start-height))
                 (open-split-win! origin-win local-layout? start-height))

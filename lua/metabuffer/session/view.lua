@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/session/view.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local state = require("metabuffer.core.state")
 local util = require("metabuffer.util")
 local M = {}
@@ -55,7 +56,7 @@ M["restore-meta-view!"] = function(meta, source_view, session, update_info_windo
     end
     current_view = vim.api.nvim_win_call(meta.win.window, _8_)
     local src_view = (source_view or {})
-    local use_src_scroll_3f = ((src_view.topline ~= nil) and (not (session and session["project-mode"]) or session["startup-initializing"] or not not session["project-mode-starting?"]))
+    local use_src_scroll_3f = ((src_view.topline ~= nil) and (not (session and session["project-mode"]) or session["startup-initializing"] or clj.boolean(session["project-mode-starting?"])))
     local base_view
     if use_src_scroll_3f then
       base_view = src_view

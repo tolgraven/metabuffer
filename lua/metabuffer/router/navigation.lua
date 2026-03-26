@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/router/navigation.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local function can_refresh_source_syntax_3f(session)
   local buf = (session and session.meta and session.meta.buf)
@@ -74,7 +75,7 @@ local function refresh_windows_21(deps, session, force_refresh)
       session["selection-refresh-pending"] = true
       local function _10_()
         session["selection-refresh-pending"] = false
-        local force_refresh_3f = not not session["selection-refresh-force?"]
+        local force_refresh_3f = clj.boolean(session["selection-refresh-force?"])
         session["selection-refresh-force?"] = false
         if force_refresh_3f then
           schedule_source_syntax_refresh_21(deps, session)

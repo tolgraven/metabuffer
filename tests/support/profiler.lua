@@ -1,4 +1,5 @@
 local M = {}
+local runtime_guard = require('tests.support.runtime_guard')
 
 local enabled = false
 local current_case = nil
@@ -241,6 +242,7 @@ function M.wrap_minitest_new_set()
     local post_once = opts.hooks.post_once
 
     opts.hooks.pre_case = function()
+      runtime_guard.clear()
       M.start_case()
       if pre_case then
         pre_case()
@@ -250,6 +252,7 @@ function M.wrap_minitest_new_set()
       if post_case then
         post_case()
       end
+      runtime_guard.assert_clean(MiniTest.expect.equality)
       M.finish_case()
     end
     opts.hooks.post_once = function()

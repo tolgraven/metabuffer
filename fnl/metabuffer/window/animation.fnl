@@ -1,3 +1,4 @@
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (require-macros :io.gitlab.andreyorst.cljlib.core)
 
 (local M {})
@@ -98,7 +99,7 @@ Expected output: module table or nil."
   [backend]
   "Return whether scroll backend is usable in current runtime."
   (if (= backend "mini")
-      (not (not (mini-animate-mod)))
+      (clj.boolean (mini-animate-mod))
       true))
 
 (fn mini-autocmds-present?
@@ -109,7 +110,7 @@ Expected output: module table or nil."
 (fn mini-managed-buf?
   [buf]
   (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "metabuffer_minianimate_enable")]]
-    (and ok (not (not v)))))
+    (and ok (clj.boolean v))))
 
 (fn apply-mini-scope!
   [buf]

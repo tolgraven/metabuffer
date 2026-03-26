@@ -1,0 +1,87 @@
+# Metabuffer Fixture
+
+local meta fixture text
+metam token lives here
+preview-window appears in this readme
+info-window appears in this readme
+lua file query content for README.md
+fixture readme line with meta local lua content 001
+fixture readme line with meta local lua content 002
+fixture readme line with meta local lua content 003
+fixture readme line with meta local lua content 004
+fixture readme line with meta local lua content 005
+fixture readme line with meta local lua content 006
+fixture readme line with meta local lua content 007
+fixture readme line with meta local lua content 008
+fixture readme line with meta local lua content 009
+fixture readme line with meta local lua content 010
+fixture readme line with meta local lua content 011
+fixture readme line with meta local lua content 012
+fixture readme line with meta local lua content 013
+fixture readme line with meta local lua content 014
+fixture readme line with meta local lua content 015
+fixture readme line with meta local lua content 016
+fixture readme line with meta local lua content 017
+fixture readme line with meta local lua content 018
+fixture readme line with meta local lua content 019
+fixture readme line with meta local lua content 020
+fixture readme line with meta local lua content 021
+fixture readme line with meta local lua content 022
+fixture readme line with meta local lua content 023
+fixture readme line with meta local lua content 024
+fixture readme line with meta local lua content 025
+fixture readme line with meta local lua content 026
+fixture readme line with meta local lua content 027
+fixture readme line with meta local lua content 028
+fixture readme line with meta local lua content 029
+fixture readme line with meta local lua content 030
+fixture readme line with meta local lua content 031
+fixture readme line with meta local lua content 032
+fixture readme line with meta local lua content 033
+fixture readme line with meta local lua content 034
+fixture readme line with meta local lua content 035
+fixture readme line with meta local lua content 036
+fixture readme line with meta local lua content 037
+fixture readme line with meta local lua content 038
+fixture readme line with meta local lua content 039
+fixture readme line with meta local lua content 040
+fixture readme line with meta local lua content 041
+fixture readme line with meta local lua content 042
+fixture readme line with meta local lua content 043
+fixture readme line with meta local lua content 044
+fixture readme line with meta local lua content 045
+fixture readme line with meta local lua content 046
+fixture readme line with meta local lua content 047
+fixture readme line with meta local lua content 048
+fixture readme line with meta local lua content 049
+fixture readme line with meta local lua content 050
+fixture readme line with meta local lua content 051
+fixture readme line with meta local lua content 052
+fixture readme line with meta local lua content 053
+fixture readme line with meta local lua content 054
+fixture readme line with meta local lua content 055
+fixture readme line with meta local lua content 056
+fixture readme line with meta local lua content 057
+fixture readme line with meta local lua content 058
+fixture readme line with meta local lua content 059
+fixture readme line with meta local lua content 060
+fixture readme line with meta local lua content 061
+fixture readme line with meta local lua content 062
+fixture readme line with meta local lua content 063
+fixture readme line with meta local lua content 064
+fixture readme line with meta local lua content 065
+fixture readme line with meta local lua content 066
+fixture readme line with meta local lua content 067
+fixture readme line with meta local lua content 068
+fixture readme line with meta local lua content 069
+fixture readme line with meta local lua content 070
+fixture readme line with meta local lua content 071
+fixture readme line with meta local lua content 072
+fixture readme line with meta local lua content 073
+fixture readme line with meta local lua content 074
+fixture readme line with meta local lua content 075
+fixture readme line with meta local lua content 076
+fixture readme line with meta local lua content 077
+fixture readme line with meta local lua content 078
+fixture readme line with meta local lua content 079
+fixture readme line with meta local lua content 080
