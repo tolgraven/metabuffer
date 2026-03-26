@@ -188,8 +188,22 @@
                               old-top (. logical-view :topline)
                               old-lnum (. logical-view :lnum)
                               old-col (or (. logical-view :col) 0)
-                              new-top (math.max 1 (math.min (+ old-top (* dir step)) max-top))
-                              new-lnum (math.max 1 (math.min (+ old-lnum (* dir step)) line-count))
+                              new-top0 (math.max 1 (math.min (+ old-top (* dir step)) max-top))
+                              new-lnum0 (math.max 1 (math.min (+ old-lnum (* dir step)) line-count))
+                              ;; Clamp: if the boundary is closer than the
+                              ;; computed target, snap there instead.
+                              new-lnum (if (and (= dir -1)
+                                                (< (- old-lnum 1) (- old-lnum new-lnum0)))
+                                           1
+                                           (and (= dir 1)
+                                                (< (- line-count old-lnum) (- new-lnum0 old-lnum)))
+                                           line-count
+                                           new-lnum0)
+                              new-top (if (= new-lnum 1)
+                                         1
+                                         (= new-lnum line-count)
+                                         max-top
+                                         new-top0)
                               target0 {:topline new-top :lnum new-lnum :col old-col :leftcol (or (. logical-view :leftcol) 0)}
                               target (effective-scroll-target session.meta.win.window view target0)
                               animate? (and animation-mod
