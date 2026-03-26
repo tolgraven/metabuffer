@@ -224,7 +224,9 @@
                                    (= (type wb-val) "string")
                                    (~= wb-val ""))
                   row (if has-winbar? 1 0)
-                  h   (if has-winbar? (math.max 1 (- height 1)) height)]
+                  host-height (vim.api.nvim_win_get_height host-win)
+                  max-h (math.max 1 (- host-height row 1))
+                  h   (math.min (math.max 1 height) max-h)]
               {:relative "win"
                :win host-win
                :anchor "NW"
