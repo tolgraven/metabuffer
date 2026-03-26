@@ -66,7 +66,7 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 56 [x] the filter has completely stopped working, and the info window doesn't show anything
 - 57 [x] when jumping to line/file with <CR> and no active filter, move cursor to first char on line.
 - 58 [x] can't move around results buffer when it's actually focused, keeps jumping back to origin.
-- 59 [] can't resize preview window width without UI lockup and strange behavior
-- 60 [] project mode :Meta! no longer pulling in other sources/files than the one started in
+- 59 [x] can't resize preview window width without UI lockup and strange behavior
+- 60 [x] project mode :Meta! no longer pulling in other sources/files than the one started in
 - 61 [] after typing `#file` and space files load properly, but then typing something after the space doesn't actually filter.
 - 62 [] the completion popup sometimes gets in the way of seeing the prompt cursorline, and sometimes doesn't close as it should.
