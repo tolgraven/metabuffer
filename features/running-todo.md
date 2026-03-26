@@ -42,7 +42,7 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 32 [x] airline continously overwrites statusline, which was not the case earlier. timing change thing?
 - 33 [x] there is a white line dividing prompt window and preview window. it should be removed.
 - 34 [] in project mode, there is a jump once loader inevitably runs into a file longer than 999 lines (which most file we start from will be), so we should pin lineno col to width 3 from start, but then dynamically allow the full 4 _if they are in view_
-- 35 [] when exiting regular `:Meta` mode with `<Esc>`, the viewport jumps. Should stay still.
+- 35 [x] when exiting regular `:Meta` mode with `<Esc>`, the viewport jumps. Should stay still.
 - 36 [x] in project mode, selecting a result and trying to jump to it with <CR> just restores the position that existed before starting `:Meta`
 - 37 [x] in project mode, info window gets stuck on "finalizing results" instead of showing the info lines once loaded
 - 38 [x] statusline seems to get stuck under our control, at least Airline isn't being re-enabled.
@@ -53,8 +53,8 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 43 [] look into using mini.nvim git stuff, might be faster and more complete than ours.
 - 44 [] linewrap setting should persist across sessions for preview window.
 - 45 [] if i run a query like `(fn \n set \n #file source` it should do what you think: search those files matching "source" for lines matching "(fn" or "set". Currently it only shows the actual files.
-- 46 [] The "basic launch smoke tests" that run with all other tests should only run on screen tests, not unit tests.
-- 47 [] when jumping to a hit (at least a `#file search` hit) it's not opened by relative path but instead absolute.
+- 46 [x] The "basic launch smoke tests" that run with all other tests should only run on screen tests, not unit tests.
+- 47 [x] when jumping to a hit (at least a `#file search` hit) it's not opened by relative path but instead absolute.
 - 48 [] rainbowparantheses doesn't re-enable (nor is enabled on nvim startup, even not having launched meta...) after exiting Meta. We only disable it while in project mode for performance reasons.
 - 49 [] if windows are resized not due to user resizing height of prompt manually, but by something like :messages opening, they should be restored to where they were automatically once offender is gone.
 - 50 [] should be able to insert a new line in prompt from insert with <S-CR> or something like that, to not jump to hit.
@@ -64,5 +64,5 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 54 [] we need an alternative project mode that searches only all loaded buffers (this will also allow stuff like filtering terminal output, other plugin windows' output etc without building specific support in)
 - 55 [x] the info window is now one line too tall and covers the main statusline.
 - 56 [] the filter has completely stopped working, and the info window doesn't show anything
-- 57 [] when jumping to line/file with <CR> and no active filter, move cursor to first char on line.
+- 57 [x] when jumping to line/file with <CR> and no active filter, move cursor to first char on line.
 - 58 [] can't move around results buffer when it's actually focused, keeps jumping back to origin.
