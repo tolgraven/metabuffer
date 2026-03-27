@@ -137,6 +137,115 @@
               (set found win)))
           found)))
 
+    (fn tab-window-count
+      [win]
+      "Return count of windows in WIN tab, or nil."
+      (when (and win (= (type win) "number") (vim.api.nvim_win_is_valid win))
+        (let [[ok tab] [(pcall vim.api.nvim_win_get_tabpage win)]]
+          (when (and ok tab)
+            (let [[ok2 wins] [(pcall vim.api.nvim_tabpage_list_wins tab)]]
+              (when (and ok2 (= (type wins) "table"))
+                (# wins)))))))
+
+    (fn layout-snapshot
+      [session]
+      "Capture expected main/prompt/preview heights and tab window count."
+      (let [main-win (and session.meta session.meta.win session.meta.win.window)
+            prompt-win session.prompt-win
+            preview-win session.preview-win]
+        (when (and main-win
+                   prompt-win
+                   preview-win
+                   (vim.api.nvim_win_is_valid main-win)
+                   (vim.api.nvim_win_is_valid prompt-win)
+                   (vim.api.nvim_win_is_valid preview-win))
+          {:main-height (vim.api.nvim_win_get_height main-win)
+           :prompt-height (vim.api.nvim_win_get_height prompt-win)
+           :preview-height (vim.api.nvim_win_get_height preview-win)
+           :tab-window-count (tab-window-count main-win)})))
+
+    (fn capture-expected-layout!
+      [session]
+      "Persist expected layout after startup/manual prompt resize."
+      (when (and session
+                 (not session.closing)
+                 (not session.ui-hidden)
+                 (not session.prompt-floating?)
+                 (not session.prompt-animating?))
+        (when-let [snap (layout-snapshot session)]
+          (set session.expected-layout snap))))
+
+    (fn expected-layout-mismatch?
+      [session]
+      "True when current window heights differ from expected snapshot."
+      (if-let [expected session.expected-layout]
+        (if-let [current (layout-snapshot session)]
+          (or (~= (. current :main-height) (. expected :main-height))
+              (~= (. current :prompt-height) (. expected :prompt-height))
+              (~= (. current :preview-height) (. expected :preview-height)))
+          false)
+        false))
+
+    (fn manual-prompt-resize?
+      [session resized-wins]
+      "Detect prompt separator drag: prompt resized, same tab window count."
+      (if-let [expected session.expected-layout]
+        (let [prompt-win session.prompt-win
+              prompt-valid? (and prompt-win (vim.api.nvim_win_is_valid prompt-win))
+              tab-count (and session.meta
+                             session.meta.win
+                             session.meta.win.window
+                             (tab-window-count session.meta.win.window))
+              prompt-height (and prompt-valid? (vim.api.nvim_win_get_height prompt-win))
+              prompt-hit? false]
+          (var hit prompt-hit?)
+          (each [_ wid (ipairs (or resized-wins []))]
+            (when (= wid prompt-win)
+              (set hit true)))
+          (and prompt-valid?
+               hit
+               (= tab-count (. expected :tab-window-count))
+               (~= prompt-height (. expected :prompt-height))))
+        false))
+
+    (fn restore-expected-layout!
+      [session]
+      "Restore main/prompt/preview heights from expected snapshot."
+      (when-let [expected session.expected-layout]
+        (let [main-win (and session.meta session.meta.win session.meta.win.window)
+              prompt-win session.prompt-win
+              preview-win session.preview-win]
+          (when (and main-win
+                     prompt-win
+                     preview-win
+                     (vim.api.nvim_win_is_valid main-win)
+                     (vim.api.nvim_win_is_valid prompt-win)
+                     (vim.api.nvim_win_is_valid preview-win))
+            (set session.handling-layout-change? true)
+            (pcall vim.api.nvim_win_set_height main-win (math.max 1 (or (. expected :main-height) 1)))
+            (pcall vim.api.nvim_win_set_height prompt-win (math.max 1 (or (. expected :prompt-height) 1)))
+            (pcall vim.api.nvim_win_set_height preview-win (math.max 1 (or (. expected :preview-height) 1)))
+            (set session.handling-layout-change? false)))))
+
+    (fn schedule-restore-expected-layout!
+      [session]
+      "Defer restore so transient disturbances can settle first."
+      (when session.expected-layout
+        (set session.layout-restore-token (+ 1 (or session.layout-restore-token 0)))
+        (let [token session.layout-restore-token]
+          (vim.defer_fn
+            (fn []
+              (when (and (session-prompt-valid? session)
+                         (= token session.layout-restore-token)
+                         session.expected-layout)
+                (let [main-win (and session.meta session.meta.win session.meta.win.window)
+                      current-count (and main-win (tab-window-count main-win))
+                      expected-count (. session.expected-layout :tab-window-count)]
+                  (when (and (= current-count expected-count)
+                             (expected-layout-mismatch? session))
+                    (restore-expected-layout! session)))))
+            80))))
+
     (fn hidden-session-reachable?
       [session]
       (let [results-buf (and session session.meta session.meta.buf session.meta.buf.buffer)]
@@ -807,6 +916,8 @@
       (let [aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true})]
         (set session.augroup aug)
 
+        (capture-expected-layout! session)
+
     (fn au!
       [events buf body]
       "Create buffer-local autocmd with schedule-when-valid session guard.
@@ -888,21 +999,28 @@
         (vim.api.nvim_create_autocmd ["VimResized" "WinResized"]
           {:group aug
            :callback (fn [ev]
-                       (when-not session.handling-layout-change?
-                         ;; Synchronous: capture resize info before schedule.
-                         (let [is-vim-resized? (= ev.event "VimResized")]
-                           (when is-vim-resized?
-                             (set session.preview-user-resized? false))
-                           (when (and (not is-vim-resized?)
-                                      session.preview-win
-                                      (vim.api.nvim_win_is_valid session.preview-win))
-                             (let [wins (or (?. vim.v :event :windows) [])]
-                               (each [_ wid (ipairs wins)]
-                                 (when (= wid session.preview-win)
-                                   (set session.preview-user-resized? true))))))
-                         (set session.handling-layout-change? true)
-                         (schedule-when-valid session
-                           (fn []
+                        (when-not session.handling-layout-change?
+                          ;; Synchronous: capture resize info before schedule.
+                          (let [is-vim-resized? (= ev.event "VimResized")
+                                wins (or (?. vim.v :event :windows) [])
+                                manual-prompt-resize (and (not is-vim-resized?)
+                                                          (manual-prompt-resize? session wins))]
+                            (when is-vim-resized?
+                              (set session.preview-user-resized? false))
+                            (when (and (not is-vim-resized?)
+                                       session.preview-win
+                                       (vim.api.nvim_win_is_valid session.preview-win))
+                              (each [_ wid (ipairs wins)]
+                                (when (= wid session.preview-win)
+                                  (set session.preview-user-resized? true))))
+                            (if manual-prompt-resize
+                                (do
+                                  (set session.prompt-target-height (vim.api.nvim_win_get_height session.prompt-win))
+                                  (capture-expected-layout! session))
+                                (schedule-restore-expected-layout! session)))
+                          (set session.handling-layout-change? true)
+                          (schedule-when-valid session
+                            (fn []
                              (let [results-wrap? (and session.meta
                                                       session.meta.win
                                                       (vim.api.nvim_win_is_valid session.meta.win.window)
@@ -910,12 +1028,14 @@
                                (when (and results-wrap? rebuild-source-set!)
                                  (pcall rebuild-source-set! session)
                                  (pcall session.meta.on-update 0)))
-                             (when-not session.prompt-animating?
-                               (pcall refresh-prompt-highlights! session)
-                               (when update-preview-window
-                                 (pcall update-preview-window session))
-                               (pcall update-info-window session))
-                             (set session.handling-layout-change? false)))))} )
+                              (when-not session.prompt-animating?
+                                (pcall refresh-prompt-highlights! session)
+                                (when update-preview-window
+                                  (pcall update-preview-window session))
+                                (pcall update-info-window session))
+                              (when (= ev.event "VimResized")
+                                (capture-expected-layout! session))
+                              (set session.handling-layout-change? false)))))} )
         (vim.api.nvim_create_autocmd "OptionSet"
           {:group aug
            :pattern "wrap"
@@ -1107,7 +1227,8 @@
           (fn []
             (when (and session.prompt-buf
                        (= (. active-by-prompt session.prompt-buf) session))
-              (pcall refresh-prompt-highlights! session)))
+              (pcall refresh-prompt-highlights! session)
+              (capture-expected-layout! session)))
           (prompt-animation-delay-ms session))
         (apply-keymaps router session)
         (apply-emacs-insert-fallbacks router session)))
