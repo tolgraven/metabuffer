@@ -55,30 +55,46 @@
 
 (fn refresh-windows!
   [deps session force-refresh]
-  (let [{: refresh : windows} deps
+  (let [{: router : refresh : windows} deps
+        timing (or (. deps :timing) {})
+        active-by-prompt (. router :active-by-prompt)
+        selection-refresh-debounce-ms (or (. timing :selection-refresh-debounce-ms) 12)
         update-preview-window (. refresh :preview!)
         update-info-window (. refresh :info!)
         context-window (. windows :context)]
     (when session
       (set session.selection-refresh-force?
            (or force-refresh session.selection-refresh-force?))
+      (set session.selection-refresh-token
+           (+ 1 (or session.selection-refresh-token 0)))
       (when-not session.selection-refresh-pending
         (set session.selection-refresh-pending true)
-        (vim.schedule
+        (vim.defer_fn
           (fn []
             (set session.selection-refresh-pending false)
-            (let [force-refresh? (clj.boolean session.selection-refresh-force?)]
-              (set session.selection-refresh-force? false)
-              (when force-refresh?
-                (schedule-source-syntax-refresh! deps session))
-              (pcall session.meta.refresh_statusline)
-              (when update-preview-window
-                (pcall update-preview-window session))
-              (when update-info-window
-                (pcall update-info-window session true))
-              (when (and context-window context-window.update!)
-                (pcall context-window.update! session))
-              (restore-scroll-cursor! session))))))))
+            (when (and session
+                       session.prompt-buf
+                       (= (. active-by-prompt session.prompt-buf) session))
+              (let [token session.selection-refresh-token
+                    force-refresh? (clj.boolean session.selection-refresh-force?)]
+                (set session.selection-refresh-force? false)
+                (when force-refresh?
+                  (schedule-source-syntax-refresh! deps session))
+                (pcall session.meta.refresh_statusline)
+                (when (and update-preview-window
+                           (= token session.selection-refresh-token))
+                  (pcall update-preview-window session))
+                (when (and update-info-window
+                           (= token session.selection-refresh-token))
+                  (pcall update-info-window session true))
+                (when (and context-window
+                           context-window.update!
+                           (= token session.selection-refresh-token))
+                  (pcall context-window.update! session))
+                (restore-scroll-cursor! session)
+                (when (~= token session.selection-refresh-token)
+                  (refresh-windows! deps session false)))))
+          selection-refresh-debounce-ms)))))
 
 (fn set-selected-index!
   [session row]
