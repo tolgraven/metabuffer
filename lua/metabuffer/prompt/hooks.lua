@@ -1177,7 +1177,7 @@ M.new = function(opts)
     end
     vim.api.nvim_create_autocmd({"TextChanged", "TextChangedI"}, {group = aug, buffer = session.meta.buf.buffer, callback = _172_})
     local function _177_(_)
-      if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
+      if (not session.closing and session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
         local bo = vim.bo[session.meta.buf.buffer]
         bo["buftype"] = "acwrite"
         bo["modifiable"] = true
@@ -1187,7 +1187,7 @@ M.new = function(opts)
       end
       if maybe_restore_hidden_ui_21 then
         local function _179_()
-          if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
+          if (not session.closing and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
             return pcall(maybe_restore_hidden_ui_21, session)
           else
             return nil

@@ -959,22 +959,26 @@
         (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
           {:group aug
            :buffer session.meta.buf.buffer
-           :callback (fn [_]
-                       (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-                         (let [bo (. vim.bo session.meta.buf.buffer)]
-                           (set (. bo :buftype) "acwrite")
-                           (set (. bo :modifiable) true)
-                           (set (. bo :readonly) false)
-                           (set (. bo :bufhidden) "hide")))
-                       (when maybe-restore-hidden-ui!
-                         ;; Defer UI restoration until after the jump/BufEnter
-                         ;; command stack settles; restoring windows directly
-                         ;; inside BufEnter can surface invalid mark jumps.
-                         (vim.schedule
-                           (fn []
-                             (when (and session.prompt-buf
-                                        (= (. active-by-prompt session.prompt-buf) session))
-                             (pcall maybe-restore-hidden-ui! session))))))})
+            :callback (fn [_]
+                        (when (and (not session.closing)
+                                   session.meta
+                                   session.meta.buf
+                                   (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+                          (let [bo (. vim.bo session.meta.buf.buffer)]
+                            (set (. bo :buftype) "acwrite")
+                            (set (. bo :modifiable) true)
+                            (set (. bo :readonly) false)
+                            (set (. bo :bufhidden) "hide")))
+                        (when maybe-restore-hidden-ui!
+                          ;; Defer UI restoration until after the jump/BufEnter
+                          ;; command stack settles; restoring windows directly
+                          ;; inside BufEnter can surface invalid mark jumps.
+                          (vim.schedule
+                            (fn []
+                              (when (and (not session.closing)
+                                         session.prompt-buf
+                                         (= (. active-by-prompt session.prompt-buf) session))
+                              (pcall maybe-restore-hidden-ui! session))))))})
         (vim.api.nvim_create_autocmd "WinNew"
           {:group aug
            :callback (fn [_]
