@@ -64,6 +64,23 @@ local function render_flags_changed_3f(session, parsed)
   local next_expansion = choose_current_when_nil(parsed.expansion, session["expansion-mode"])
   return ((next_prefilter ~= session["prefilter-mode"]) or (next_lazy ~= session["lazy-mode"]) or (next_expansion ~= session["expansion-mode"]))
 end
+local function file_lines_changed_3f(session, parsed)
+  local prev = (session["file-query-lines"] or {})
+  local next = (parsed["file-lines"] or {})
+  local n = #next
+  if (n ~= #prev) then
+    return true
+  else
+    local diff = false
+    for i = 1, n do
+      if (not diff and (prev[i] ~= next[i])) then
+        diff = true
+      else
+      end
+    end
+    return diff
+  end
+end
 local function dispatch_directive_changes_21(session, parsed)
   local directive_mod = require("metabuffer.query.directive")
   local prev = (session["last-parsed-query"] or {})
@@ -105,7 +122,7 @@ local function refresh_session_ui_21(session, update_preview_window, update_info
   end
 end
 local function retry_textlock_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
-  local function _11_()
+  local function _13_()
     if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
       pcall(session.meta["on-update"], 0)
       return pcall(refresh_session_ui_21, session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
@@ -113,7 +130,7 @@ local function retry_textlock_update_21(session, update_preview_window, update_i
       return nil
     end
   end
-  return vim.defer_fn(_11_, 1)
+  return vim.defer_fn(_13_, 1)
 end
 local function run_meta_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
   local ok,err = pcall(session.meta["on-update"], 0)
@@ -238,7 +255,7 @@ M["apply-prompt-lines!"] = function(deps, session)
     else
     end
     session.meta.debug_out = ""
-    if (changed or text_changed_3f) then
+    if (changed or text_changed_3f or file_lines_changed_3f(session, parsed)) then
       invalidate_filter_cache_21(session)
     else
     end
@@ -284,7 +301,7 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
     local effective_text = table.concat((parsed.lines or {}), "\n")
     local no_flag_change_3f = (not source_flags_changed_3f(session, parsed) and not render_flags_changed_3f(session, parsed))
     local pure_flag_edit_3f = ((effective_text ~= (session["prompt-last-event-text"] or "")) and (effective_text == (session["prompt-last-applied-text"] or "")) and (source_flags_changed_3f(session, parsed) or render_flags_changed_3f(session, parsed)))
-    local noop_3f = (not force and no_flag_change_3f and (effective_text == (session["prompt-last-applied-text"] or "")) and (effective_text == (session["prompt-last-event-text"] or "")))
+    local noop_3f = (not force and no_flag_change_3f and not file_lines_changed_3f(session, parsed) and (effective_text == (session["prompt-last-applied-text"] or "")) and (effective_text == (session["prompt-last-event-text"] or "")))
     local now = router_prompt_mod["now-ms"]()
     local delay = prompt_delay_ms(settings, query_mod, session)
     if not noop_3f then
