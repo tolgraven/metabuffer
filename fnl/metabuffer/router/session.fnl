@@ -151,13 +151,18 @@
            :schedule-scroll-sync! schedule-scroll-sync!
            :maybe-restore-hidden-ui! maybe-restore-hidden-ui!
            :hide-visible-ui! hide-visible-ui!
-           :maybe-refresh-preview-statusline! (fn [s]
-                                               (when (and preview-window
-                                                          preview-window.refresh-statusline!)
-                                                 (preview-window.refresh-statusline! s)))
-           :update-context-window! (fn [s]
-                                     (when (and context-window context-window.update!)
-                                       (context-window.update! s)))
+            :maybe-refresh-preview-statusline! (fn [s]
+                                                (when (and preview-window
+                                                           preview-window.refresh-statusline!)
+                                                  (preview-window.refresh-statusline! s)))
+            :maybe-refresh-info-statusline! (fn [s]
+                                             (let [info-window (. windows :info)]
+                                               (when (and info-window
+                                                          info-window.refresh-statusline!)
+                                                 (info-window.refresh-statusline! s))))
+            :update-context-window! (fn [s]
+                                      (when (and context-window context-window.update!)
+                                        (context-window.update! s)))
            :rebuild-source-set! (fn [s]
                                   (when (and project-source project-source.apply-source-set!)
                                     (project-source.apply-source-set! s)))

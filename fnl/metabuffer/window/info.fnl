@@ -319,6 +319,13 @@
             cfg (info_window_config session width height)]
         (apply-info-config-if-changed! session cfg))))
 
+  (fn refresh-info-statusline!
+    [session]
+    "Re-apply float-local statusline options after focus/plugin redraw churn."
+    (when (valid-info-win? session)
+      (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
+      (pcall vim.api.nvim_set_option_value "winbar" "" {:win session.info-win})))
+
   (fn close-info-window!
     [session]
     (when (valid-info-win? session)
@@ -913,9 +920,7 @@
                  (.. "selected=" session.meta.selected_index)
                  (.. "info-win=" session.info-win)
                  (.. "info-buf=" session.info-buf)]))
-            (when (valid-info-win? session)
-              (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
-              (pcall vim.api.nvim_set_option_value "winbar" "" {:win session.info-win}))
+            (refresh-info-statusline! session)
             (when (and (not session.info-render-suspended?)
                        session.info-buf
                        (vim.api.nvim_buf_is_valid session.info-buf))
@@ -983,6 +988,7 @@
                (update-regular! session refresh-lines)))))
 
   {:close-window! close-info-window!
-   :update! update!}))
+   :update! update!
+   :refresh-statusline! refresh-info-statusline!}))
 
 M

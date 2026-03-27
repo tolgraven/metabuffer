@@ -16,7 +16,9 @@
          : schedule-scroll-sync! : maybe-restore-hidden-ui!
          : hide-visible-ui!
          : rebuild-source-set!
-         : maybe-refresh-preview-statusline! : sign-mod} opts]
+         : maybe-refresh-preview-statusline!
+         : maybe-refresh-info-statusline!
+         : sign-mod} opts]
     (let [animation-enabled? (. animation-mod :enabled?)
           animation-duration-ms (. animation-mod :duration-ms)]
     (fn prompt-animation-delay-ms
@@ -866,7 +868,9 @@
       (au! ["BufEnter" "WinEnter" "FocusGained"] session.prompt-buf
         (fn []
           (when maybe-refresh-preview-statusline!
-            (pcall maybe-refresh-preview-statusline! session))))
+            (pcall maybe-refresh-preview-statusline! session))
+          (when maybe-refresh-info-statusline!
+            (pcall maybe-refresh-info-statusline! session))))
       ;; Recompute floating info rendering/width when editor windows resize.
       ;; Guard: both VimResized/WinResized and OptionSet "wrap" can trigger
       ;; on-update which re-renders and may cause further resize/option events.
