@@ -115,6 +115,7 @@ Insert-mode editing:
 \t<C-u>\tKill from line start to cursor
 \t<C-k>\tKill from cursor to line end
 \t<C-y>\tYank killed prompt text
+\t<S-CR>\tInsert newline at cursor in prompt buffer
 
 Prompt token operators:
 \t<LocalLeader>1, <LocalLeader>!\tToggle leading ! on token under cursor

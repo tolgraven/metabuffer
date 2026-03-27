@@ -269,6 +269,9 @@ end
 M["prompt-yank"] = function(prompt_buf)
   return router_prompt_mod["prompt-yank!"](M["active-by-prompt"], prompt_buf)
 end
+M["prompt-newline"] = function(prompt_buf)
+  return router_prompt_mod["prompt-newline!"](M["active-by-prompt"], prompt_buf)
+end
 M["prompt-insert-text"] = function(prompt_buf, text)
   return router_prompt_mod["prompt-insert-text!"](M["active-by-prompt"], prompt_buf, text)
 end

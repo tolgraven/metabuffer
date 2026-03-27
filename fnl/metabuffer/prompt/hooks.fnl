@@ -626,6 +626,10 @@
         (fn [] (schedule-when-valid session
                  (fn []
                    (router.prompt-yank session.prompt-buf))))
+        (= action "prompt-newline")
+        (fn [] (schedule-when-valid session
+                 (fn []
+                   (router.prompt-newline session.prompt-buf))))
         (= action "insert-last-prompt")
         (fn [] (schedule-when-valid session
                  (fn []

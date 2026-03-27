@@ -341,6 +341,9 @@ M["prompt-yank!"] = function(active_by_prompt, prompt_buf)
     return nil
   end
 end
+M["prompt-newline!"] = function(active_by_prompt, prompt_buf)
+  return M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, "\n")
+end
 M["prompt-insert-text!"] = function(active_by_prompt, prompt_buf, text)
   return M["prompt-insert-at-cursor!"](active_by_prompt, prompt_buf, text)
 end

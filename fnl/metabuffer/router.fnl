@@ -385,6 +385,11 @@
   "Insert prompt yank register content at cursor."
   (router_prompt_mod.prompt-yank! M.active-by-prompt prompt-buf))
 
+(fn M.prompt-newline
+  [prompt-buf]
+  "Insert a newline at the prompt cursor."
+  (router_prompt_mod.prompt-newline! M.active-by-prompt prompt-buf))
+
 (fn M.prompt-insert-text
   [prompt-buf text]
   "Insert arbitrary text at prompt cursor."

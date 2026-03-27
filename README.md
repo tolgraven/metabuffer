@@ -47,6 +47,7 @@ require("metabuffer").setup({
       { "i", "<C-e>", "prompt-end" },
       { "i", "<C-u>", "prompt-kill-backward" },
       { "i", "<C-y>", "prompt-yank" },
+      { "i", "<S-CR>", "prompt-newline" },
       { "i", "<Up>", "history-or-move", 1 },
       { "i", "<Down>", "history-or-move", -1 },
       { "n", "<Up>", "history-or-move", 1 },
