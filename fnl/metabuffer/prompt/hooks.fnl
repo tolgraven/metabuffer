@@ -2,13 +2,14 @@
 (local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
 (local animation-mod (require :metabuffer.window.animation))
+(local events (require :metabuffer.events))
 (local query-mod (require :metabuffer.query))
 (local directive-mod (require :metabuffer.query.directive))
 
 (fn M.new
   [opts]
   "Public API: M.new."
-  (let [{: mark-prompt-buffer! : default-prompt-keymaps : active-by-prompt
+    (let [{: default-prompt-keymaps : active-by-prompt
          : default-main-keymaps
          : on-prompt-changed : update-info-window : update-preview-window
          : maybe-sync-from-main!
@@ -25,14 +26,6 @@
                (animation-enabled? session :prompt))
           (animation-duration-ms session :prompt 140)
           0))
-
-    (fn disable-cmp
-  [session]
-      (mark-prompt-buffer! session.prompt-buf)
-      (let [[ok cmp] [(pcall require :cmp)]]
-        (when ok
-          (pcall cmp.setup.buffer {:enabled false})
-          (pcall cmp.abort))))
 
     (fn switch-mode
   [session which]
@@ -807,6 +800,16 @@
   [router session]
       (let [aug (vim.api.nvim_create_augroup (.. "MetaPrompt" session.prompt-buf) {:clear true})]
         (set session.augroup aug)
+
+    (fn au!
+      [events buf body]
+      "Create buffer-local autocmd with schedule-when-valid session guard.
+       `body` is a zero-arg function called inside the scheduled guard."
+      (vim.api.nvim_create_autocmd events
+        {:group aug
+         :buffer buf
+         :callback (fn [_]
+                     (schedule-when-valid session body))}))
       ;; Some environments/plugins do not reliably emit TextChangedI for this
       ;; scratch prompt buffer; keep a low-level line-change hook as a fallback.
         (vim.api.nvim_buf_attach session.prompt-buf false
@@ -843,50 +846,27 @@
                                (vim.api.nvim_buf_get_changedtick session.prompt-buf)))))})
       ;; Re-assert prompt maps when entering insert mode; this wins over late
       ;; plugin mappings (for example completion plugins).
-        (vim.api.nvim_create_autocmd "InsertEnter"
-          {:group aug
-           :buffer session.prompt-buf
-           :callback (fn [_]
-                       (schedule-when-valid
-                         session
-                         (fn []
-                           (disable-cmp session)
-                           (apply-keymaps router session)
-                           (apply-emacs-insert-fallbacks router session))))})
+        (au! "InsertEnter" session.prompt-buf
+          (fn []
+            (events.send :on-insert-enter! {:session session})
+            (apply-keymaps router session)
+            (apply-emacs-insert-fallbacks router session)))
       ;; Some statusline plugins or focus transitions (for example tmux pane
       ;; switches) can overwrite local statusline state. Re-apply ours when the
       ;; prompt window regains focus.
-        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
-          {:group aug
-           :buffer session.prompt-buf
-           :callback (fn [_]
-                       (schedule-when-valid session
-                         (fn []
-                           (pcall session.meta.refresh_statusline))))})
+        (au! ["BufEnter" "WinEnter" "FocusGained"] session.prompt-buf
+          (fn [] (pcall session.meta.refresh_statusline)))
       ;; Refresh mode segment when switching Insert/Normal/Replace in the prompt.
-        (vim.api.nvim_create_autocmd ["ModeChanged" "InsertEnter" "InsertLeave"]
-          {:group aug
-           :buffer session.prompt-buf
-           :callback (fn [_]
-                       (schedule-when-valid session
-                         (fn []
-                           (pcall session.meta.refresh_statusline)
-                           (maybe-show-directive-help! session))))})
-        (vim.api.nvim_create_autocmd ["CursorMoved" "CursorMovedI"]
-          {:group aug
-           :buffer session.prompt-buf
-           :callback (fn [_]
-                       (schedule-when-valid session
-                         (fn []
-                           (maybe-show-directive-help! session))))})
-      (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
-        {:group aug
-         :buffer session.prompt-buf
-         :callback (fn [_]
-                     (schedule-when-valid session
-                       (fn []
-                         (when maybe-refresh-preview-statusline!
-                           (pcall maybe-refresh-preview-statusline! session)))))})
+        (au! ["ModeChanged" "InsertEnter" "InsertLeave"] session.prompt-buf
+          (fn []
+            (pcall session.meta.refresh_statusline)
+            (maybe-show-directive-help! session)))
+        (au! ["CursorMoved" "CursorMovedI"] session.prompt-buf
+          (fn [] (maybe-show-directive-help! session)))
+      (au! ["BufEnter" "WinEnter" "FocusGained"] session.prompt-buf
+        (fn []
+          (when maybe-refresh-preview-statusline!
+            (pcall maybe-refresh-preview-statusline! session))))
       ;; Recompute floating info rendering/width when editor windows resize.
       ;; Guard: both VimResized/WinResized and OptionSet "wrap" can trigger
       ;; on-update which re-renders and may cause further resize/option events.
@@ -951,13 +931,8 @@
                              (set session.handling-layout-change? false)))))})
       ;; Keep selection/status/info synced when user scrolls or moves in the
       ;; main meta window with regular motions/mouse while prompt is open.
-        (vim.api.nvim_create_autocmd ["CursorMoved" "CursorMovedI"]
-          {:group aug
-           :buffer session.meta.buf.buffer
-           :callback (fn [_]
-                       (schedule-when-valid session
-                         (fn []
-                           (maybe-sync-from-main! session))))})
+        (au! ["CursorMoved" "CursorMovedI"] session.meta.buf.buffer
+          (fn [] (maybe-sync-from-main! session)))
         (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
           {:group aug
            :buffer session.meta.buf.buffer
@@ -1029,13 +1004,8 @@
                                          (covered-by-new-window? session win))
                                  (pcall hide-visible-ui! session)))))
                          20))})
-        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
-          {:group aug
-           :buffer session.meta.buf.buffer
-           :callback (fn [_]
-                       (schedule-when-valid session
-                         (fn []
-                           (pcall session.meta.refresh_statusline))))} )
+        (au! ["BufEnter" "WinEnter" "FocusGained"] session.meta.buf.buffer
+          (fn [] (pcall session.meta.refresh_statusline)))
         (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
           {:group aug
            :callback (fn [_]
@@ -1114,11 +1084,9 @@
           {:group aug
            :buffer session.meta.buf.buffer
            :callback (fn [_]
-                       (vim.schedule
-                         (fn []
-                           (router.results-buffer-wiped session.meta.buf.buffer))))})
-        (disable-cmp session)
-        (mark-prompt-buffer! session.prompt-buf)
+                        (vim.schedule
+                          (fn []
+                            (router.results-buffer-wiped session.meta.buf.buffer))))})
         (refresh-prompt-highlights! session)
         (maybe-show-directive-help! session)
         ;; Prompt/footer layout can change one tick later after split/floating

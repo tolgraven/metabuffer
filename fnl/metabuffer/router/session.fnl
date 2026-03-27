@@ -127,7 +127,6 @@
         mods (. deps :mods)
         windows (. deps :windows)
         prompt-hooks-mod (. mods :prompt-hooks)
-        router-util-mod (. mods :router-util)
         active-by-prompt router.active-by-prompt
         on-prompt-changed (. deps :on-prompt-changed)
         update-info-window (. deps :update-info-window)
@@ -142,8 +141,7 @@
         sign-mod (. deps :sign-mod)
         hooks
         (prompt-hooks-mod.new
-          {:mark-prompt-buffer! router-util-mod.mark-prompt-buffer!
-           :default-prompt-keymaps router.prompt-keymaps
+          {:default-prompt-keymaps router.prompt-keymaps
            :default-main-keymaps router.main-keymaps
            :active-by-prompt active-by-prompt
            :on-prompt-changed on-prompt-changed
@@ -171,7 +169,6 @@
   [deps session initial-lines]
   (let [router (. deps :router)
         mods (. deps :mods)
-        router-util-mod (. mods :router-util)
         active-by-source router.active-by-source
         active-by-prompt router.active-by-prompt
         animation-mod (. mods :animation)
@@ -240,8 +237,6 @@
       (fn [] (hide-startup-cursor! session)))
     (run-step! "activate-session-ui/set-prompt-lines"
       (fn [] (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)))
-    (run-step! "activate-session-ui/mark-prompt-buffer"
-      (fn [] (router-util-mod.mark-prompt-buffer! prompt-buf)))
     (run-step! "activate-session-ui/register-prompt-hooks"
       (fn [] (register-prompt-hooks! deps session)))
     (set (. active-by-source session.source-buf) session)
@@ -479,7 +474,6 @@
         next-instance-id! (. deps :next-instance-id!)
         launching-by-source (. router :launching-by-source)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)]
-    (pcall vim.cmd "silent! nohlsearch")
     (let [current-buf (vim.api.nvim_get_current_buf)
           current-session (current-session-for-buffer router current-buf)]
       (if (and current-session
@@ -710,6 +704,7 @@
                     (set curr.session session)
                     (set curr.buf.session session)
                     (activate-session-ui! deps session initial-lines)
+                    (events.send :on-session-start! {:session session})
                     (finish-session-startup!
                       deps
                       curr

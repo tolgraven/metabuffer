@@ -147,6 +147,7 @@ local function remove_session_21(deps, session)
   local instances = router.instances
   if session then
     session.closing = true
+    events.send("on-session-stop!", {session = session})
     if (animation_mod and animation_mod["unmark-mini-session!"]) then
       animation_mod["unmark-mini-session!"](session)
     else
@@ -479,10 +480,10 @@ local function finish_accept(deps, session)
     local vq = curr.vim_query()
     if (vq ~= "") then
       vim.fn.setreg("/", vq)
-      vim.o.hlsearch = true
     else
     end
   end
+  events.send("on-accept!", {session = session})
   pcall(vim.cmd, "stopinsert")
   clear_hit_highlight_21(curr)
   session["results-edit-mode"] = false
