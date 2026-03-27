@@ -186,6 +186,19 @@ That keeps the core generic while letting you swap commands by filetype now. Lat
 
 Durations are not part of the public setup surface. Meta keeps sensible base timings internally and applies the master/per-animation scales on top.
 
+### Dependencies
+
+| Dependency | Required? | Used for | Without it |
+| --- | --- | --- | --- |
+| Neovim 0.9+ | Yes | Runs metabuffer and its bundled nfnl-based runtime. | metabuffer will not load. |
+| `rg` / ripgrep | Yes | Fast project file listing and ignore/deps-aware scanning. | Project mode falls back to built-in globbing and is slower/less precise. |
+| `mini.nvim` / `mini.animate` | No | Preferred animation backend when `ui.animation.backend = "mini"`. | Meta uses its native animation fallback instead. |
+| `fennel-ls` | No (dev) | Fennel diagnostics/linting while editing source files. | No editor linting; runtime is unchanged. |
+| `nfnl` | No (dev/build) | Rebuilding the committed Lua/plugin output from `fnl/` sources. | The committed Lua still works, but Fennel regeneration does not. |
+| `lgrep` | No | Powers `#lgrep`, `#lgrep:d`, `#lgrep:u`, and lgrep-backed source queries. | Those directives and query-backed sources are unavailable. |
+
+No other external CLI tools are required by default; the plugin uses built-in Neovim APIs for fallback paths.
+
 ### Commands
 
 - `:Meta[!] [query]` (`!` starts repo-wide source mode)

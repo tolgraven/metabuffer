@@ -5,6 +5,7 @@ CONTENTS\t\t\t\t*metabuffer-contents*
 
 INTRODUCTION\t\t\t|metabuffer-introduction|
 USAGE\t\t\t\t|metabuffer-usage|
+DEPENDENCIES			|metabuffer-dependencies|
 COMMANDS\t\t\t|metabuffer-commands|
 SETUP OPTIONS\t\t\t|metabuffer-setup-options|
 PROMPT KEYS\t\t\t|metabuffer-prompt-keys|
@@ -21,6 +22,40 @@ cycling and optional line push-back to source.
 USAGE\t\t\t\t\t*metabuffer-usage*
 
 Run |:Meta| to start filtering current buffer lines.
+
+==============================================================================
+DEPENDENCIES			*metabuffer-dependencies*
+
+Required runtime dependencies:
+
+	Neovim 0.9+
+		Runs metabuffer and its bundled nfnl-based runtime.
+
+	rg (ripgrep)
+		Used for project file listing and ignore/deps-aware scanning.
+		Without it, project mode falls back to built-in globbing and is slower
+		and less precise.
+
+Optional dependencies:
+
+	mini.nvim / mini.animate
+		Preferred animation backend when ui.animation.backend is "mini".
+		Without it, Meta uses its native animation fallback.
+
+	fennel-ls
+		Provides Fennel diagnostics/linting while editing source files.
+		Without it, runtime behavior is unchanged; you only lose editor linting.
+
+	nfnl
+		Used to regenerate the committed Lua/plugin output from fnl/ sources.
+		Without it, the committed Lua still works, but Fennel regeneration does not.
+
+	lgrep
+		Enables #lgrep, #lgrep:d, #lgrep:u, and lgrep-backed source queries.
+		Without it, those directives and query-backed sources are unavailable.
+
+No other external CLI tools are required by default; the plugin uses built-in
+Neovim APIs for fallback paths.
 
 ==============================================================================
 COMMANDS\t\t\t\t*metabuffer-commands*
