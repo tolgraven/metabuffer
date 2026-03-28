@@ -80,6 +80,7 @@ Runner behavior:
   - child Neovim startup time
 - Event-bus profiling can be enabled inside a test via `require('metabuffer.events')['set-profile!'](true)`.
   Use `profile-stats()` / `reset-profile-stats!()` to compare a semantic event's handler time against the full observed interaction time.
+  Per-event stats now include emission counts, aggregate wall/CPU totals, and an `emissions` list with every individual emission plus per-handler wall/CPU timings.
 - Returns non-zero if any file has failing cases.
 
 ## Screen Tests
@@ -132,6 +133,7 @@ Key helper coverage:
 ### `tests/profile/test_profile_project_events.lua`
 - Profiles a real project-mode launch from file-backed sources, waits for bootstrap expansion, then performs prompt filtering.
 - Records end-to-end bootstrap/filter timings alongside accumulated `:on-project-bootstrap!`, `:on-project-complete!`, and `:on-query-update!` handler time so leftover off-bus work is visible as a gap.
+- Dumps every event emission seen in each phase, including per-handler wall and CPU time, into the profile log for detailed follow-up.
 
 ### `tests/screen/project/test_screen_project_flags_core_*.lua`
 - `#hidden/#deps/#nolazy` consumption + status/debug reflection.

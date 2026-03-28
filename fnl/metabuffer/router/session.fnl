@@ -421,31 +421,16 @@
       (fn [] (events.send :on-win-create! {:win curr.win.window :role :main})))
     (run-step! "finish-session-startup!/on-init"
       (fn [] (curr.on-init)))
-    (run-step! "finish-session-startup!/capture-sign-baseline"
-      (fn [] (events.send :on-session-ready!
-             {:session session
-              :refresh-lines false
-              :capture-sign-baseline? true})))
-    (when (and session.project-mode (not startup-layout-unsettled?))
-      (run-step! "finish-session-startup!/restore-meta-view-project"
-        (fn [] (events.send :on-session-ready!
-               {:session session
-                :refresh-lines true
-                :restore-view? true}))))
     (when-not (and session.project-mode (not initial-query-active))
       (run-step! "finish-session-startup!/apply-prompt-lines"
         (fn [] (apply-prompt-lines session))))
-    (when (and (not session.project-mode) (not startup-layout-unsettled?))
-      (run-step! "finish-session-startup!/restore-meta-view-regular"
-        (fn [] (events.send :on-session-ready!
-               {:session session
-                :refresh-lines true
-                :restore-view? true}))))
     (run-step! "finish-session-startup!/emit-session-ready"
       (fn []
         (events.send :on-session-ready!
           {:session session
-           :refresh-lines true})))
+           :refresh-lines true
+           :restore-view? (not startup-layout-unsettled?)
+           :capture-sign-baseline? true})))
     (when session.project-mode
       (vim.defer_fn
         (fn []
@@ -479,8 +464,7 @@
               (when (and session.project-mode (not session.project-bootstrapped))
                 (project-source.schedule-project-bootstrap! session 17)))
             (restore-startup-cursor! session))))
-    (when (or (and session.project-mode (not initial-query-active))
-              (and context-window context-window.update!))
+    (when (and context-window context-window.update!)
       (schedule-aux-ui-refresh!))
     (set (. instances session.instance-id) session)))
 

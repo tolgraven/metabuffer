@@ -659,74 +659,79 @@
     (set session.lazy-stream-paths (or (. init :deferred-paths) []))
     (set session.lazy-stream-total (# session.lazy-stream-paths))
     (set session.lazy-prefilter prefilter)
-    (let [stream-id session.lazy-stream-id]
-    (fn run-batch
-      []
-      (when (and (session-active? session)
-                 (= stream-id session.lazy-stream-id)
-                 (not session.lazy-stream-done))
-        (let [paths session.lazy-stream-paths
-              total (# paths)
-              chunk (math.max 1 settings.project-lazy-chunk-size)
-              frame-budget (math.max 1 (or settings.project-lazy-frame-budget-ms 6))
-              batch-start (now-ms)]
-          (var consumed 0)
-          (var touched false)
-          (while (and (< consumed chunk)
-                      (< (- (now-ms) batch-start) frame-budget)
-                      (<= session.lazy-stream-next total)
-                      (< (# session.meta.buf.content) settings.project-max-total-lines))
-            (let [path (. paths session.lazy-stream-next)
-                  view (and path
-                            (read-file-view-cached
-                              path
-                              {:include-binary session.effective-include-binary
-                               :transforms (or session.effective-transforms {})
-                               :wrap-width (results-wrap-width session)
-                               :linebreak true}))
-                  before (# session.meta.buf.content)]
-              (when view
-                (push-file-into-pool! session path view prefilter)
-                (when (> (# session.meta.buf.content) before)
-                  (set touched true)))
-              (set consumed (+ consumed 1))
-              (set session.lazy-stream-next (+ session.lazy-stream-next 1))))
-          (when (or (> session.lazy-stream-next total)
-                    (>= (# session.meta.buf.content) settings.project-max-total-lines))
-            (set session.lazy-stream-done true))
-          (when (and session.lazy-stream-done
-                     session.meta
-                     session.meta.buf
-                     (not session.prompt-animating?)
-                     (not session.startup-initializing))
-            (set session.meta.buf.visible-source-syntax-only false)
-            (pcall session.meta.buf.apply-source-syntax-regions)
-            (when-not (prompt-has-active-query? session)
-              ;; Streaming added content to meta.buf.content but indices was
-              ;; only built at bootstrap time.  Rebuild indices from the full
-              ;; content table and render so all streamed lines appear.
-              (reset-meta-indices! session.meta)
-              (pcall session.meta.buf.render)
-              (events.send :on-project-complete!
-                {:session session
-                 :refresh-lines true
-                 :restore-view? true}))
-            ;; Always force one final UI refresh when streaming settles so the
-            ;; info pane leaves its loading/empty state even if the last batch
-            ;; did not append any new visible lines.
-            (events.send :on-project-complete!
-              {:session session
-               :refresh-lines true}))
-          (when touched
-            (do
-              (events.send :on-project-bootstrap!
-                {:session session
-                 :refresh-lines false})
-              (schedule-lazy-refresh! session)))
-          (when (and (not session.lazy-stream-done)
+    (let [stream-id session.lazy-stream-id
+          run-batch0 nil]
+      (var run-batch run-batch0)
+      (set run-batch
+        (fn []
+          (when (and (session-active? session)
                      (= stream-id session.lazy-stream-id)
-                     (session-active? session))
-            (vim.defer_fn run-batch 17)))))
+                     (not session.lazy-stream-done))
+            (let [paths session.lazy-stream-paths
+                  total (# paths)
+                  chunk (math.max 1 settings.project-lazy-chunk-size)
+                  frame-budget (math.max 1 (or settings.project-lazy-frame-budget-ms 6))
+                  batch-start (now-ms)]
+              (var consumed 0)
+              (var touched false)
+              (while (and (< consumed chunk)
+                          (< (- (now-ms) batch-start) frame-budget)
+                          (<= session.lazy-stream-next total)
+                          (< (# session.meta.buf.content) settings.project-max-total-lines))
+                (let [path (. paths session.lazy-stream-next)
+                      view (and path
+                                (read-file-view-cached
+                                  path
+                                  {:include-binary session.effective-include-binary
+                                   :transforms (or session.effective-transforms {})
+                                   :wrap-width (results-wrap-width session)
+                                   :linebreak true}))
+                      before (# session.meta.buf.content)]
+                  (when view
+                    (push-file-into-pool! session path view prefilter)
+                    (when (> (# session.meta.buf.content) before)
+                      (set touched true)))
+                  (set consumed (+ consumed 1))
+                  (set session.lazy-stream-next (+ session.lazy-stream-next 1))))
+              (when (or (> session.lazy-stream-next total)
+                        (>= (# session.meta.buf.content) settings.project-max-total-lines))
+                (set session.lazy-stream-done true))
+              (when (and session.lazy-stream-done
+                         session.meta
+                         session.meta.buf
+                         (not session.prompt-animating?)
+                         (not session.startup-initializing))
+                (let [sent-complete0 false]
+                  (var sent-complete? sent-complete0)
+                  (set session.meta.buf.visible-source-syntax-only false)
+                  (pcall session.meta.buf.apply-source-syntax-regions)
+                  (when-not (prompt-has-active-query? session)
+                    ;; Streaming added content to meta.buf.content but indices was
+                    ;; only built at bootstrap time. Rebuild indices from the full
+                    ;; content table and render so all streamed lines appear.
+                    (reset-meta-indices! session.meta)
+                    (pcall session.meta.buf.render)
+                    (events.send :on-project-complete!
+                      {:session session
+                       :refresh-lines true
+                       :restore-view? true})
+                    (set sent-complete? true))
+                  ;; Always force one final UI refresh when streaming settles so the
+                  ;; info pane leaves its loading/empty state even if the last batch
+                  ;; did not append any new visible lines.
+                  (when-not sent-complete?
+                    (events.send :on-project-complete!
+                      {:session session
+                       :refresh-lines true}))))
+              (when touched
+                (events.send :on-project-bootstrap!
+                  {:session session
+                   :refresh-lines false})
+                (schedule-lazy-refresh! session))
+              (when (and (not session.lazy-stream-done)
+                         (= stream-id session.lazy-stream-id)
+                         (session-active? session))
+                (vim.defer_fn run-batch 17))))))
       (vim.defer_fn run-batch 0)))
 
   (fn apply-source-set!
@@ -877,16 +882,7 @@
                       (events.send :on-project-complete!
                         {:session session
                          :restore-view? true
-                         :refresh-lines true})
-                      (vim.defer_fn
-                        (fn []
-                          (when (and session
-                                     (session-active? session)
-                                     (not session.closing))
-                            (events.send :on-project-complete!
-                              {:session session
-                               :refresh-lines true})))
-                        17))
+                         :refresh-lines true}))
                     (set session.project-mode-starting? false))))]
           (vim.defer_fn run-bootstrap! delay)))))
 

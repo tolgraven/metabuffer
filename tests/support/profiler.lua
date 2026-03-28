@@ -93,6 +93,9 @@ local function print_case_summary(case_stats, idx)
       item.ms
     )
   end
+  for _, note in ipairs(case_stats.notes or {}) do
+    lines[#lines + 1] = string.format('[mini-profile]        note | %s', note)
+  end
   return lines
 end
 
@@ -144,6 +147,13 @@ function M.record(kind, label, ms)
   record_span(kind, label, ms)
 end
 
+function M.note(label)
+  if not (enabled and current_case and label and label ~= '') then
+    return
+  end
+  current_case.notes[#current_case.notes + 1] = label
+end
+
 function M.start_case()
   local name = case_name()
   io.stdout:write(string.format('\n[mini-runner] CASE START %s\n', name))
@@ -157,6 +167,7 @@ function M.start_case()
     wall0 = hr_ms(),
     cpu0 = cpu_ms(),
     spans = {},
+    notes = {},
     wait = 0,
     sleep = 0,
     child = 0,

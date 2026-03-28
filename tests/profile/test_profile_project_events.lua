@@ -27,10 +27,71 @@ local function elapsed_ms(stats, key)
   return (item.elapsed_us or 0) / 1000
 end
 
+local function cpu_ms(stats, key)
+  local item = stats[key] or {}
+  return (item.cpu_us or 0) / 1000
+end
+
 local function measure_ms(fn)
   local t0 = vim.loop.hrtime()
   fn()
   return (vim.loop.hrtime() - t0) / 1e6
+end
+
+local function sorted_event_keys(stats)
+  local keys = {}
+  for key, value in pairs(stats or {}) do
+    if type(key) == 'string' and type(value) == 'table' then
+      keys[#keys + 1] = key
+    end
+  end
+  table.sort(keys)
+  return keys
+end
+
+local function emission_ms(item, key)
+  return (item[key] or 0) / 1000
+end
+
+local function record_event_trace(phase, stats)
+  for _, event_key in ipairs(sorted_event_keys(stats)) do
+    local item = stats[event_key] or {}
+    profiler.note(string.format(
+      '%s %s totals | emits=%d handlers=%d wall=%.3fms cpu=%.3fms',
+      phase,
+      event_key,
+      item.count or 0,
+      item.handler_count or 0,
+      emission_ms(item, 'elapsed_us'),
+      emission_ms(item, 'cpu_us')
+    ))
+    for i, emission in ipairs(item.emissions or {}) do
+      profiler.note(string.format(
+        '%s %s emit#%d | handlers=%d wall=%.3fms cpu=%.3fms',
+        phase,
+        event_key,
+        i,
+        emission.handler_count or 0,
+        emission_ms(emission, 'elapsed_us'),
+        emission_ms(emission, 'cpu_us')
+      ))
+      for j, handler in ipairs(emission.handlers or {}) do
+        profiler.note(string.format(
+          '%s %s emit#%d handler#%d %s/%s p=%s | wall=%.3fms cpu=%.3fms%s',
+          phase,
+          event_key,
+          i,
+          j,
+          handler.domain or '?',
+          handler.source or '?',
+          tostring(handler.priority or '?'),
+          emission_ms(handler, 'elapsed_us'),
+          emission_ms(handler, 'cpu_us'),
+          handler.error and (' err=' .. handler.error) or ''
+        ))
+      end
+    end
+  end
 end
 
 T['project bootstrap and filtering profile through event bus'] = H.timed_case(function()
@@ -47,17 +108,20 @@ T['project bootstrap and filtering profile through event bus'] = H.timed_case(fu
   local after_bootstrap = event_profile_stats()
   local bootstrap_event_ms = elapsed_ms(after_bootstrap, 'on-project-bootstrap!')
   local complete_event_ms = elapsed_ms(after_bootstrap, 'on-project-complete!')
+  local bootstrap_cpu_ms = cpu_ms(after_bootstrap, 'on-project-bootstrap!')
+  local complete_cpu_ms = cpu_ms(after_bootstrap, 'on-project-complete!')
 
   profiler.record(
     'event',
     string.format(
-      'project bootstrap total=%.3fms bootstrap=%.3fms complete=%.3fms',
-      bootstrap_ms, bootstrap_event_ms, complete_event_ms
+      'project bootstrap total=%.3fms bootstrap=%.3fms cpu=%.3fms complete=%.3fms cpu=%.3fms',
+      bootstrap_ms, bootstrap_event_ms, bootstrap_cpu_ms, complete_event_ms, complete_cpu_ms
     ),
     bootstrap_ms
   )
   profiler.record('event-bootstrap', 'on-project-bootstrap handlers', bootstrap_event_ms)
   profiler.record('event-complete', 'on-project-complete handlers', complete_event_ms)
+  record_event_trace('bootstrap', after_bootstrap)
 
   reset_event_profile()
 
@@ -74,16 +138,18 @@ T['project bootstrap and filtering profile through event bus'] = H.timed_case(fu
 
   local after_filter = event_profile_stats()
   local query_event_ms = elapsed_ms(after_filter, 'on-query-update!')
+  local query_cpu_ms = cpu_ms(after_filter, 'on-query-update!')
 
   profiler.record(
     'event',
     string.format(
-      'project filter total=%.3fms query=%.3fms gap=%.3fms',
-      filter_ms, query_event_ms, math.max(0, filter_ms - query_event_ms)
+      'project filter total=%.3fms query=%.3fms cpu=%.3fms gap=%.3fms',
+      filter_ms, query_event_ms, query_cpu_ms, math.max(0, filter_ms - query_event_ms)
     ),
     filter_ms
   )
   profiler.record('event-query', 'on-query-update handlers', query_event_ms)
+  record_event_trace('filter', after_filter)
 
   eq(bootstrap_event_ms > 0 or complete_event_ms > 0, true)
   eq(query_event_ms > 0, true)
