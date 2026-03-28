@@ -5,6 +5,7 @@ XDG_DATA_HOME := /tmp
 XDG_CACHE_HOME := /tmp
 NVIM_APPNAME := metabuffer-make
 NVIM_ENV = XDG_STATE_HOME="$(XDG_STATE_HOME)" XDG_DATA_HOME="$(XDG_DATA_HOME)" XDG_CACHE_HOME="$(XDG_CACHE_HOME)" NVIM_APPNAME="$(NVIM_APPNAME)"
+QUIET ?= 0
 PRIMARY_GOAL := $(firstword $(MAKECMDGOALS))
 RAW_ARGS ?= $(filter-out $(PRIMARY_GOAL),$(MAKECMDGOALS))
 FILE_ARGS ?= $(filter-out --,$(RAW_ARGS))
@@ -15,11 +16,13 @@ LUA_CHECK_ARGS = $(if $(strip $(filter %.lua,$(FILE_ARGS))),$(filter %.lua,$(FIL
 all: compile
 
 compile:
-	@echo "[make] compiling fennel..."
-	$(NVIM_ENV) ./scripts/compile-fennel.sh
+	@if [ "$(QUIET)" != "1" ]; then echo "[make] compiling fennel..."; fi
+	@META_COMPILE_QUIET="$(QUIET)" $(NVIM_ENV) ./scripts/compile-fennel.sh
 
 # Full local verification: lint fennel, then compile+test via `make test`.
-full: check-fnl test
+full:
+	@$(MAKE) --no-print-directory QUIET=1 check-fnl $(if $(strip $(FILE_ARGS)),-- $(FILE_ARGS),)
+	@$(MAKE) --no-print-directory QUIET=1 test $(if $(strip $(FILE_ARGS)),-- $(FILE_ARGS),)
 	@:
 
 # Run all linters
@@ -28,18 +31,18 @@ check: check-fnl check-lua
 
 # Run linter on all fennel files
 check-fnl:
-	@echo "[make] checking fennel-ls..."
-	$(NVIM_ENV) fennel-ls --lint $(FNL_CHECK_ARGS)
+	@if [ "$(QUIET)" != "1" ]; then echo "[make] checking fennel-ls..."; fi
+	@$(NVIM_ENV) fennel-ls --lint $(FNL_CHECK_ARGS)
 
 # Run linter on all generated lua files (using root to pick up .luarc.json)
 check-lua:
-	@echo "[make] checking lua-language-server..."
-	lua-language-server --check $(LUA_CHECK_ARGS)
+	@if [ "$(QUIET)" != "1" ]; then echo "[make] checking lua-language-server..."; fi
+	@lua-language-server --check $(LUA_CHECK_ARGS)
 
 # Run tests. Use 'make test' for all, 'make test -- file.lua' for one, TEST_JOBS=N for parallelism.
 test: compile
-	@echo "[make] running tests..."
-	TEST_FILE_TIMEOUT_MS="$${TEST_FILE_TIMEOUT_MS:-30000}" $(NVIM_ENV) ./scripts/test-mini.sh $(FILE_ARGS)
+	@if [ "$(QUIET)" != "1" ]; then echo "[make] running tests..."; fi
+	@TEST_RUNNER_QUIET="$(QUIET)" TEST_FILE_TIMEOUT_MS="$${TEST_FILE_TIMEOUT_MS:-30000}" $(NVIM_ENV) ./scripts/test-mini.sh $(FILE_ARGS)
 
 test-then-all: compile
 	@if [ -z "$(strip $(FILE_ARGS))" ]; then \

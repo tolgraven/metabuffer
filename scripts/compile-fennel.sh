@@ -2,6 +2,7 @@
 set -eu
 
 VERBOSE=0
+QUIET="${META_COMPILE_QUIET:-0}"
 if [ "${1:-}" = "--verbose" ]; then
   VERBOSE=1
   shift
@@ -175,12 +176,16 @@ run_nvim_lua_script "./scripts/update-directive-docs.lua"
 
 if [ "${META_COMPILE_MINIMAL:-0}" = "1" ]; then
   rm -f "$compile_script"
-  echo "Compile successful."
+  if [ "$QUIET" != "1" ]; then
+    echo "Compile successful."
+  fi
   exit 0
 fi
 
 # Copy .lua files from dependencies to lua/ directory
-echo "Bundling .lua dependencies..."
+if [ "$QUIET" != "1" ]; then
+  echo "Bundling .lua dependencies..."
+fi
 find .deps/git -path "*/src/*.lua" | while read -r src_file; do
   # Extract the part after /src/
   # .deps/git/io.gitlab.andreyorst/reduced.lua/92cc61fee3250cb3eb54cc7b6f41f9625f7114bc/src/io/gitlab/andreyorst/reduced.lua
@@ -199,4 +204,6 @@ if command -v lua-language-server >/dev/null 2>&1; then
 fi
 
 rm -f "$compile_script"
-echo "Compile successful."
+if [ "$QUIET" != "1" ]; then
+  echo "Compile successful."
+fi

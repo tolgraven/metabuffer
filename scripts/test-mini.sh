@@ -92,6 +92,7 @@ VERBOSE=0
 SHOW_TIMINGS=0
 SKIP_SMOKE=0
 INCLUDE_ANIMATION=0
+QUIET="${TEST_RUNNER_QUIET:-0}"
 TEST_FILE_TIMEOUT_MS="${TEST_FILE_TIMEOUT_MS:-18000}"
 if [[ "$TEST_FILE_TIMEOUT_MS" =~ ^[0-9]+$ ]]; then
   :
@@ -346,7 +347,9 @@ if [[ -d "$TEMP_PROJECT_SRC" ]]; then
   export META_TEST_TEMP_PROJECT_SRC
 fi
 
-echo "[mini-runner] tmp dir: $TMP_DIR"
+if [[ "$QUIET" != "1" ]]; then
+  echo "[mini-runner] tmp dir: $TMP_DIR"
+fi
 
 TOTAL_START_MS=$(python3 - <<'PY'
 import time
@@ -354,15 +357,17 @@ print(int(time.time() * 1000))
 PY
 )
 
-echo "[mini-runner] running ${#TEST_FILES[@]} files with ${JOBS} parallel worker(s)"
-if (( SKIP_SMOKE == 0 )); then
-  echo "[mini-runner] startup smoke tests first: ${SMOKE_TESTS[*]}"
-else
-  echo "[mini-runner] startup smoke tests skipped"
-fi
-if (( PROFILE_MODE == 1 )); then
-  echo "[mini-runner] profiling enabled"
-  echo "[mini-runner] profile dir: $PROFILE_DIR"
+if [[ "$QUIET" != "1" ]]; then
+  echo "[mini-runner] running ${#TEST_FILES[@]} files with ${JOBS} parallel worker(s)"
+  if (( SKIP_SMOKE == 0 )); then
+    echo "[mini-runner] startup smoke tests first: ${SMOKE_TESTS[*]}"
+  else
+    echo "[mini-runner] startup smoke tests skipped"
+  fi
+  if (( PROFILE_MODE == 1 )); then
+    echo "[mini-runner] profiling enabled"
+    echo "[mini-runner] profile dir: $PROFILE_DIR"
+  fi
 fi
 
 run_worker() {
@@ -643,7 +648,9 @@ for entry in "${TEST_FILES[@]}"; do
   ACTUAL_FILE_COUNT=$((ACTUAL_FILE_COUNT + ${#_parts[@]}))
 done
 
-echo "[mini-runner] TOTAL ${ACTUAL_FILE_COUNT} file(s) (${#TEST_FILES[@]} worker(s)) | failed=$FAIL_FILES | elapsed=${TOTAL_DT_MS}ms"
+if (( FAIL_FILES > 0 )) || [[ "$QUIET" != "1" ]]; then
+  echo "[mini-runner] TOTAL ${ACTUAL_FILE_COUNT} file(s) (${#TEST_FILES[@]} worker(s)) | failed=$FAIL_FILES | elapsed=${TOTAL_DT_MS}ms"
+fi
 
 if (( FAIL_FILES > 0 )); then
   echo "[mini-runner] rerun failed only: TEST_FAILED_ONLY=1 ./scripts/test-mini.sh"
