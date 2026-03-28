@@ -121,6 +121,38 @@
        (not session.closing)
        session.meta))
 
+(fn build-refresh-hooks
+  [deps]
+  (let [windows (. deps :windows)
+        update-preview-window (. deps :update-preview-window)
+        update-info-window (. deps :update-info-window)
+        context-window (. windows :context)
+        preview-window (. windows :preview)
+        info-window (. windows :info)
+        sign-mod (. deps :sign-mod)]
+    {:statusline! (fn [session]
+                    (when (and session session.meta session.meta.refresh_statusline)
+                      (pcall session.meta.refresh_statusline))
+                    (when (and preview-window preview-window.refresh-statusline!)
+                      (pcall preview-window.refresh-statusline! session))
+                    (when (and info-window info-window.refresh-statusline!)
+                      (pcall info-window.refresh-statusline! session)))
+     :preview! (fn [session]
+                 (when update-preview-window
+                   (pcall update-preview-window session)))
+     :info! (fn [session refresh-lines]
+              (when update-info-window
+                (pcall update-info-window session refresh-lines)))
+     :context! (fn [session]
+                 (when (and context-window context-window.update!)
+                   (pcall context-window.update! session)))
+     :refresh-change-signs! (fn [session]
+                              (when (and sign-mod sign-mod.refresh-change-signs!)
+                                (pcall sign-mod.refresh-change-signs! session)))
+     :capture-sign-baseline! (fn [session]
+                               (when (and sign-mod sign-mod.capture-baseline!)
+                                 (pcall sign-mod.capture-baseline! session)))}))
+
 (fn register-prompt-hooks!
   [deps session]
     (let [router (. deps :router)
@@ -349,10 +381,8 @@
 (fn finish-session-startup!
   [deps curr session initial-query-active]
   (let [project-source (. deps :project-source)
-        sign-mod (. deps :sign-mod)
         session-view (. deps :session-view)
         apply-prompt-lines (. deps :apply-prompt-lines)
-        update-preview-window (. deps :update-preview-window)
         update-info-window (. deps :update-info-window)
         context-window (. (. deps :windows) :context)
         active-by-prompt (. (. deps :router) :active-by-prompt)
@@ -368,12 +398,7 @@
       (vim.schedule
         (fn []
           (when (startup-live?)
-            (pcall curr.refresh_statusline)
-            (when update-preview-window
-              (pcall update-preview-window session))
-            (pcall update-info-window session true)
-            (when (and context-window context-window.update!)
-              (pcall context-window.update! session))))))
+            (events.send :on-session-ready! {:session session :refresh-lines true})))))
     (fn schedule-single-file-info-phases!
       []
       (when-not session.project-mode
@@ -395,13 +420,13 @@
     (set curr.status-win curr.win)
     (run-step! "finish-session-startup!/disable-airline"
       (fn [] (events.send :on-win-create! {:win curr.win.window :role :main})))
-    (run-step! "finish-session-startup!/refresh-statusline"
-      (fn [] (pcall curr.refresh_statusline)))
     (run-step! "finish-session-startup!/on-init"
       (fn [] (curr.on-init)))
-    (when sign-mod
-      (run-step! "finish-session-startup!/capture-sign-baseline"
-        (fn [] (pcall sign-mod.capture-baseline! session))))
+    (run-step! "finish-session-startup!/capture-sign-baseline"
+      (fn [] (events.send :on-session-ready!
+             {:session session
+              :refresh-lines false
+              :capture-sign-baseline? true})))
     (when (and session.project-mode (not startup-layout-unsettled?))
       (run-step! "finish-session-startup!/restore-meta-view-project"
         (fn [] (session-view.restore-meta-view! curr session.source-view session update-info-window))))
@@ -411,16 +436,16 @@
     (when (and (not session.project-mode) (not startup-layout-unsettled?))
       (run-step! "finish-session-startup!/restore-meta-view-regular"
         (fn [] (session-view.restore-meta-view! curr session.source-view session update-info-window))))
-    (when (and update-preview-window (not startup-layout-unsettled?))
-      (run-step! "finish-session-startup!/update-preview-window"
-        (fn [] (pcall update-preview-window session))))
-    (run-step! "finish-session-startup!/update-info-window"
-      (fn [] (pcall update-info-window session true)))
+    (run-step! "finish-session-startup!/emit-session-ready"
+      (fn []
+        (events.send :on-session-ready!
+          {:session session
+           :refresh-lines true})))
     (when session.project-mode
       (vim.defer_fn
         (fn []
           (when (startup-live?)
-            (pcall update-info-window session true))
+            (events.send :on-session-ready! {:session session :refresh-lines true}))
           ; (when (= (. active-by-prompt session.prompt-buf) session)
             ; (pcall update-info-window session true))
           )
@@ -433,7 +458,7 @@
               (set session.startup-initializing false)
               (when-not session.project-mode
                 (set session.project-mode-starting? false))
-              (pcall update-info-window session)
+              (events.send :on-session-ready! {:session session :refresh-lines false})
               (vim.defer_fn
                 (fn []
                   (when (startup-live?)
@@ -691,6 +716,7 @@
                                :single-refs (vim.deepcopy (or curr.buf.source-refs []))
                                :instance-id (next-instance-id!)
                                :meta curr}]
+                    (set session.refresh-hooks (build-refresh-hooks deps))
                   (transform-mod.apply-flags! session start-transforms)
                   (transform-mod.apply-flags! curr start-transforms)
                   (let [start-wrap (let [persisted (router-util-mod.results-wrap-enabled?)]

@@ -43,7 +43,8 @@
 ;;;
 ;;; Session lifecycle
 ;;;   :on-session-start!     {:session ...}
-;;;   :on-session-ready!     {:session ...}
+;;;   :on-session-ready!     {:session ... :refresh-lines bool
+;;;                           :refresh-signs? bool :capture-sign-baseline? bool}
 ;;;   :on-session-stop!      {:session ...}
 ;;;
 ;;; Buffer lifecycle
@@ -62,12 +63,14 @@
 ;;;
 ;;; Source / query events
 ;;;   :on-source-switch!     {:session ... :old-source str :new-source str}
-;;;   :on-query-update!      {:session ... :query str}
-;;;   :on-selection-change!  {:session ... :line-nr N}
+;;;   :on-query-update!      {:session ... :query str :refresh-lines bool
+;;;                           :refresh-signs? bool :capture-sign-baseline? bool}
+;;;   :on-selection-change!  {:session ... :line-nr N :refresh-lines bool
+;;;                           :force-refresh? bool}
 ;;;
 ;;; Project events
-;;;   :on-project-bootstrap! {:session ...}
-;;;   :on-project-complete!  {:session ...}
+;;;   :on-project-bootstrap! {:session ... :refresh-lines bool}
+;;;   :on-project-complete!  {:session ... :refresh-lines bool}
 ;;;
 ;;; Action events
 ;;;   :on-accept!            {:session ...}

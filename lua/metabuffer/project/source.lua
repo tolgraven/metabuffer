@@ -1,6 +1,7 @@
 -- [nfnl] fnl/metabuffer/project/source.fnl
 local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
+local events = require("metabuffer.events")
 local source_mod = require("metabuffer.source")
 local transform_mod = require("metabuffer.transform")
 M.new = function(opts)
@@ -434,20 +435,17 @@ M.new = function(opts)
                   session["lazy-last-render-ms"] = now
                 else
                 end
-                pcall(session.meta.refresh_statusline)
-                pcall(update_info_window, session)
+                events.send("on-project-bootstrap!", {session = session, ["refresh-lines"] = false})
               else
                 local ok,err = pcall(session.meta["on-update"], 0)
                 if ok then
-                  pcall(session.meta.refresh_statusline)
-                  pcall(update_info_window, session)
+                  events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = false})
                 else
                   if (err and string.find(tostring(err), "E565")) then
                     local function _47_()
                       if (session and session_active_3f(session) and session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
                         pcall(session.meta["on-update"], 0)
-                        pcall(session.meta.refresh_statusline)
-                        return pcall(update_info_window, session)
+                        return events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = false})
                       else
                         return nil
                       end
@@ -725,11 +723,11 @@ M.new = function(opts)
             restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
           else
           end
-          pcall(session.meta.refresh_statusline)
-          pcall(update_info_window, session, true)
+          events.send("on-project-complete!", {session = session, ["refresh-lines"] = true})
         else
         end
         if touched then
+          events.send("on-project-bootstrap!", {session = session, ["refresh-lines"] = false})
           schedule_lazy_refresh_21(session)
         else
         end
@@ -863,6 +861,7 @@ M.new = function(opts)
         if (session and (token == session["project-bootstrap-token"]) and session["project-mode"] and session["prompt-buf"] and session_active_3f(session) and not session["project-bootstrapped"]) then
           local has_query = prompt_has_active_query_3f(session)
           apply_source_set_21(session)
+          events.send("on-project-bootstrap!", {session = session, ["refresh-lines"] = true})
           session["project-bootstrapped"] = true
           if has_query then
             session["prompt-update-dirty"] = true
@@ -879,11 +878,10 @@ M.new = function(opts)
           if not has_query then
             pcall(session.meta.buf.render)
             restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
-            pcall(session.meta.refresh_statusline)
-            pcall(update_info_window, session, true)
+            events.send("on-project-complete!", {session = session, ["refresh-lines"] = true})
             local function _107_()
               if (session and session_active_3f(session) and not session.closing) then
-                return pcall(update_info_window, session, true)
+                return events.send("on-project-complete!", {session = session, ["refresh-lines"] = true})
               else
                 return nil
               end

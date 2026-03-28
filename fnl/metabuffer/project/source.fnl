@@ -1,6 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
+(local events (require :metabuffer.events))
 (local source-mod (require :metabuffer.source))
 (local transform-mod (require :metabuffer.transform))
 
@@ -379,13 +380,15 @@
                         (pcall session.meta.buf.render)
                         (restore-meta-view! session.meta session.source-view session update-info-window)
                         (set session.lazy-last-render-ms now))
-                      (pcall session.meta.refresh_statusline)
-                      (pcall update-info-window session))
+                      (events.send :on-project-bootstrap!
+                        {:session session
+                         :refresh-lines false}))
                     (let [[ok err] [(pcall session.meta.on-update 0)]]
                       (if ok
-                          (do
-                            (pcall session.meta.refresh_statusline)
-                            (pcall update-info-window session))
+                          (events.send :on-query-update!
+                            {:session session
+                             :query (or session.prompt-last-applied-text "")
+                             :refresh-lines false})
                           (when (and err (string.find (tostring err) "E565"))
                             (vim.defer_fn
                               (fn []
@@ -395,8 +398,10 @@
                                            session.meta.buf
                                            (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
                                   (pcall session.meta.on-update 0)
-                                  (pcall session.meta.refresh_statusline)
-                                  (pcall update-info-window session)))
+                                  (events.send :on-query-update!
+                                    {:session session
+                                     :query (or session.prompt-last-applied-text "")
+                                     :refresh-lines false})))
                               1)))))))
             (when (and session (session-active? session) session.lazy-refresh-dirty)
               (schedule-lazy-refresh! session)))
@@ -703,10 +708,15 @@
             ;; Always force one final UI refresh when streaming settles so the
             ;; info pane leaves its loading/empty state even if the last batch
             ;; did not append any new visible lines.
-            (pcall session.meta.refresh_statusline)
-            (pcall update-info-window session true))
+            (events.send :on-project-complete!
+              {:session session
+               :refresh-lines true}))
           (when touched
-            (schedule-lazy-refresh! session))
+            (do
+              (events.send :on-project-bootstrap!
+                {:session session
+                 :refresh-lines false})
+              (schedule-lazy-refresh! session)))
           (when (and (not session.lazy-stream-done)
                      (= stream-id session.lazy-stream-id)
                      (session-active? session))
@@ -837,6 +847,9 @@
                            (not session.project-bootstrapped))
                   (let [has-query (prompt-has-active-query? session)]
                     (apply-source-set! session)
+                    (events.send :on-project-bootstrap!
+                      {:session session
+                       :refresh-lines true})
                     (set session.project-bootstrapped true)
                     ;; Avoid a bootstrap-triggered filter/view update for plain `:Meta!`
                     ;; with empty prompt; defer filtering until the user types.
@@ -856,14 +869,17 @@
                     (when-not has-query
                       (pcall session.meta.buf.render)
                       (restore-meta-view! session.meta session.source-view session update-info-window)
-                      (pcall session.meta.refresh_statusline)
-                      (pcall update-info-window session true)
+                      (events.send :on-project-complete!
+                        {:session session
+                         :refresh-lines true})
                       (vim.defer_fn
                         (fn []
                           (when (and session
                                      (session-active? session)
                                      (not session.closing))
-                            (pcall update-info-window session true)))
+                            (events.send :on-project-complete!
+                              {:session session
+                               :refresh-lines true})))
                         17))
                     (set session.project-mode-starting? false))))]
           (vim.defer_fn run-bootstrap! delay)))))

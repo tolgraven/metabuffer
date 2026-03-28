@@ -1,8 +1,19 @@
 local query_flow = require('metabuffer.router.query_flow')
 local router_util = require('metabuffer.router.util')
+local events = require('metabuffer.events')
+local core_events = require('metabuffer.core_events')
 local eq = MiniTest.expect.equality
 
 local T = MiniTest.new_set()
+local core_events_registered = false
+
+local function ensure_core_events()
+  if core_events_registered then
+    return
+  end
+  events['register!'](core_events)
+  core_events_registered = true
+end
 
 local function mk_session(prompt_buf)
   local session = {
@@ -34,6 +45,21 @@ local function mk_session(prompt_buf)
         indices = { 1, 2, 3 },
       },
     },
+  }
+  session['refresh-hooks'] = {
+    ['statusline!'] = function()
+      session._status_calls = (session._status_calls or 0) + 1
+    end,
+    ['info!'] = function(_, refresh_lines)
+      session._info_calls = (session._info_calls or 0) + 1
+      session._last_info_refresh_lines = refresh_lines
+    end,
+    ['refresh-change-signs!'] = function()
+      session._sign_refresh_calls = (session._sign_refresh_calls or 0) + 1
+    end,
+    ['capture-sign-baseline!'] = function()
+      session._sign_baseline_calls = (session._sign_baseline_calls or 0) + 1
+    end,
   }
   session.meta['on-update'] = function()
     session._update_calls = (session._update_calls or 0) + 1
@@ -104,6 +130,7 @@ local function mk_deps(overrides)
 end
 
 T['apply-prompt-lines invalidates filter cache when project flags transition'] = function()
+  ensure_core_events()
   local prompt_buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(prompt_buf, 0, -1, false, { 'needle' })
 
@@ -133,6 +160,7 @@ T['apply-prompt-lines invalidates filter cache when project flags transition'] =
 end
 
 T['apply-prompt-lines skips synchronous meta update on pure project flag changes'] = function()
+  ensure_core_events()
   local prompt_buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(prompt_buf, 0, -1, false, { 'needle' })
 
@@ -172,6 +200,7 @@ T['apply-prompt-lines skips synchronous meta update on pure project flag changes
 end
 
 T['apply-prompt-lines does not rebuild project source on text-only changes'] = function()
+  ensure_core_events()
   local prompt_buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(prompt_buf, 0, -1, false, { 'meta token' })
 
@@ -186,6 +215,22 @@ T['apply-prompt-lines does not rebuild project source on text-only changes'] = f
 
   eq(session['prompt-last-applied-text'], 'meta')
   eq(deps._state.apply_calls, first_calls)
+end
+
+T['core source-switch handler clears stale info state'] = function()
+  ensure_core_events()
+  local prompt_buf = vim.api.nvim_create_buf(false, true)
+  local session = mk_session(prompt_buf)
+  session['info-render-sig'] = 'stale'
+  session['info-line-meta-range-key'] = 'range'
+  events['send']('on-source-switch!', {
+    session = session,
+    ['old-source'] = 'text',
+    ['new-source'] = 'file',
+  })
+
+  eq(session['info-render-sig'], nil)
+  eq(session['info-line-meta-range-key'], nil)
 end
 
 T['prompt-lines ignores non-buffer prompt handles'] = function()

@@ -16,6 +16,7 @@ The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) 
 - `stop!` — Tears down a session: clears autocmds, destroys windows, restores stashed options, unloads buffers async.
 - `resume!` — Reactivates a previously stopped session (re-attaches windows, re-registers hooks).
 - Handles project-mode-specific bootstrap: calls `project_source_mod.bootstrap!` with a streaming callback that feeds results into `meta.on-update` as they arrive.
+- Builds `session.refresh-hooks`, the per-session fanout consumed by `core_events.fnl` for statusline/preview/info/context/sign refresh.
 - Wires the dependency table that hooks, actions, and query_flow modules receive.
 
 ### `actions.fnl` (1216 lines — largest router file)
@@ -33,13 +34,13 @@ The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) 
 - Source switching: detects when `#file`, `#file:{filter}`, `#lgrep`, or scope toggles change and reloads the source set.
 - Transform switching: detects `#hex`, `#json`, etc. and applies/removes transforms.
 - Space-handling optimization: skips re-filter when whitespace-only edits don't change effective tokens.
-- Event emission: fires `:on-directive!` events for each changed directive key, comparing the new parsed query against `session.last-parsed-query`. This allows compat modules and other subsystems to react to directive changes without polling.
+- Event emission: fires `:on-directive!` events for each changed directive key, emits `:on-source-switch!` when source provider changes, and emits `:on-query-update!` instead of directly refreshing preview/info/context/statusline. This allows compat modules and built-in core handlers to react without polling or direct router coupling.
 
 ### `navigation.fnl` (316 lines)
 - `move-selection!` — Moves cursor by N lines, clamps to buffer bounds.
 - Selection coalescing: rapid `move-selection!` calls within a short frame budget are coalesced to drop intermediate render frames, reducing UI jitter during fast navigation.
 - `scroll-half-page!` / `scroll-page!` — Half/full page movement with boundary clamping.
-- Scroll sync: after moving selection, schedules preview and info window updates.
+- Scroll sync: after moving selection, emits `:on-selection-change!`; `core_events.fnl` handles preview/info/context/statusline refresh.
 - Source syntax refresh: in project mode, debounces treesitter re-highlight for visible source separators.
 - Cursor hiding: temporarily hides cursor during programmatic scroll to avoid visual flash.
 
@@ -90,4 +91,5 @@ This pattern prevents Lua `require` cycles. Submodules never require `router.fnl
 - `silent-win-set-buf!` is duplicated in `actions.fnl` and `session.fnl` intentionally. Each needs it locally to avoid requiring the other.
 - The debounce in `query_flow.fnl` interacts with the idle-window detection in `prompt.fnl` — changes to timing must consider both.
 - Project mode bootstrap in `session.fnl` sets up an async streaming callback. The session must stay alive until `stream-done` is set; premature teardown causes orphaned timers.
+- Query/navigation/startup code should emit lifecycle events and rely on `session.refresh-hooks` + `core_events.fnl` for UI fanout. Reintroducing direct preview/info/context refresh chains defeats the feature-22 architecture.
 - `settings.project-file-cache` is shared between `binary-file?` (which creates entries with `:size`/`:mtime`/`:binary` but no `:lines`) and `read-file-view-cached` (which expects `:lines`). The `read-file-view-cached` function handles this by reading the file on demand when `:lines` is missing from a cached entry.
