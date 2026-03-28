@@ -645,6 +645,8 @@
                                :lazy-mode start-lazy
                                :expansion-mode start-expansion
                                :project-source-syntax-chunk-lines settings.project-source-syntax-chunk-lines
+                               :project-lazy-refresh-min-ms settings.project-lazy-refresh-min-ms
+                               :project-lazy-refresh-debounce-ms settings.project-lazy-refresh-debounce-ms
                                :last-parsed-query (vim.tbl_extend
                                                     "force"
                                                     {:lines (or (. parsed-query :lines) [""])

@@ -411,66 +411,6 @@ M.new = function(opts)
     end
     return math.max(0, math.min(_43_, math.max(0, (#meta.buf.indices - 1))))
   end
-  local function schedule_lazy_refresh_21(session)
-    if (session and session_active_3f(session) and not session.closing) then
-      session["lazy-refresh-dirty"] = true
-      if not session["lazy-refresh-pending"] then
-        session["lazy-refresh-pending"] = true
-        local function _45_()
-          session["lazy-refresh-pending"] = false
-          if (session and session_active_3f(session) and session["lazy-refresh-dirty"]) then
-            session["lazy-refresh-dirty"] = false
-            if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
-              if (not session["lazy-stream-done"] and not prompt_has_active_query_3f(session)) then
-                local now = now_ms()
-                local last_render_ms = (session["lazy-last-render-ms"] or 0)
-                local render_interval_ms = 500
-                local should_render_3f = ((now - last_render_ms) >= render_interval_ms)
-                if should_render_3f then
-                  reset_meta_indices_21(session.meta)
-                  pcall(session.meta.buf.render)
-                  events.send("on-project-bootstrap!", {session = session, ["restore-view?"] = true, ["refresh-lines"] = false})
-                  session["lazy-last-render-ms"] = now
-                else
-                end
-                events.send("on-project-bootstrap!", {session = session, ["refresh-lines"] = false})
-              else
-                local ok,err = pcall(session.meta["on-update"], 0)
-                if ok then
-                  events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = false})
-                else
-                  if (err and string.find(tostring(err), "E565")) then
-                    local function _47_()
-                      if (session and session_active_3f(session) and session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
-                        pcall(session.meta["on-update"], 0)
-                        return events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = false})
-                      else
-                        return nil
-                      end
-                    end
-                    vim.defer_fn(_47_, 1)
-                  else
-                  end
-                end
-              end
-            else
-            end
-          else
-          end
-          if (session and session_active_3f(session) and session["lazy-refresh-dirty"]) then
-            return schedule_lazy_refresh_21(session)
-          else
-            return nil
-          end
-        end
-        return vim.defer_fn(_45_, math.max((settings["project-lazy-refresh-min-ms"] or 0), settings["project-lazy-refresh-debounce-ms"]))
-      else
-        return nil
-      end
-    else
-      return nil
-    end
-  end
   local function push_file_into_pool_21(session, path, view, prefilter)
     local lines = (view and view.lines)
     local line_map = ((view and view["line-map"]) or {})
@@ -578,16 +518,16 @@ M.new = function(opts)
     if file_only_mode_3f(session) then
       for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)) do
         table.insert(content, "")
-        local _69_
+        local _57_
         do
           local rel = vim.fn.fnamemodify(path, ":.")
           if ((type(rel) == "string") and (rel ~= "")) then
-            _69_ = rel
+            _57_ = rel
           else
-            _69_ = path
+            _57_ = path
           end
         end
-        table.insert(refs, {path = path, lnum = 1, line = _69_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
+        table.insert(refs, {path = path, lnum = 1, line = _57_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
       end
       return {content = content, refs = refs}
     else
@@ -686,7 +626,7 @@ M.new = function(opts)
     local stream_id = session["lazy-stream-id"]
     local run_batch0 = nil
     local run_batch = run_batch0
-    local function _82_()
+    local function _70_()
       if (session_active_3f(session) and (stream_id == session["lazy-stream-id"]) and not session["lazy-stream-done"]) then
         local paths = session["lazy-stream-paths"]
         local total = #paths
@@ -720,21 +660,24 @@ M.new = function(opts)
           session.meta.buf["visible-source-syntax-only"] = false
           pcall(session.meta.buf["apply-source-syntax-regions"])
           if not prompt_has_active_query_3f(session) then
-            reset_meta_indices_21(session.meta)
-            pcall(session.meta.buf.render)
-            events.send("on-project-complete!", {session = session, ["refresh-lines"] = true, ["restore-view?"] = true})
+            events.send("on-source-pool-change!", {session = session, phase = "complete", ["force?"] = true, ["refresh-lines"] = true, ["restore-view?"] = true})
             sent_complete_3f = true
           else
           end
           if not sent_complete_3f then
-            events.send("on-project-complete!", {session = session, ["refresh-lines"] = true})
+            events.send("on-source-pool-change!", {session = session, phase = "complete", ["phase-only?"] = true, ["force?"] = true, ["refresh-lines"] = true})
           else
           end
         else
         end
         if touched then
-          events.send("on-project-bootstrap!", {session = session, ["refresh-lines"] = false})
-          schedule_lazy_refresh_21(session)
+          local _77_
+          if prompt_has_active_query_3f(session) then
+            _77_ = nil
+          else
+            _77_ = "bootstrap"
+          end
+          events.send("on-source-pool-change!", {session = session, phase = _77_, ["refresh-lines"] = false})
         else
         end
         if (not session["lazy-stream-done"] and (stream_id == session["lazy-stream-id"]) and session_active_3f(session)) then
@@ -746,7 +689,7 @@ M.new = function(opts)
         return nil
       end
     end
-    run_batch = _82_
+    run_batch = _70_
     return vim.defer_fn(run_batch, 0)
   end
   local function apply_source_set_21(session)
@@ -815,7 +758,7 @@ M.new = function(opts)
       session["source-set-rebuild-token"] = (1 + (session["source-set-rebuild-token"] or 0))
       local token = session["source-set-rebuild-token"]
       session["source-set-rebuild-pending"] = true
-      local function _99_()
+      local function _89_()
         if (session and (token == session["source-set-rebuild-token"])) then
           session["source-set-rebuild-pending"] = false
         else
@@ -831,7 +774,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_99_, math.max(0, (wait_ms or 0)))
+      return vim.defer_fn(_89_, math.max(0, (wait_ms or 0)))
     else
       return nil
     end
@@ -860,7 +803,7 @@ M.new = function(opts)
       local delay = math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"] or 0))
       session["project-bootstrap-pending"] = true
       local run_bootstrap_21
-      local function _105_()
+      local function _95_()
         if (session and (token == session["project-bootstrap-token"])) then
           session["project-bootstrap-pending"] = false
         else
@@ -868,7 +811,7 @@ M.new = function(opts)
         if (session and (token == session["project-bootstrap-token"]) and session["project-mode"] and session["prompt-buf"] and session_active_3f(session) and not session["project-bootstrapped"]) then
           local has_query = prompt_has_active_query_3f(session)
           apply_source_set_21(session)
-          events.send("on-project-bootstrap!", {session = session, ["refresh-lines"] = true})
+          events.send("on-source-pool-change!", {session = session, phase = "bootstrap", ["force?"] = true, ["refresh-lines"] = true})
           session["project-bootstrapped"] = true
           if has_query then
             session["prompt-update-dirty"] = true
@@ -883,8 +826,7 @@ M.new = function(opts)
           else
           end
           if not has_query then
-            pcall(session.meta.buf.render)
-            events.send("on-project-complete!", {session = session, ["restore-view?"] = true, ["refresh-lines"] = true})
+            events.send("on-source-pool-change!", {session = session, phase = "complete", ["force?"] = true, ["restore-view?"] = true, ["refresh-lines"] = true})
           else
           end
           session["project-mode-starting?"] = false
@@ -893,13 +835,13 @@ M.new = function(opts)
           return nil
         end
       end
-      run_bootstrap_21 = _105_
+      run_bootstrap_21 = _95_
       return vim.defer_fn(run_bootstrap_21, delay)
     else
       return nil
     end
   end
-  local api = {["schedule-lazy-refresh!"] = schedule_lazy_refresh_21, ["apply-source-set!"] = apply_source_set_21, ["schedule-source-set-rebuild!"] = schedule_source_set_rebuild_21, ["apply-minimal-source-set!"] = apply_minimal_source_set_21, ["schedule-project-bootstrap!"] = schedule_project_bootstrap_21}
+  local api = {["apply-source-set!"] = apply_source_set_21, ["schedule-source-set-rebuild!"] = schedule_source_set_rebuild_21, ["apply-minimal-source-set!"] = apply_minimal_source_set_21, ["schedule-project-bootstrap!"] = schedule_project_bootstrap_21}
   return api
 end
 return M

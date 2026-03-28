@@ -106,6 +106,8 @@ T['project bootstrap and filtering profile through event bus'] = H.timed_case(fu
   profiler.record('bench', 'project bootstrap total', bootstrap_ms)
 
   local after_bootstrap = event_profile_stats()
+  local source_change_ms = elapsed_ms(after_bootstrap, 'on-source-pool-change!')
+  local source_change_cpu_ms = cpu_ms(after_bootstrap, 'on-source-pool-change!')
   local bootstrap_event_ms = elapsed_ms(after_bootstrap, 'on-project-bootstrap!')
   local complete_event_ms = elapsed_ms(after_bootstrap, 'on-project-complete!')
   local bootstrap_cpu_ms = cpu_ms(after_bootstrap, 'on-project-bootstrap!')
@@ -114,11 +116,12 @@ T['project bootstrap and filtering profile through event bus'] = H.timed_case(fu
   profiler.record(
     'event',
     string.format(
-      'project bootstrap total=%.3fms bootstrap=%.3fms cpu=%.3fms complete=%.3fms cpu=%.3fms',
-      bootstrap_ms, bootstrap_event_ms, bootstrap_cpu_ms, complete_event_ms, complete_cpu_ms
+      'project bootstrap total=%.3fms source=%.3fms cpu=%.3fms bootstrap=%.3fms cpu=%.3fms complete=%.3fms cpu=%.3fms',
+      bootstrap_ms, source_change_ms, source_change_cpu_ms, bootstrap_event_ms, bootstrap_cpu_ms, complete_event_ms, complete_cpu_ms
     ),
     bootstrap_ms
   )
+  profiler.record('event-source', 'on-source-pool-change handlers', source_change_ms)
   profiler.record('event-bootstrap', 'on-project-bootstrap handlers', bootstrap_event_ms)
   profiler.record('event-complete', 'on-project-complete handlers', complete_event_ms)
   record_event_trace('bootstrap', after_bootstrap)
@@ -137,24 +140,28 @@ T['project bootstrap and filtering profile through event bus'] = H.timed_case(fu
   profiler.record('bench', 'project filter total', filter_ms)
 
   local after_filter = event_profile_stats()
+  local filter_source_change_ms = elapsed_ms(after_filter, 'on-source-pool-change!')
+  local filter_source_change_cpu_ms = cpu_ms(after_filter, 'on-source-pool-change!')
   local query_event_ms = elapsed_ms(after_filter, 'on-query-update!')
   local query_cpu_ms = cpu_ms(after_filter, 'on-query-update!')
 
   profiler.record(
     'event',
     string.format(
-      'project filter total=%.3fms query=%.3fms cpu=%.3fms gap=%.3fms',
-      filter_ms, query_event_ms, query_cpu_ms, math.max(0, filter_ms - query_event_ms)
+      'project filter total=%.3fms source=%.3fms cpu=%.3fms query=%.3fms cpu=%.3fms gap=%.3fms',
+      filter_ms, filter_source_change_ms, filter_source_change_cpu_ms, query_event_ms, query_cpu_ms, math.max(0, filter_ms - filter_source_change_ms - query_event_ms)
     ),
     filter_ms
   )
+  profiler.record('event-source', 'on-source-pool-change handlers', filter_source_change_ms)
   profiler.record('event-query', 'on-query-update handlers', query_event_ms)
   record_event_trace('filter', after_filter)
 
+  eq(source_change_ms > 0, true)
   eq(bootstrap_event_ms > 0 or complete_event_ms > 0, true)
   eq(query_event_ms > 0, true)
-  eq(bootstrap_ms >= bootstrap_event_ms, true)
-  eq(filter_ms >= query_event_ms, true)
+  eq(bootstrap_ms >= source_change_ms, true)
+  eq(filter_ms >= (filter_source_change_ms + query_event_ms), true)
 end)
 
 return T
