@@ -16,12 +16,16 @@ T['info window updates automatically when typing in prompt during project mode']
   -- Wait for scanning to finish and info window to show something (initial state)
   H.wait_for(function()
     local snap = H.session_info_snapshot()
-    return snap and snap.line ~= '' and H.str_contains(snap.line, "main.txt")
+    local winbar = H.session_info_winbar()
+    return snap and snap.line ~= '' and H.str_contains(snap.line, "main.txt") and type(winbar) == 'string' and winbar ~= ''
   end, 5000)
 
   local initial_snap = H.session_info_snapshot()
+  local initial_winbar = H.session_info_winbar()
   eq(initial_snap.count > 0, true, "Info window should contain rendered lines immediately after :Meta! launch")
   eq(initial_snap.line ~= '', true, "Info window should not stay empty until a later resize")
+  eq(type(initial_winbar), 'string', "Info window winbar should be populated during project startup")
+  eq(initial_winbar ~= '', true, "Info window winbar should expose startup/loading state")
 
   H.wait_for(function()
     local snap = H.session_info_snapshot()

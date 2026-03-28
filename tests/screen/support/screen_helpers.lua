@@ -943,6 +943,17 @@ function M.session_info_snapshot()
   return vim.json.decode(encoded)
 end
 
+function M.session_info_winbar()
+  return M.child.lua_get(session_expr([[
+    if not s then return nil end
+    local info_win = s['info-win']
+    if not (info_win and vim.api.nvim_win_is_valid(info_win)) then
+      return nil
+    end
+    return vim.api.nvim_get_option_value('winbar', { win = info_win })
+  ]]))
+end
+
 function M.start_info_blank_watch(duration_ms)
   M.child.lua(string.format([[
     (function()

@@ -5,6 +5,8 @@ Mostly vibecoded enhanced port of my old Python remote plugin [metabuffer.nvim](
 
 ![metabuffer screenshot](./metabuffer.png)
 
+The right-side info window now keeps a live winbar with visible-range/loading progress, and uses non-empty loading placeholders instead of flashing blank pages during project bootstrap, fast scroll refreshes, or source-mode switches like `#file`.
+
 ## User Guide
 
 ### Setup
