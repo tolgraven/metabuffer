@@ -177,7 +177,7 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 - Custom user transforms registered via `options.custom.transforms` in config.
 
 **Event bus** (`events.fnl`):
-- `events.fnl` — Standalone generic lifecycle event dispatcher. Collects handler specs from registered modules, sorts by priority, filters by `:role-filter`, pcall-dispatches. Public API: `events.send`, `events.register!`, `events.registered-events`, `events.handlers-for`, `events.set-profile!`. The bus is used bidirectionally: compat modules consume events, and core subsystems (`prompt/hooks.fnl`, `router/session.fnl`, `router/actions.fnl`, `router/query_flow.fnl`) emit them. All lifecycle transitions — session start/stop, accept/cancel, insert-enter, mode switches, directive changes — flow through the bus.
+- `events.fnl` — Standalone generic lifecycle event dispatcher. Collects handler specs from registered modules, sorts by priority, filters by `:role-filter`, pcall-dispatches. Public API: `events.send`, `events.register!`, `events.registered-events`, `events.handlers-for`, `events.set-profile!`, `events.profile-stats`, `events.reset-profile-stats!`. The bus is used bidirectionally: compat modules consume events, core subsystems emit them, and the built-in `core_events.fnl` provider fans those lifecycle events back out into statusline/preview/info/context/sign refresh hooks. All lifecycle transitions — session start/stop, startup-ready, source switches, query updates, selection changes, project bootstrap/completion, accept/cancel, insert-enter, mode switches, directive changes — should flow through the bus instead of direct cross-module UI calls.
 
 **Compat / Plugin shims** (`compat/` — see `fnl/metabuffer/compat/AGENTS.md`):
 - `init.fnl` — Pure side-effect loader. Requires the 5 builtin compat sub-modules and registers each into the event bus via `events.register!`. Returns `{}`.
@@ -227,7 +227,7 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 
 ### Key Design Patterns
 
-- **Event-driven UI updates**: Selection changes fan out to preview, info, context, and statusline independently via router callbacks. Window modules never call each other directly.
+- **Event-driven UI updates**: Selection/query/startup/project lifecycle changes fan out to preview, info, context, statusline, and sign refresh through bus handlers (`core_events.fnl`). Window modules never call each other directly.
 - **Compat event bus**: Generic lifecycle dispatcher (`compat/init.fnl`). Modules declare `{:events {:<event> <spec>}}` with priority + role filters. The bus collects, sorts, and pcall-dispatches. See `fnl/metabuffer/compat/AGENTS.md` for the full event schema.
 - **Barrel/index modules**: `window/init.fnl`, `prompt/init.fnl`, `matcher/init.fnl`, `transform/init.fnl`, `source/init.fnl`, `buffer/init.fnl` — return maps of sub-module requires.
 - **Transform registry**: Pluggable modules with a common contract. Each transform can be toggled via `#directive` in the prompt. Custom transforms follow the same interface.

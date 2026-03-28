@@ -264,13 +264,10 @@
 
 (fn restore-session-ui!
   [deps session opts]
-  (let [{: mods : windows : refresh} deps
-        update-preview-window (. refresh :preview!)
+  (let [{: mods : refresh} deps
         sync-prompt-buffer-name! (. refresh :sync-prompt-buffer-name!)
         router-util-mod (. mods :router-util)
         session-view-mod (. mods :session-view)
-        update-info-window (. refresh :info!)
-        context-window (. windows :context)
         preserve-focus? (and opts (. opts :preserve-focus))
         curr session.meta]
     (when (and session.ui-hidden
@@ -318,9 +315,9 @@
             (set (. bo :readonly) false)
             (set (. bo :bufhidden) "hide"))
           (pcall curr.buf.render))
-        (when (and session-view-mod session.source-view)
-          (pcall session-view-mod.restore-meta-view! curr session.source-view session update-info-window))
-        (events.send :on-restore-ui! {:session session})
+        (events.send :on-restore-ui!
+          {:session session
+           :restore-view? (and session-view-mod session.source-view)})
         (let [cursor (or session.hidden-prompt-cursor [1 0])
               row (math.max 1 (or (. cursor 1) 1))
               col (math.max 0 (or (. cursor 2) 0))
@@ -329,12 +326,9 @@
               line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf (- row* 1) row* false) 1) "")
               col* (math.min col (# line))]
           (pcall vim.api.nvim_win_set_cursor prompt-win [row* col*]))
-        (pcall curr.refresh_statusline)
-        (when update-preview-window
-          (pcall update-preview-window session))
-        (pcall update-info-window session true)
-        (when (and context-window context-window.update!)
-          (pcall context-window.update! session))
+        (events.send :on-restore-ui!
+          {:session session
+           :refresh-lines true})
         (when-not preserve-focus?
           (vim.api.nvim_set_current_win prompt-win)
           (if session.ui-last-insert-mode
@@ -616,8 +610,7 @@
 
 (fn M.toggle-info-file-entry-view!
   [deps prompt-buf]
-  (let [{: router : refresh} deps
-        update-info-window (. refresh :info!)
+  (let [{: router} deps
         session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when session
       (set session.info-file-entry-view
@@ -625,27 +618,27 @@
                "meta"
                "content"))
       (set session.info-render-sig nil)
-      (pcall update-info-window session true))))
+      (events.send :on-query-update!
+        {:session session
+         :query (or session.prompt-last-applied-text "")
+         :refresh-lines true}))))
 
 (fn M.refresh-files!
   [deps prompt-buf]
-  (let [{: router : mods : refresh : project : windows} deps
+  (let [{: router : mods : refresh : project} deps
         router-util-mod (. mods :router-util)
         project-source (. project :source)
         apply-prompt-lines (. refresh :apply-prompt-lines!)
-        update-info-window (. refresh :info!)
-        preview-window (. windows :preview)
-        context-window (. windows :context)
         session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when session
       (router-util-mod.clear-file-caches! router session)
       (when session.project-mode
         (project-source.apply-source-set! session))
       (apply-prompt-lines session)
-      (pcall update-info-window session true)
-      (pcall preview-window.maybe-update-for-selection! session)
-      (when (and context-window context-window.update!)
-        (pcall context-window.update! session))
+      (events.send :on-query-update!
+        {:session session
+         :query (or session.prompt-last-applied-text "")
+         :refresh-lines true})
       (vim.notify "metabuffer: refreshed cached file views" vim.log.levels.INFO))))
 
 (fn M.remove-session!
@@ -1129,12 +1122,9 @@
 
 (fn M.write-results!
   [deps prompt-buf]
-  (let [{: router : mods : refresh : windows} deps
+  (let [{: router : mods} deps
         session (session-by-prompt (. router :active-by-prompt) prompt-buf)
-        sign-mod (. mods :sign)
-        update-info-window (. refresh :info!)
-        preview-window (. windows :preview)
-        context-window (. windows :context)]
+        sign-mod (. mods :sign)]
     (when session
       (let [collected (collect-file-ops session)
             ops (. collected :ops)
@@ -1144,9 +1134,11 @@
               (vim.notify
                 "metabuffer: only in-place line replacements are writable from results; open the real file for insert/delete edits"
                 vim.log.levels.ERROR)
-              (pcall session.meta.refresh_statusline)
-              (when sign-mod
-                (pcall sign-mod.refresh-change-signs! session)))
+              (events.send :on-query-update!
+                {:session session
+                 :query (or session.prompt-last-applied-text "")
+                 :refresh-lines false
+                 :refresh-signs? true}))
             (let [result (apply-file-ops! ops)]
               (set session.pending-structural-edit nil)
               (update-session-refs-after-ops! session (. collected :current-rows) ops (. result :post-lines) (. result :renames))
@@ -1155,14 +1147,12 @@
                 (pcall session.meta.on-update 0))
               (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
               (pcall vim.api.nvim_buf_set_var buf "meta_manual_edit_active" false)
-              (pcall session.meta.refresh_statusline)
-              (pcall update-info-window session true)
-              (pcall preview-window.maybe-update-for-selection! session)
-              (when (and context-window context-window.update!)
-                (pcall context-window.update! session))
-              (when sign-mod
-                (pcall sign-mod.capture-baseline! session)
-                (pcall sign-mod.refresh-change-signs! session))
+              (events.send :on-query-update!
+                {:session session
+                 :query (or session.prompt-last-applied-text "")
+                 :refresh-lines true
+                 :capture-sign-baseline? (not (not sign-mod))
+                 :refresh-signs? (not (not sign-mod))})
               (vim.notify
                 (if (> result.changed 0)
                     (.. "metabuffer: wrote " (tostring result.changed) " change(s)")

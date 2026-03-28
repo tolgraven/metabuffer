@@ -100,45 +100,24 @@ local function dispatch_directive_changes_21(session, parsed)
   end
   return nil
 end
-local function refresh_session_ui_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
-  session.meta.refresh_statusline()
-  if update_preview_window then
-    update_preview_window(session)
-  else
-  end
-  update_info_window(session, true)
-  if (context_window and context_window["update!"]) then
-    context_window["update!"](session)
-  else
-  end
-  if refresh_change_signs_21 then
-    refresh_change_signs_21(session)
-  else
-  end
-  if capture_sign_baseline_21 then
-    return capture_sign_baseline_21(session)
-  else
-    return nil
-  end
-end
-local function retry_textlock_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
-  local function _13_()
+local function retry_textlock_update_21(session)
+  local function _9_()
     if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
       pcall(session.meta["on-update"], 0)
-      return pcall(refresh_session_ui_21, session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+      return events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = true, ["refresh-signs?"] = true, ["capture-sign-baseline?"] = true})
     else
       return nil
     end
   end
-  return vim.defer_fn(_13_, 1)
+  return vim.defer_fn(_9_, 1)
 end
-local function run_meta_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+local function run_meta_update_21(session)
   local ok,err = pcall(session.meta["on-update"], 0)
   if ok then
-    return refresh_session_ui_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+    return events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = true, ["refresh-signs?"] = true, ["capture-sign-baseline?"] = true})
   else
     if string.find(tostring(err), "E565") then
-      return retry_textlock_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+      return retry_textlock_update_21(session)
     else
       return nil
     end
@@ -166,16 +145,9 @@ end
 M["apply-prompt-lines!"] = function(deps, session)
   local mods = deps.mods
   local project = deps.project
-  local refresh = deps.refresh
-  local windows = deps.windows
   local history = deps.history
   local query_mod = mods.query
   local project_source = project.source
-  local update_preview_window = refresh["preview!"]
-  local update_info_window = refresh["info!"]
-  local context_window = windows.context
-  local refresh_change_signs_21 = refresh["change-signs!"]
-  local capture_sign_baseline_21 = refresh["capture-sign-baseline!"]
   local merge_history_into_session_21 = history["merge-into-session!"]
   local save_current_prompt_tag_21 = history["save-current-prompt-tag!"]
   local restore_saved_prompt_tag_21 = history["restore-saved-prompt-tag!"]
@@ -198,6 +170,8 @@ M["apply-prompt-lines!"] = function(deps, session)
     local next_expansion = choose_current_when_nil(parsed.expansion, session["expansion-mode"])
     local schedule_source_set_rebuild_21 = project_source["schedule-source-set-rebuild!"]
     local apply_source_set_21 = project_source["apply-source-set!"]
+    local prev_source = source_mod["query-source-signature"]((session["last-parsed-query"] or {}))
+    local next_source = source_mod["query-source-signature"](parsed)
     local prev_effective_text = (session["prompt-last-applied-text"] or "")
     local text_changed_3f = (effective_text ~= prev_effective_text)
     local source_changed_3f = source_flags_changed_3f(session, parsed)
@@ -264,6 +238,10 @@ M["apply-prompt-lines!"] = function(deps, session)
     else
     end
     if ((session["project-mode"] or session["active-source-key"] or source_mod["query-source-active?"](parsed)) and source_changed_3f) then
+      if (next_source ~= prev_source) then
+        events.send("on-source-switch!", {session = session, ["old-source"] = prev_source, ["new-source"] = next_source})
+      else
+      end
       if schedule_source_set_rebuild_21 then
         schedule_source_set_rebuild_21(session, 0)
       else
@@ -276,9 +254,9 @@ M["apply-prompt-lines!"] = function(deps, session)
     end
     session.meta["set-query-lines"](effective_lines)
     if (session["project-mode"] and source_changed_3f and not text_changed_3f) then
-      return refresh_session_ui_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+      return events.send("on-query-update!", {session = session, query = effective_text, ["refresh-lines"] = true, ["refresh-signs?"] = true, ["capture-sign-baseline?"] = true})
     else
-      return run_meta_update_21(session, update_preview_window, update_info_window, context_window, refresh_change_signs_21, capture_sign_baseline_21)
+      return run_meta_update_21(session)
     end
   else
     return nil

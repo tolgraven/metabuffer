@@ -3,6 +3,7 @@
 (local config (require :metabuffer.config))
 (local events (require :metabuffer.events))
 (local compat-providers (require :metabuffer.compat))
+(local core-events-provider (require :metabuffer.core_events))
 (local PRIMARY_LINE_GROUPS ["Title" "String" "Number" "Special" "Type" "Identifier"])
 
 (local M {})
@@ -592,7 +593,7 @@
 (fn M.setup
   [opts]
   "Public API: M.setup."
-  (events.load-providers! compat-providers)
+  (events.load-providers! (vim.list_extend (vim.deepcopy compat-providers) [core-events-provider]))
   (set last-setup-opts opts)
   (router.configure opts)
   (ensure-defaults-and-highlights! opts)

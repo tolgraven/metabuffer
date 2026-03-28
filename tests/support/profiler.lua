@@ -8,6 +8,7 @@ local file_totals = nil
 local output_path = nil
 local file_finished = false
 local case_timings = nil
+local finalize_group = nil
 local pack = table.pack or function(...)
   return { n = select('#', ...), ... }
 end
@@ -68,27 +69,32 @@ local function top_spans(case_stats, n)
 end
 
 local function print_case_summary(case_stats, idx)
-  local blocked = math.max(0, case_stats.wall - case_stats.cpu)
+  local yielded = case_stats.wait or 0
+  local blocked = math.max(0, case_stats.wall - case_stats.cpu - yielded)
   local lines = {
     string.format(
-    '[mini-profile]   %02d. %s | wall=%.1fms cpu=%.1fms blocked=%.1fms wait=%.1fms sleep=%.1fms child=%.1fms',
+    '[mini-profile]   %02d. %s | wall=%.1fms cpu=%.1fms blocked=%.1fms yielded=%.1fms wait=%.1fms sleep=%.1fms child=%.1fms',
     idx,
     case_stats.name,
     case_stats.wall,
     case_stats.cpu,
     blocked,
+    yielded,
     case_stats.wait or 0,
     case_stats.sleep or 0,
     case_stats.child or 0
     ),
   }
-  for _, item in ipairs(top_spans(case_stats, 3)) do
+  for _, item in ipairs(top_spans(case_stats, 5)) do
     lines[#lines + 1] = string.format(
       '[mini-profile]        %s | %s | %.1fms',
       item.kind,
       item.label,
       item.ms
     )
+  end
+  for _, note in ipairs(case_stats.notes or {}) do
+    lines[#lines + 1] = string.format('[mini-profile]        note | %s', note)
   end
   return lines
 end
@@ -141,6 +147,13 @@ function M.record(kind, label, ms)
   record_span(kind, label, ms)
 end
 
+function M.note(label)
+  if not (enabled and current_case and label and label ~= '') then
+    return
+  end
+  current_case.notes[#current_case.notes + 1] = label
+end
+
 function M.start_case()
   local name = case_name()
   io.stdout:write(string.format('\n[mini-runner] CASE START %s\n', name))
@@ -154,6 +167,7 @@ function M.start_case()
     wall0 = hr_ms(),
     cpu0 = cpu_ms(),
     spans = {},
+    notes = {},
     wait = 0,
     sleep = 0,
     child = 0,
@@ -205,11 +219,12 @@ function M.finish_file()
   table.sort(case_order, function(a, b) return a.wall > b.wall end)
   local lines = {
     string.format(
-    '[mini-profile] FILE SUMMARY | cases=%d wall=%.1fms cpu=%.1fms blocked=%.1fms wait=%.1fms sleep=%.1fms child=%.1fms',
+    '[mini-profile] FILE SUMMARY | cases=%d wall=%.1fms cpu=%.1fms blocked=%.1fms yielded=%.1fms wait=%.1fms sleep=%.1fms child=%.1fms',
     #case_order,
     file_totals.wall,
     file_totals.cpu,
-    math.max(0, file_totals.wall - file_totals.cpu),
+    math.max(0, file_totals.wall - file_totals.cpu - file_totals.wait),
+    file_totals.wait,
     file_totals.wait,
     file_totals.sleep,
     file_totals.child
@@ -281,6 +296,19 @@ function M.setup()
     sleep = 0,
     child = 0,
   }
+  if finalize_group ~= nil then
+    pcall(vim.api.nvim_del_augroup_by_id, finalize_group)
+  end
+  finalize_group = vim.api.nvim_create_augroup('MetaTestProfiler', { clear = true })
+  vim.api.nvim_create_autocmd('VimLeavePre', {
+    group = finalize_group,
+    callback = function()
+      if current_case ~= nil then
+        pcall(M.finish_case)
+      end
+      pcall(M.finish_file)
+    end,
+  })
   M.wrap_minitest_new_set()
 end
 

@@ -36,7 +36,7 @@
         ctx)))
 
 (fn M.restore-meta-view!
-  [meta source-view session update-info-window]
+  [meta source-view session _update-info-window]
   "Restore cursor and viewport in the results window."
   (when (and meta (vim.api.nvim_win_is_valid meta.win.window))
     (let [line-count (vim.api.nvim_buf_line_count meta.buf.buffer)
@@ -71,8 +71,18 @@
             (when (~= (. base-view :col) nil)
               (set (. view :col) (. base-view :col)))
             (vim.fn.winrestview view)
-            (when (and update-info-window session)
-              (vim.defer_fn (fn [] (pcall update-info-window session true)) 50))))))))
+            (when session
+              (vim.defer_fn
+                (fn []
+                  (when (and session
+                             session.meta
+                             session.meta.win
+                             (vim.api.nvim_win_is_valid session.meta.win.window))
+                    (events.send :on-selection-change!
+                      {:session session
+                       :line-nr (+ 1 (or session.meta.selected_index 0))
+                       :refresh-lines true})))
+                50))))))))
 
 (fn M.sync-selected-from-main-cursor!
   [session]
@@ -93,10 +103,7 @@
   [session force-refresh opts]
   "Sync selection and UI state from main window cursor when session is active."
   (let [{: active-by-prompt
-         : schedule-source-syntax-refresh!
-         : update-info-window
-         : update-preview-window!
-         : update-context-window!}
+         : schedule-source-syntax-refresh!}
         (or opts {})]
     (when (and session
                (not session.ui-hidden)
@@ -115,12 +122,11 @@
         (when force-refresh
           (schedule-source-syntax-refresh! session))
         (when (or force-refresh (~= before session.meta.selected_index))
-          (pcall session.meta.refresh_statusline)
-          (when update-preview-window!
-            (pcall update-preview-window! session))
-          (pcall update-info-window session false)
-          (when update-context-window!
-            (pcall update-context-window! session)))))))
+          (events.send :on-selection-change!
+            {:session session
+             :line-nr (+ 1 (or session.meta.selected_index 0))
+             :force-refresh? force-refresh
+             :refresh-lines false}))))))
 
 (fn M.schedule-scroll-sync!
   [session opts]

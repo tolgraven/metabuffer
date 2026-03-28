@@ -1,7 +1,18 @@
 local navigation = require('metabuffer.router.navigation')
+local events = require('metabuffer.events')
+local core_events = require('metabuffer.core_events')
 local eq = MiniTest.expect.equality
 
 local T = MiniTest.new_set()
+local core_events_registered = false
+
+local function ensure_core_events()
+  if core_events_registered then
+    return
+  end
+  events['register!'](core_events)
+  core_events_registered = true
+end
 
 local function wait_for_refresh(count_fn, expected)
   vim.wait(1000, function()
@@ -11,6 +22,7 @@ local function wait_for_refresh(count_fn, expected)
 end
 
 T['scroll-main keeps selected row in sync with results viewport from prompt window'] = function()
+  ensure_core_events()
   vim.cmd('enew')
   local meta_buf = vim.api.nvim_get_current_buf()
   local lines = {}
@@ -38,6 +50,11 @@ T['scroll-main keeps selected row in sync with results viewport from prompt wind
   }
   local session = {
     ['prompt-buf'] = prompt_buf,
+    ['refresh-hooks'] = {
+      ['statusline!'] = function()
+        status_calls = status_calls + 1
+      end,
+    },
     meta = {
       ['selected_index'] = 9,
       win = { window = meta_win },
@@ -71,6 +88,7 @@ T['scroll-main keeps selected row in sync with results viewport from prompt wind
 end
 
 T['animated scroll-main does not jump the real cursor before the animation runs'] = function()
+  ensure_core_events()
   vim.cmd('enew')
   local meta_buf = vim.api.nvim_get_current_buf()
   local lines = {}
@@ -131,6 +149,20 @@ T['animated scroll-main does not jump the real cursor before the animation runs'
   }
   local session = {
     ['prompt-buf'] = prompt_buf,
+    ['refresh-hooks'] = {
+      ['statusline!'] = function()
+        status_calls = status_calls + 1
+      end,
+      ['preview!'] = function()
+        preview_calls = preview_calls + 1
+      end,
+      ['info!'] = function()
+        info_calls = info_calls + 1
+      end,
+      ['context!'] = function()
+        context_calls = context_calls + 1
+      end,
+    },
     meta = {
       ['selected_index'] = 9,
       win = { window = meta_win },
@@ -168,6 +200,7 @@ T['animated scroll-main does not jump the real cursor before the animation runs'
 end
 
 T['scroll-main uses Neovim effective final view when paging changes cursor row'] = function()
+  ensure_core_events()
   vim.cmd('enew')
   local meta_buf = vim.api.nvim_get_current_buf()
   local lines = {}
@@ -209,6 +242,11 @@ T['scroll-main uses Neovim effective final view when paging changes cursor row']
   }
   local session = {
     ['prompt-buf'] = prompt_buf,
+    ['refresh-hooks'] = {
+      ['statusline!'] = function()
+        status_calls = status_calls + 1
+      end,
+    },
     meta = {
       ['selected_index'] = 9,
       win = { window = meta_win },

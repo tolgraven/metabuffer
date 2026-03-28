@@ -86,6 +86,7 @@ Events are organized by lifecycle phase. Each entry shows the event name, handle
 - **Buffer mode**: first filter + render cycle complete, results visible, info loaded.
 - **Project mode**: bootstrap streaming done, results rendered into buffer, info window populated, entry animations finished.
 - This is the "plugin is ready to use" signal. Use it for anything that should run only after the user can see and interact with results.
+- Internal core UI refresh also consumes this event via `core_events.fnl`; handlers may receive extra args like `:refresh-lines`, `:refresh-signs?`, or `:capture-sign-baseline?` on the shared args table.
 
 ### Buffer Lifecycle
 
@@ -137,12 +138,21 @@ Events are organized by lifecycle phase. Each entry shows the event name, handle
 | `:on-query-update!` | `(session query)` | Prompt query parsed and applied |
 | `:on-selection-change!` | `(session line-nr)` | Selected hit changed (navigation, filter) |
 
+`core_events.fnl` currently uses optional args on these events:
+- `:refresh-lines` — whether info/preview should rebuild line-derived state.
+- `:force-refresh?` — selection refresh should also schedule visible source-syntax refresh.
+- `:refresh-signs?` / `:capture-sign-baseline?` — sign subsystem maintenance during query/startup updates.
+
 ### Project Events
 
 | Event | Signature | Fires when |
 |-------|-----------|------------|
 | `:on-project-bootstrap!` | `(session)` | Project mode streaming starts |
 | `:on-project-complete!` | `(session)` | Project source fully loaded |
+
+These project events may fire more than once during a session:
+- bootstrap while lazy streaming is still expanding the pool
+- complete when eager bootstrap or lazy streaming fully settles
 
 ### Action Events
 
@@ -226,6 +236,10 @@ Enable from Lua:
 vim.g["meta#debug"] = true  -- required: turns on debug logging
 require("metabuffer.events").set_profile(true)
 ```
+
+### `(events.profile-stats)` / `(events.reset-profile-stats!)` — Timing snapshots
+
+When profiling is enabled, the bus also accumulates per-event timing totals in memory. `profile-stats` returns a deep copy keyed by event name with total `elapsed_us`, `count`, and per-handler subtables keyed as `domain/source`. `reset-profile-stats!` clears those accumulators so screen tests or ad hoc profiling sessions can compare one interaction's end-to-end time against just the bus-handler portion.
 
 ## Builtin Modules
 

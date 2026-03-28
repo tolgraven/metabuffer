@@ -3,10 +3,77 @@ local M = {}
 local debug = require("metabuffer.debug")
 local default_priority = 50
 local handlers_by_event = {}
+local profile_stats = {}
 local profile_3f = false
+local function cpu_us()
+  local uv = (vim.uv or vim.loop)
+  local usage = (uv and uv.getrusage and uv.getrusage())
+  if usage then
+    return ((usage.utime.sec * 1000000) + usage.utime.usec + (usage.stime.sec * 1000000) + usage.stime.usec)
+  else
+    return 0
+  end
+end
 M["set-profile!"] = function(enabled)
   profile_3f = not not enabled
   return nil
+end
+local function clear_profile_stats_21()
+  for k, _ in pairs(profile_stats) do
+    profile_stats[k] = nil
+  end
+  return nil
+end
+local function event_stats_for(event_key)
+  local event_stats = (profile_stats[event_key] or {})
+  if (profile_stats[event_key] == nil) then
+    profile_stats[event_key] = event_stats
+  else
+  end
+  if (event_stats.emissions == nil) then
+    event_stats["emissions"] = {}
+  else
+  end
+  return event_stats
+end
+local function handler_key(spec)
+  return ((spec.domain or "?") .. "/" .. (spec.source or "?"))
+end
+local function handler_stats_for(event_stats, key)
+  local handler_stats = (event_stats[key] or {})
+  if (event_stats[key] == nil) then
+    event_stats[key] = handler_stats
+  else
+  end
+  return handler_stats
+end
+local function start_emission_21(event_key)
+  local event_stats = event_stats_for(event_key)
+  local emissions = event_stats.emissions
+  local emission = {index = (#emissions + 1), event = event_key, elapsed_us = 0, cpu_us = 0, handler_count = 0, handlers = {}}
+  table.insert(emissions, emission)
+  event_stats.count = (1 + (event_stats.count or 0))
+  return {event_stats, emission}
+end
+local function accumulate_profile_21(event_stats, emission, spec, elapsed_us, cpu_elapsed_us, ok, err)
+  event_stats.handler_count = (1 + (event_stats.handler_count or 0))
+  event_stats.elapsed_us = (elapsed_us + (event_stats.elapsed_us or 0))
+  event_stats.cpu_us = (cpu_elapsed_us + (event_stats.cpu_us or 0))
+  emission.handler_count = (1 + (emission.handler_count or 0))
+  emission.elapsed_us = (elapsed_us + (emission.elapsed_us or 0))
+  emission.cpu_us = (cpu_elapsed_us + (emission.cpu_us or 0))
+  local handler_key0 = handler_key(spec)
+  local handler_stats = handler_stats_for(event_stats, handler_key0)
+  local handler_run = {domain = (spec.domain or "?"), source = (spec.source or "?"), priority = (spec.priority or default_priority), elapsed_us = elapsed_us, cpu_us = cpu_elapsed_us, ok = ok}
+  handler_stats.count = (1 + (handler_stats.count or 0))
+  handler_stats.elapsed_us = (elapsed_us + (handler_stats.elapsed_us or 0))
+  handler_stats.cpu_us = (cpu_elapsed_us + (handler_stats.cpu_us or 0))
+  if not ok then
+    handler_stats.last_error = tostring(err)
+    handler_run.error = tostring(err)
+  else
+  end
+  return table.insert(emission.handlers, handler_run)
 end
 local function normalize_spec(spec)
   if (type(spec) == "function") then
@@ -55,10 +122,10 @@ local function register_module_21(mod)
 end
 local function sort_handlers_21()
   for _, list in pairs(handlers_by_event) do
-    local function _8_(a, b)
+    local function _13_(a, b)
       return (a.priority < b.priority)
     end
-    table.sort(list, _8_)
+    table.sort(list, _13_)
   end
   return nil
 end
@@ -86,19 +153,22 @@ local function matches_filter_3f(spec, args)
     return true
   end
 end
-local function pcall_handler_21(spec, event_key, args)
+local function pcall_handler_21(spec, event_key, args, event_stats, emission)
   if profile_3f then
     local t0 = vim.uv.hrtime()
+    local cpu0 = cpu_us()
     local ok, err = pcall(spec.handler, args)
     local elapsed_us = ((vim.uv.hrtime() - t0) / 1000)
-    local function _12_()
+    local cpu_elapsed_us = math.max(0, (cpu_us() - cpu0))
+    accumulate_profile_21(event_stats, emission, spec, elapsed_us, cpu_elapsed_us, ok, err)
+    local function _17_()
       if ok then
         return ""
       else
         return ("  ERR: " .. tostring(err))
       end
     end
-    return debug.log("event-bus", string.format("%s  %s/%s  p=%d  %.1f\194\181s%s", event_key, (spec.domain or "?"), (spec.source or "?"), spec.priority, elapsed_us, _12_()))
+    return debug.log("event-bus", string.format("%s  %s/%s  p=%d  wall=%.1f\194\181s cpu=%.1f\194\181s%s", event_key, (spec.domain or "?"), (spec.source or "?"), spec.priority, elapsed_us, cpu_elapsed_us, _17_()))
   else
     return pcall(spec.handler, args)
   end
@@ -106,10 +176,20 @@ end
 M.send = function(event_key, args)
   local list = handlers_by_event[event_key]
   local args_2a = (args or {})
+  local function _19_()
+    if (profile_3f and list) then
+      return start_emission_21(event_key)
+    else
+      return {nil, nil}
+    end
+  end
+  local _let_20_ = _19_()
+  local event_stats = _let_20_[1]
+  local emission = _let_20_[2]
   if list then
     for _, spec in ipairs(list) do
       if matches_filter_3f(spec, args_2a) then
-        pcall_handler_21(spec, event_key, args_2a)
+        pcall_handler_21(spec, event_key, args_2a, event_stats, emission)
       else
       end
     end
@@ -138,5 +218,11 @@ M["registered-events"] = function()
 end
 M["handlers-for"] = function(event_key)
   return handlers_by_event[event_key]
+end
+M["profile-stats"] = function()
+  return vim.deepcopy(profile_stats)
+end
+M["reset-profile-stats!"] = function()
+  return clear_profile_stats_21()
 end
 return M

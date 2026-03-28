@@ -43,7 +43,9 @@
 ;;;
 ;;; Session lifecycle
 ;;;   :on-session-start!     {:session ...}
-;;;   :on-session-ready!     {:session ...}
+;;;   :on-session-ready!     {:session ... :refresh-lines bool
+;;;                           :restore-view? bool
+;;;                           :refresh-signs? bool :capture-sign-baseline? bool}
 ;;;   :on-session-stop!      {:session ...}
 ;;;
 ;;; Buffer lifecycle
@@ -59,20 +61,27 @@
 ;;; Mode events
 ;;;   :on-insert-enter!      {:session ...}
 ;;;   :on-mode-switch!       {:session ... :kind str :old str :new str}
+;;;   :on-prompt-focus!      {:session ...}
+;;;   :on-loading-state!     {:session ...}
 ;;;
 ;;; Source / query events
 ;;;   :on-source-switch!     {:session ... :old-source str :new-source str}
-;;;   :on-query-update!      {:session ... :query str}
-;;;   :on-selection-change!  {:session ... :line-nr N}
+;;;   :on-query-update!      {:session ... :query str :refresh-lines bool
+;;;                           :refresh-signs? bool :capture-sign-baseline? bool}
+;;;   :on-selection-change!  {:session ... :line-nr N :refresh-lines bool
+;;;                           :force-refresh? bool}
 ;;;
 ;;; Project events
-;;;   :on-project-bootstrap! {:session ...}
-;;;   :on-project-complete!  {:session ...}
+;;;   :on-project-bootstrap! {:session ... :refresh-lines bool
+;;;                           :restore-view? bool}
+;;;   :on-project-complete!  {:session ... :refresh-lines bool
+;;;                           :restore-view? bool}
 ;;;
 ;;; Action events
 ;;;   :on-accept!            {:session ...}
 ;;;   :on-cancel!            {:session ...}
-;;;   :on-restore-ui!        {:session ...}
+;;;   :on-restore-ui!        {:session ... :restore-view? bool}
+;;;   :on-restore-view!      {:session ...}
 ;;;
 ;;; Directive events
 ;;;   :on-directive!         {:session ...  :key str  :value any
@@ -85,12 +94,87 @@
 
 (local default-priority 50)
 (local handlers-by-event {})
+(local profile-stats {})
 (var profile? false)
+
+(fn cpu-us
+  []
+  (let [uv (or vim.uv vim.loop)
+        usage (and uv uv.getrusage (uv.getrusage))]
+    (if usage
+        (+ (* (. (. usage :utime) :sec) 1000000)
+           (. (. usage :utime) :usec)
+           (* (. (. usage :stime) :sec) 1000000)
+           (. (. usage :stime) :usec))
+        0)))
 
 (fn M.set-profile!
   [enabled]
   "Enable or disable per-handler timing logs (via debug.log)."
   (set profile? (not (not enabled))))
+
+(fn clear-profile-stats!
+  []
+  (each [k _ (pairs profile-stats)]
+    (set (. profile-stats k) nil)))
+
+(fn event-stats-for
+  [event-key]
+  (let [event-stats (or (. profile-stats event-key) {})]
+    (when (= (. profile-stats event-key) nil)
+      (set (. profile-stats event-key) event-stats))
+    (when (= (. event-stats :emissions) nil)
+      (set (. event-stats :emissions) []))
+    event-stats))
+
+(fn handler-key
+  [spec]
+  (.. (or spec.domain "?") "/" (or spec.source "?")))
+
+(fn handler-stats-for
+  [event-stats key]
+  (let [handler-stats (or (. event-stats key) {})]
+    (when (= (. event-stats key) nil)
+      (set (. event-stats key) handler-stats))
+    handler-stats))
+
+(fn start-emission!
+  [event-key]
+  (let [event-stats (event-stats-for event-key)
+        emissions (. event-stats :emissions)
+        emission {:index (+ (# emissions) 1)
+                  :event event-key
+                  :elapsed_us 0
+                  :cpu_us 0
+                  :handler_count 0
+                  :handlers []}]
+    (table.insert emissions emission)
+    (set event-stats.count (+ 1 (or event-stats.count 0)))
+    [event-stats emission]))
+
+(fn accumulate-profile!
+  [event-stats emission spec elapsed-us cpu-elapsed-us ok err]
+  (set event-stats.handler_count (+ 1 (or event-stats.handler_count 0)))
+  (set event-stats.elapsed_us (+ elapsed-us (or event-stats.elapsed_us 0)))
+  (set event-stats.cpu_us (+ cpu-elapsed-us (or event-stats.cpu_us 0)))
+  (set emission.handler_count (+ 1 (or emission.handler_count 0)))
+  (set emission.elapsed_us (+ elapsed-us (or emission.elapsed_us 0)))
+  (set emission.cpu_us (+ cpu-elapsed-us (or emission.cpu_us 0)))
+  (let [handler-key0 (handler-key spec)
+        handler-stats (handler-stats-for event-stats handler-key0)
+        handler-run {:domain (or spec.domain "?")
+                     :source (or spec.source "?")
+                     :priority (or spec.priority default-priority)
+                     :elapsed_us elapsed-us
+                     :cpu_us cpu-elapsed-us
+                     :ok ok}]
+    (set handler-stats.count (+ 1 (or handler-stats.count 0)))
+    (set handler-stats.elapsed_us (+ elapsed-us (or handler-stats.elapsed_us 0)))
+    (set handler-stats.cpu_us (+ cpu-elapsed-us (or handler-stats.cpu_us 0)))
+    (when (not ok)
+      (set handler-stats.last_error (tostring err))
+      (set handler-run.error (tostring err)))
+    (table.insert (. emission :handlers) handler-run)))
 
 (fn normalize-spec
   [spec]
@@ -142,19 +226,22 @@
       true))
 
 (fn pcall-handler!
-  [spec event-key args]
+  [spec event-key args event-stats emission]
   "Invoke spec.handler with pcall.  When profiling is active, measure
    wall-clock time and log domain/source/event/priority/elapsed-µs."
   (if profile?
       (let [t0 (vim.uv.hrtime)
+            cpu0 (cpu-us)
             (ok err) (pcall spec.handler args)
-            elapsed-us (/ (- (vim.uv.hrtime) t0) 1000)]
+            elapsed-us (/ (- (vim.uv.hrtime) t0) 1000)
+            cpu-elapsed-us (math.max 0 (- (cpu-us) cpu0))]
+        (accumulate-profile! event-stats emission spec elapsed-us cpu-elapsed-us ok err)
         (debug.log :event-bus
-                   (string.format "%s  %s/%s  p=%d  %.1fµs%s"
+                   (string.format "%s  %s/%s  p=%d  wall=%.1fµs cpu=%.1fµs%s"
                                   event-key
                                   (or spec.domain "?")
                                   (or spec.source "?")
-                                  spec.priority elapsed-us
+                                  spec.priority elapsed-us cpu-elapsed-us
                                   (if ok "" (.. "  ERR: " (tostring err))))))
       (pcall spec.handler args)))
 
@@ -165,11 +252,14 @@
    Handlers failing their role-filter are skipped silently.
    All invocations are pcall-isolated."
   (let [list (. handlers-by-event event-key)
-        args* (or args {})]
+        args* (or args {})
+        [event-stats emission] (if (and profile? list)
+                                   (start-emission! event-key)
+                                   [nil nil])]
     (when list
       (each [_ spec (ipairs list)]
         (when (matches-filter? spec args*)
-          (pcall-handler! spec event-key args*))))))
+          (pcall-handler! spec event-key args* event-stats emission))))))
 
 (fn M.register!
   [mod]
@@ -200,5 +290,15 @@
   [event-key]
   "Return the sorted handler list for event-key, or nil."
   (. handlers-by-event event-key))
+
+(fn M.profile-stats
+  []
+  "Return a deep copy of accumulated profile stats keyed by event name."
+  (vim.deepcopy profile-stats))
+
+(fn M.reset-profile-stats!
+  []
+  "Clear accumulated event profile stats."
+  (clear-profile-stats!))
 
 M

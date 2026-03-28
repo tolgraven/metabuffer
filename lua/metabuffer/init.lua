@@ -3,6 +3,7 @@ local router = require("metabuffer.router")
 local config = require("metabuffer.config")
 local events = require("metabuffer.events")
 local compat_providers = require("metabuffer.compat")
+local core_events_provider = require("metabuffer.core_events")
 local PRIMARY_LINE_GROUPS = {"Title", "String", "Number", "Special", "Type", "Identifier"}
 local M = {}
 local PATH_SEG_GROUPS = {"Directory", "Identifier", "Type", "Special", "String", "Constant", "Function", "Statement", "PreProc", "Keyword", "Operator", "Character", "Tag", "Delimiter", "Number", "Boolean", "Macro", "Title", "Question", "Exception", "DiffAdd", "DiffChange", "DiffText", "DiagnosticInfo"}
@@ -645,7 +646,7 @@ M.reload = function(opts)
   return true
 end
 M.setup = function(opts)
-  events["load-providers!"](compat_providers)
+  events["load-providers!"](vim.list_extend(vim.deepcopy(compat_providers), {core_events_provider}))
   last_setup_opts = opts
   router.configure(opts)
   ensure_defaults_and_highlights_21(opts)

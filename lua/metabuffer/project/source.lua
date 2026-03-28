@@ -1,6 +1,7 @@
 -- [nfnl] fnl/metabuffer/project/source.fnl
 local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
+local events = require("metabuffer.events")
 local source_mod = require("metabuffer.source")
 local transform_mod = require("metabuffer.transform")
 M.new = function(opts)
@@ -22,8 +23,6 @@ M.new = function(opts)
   local now_ms = opts["now-ms"]
   local prompt_update_delay_ms = opts["prompt-update-delay-ms"]
   local schedule_prompt_update_21 = opts["schedule-prompt-update!"]
-  local restore_meta_view_21 = opts["restore-meta-view!"]
-  local update_info_window = opts["update-info-window"]
   local function parse_prefilter_terms(query_lines, ignorecase)
     local function unclosed_pattern_delims_3f(token)
       local s = (token or "")
@@ -430,24 +429,21 @@ M.new = function(opts)
                 if should_render_3f then
                   reset_meta_indices_21(session.meta)
                   pcall(session.meta.buf.render)
-                  restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
+                  events.send("on-project-bootstrap!", {session = session, ["restore-view?"] = true, ["refresh-lines"] = false})
                   session["lazy-last-render-ms"] = now
                 else
                 end
-                pcall(session.meta.refresh_statusline)
-                pcall(update_info_window, session)
+                events.send("on-project-bootstrap!", {session = session, ["refresh-lines"] = false})
               else
                 local ok,err = pcall(session.meta["on-update"], 0)
                 if ok then
-                  pcall(session.meta.refresh_statusline)
-                  pcall(update_info_window, session)
+                  events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = false})
                 else
                   if (err and string.find(tostring(err), "E565")) then
                     local function _47_()
                       if (session and session_active_3f(session) and session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
                         pcall(session.meta["on-update"], 0)
-                        pcall(session.meta.refresh_statusline)
-                        return pcall(update_info_window, session)
+                        return events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = false})
                       else
                         return nil
                       end
@@ -688,7 +684,9 @@ M.new = function(opts)
     session["lazy-stream-total"] = #session["lazy-stream-paths"]
     session["lazy-prefilter"] = prefilter
     local stream_id = session["lazy-stream-id"]
-    local function run_batch()
+    local run_batch0 = nil
+    local run_batch = run_batch0
+    local function _82_()
       if (session_active_3f(session) and (stream_id == session["lazy-stream-id"]) and not session["lazy-stream-done"]) then
         local paths = session["lazy-stream-paths"]
         local total = #paths
@@ -717,19 +715,25 @@ M.new = function(opts)
         else
         end
         if (session["lazy-stream-done"] and session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
+          local sent_complete0 = false
+          local sent_complete_3f = sent_complete0
           session.meta.buf["visible-source-syntax-only"] = false
           pcall(session.meta.buf["apply-source-syntax-regions"])
           if not prompt_has_active_query_3f(session) then
             reset_meta_indices_21(session.meta)
             pcall(session.meta.buf.render)
-            restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
+            events.send("on-project-complete!", {session = session, ["refresh-lines"] = true, ["restore-view?"] = true})
+            sent_complete_3f = true
           else
           end
-          pcall(session.meta.refresh_statusline)
-          pcall(update_info_window, session, true)
+          if not sent_complete_3f then
+            events.send("on-project-complete!", {session = session, ["refresh-lines"] = true})
+          else
+          end
         else
         end
         if touched then
+          events.send("on-project-bootstrap!", {session = session, ["refresh-lines"] = false})
           schedule_lazy_refresh_21(session)
         else
         end
@@ -742,6 +746,7 @@ M.new = function(opts)
         return nil
       end
     end
+    run_batch = _82_
     return vim.defer_fn(run_batch, 0)
   end
   local function apply_source_set_21(session)
@@ -810,7 +815,7 @@ M.new = function(opts)
       session["source-set-rebuild-token"] = (1 + (session["source-set-rebuild-token"] or 0))
       local token = session["source-set-rebuild-token"]
       session["source-set-rebuild-pending"] = true
-      local function _97_()
+      local function _99_()
         if (session and (token == session["source-set-rebuild-token"])) then
           session["source-set-rebuild-pending"] = false
         else
@@ -826,7 +831,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_97_, math.max(0, (wait_ms or 0)))
+      return vim.defer_fn(_99_, math.max(0, (wait_ms or 0)))
     else
       return nil
     end
@@ -855,7 +860,7 @@ M.new = function(opts)
       local delay = math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"] or 0))
       session["project-bootstrap-pending"] = true
       local run_bootstrap_21
-      local function _103_()
+      local function _105_()
         if (session and (token == session["project-bootstrap-token"])) then
           session["project-bootstrap-pending"] = false
         else
@@ -863,6 +868,7 @@ M.new = function(opts)
         if (session and (token == session["project-bootstrap-token"]) and session["project-mode"] and session["prompt-buf"] and session_active_3f(session) and not session["project-bootstrapped"]) then
           local has_query = prompt_has_active_query_3f(session)
           apply_source_set_21(session)
+          events.send("on-project-bootstrap!", {session = session, ["refresh-lines"] = true})
           session["project-bootstrapped"] = true
           if has_query then
             session["prompt-update-dirty"] = true
@@ -878,17 +884,7 @@ M.new = function(opts)
           end
           if not has_query then
             pcall(session.meta.buf.render)
-            restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
-            pcall(session.meta.refresh_statusline)
-            pcall(update_info_window, session, true)
-            local function _107_()
-              if (session and session_active_3f(session) and not session.closing) then
-                return pcall(update_info_window, session, true)
-              else
-                return nil
-              end
-            end
-            vim.defer_fn(_107_, 17)
+            events.send("on-project-complete!", {session = session, ["restore-view?"] = true, ["refresh-lines"] = true})
           else
           end
           session["project-mode-starting?"] = false
@@ -897,7 +893,7 @@ M.new = function(opts)
           return nil
         end
       end
-      run_bootstrap_21 = _103_
+      run_bootstrap_21 = _105_
       return vim.defer_fn(run_bootstrap_21, delay)
     else
       return nil

@@ -69,7 +69,11 @@ function M.child_setup()
     for attempt = 1, 4 do
       local ok, err = pcall(function()
         M.child.restart(
-          { "-u", root .. "/tests/minimal_init.lua", "-n", "-i", "NONE" },
+          {
+            "--cmd", "let $TEST_PROFILE=''",
+            "--cmd", "let $TEST_PROFILE_PATH=''",
+            "-u", root .. "/tests/minimal_init.lua", "-n", "-i", "NONE"
+          },
           { connection_timeout = 12000 }
         )
       end)

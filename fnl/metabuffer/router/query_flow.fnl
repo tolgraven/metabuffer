@@ -122,54 +122,33 @@
                           :kind (or (. spec :kind) "")
                           :provider-type (or (. spec :provider-type) "")}}))))))))
 
-(fn refresh-session-ui!
-  [session update-preview-window update-info-window context-window refresh-change-signs! capture-sign-baseline!]
-  (session.meta.refresh_statusline)
-  (when update-preview-window
-    (update-preview-window session))
-  (update-info-window session true)
-  (when (and context-window context-window.update!)
-    (context-window.update! session))
-  (when refresh-change-signs!
-    (refresh-change-signs! session))
-  (when capture-sign-baseline!
-    (capture-sign-baseline! session)))
-
 (fn retry-textlock-update!
-  [session update-preview-window update-info-window context-window refresh-change-signs! capture-sign-baseline!]
+  [session]
   (vim.defer_fn
     (fn []
       (when (and session.meta
                  (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
         (pcall session.meta.on-update 0)
-        (pcall refresh-session-ui!
-               session
-               update-preview-window
-               update-info-window
-               context-window
-               refresh-change-signs!
-               capture-sign-baseline!)))
+        (events.send :on-query-update!
+          {:session session
+           :query (or session.prompt-last-applied-text "")
+           :refresh-lines true
+           :refresh-signs? true
+           :capture-sign-baseline? true})))
     1))
 
 (fn run-meta-update!
-  [session update-preview-window update-info-window context-window refresh-change-signs! capture-sign-baseline!]
+  [session]
   (let [[ok err] [(pcall session.meta.on-update 0)]]
     (if ok
-        (refresh-session-ui!
-          session
-          update-preview-window
-          update-info-window
-          context-window
-          refresh-change-signs!
-          capture-sign-baseline!)
+        (events.send :on-query-update!
+          {:session session
+           :query (or session.prompt-last-applied-text "")
+           :refresh-lines true
+           :refresh-signs? true
+           :capture-sign-baseline? true})
         (when (string.find (tostring err) "E565")
-          (retry-textlock-update!
-            session
-            update-preview-window
-            update-info-window
-            context-window
-            refresh-change-signs!
-            capture-sign-baseline!)))))
+          (retry-textlock-update! session)))))
 
 (fn consume-visible-control-token?
   [query-mod tok]
@@ -204,14 +183,9 @@
 
 (fn M.apply-prompt-lines!
   [deps session]
-  (let [{: mods : project : refresh : windows : history} deps
+  (let [{: mods : project : history} deps
         query-mod (. mods :query)
         project-source (. project :source)
-        update-preview-window (. refresh :preview!)
-        update-info-window (. refresh :info!)
-        context-window (. windows :context)
-        refresh-change-signs! (. refresh :change-signs!)
-        capture-sign-baseline! (. refresh :capture-sign-baseline!)
         merge-history-into-session! (. history :merge-into-session!)
         save-current-prompt-tag! (. history :save-current-prompt-tag!)
         restore-saved-prompt-tag! (. history :restore-saved-prompt-tag!)
@@ -220,7 +194,7 @@
                (not session.closing)
                (vim.api.nvim_buf_is_valid session.prompt-buf)
                (not session._rewriting-visible-controls))
-        (let [raw-lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
+      (let [raw-lines (vim.api.nvim_buf_get_lines session.prompt-buf 0 -1 false)]
         (let [parsed (resolve-parsed-query
                        query-mod
                        session
@@ -240,6 +214,8 @@
               next-expansion (choose-current-when-nil (. parsed :expansion) session.expansion-mode)
               schedule-source-set-rebuild! (. project-source :schedule-source-set-rebuild!)
               apply-source-set! (. project-source :apply-source-set!)
+              prev-source (source-mod.query-source-signature (or session.last-parsed-query {}))
+              next-source (source-mod.query-source-signature parsed)
               prev-effective-text (or session.prompt-last-applied-text "")
               text-changed? (~= effective-text prev-effective-text)
               source-changed? (source-flags-changed? session parsed)
@@ -298,27 +274,24 @@
                          session.active-source-key
                          (source-mod.query-source-active? parsed))
                      source-changed?)
+            (when (~= next-source prev-source)
+              (events.send :on-source-switch!
+                {:session session
+                 :old-source prev-source
+                 :new-source next-source}))
             (if schedule-source-set-rebuild!
                 (schedule-source-set-rebuild! session 0)
                 (when apply-source-set!
                   (apply-source-set! session))))
           (session.meta.set-query-lines effective-lines)
           (if (and session.project-mode source-changed? (not text-changed?))
-              (refresh-session-ui!
-                session
-                update-preview-window
-                update-info-window
-                context-window
-                refresh-change-signs!
-                capture-sign-baseline!)
-          (run-meta-update!
-            session
-            update-preview-window
-            update-info-window
-            context-window
-            refresh-change-signs!
-                capture-sign-baseline!))))))
-      )
+              (events.send :on-query-update!
+                {:session session
+                 :query effective-text
+                 :refresh-lines true
+                 :refresh-signs? true
+                 :capture-sign-baseline? true})
+              (run-meta-update! session)))))))
 
 (fn M.on-prompt-changed!
   [deps prompt-buf force event-tick]
