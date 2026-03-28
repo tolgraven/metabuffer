@@ -93,6 +93,14 @@
       (when-let [f (. hooks :restore-view!)]
         (pcall f session)))))
 
+(fn refresh-source-syntax-only!
+  [args]
+  (let [session (. args :session)
+        hooks (refresh-hooks session)]
+    (when session
+      (when-let [f (. hooks :source-syntax!)]
+        (pcall f session (clj.boolean (. args :immediate?)))))))
+
 (fn update-source-pool-now!
   [session args]
   (let [phase (. args :phase)
@@ -201,6 +209,7 @@
   :on-session-ready! {:handler refresh-ui! :priority 40}
   :on-restore-ui! {:handler refresh-ui! :priority 40}
   :on-restore-view! {:handler restore-view-only! :priority 40}
+  :on-source-syntax-refresh! {:handler refresh-source-syntax-only! :priority 40}
   :on-mode-switch! {:handler refresh-statusline-only! :priority 40}
   :on-prompt-focus! {:handler refresh-statusline-only! :priority 40}
   :on-loading-state! {:handler refresh-statusline-only! :priority 40}

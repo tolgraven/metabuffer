@@ -69,6 +69,7 @@
 ;;;   :on-source-pool-change! {:session ... :refresh-lines bool
 ;;;                            :phase kw-or-nil :force? bool
 ;;;                            :restore-view? bool :phase-only? bool}
+;;;   :on-source-syntax-refresh! {:session ... :immediate? bool}
 ;;;   :on-query-update!      {:session ... :query str :refresh-lines bool
 ;;;                           :refresh-signs? bool :capture-sign-baseline? bool}
 ;;;   :on-selection-change!  {:session ... :line-nr N :refresh-lines bool

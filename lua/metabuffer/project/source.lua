@@ -658,7 +658,7 @@ M.new = function(opts)
           local sent_complete0 = false
           local sent_complete_3f = sent_complete0
           session.meta.buf["visible-source-syntax-only"] = false
-          pcall(session.meta.buf["apply-source-syntax-regions"])
+          events.send("on-source-syntax-refresh!", {session = session, ["immediate?"] = true})
           if not prompt_has_active_query_3f(session) then
             events.send("on-source-pool-change!", {session = session, phase = "complete", ["force?"] = true, ["refresh-lines"] = true, ["restore-view?"] = true})
             sent_complete_3f = true
@@ -720,7 +720,7 @@ M.new = function(opts)
         session["lazy-stream-done"] = true
         if (session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
           session.meta.buf["visible-source-syntax-only"] = false
-          pcall(session.meta.buf["apply-source-syntax-regions"])
+          events.send("on-source-syntax-refresh!", {session = session, ["immediate?"] = true})
         else
         end
       end

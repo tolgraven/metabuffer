@@ -30,8 +30,14 @@
       (set session.scroll-saved-guicursor nil)
       (pcall vim.api.nvim_set_option_value "guicursor" value {:scope "global"}))))
 
+(fn apply-source-syntax-refresh!
+  [session]
+  (when (can-refresh-source-syntax? session)
+    (pcall session.meta.buf.apply-source-syntax-regions)))
+
 (fn schedule-source-syntax-refresh!
   [deps session]
+
   (let [{: router : timing} deps
         active-by-prompt (. router :active-by-prompt)
         source-syntax-refresh-debounce-ms (. timing :source-syntax-refresh-debounce-ms)]
@@ -40,19 +46,25 @@
     (when-not session.syntax-refresh-pending
       (set session.syntax-refresh-pending true)
       (vim.defer_fn
-        (fn []
-          (set session.syntax-refresh-pending false)
-          (when (and session
-                     session.prompt-buf
-                     (= (. active-by-prompt session.prompt-buf) session))
-            (when session.syntax-refresh-dirty
-              (set session.syntax-refresh-dirty false)
-              (pcall session.meta.buf.apply-source-syntax-regions))
-            ;; If additional scroll events arrived while refreshing, ensure we
-            ;; run one trailing update.
-            (when session.syntax-refresh-dirty
-              (schedule-source-syntax-refresh! deps session))))
+          (fn []
+            (set session.syntax-refresh-pending false)
+            (when (and session
+                       session.prompt-buf
+                       (= (. active-by-prompt session.prompt-buf) session))
+              (when session.syntax-refresh-dirty
+                (set session.syntax-refresh-dirty false)
+                (apply-source-syntax-refresh! session))
+              ;; If additional scroll events arrived while refreshing, ensure we
+              ;; run one trailing update.
+              (when session.syntax-refresh-dirty
+                (schedule-source-syntax-refresh! deps session))))
         (or source-syntax-refresh-debounce-ms 80))))))
+
+(fn M.refresh-source-syntax!
+  [deps session immediate?]
+  (if immediate?
+      (apply-source-syntax-refresh! session)
+      (schedule-source-syntax-refresh! deps session)))
 
 (fn refresh-windows!
   [deps session force-refresh]

@@ -127,6 +127,7 @@
         session-view (. deps :session-view)
         update-preview-window (. deps :update-preview-window)
         update-info-window (. deps :update-info-window)
+        refresh-source-syntax! (. deps :refresh-source-syntax!)
         context-window (. windows :context)
         preview-window (. windows :preview)
         info-window (. windows :info)
@@ -150,6 +151,9 @@
      :context! (fn [session]
                  (when (and context-window context-window.update!)
                    (pcall context-window.update! session)))
+     :source-syntax! (fn [session immediate?]
+                       (when refresh-source-syntax!
+                         (pcall refresh-source-syntax! session immediate?)))
      :refresh-change-signs! (fn [session]
                               (when (and sign-mod sign-mod.refresh-change-signs!)
                                 (pcall sign-mod.refresh-change-signs! session)))
@@ -404,27 +408,29 @@
     (schedule-single-file-info-phases!)
     (vim.schedule
       (fn []
-        (if (startup-live?)
-            (do
-              (set session.startup-initializing false)
-              (when-not session.project-mode
-                (set session.project-mode-starting? false))
-              (events.send :on-session-ready! {:session session :refresh-lines false})
-              (vim.defer_fn
-                (fn []
-                  (when (startup-live?)
-                    (set session.animate-enter? false)
-                    (restore-startup-cursor! session)
-                    (when (and session.project-mode
-                               session.meta
-                               session.meta.buf
-                               session.lazy-stream-done)
-                      (set session.meta.buf.visible-source-syntax-only false)
-                      (pcall session.meta.buf.apply-source-syntax-regions))))
-                (or session.startup-ui-delay-ms 320))
-              (when (and session.project-mode (not session.project-bootstrapped))
-                (project-source.schedule-project-bootstrap! session 17)))
-            (restore-startup-cursor! session))))
+        (when (startup-live?)
+          (set session.startup-initializing false)
+          (when-not session.project-mode
+            (set session.project-mode-starting? false))
+          (events.send :on-session-ready! {:session session :refresh-lines false})
+          (vim.defer_fn
+            (fn []
+              (when (startup-live?)
+                (set session.animate-enter? false)
+                (restore-startup-cursor! session)
+                (when (and session.project-mode
+                           session.meta
+                           session.meta.buf
+                           session.lazy-stream-done)
+                  (set session.meta.buf.visible-source-syntax-only false)
+                  (events.send :on-source-syntax-refresh!
+                    {:session session
+                     :immediate? true}))))
+            (or session.startup-ui-delay-ms 320))
+          (when (and session.project-mode (not session.project-bootstrapped))
+            (project-source.schedule-project-bootstrap! session 17)))
+        (when-not (startup-live?)
+          (restore-startup-cursor! session))))
     (set (. instances session.instance-id) session)))
 
 (fn M.start!

@@ -183,6 +183,21 @@ local function restore_view_only_21(args)
     return nil
   end
 end
+local function refresh_source_syntax_only_21(args)
+  local session = args.session
+  local hooks = refresh_hooks(session)
+  if session then
+    local val_110_auto = hooks["source-syntax!"]
+    if val_110_auto then
+      local f = val_110_auto
+      return pcall(f, session, clj.boolean(args["immediate?"]))
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
 local function update_source_pool_now_21(session, args)
   local phase = args.phase
   local refresh_lines
@@ -220,7 +235,7 @@ local function update_source_pool_now_21(session, args)
           events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = refresh_lines})
         else
           if (err and string.find(tostring(err), "E565")) then
-            local function _29_()
+            local function _31_()
               if valid_session_buffer_3f(session) then
                 pcall(session.meta["on-update"], 0)
                 return events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = refresh_lines})
@@ -228,7 +243,7 @@ local function update_source_pool_now_21(session, args)
                 return nil
               end
             end
-            vim.defer_fn(_29_, 1)
+            vim.defer_fn(_31_, 1)
           else
           end
         end
@@ -268,7 +283,7 @@ local function schedule_source_pool_refresh_21(args)
       state["dirty?"] = true
       if not state["scheduled?"] then
         state["scheduled?"] = true
-        local function _39_()
+        local function _41_()
           if session then
             state["scheduled?"] = false
             if state["dirty?"] then
@@ -290,7 +305,7 @@ local function schedule_source_pool_refresh_21(args)
             return nil
           end
         end
-        return vim.defer_fn(_39_, math.max((session["project-lazy-refresh-min-ms"] or 0), (session["project-lazy-refresh-debounce-ms"] or 17)))
+        return vim.defer_fn(_41_, math.max((session["project-lazy-refresh-min-ms"] or 0), (session["project-lazy-refresh-debounce-ms"] or 17)))
       else
         return nil
       end
@@ -299,4 +314,4 @@ local function schedule_source_pool_refresh_21(args)
     return nil
   end
 end
-return {name = "core-events", domain = "core", events = {["on-source-pool-change!"] = {handler = schedule_source_pool_refresh_21, priority = 35}, ["on-query-update!"] = {handler = refresh_ui_21, priority = 40}, ["on-selection-change!"] = {handler = refresh_selection_ui_21, priority = 40}, ["on-session-ready!"] = {handler = refresh_ui_21, priority = 40}, ["on-restore-ui!"] = {handler = refresh_ui_21, priority = 40}, ["on-restore-view!"] = {handler = restore_view_only_21, priority = 40}, ["on-mode-switch!"] = {handler = refresh_statusline_only_21, priority = 40}, ["on-prompt-focus!"] = {handler = refresh_statusline_only_21, priority = 40}, ["on-loading-state!"] = {handler = refresh_statusline_only_21, priority = 40}, ["on-project-bootstrap!"] = {handler = refresh_project_info_21, priority = 40}, ["on-project-complete!"] = {handler = refresh_project_info_21, priority = 40}, ["on-source-switch!"] = {handler = reset_source_derived_ui_21, priority = 30}}}
+return {name = "core-events", domain = "core", events = {["on-source-pool-change!"] = {handler = schedule_source_pool_refresh_21, priority = 35}, ["on-query-update!"] = {handler = refresh_ui_21, priority = 40}, ["on-selection-change!"] = {handler = refresh_selection_ui_21, priority = 40}, ["on-session-ready!"] = {handler = refresh_ui_21, priority = 40}, ["on-restore-ui!"] = {handler = refresh_ui_21, priority = 40}, ["on-restore-view!"] = {handler = restore_view_only_21, priority = 40}, ["on-source-syntax-refresh!"] = {handler = refresh_source_syntax_only_21, priority = 40}, ["on-mode-switch!"] = {handler = refresh_statusline_only_21, priority = 40}, ["on-prompt-focus!"] = {handler = refresh_statusline_only_21, priority = 40}, ["on-loading-state!"] = {handler = refresh_statusline_only_21, priority = 40}, ["on-project-bootstrap!"] = {handler = refresh_project_info_21, priority = 40}, ["on-project-complete!"] = {handler = refresh_project_info_21, priority = 40}, ["on-source-switch!"] = {handler = reset_source_derived_ui_21, priority = 30}}}

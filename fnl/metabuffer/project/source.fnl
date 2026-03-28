@@ -645,7 +645,9 @@
                 (let [sent-complete0 false]
                   (var sent-complete? sent-complete0)
                   (set session.meta.buf.visible-source-syntax-only false)
-                  (pcall session.meta.buf.apply-source-syntax-regions)
+                  (events.send :on-source-syntax-refresh!
+                    {:session session
+                     :immediate? true})
                   (when-not (prompt-has-active-query? session)
                     (events.send :on-source-pool-change!
                       {:session session
@@ -713,7 +715,9 @@
                            (not session.prompt-animating?)
                            (not session.startup-initializing))
                   (set session.meta.buf.visible-source-syntax-only false)
-                  (pcall session.meta.buf.apply-source-syntax-regions)))))
+                  (events.send :on-source-syntax-refresh!
+                    {:session session
+                     :immediate? true})))))
         (do
           (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
           (set session.lazy-stream-done true)
