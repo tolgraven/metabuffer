@@ -11,6 +11,9 @@
         hooks (refresh-hooks session)
         refresh-lines (if (= (. args :refresh-lines) nil) true (clj.boolean (. args :refresh-lines)))]
     (when session
+      (when (clj.boolean (. args :restore-view?))
+        (when-let [f (. hooks :restore-view!)]
+          (pcall f session)))
       (when-let [f (. hooks :statusline!)]
         (pcall f session))
       (when-let [f (. hooks :preview!)]
@@ -40,6 +43,9 @@
   (let [session (. args :session)
         hooks (refresh-hooks session)]
     (when session
+      (when (clj.boolean (. args :restore-view?))
+        (when-let [f (. hooks :restore-view!)]
+          (pcall f session)))
       (when-let [f (. hooks :statusline!)]
         (pcall f session))
       (when-let [f (. hooks :info!)]

@@ -83,7 +83,7 @@ local function print_case_summary(case_stats, idx)
     case_stats.child or 0
     ),
   }
-  for _, item in ipairs(top_spans(case_stats, 3)) do
+  for _, item in ipairs(top_spans(case_stats, 5)) do
     lines[#lines + 1] = string.format(
       '[mini-profile]        %s | %s | %.1fms',
       item.kind,

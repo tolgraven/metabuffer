@@ -13,6 +13,15 @@ local function refresh_ui_21(args)
     refresh_lines = clj.boolean(args["refresh-lines"])
   end
   if session then
+    if clj.boolean(args["restore-view?"]) then
+      local val_110_auto = hooks["restore-view!"]
+      if val_110_auto then
+        local f = val_110_auto
+        pcall(f, session)
+      else
+      end
+    else
+    end
     do
       local val_110_auto = hooks["statusline!"]
       if val_110_auto then
@@ -87,6 +96,15 @@ local function refresh_project_info_21(args)
   local session = args.session
   local hooks = refresh_hooks(session)
   if session then
+    if clj.boolean(args["restore-view?"]) then
+      local val_110_auto = hooks["restore-view!"]
+      if val_110_auto then
+        local f = val_110_auto
+        pcall(f, session)
+      else
+      end
+    else
+    end
     do
       local val_110_auto = hooks["statusline!"]
       if val_110_auto then

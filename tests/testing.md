@@ -128,6 +128,10 @@ Key helper coverage:
 - Uses dedicated benchmark spans so `--profile` output shows backend cost directly.
 - Excluded from the default suite; runs under `--profile` or when selected explicitly.
 
+### `tests/profile/test_profile_project_events.lua`
+- Profiles a real project-mode launch from file-backed sources, waits for bootstrap expansion, then performs prompt filtering.
+- Records end-to-end bootstrap/filter timings alongside accumulated `:on-project-bootstrap!`, `:on-project-complete!`, and `:on-query-update!` handler time so leftover off-bus work is visible as a gap.
+
 ### `tests/screen/project/test_screen_project_flags_core_*.lua`
 - `#hidden/#deps/#nolazy` consumption + status/debug reflection.
 - `#binary/#hex/#strings` visibility and toggle-state reflection.

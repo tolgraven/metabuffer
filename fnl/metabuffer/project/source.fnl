@@ -13,7 +13,7 @@
          : project-file-list : binary-file? : read-file-view-cached : session-active?
          : lazy-streaming-allowed? : on-prompt-changed : apply-prompt-lines-now!
          : prompt-has-active-query? : now-ms : prompt-update-delay-ms
-         : schedule-prompt-update! : restore-meta-view! : update-info-window} opts]
+         : schedule-prompt-update!} opts]
 
   (fn parse-prefilter-terms
     [query-lines ignorecase]
@@ -378,7 +378,10 @@
                       (when should-render?
                         (reset-meta-indices! session.meta)
                         (pcall session.meta.buf.render)
-                        (restore-meta-view! session.meta session.source-view session update-info-window)
+                        (events.send :on-project-bootstrap!
+                          {:session session
+                           :refresh-lines false
+                           :restore-view? true})
                         (set session.lazy-last-render-ms now))
                       (events.send :on-project-bootstrap!
                         {:session session
@@ -704,7 +707,10 @@
               ;; content table and render so all streamed lines appear.
               (reset-meta-indices! session.meta)
               (pcall session.meta.buf.render)
-              (restore-meta-view! session.meta session.source-view session update-info-window))
+              (events.send :on-project-complete!
+                {:session session
+                 :refresh-lines true
+                 :restore-view? true}))
             ;; Always force one final UI refresh when streaming settles so the
             ;; info pane leaves its loading/empty state even if the last batch
             ;; did not append any new visible lines.
@@ -868,9 +874,9 @@
                     ;; Keep selection/view stable even when no prompt filter is applied.
                     (when-not has-query
                       (pcall session.meta.buf.render)
-                      (restore-meta-view! session.meta session.source-view session update-info-window)
                       (events.send :on-project-complete!
                         {:session session
+                         :restore-view? true
                          :refresh-lines true})
                       (vim.defer_fn
                         (fn []

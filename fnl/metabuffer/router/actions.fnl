@@ -268,7 +268,6 @@
         sync-prompt-buffer-name! (. refresh :sync-prompt-buffer-name!)
         router-util-mod (. mods :router-util)
         session-view-mod (. mods :session-view)
-        update-info-window (. refresh :info!)
         preserve-focus? (and opts (. opts :preserve-focus))
         curr session.meta]
     (when (and session.ui-hidden
@@ -316,9 +315,9 @@
             (set (. bo :readonly) false)
             (set (. bo :bufhidden) "hide"))
           (pcall curr.buf.render))
-        (when (and session-view-mod session.source-view)
-          (pcall session-view-mod.restore-meta-view! curr session.source-view session update-info-window))
-        (events.send :on-restore-ui! {:session session})
+        (events.send :on-restore-ui!
+          {:session session
+           :restore-view? (and session-view-mod session.source-view)})
         (let [cursor (or session.hidden-prompt-cursor [1 0])
               row (math.max 1 (or (. cursor 1) 1))
               col (math.max 0 (or (. cursor 2) 0))

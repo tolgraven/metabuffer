@@ -23,8 +23,6 @@ M.new = function(opts)
   local now_ms = opts["now-ms"]
   local prompt_update_delay_ms = opts["prompt-update-delay-ms"]
   local schedule_prompt_update_21 = opts["schedule-prompt-update!"]
-  local restore_meta_view_21 = opts["restore-meta-view!"]
-  local update_info_window = opts["update-info-window"]
   local function parse_prefilter_terms(query_lines, ignorecase)
     local function unclosed_pattern_delims_3f(token)
       local s = (token or "")
@@ -431,7 +429,7 @@ M.new = function(opts)
                 if should_render_3f then
                   reset_meta_indices_21(session.meta)
                   pcall(session.meta.buf.render)
-                  restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
+                  events.send("on-project-bootstrap!", {session = session, ["restore-view?"] = true, ["refresh-lines"] = false})
                   session["lazy-last-render-ms"] = now
                 else
                 end
@@ -720,7 +718,7 @@ M.new = function(opts)
           if not prompt_has_active_query_3f(session) then
             reset_meta_indices_21(session.meta)
             pcall(session.meta.buf.render)
-            restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
+            events.send("on-project-complete!", {session = session, ["refresh-lines"] = true, ["restore-view?"] = true})
           else
           end
           events.send("on-project-complete!", {session = session, ["refresh-lines"] = true})
@@ -877,8 +875,7 @@ M.new = function(opts)
           end
           if not has_query then
             pcall(session.meta.buf.render)
-            restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
-            events.send("on-project-complete!", {session = session, ["refresh-lines"] = true})
+            events.send("on-project-complete!", {session = session, ["restore-view?"] = true, ["refresh-lines"] = true})
             local function _107_()
               if (session and session_active_3f(session) and not session.closing) then
                 return events.send("on-project-complete!", {session = session, ["refresh-lines"] = true})

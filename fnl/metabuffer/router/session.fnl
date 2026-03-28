@@ -124,6 +124,7 @@
 (fn build-refresh-hooks
   [deps]
   (let [windows (. deps :windows)
+        session-view (. deps :session-view)
         update-preview-window (. deps :update-preview-window)
         update-info-window (. deps :update-info-window)
         context-window (. windows :context)
@@ -140,6 +141,9 @@
      :preview! (fn [session]
                  (when update-preview-window
                    (pcall update-preview-window session)))
+     :restore-view! (fn [session]
+                      (when (and session session.meta)
+                        (pcall session-view.restore-meta-view! session.meta session.source-view session nil)))
      :info! (fn [session refresh-lines]
               (when update-info-window
                 (pcall update-info-window session refresh-lines)))
@@ -378,9 +382,7 @@
 (fn finish-session-startup!
   [deps curr session initial-query-active]
   (let [project-source (. deps :project-source)
-        session-view (. deps :session-view)
         apply-prompt-lines (. deps :apply-prompt-lines)
-        update-info-window (. deps :update-info-window)
         context-window (. (. deps :windows) :context)
         active-by-prompt (. (. deps :router) :active-by-prompt)
         instances (. (. deps :router) :instances)
@@ -426,13 +428,19 @@
               :capture-sign-baseline? true})))
     (when (and session.project-mode (not startup-layout-unsettled?))
       (run-step! "finish-session-startup!/restore-meta-view-project"
-        (fn [] (session-view.restore-meta-view! curr session.source-view session update-info-window))))
+        (fn [] (events.send :on-session-ready!
+               {:session session
+                :refresh-lines true
+                :restore-view? true}))))
     (when-not (and session.project-mode (not initial-query-active))
       (run-step! "finish-session-startup!/apply-prompt-lines"
         (fn [] (apply-prompt-lines session))))
     (when (and (not session.project-mode) (not startup-layout-unsettled?))
       (run-step! "finish-session-startup!/restore-meta-view-regular"
-        (fn [] (session-view.restore-meta-view! curr session.source-view session update-info-window))))
+        (fn [] (events.send :on-session-ready!
+               {:session session
+                :refresh-lines true
+                :restore-view? true}))))
     (run-step! "finish-session-startup!/emit-session-ready"
       (fn []
         (events.send :on-session-ready!

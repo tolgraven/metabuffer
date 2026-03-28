@@ -44,6 +44,7 @@
 ;;; Session lifecycle
 ;;;   :on-session-start!     {:session ...}
 ;;;   :on-session-ready!     {:session ... :refresh-lines bool
+;;;                           :restore-view? bool
 ;;;                           :refresh-signs? bool :capture-sign-baseline? bool}
 ;;;   :on-session-stop!      {:session ...}
 ;;;
@@ -69,13 +70,15 @@
 ;;;                           :force-refresh? bool}
 ;;;
 ;;; Project events
-;;;   :on-project-bootstrap! {:session ... :refresh-lines bool}
-;;;   :on-project-complete!  {:session ... :refresh-lines bool}
+;;;   :on-project-bootstrap! {:session ... :refresh-lines bool
+;;;                           :restore-view? bool}
+;;;   :on-project-complete!  {:session ... :refresh-lines bool
+;;;                           :restore-view? bool}
 ;;;
 ;;; Action events
 ;;;   :on-accept!            {:session ...}
 ;;;   :on-cancel!            {:session ...}
-;;;   :on-restore-ui!        {:session ...}
+;;;   :on-restore-ui!        {:session ... :restore-view? bool}
 ;;;
 ;;; Directive events
 ;;;   :on-directive!         {:session ...  :key str  :value any
