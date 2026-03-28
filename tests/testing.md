@@ -352,6 +352,9 @@ Key helper coverage:
 ### `tests/screen/project/test_screen_project_info_file_mode_refresh.lua`
 - Switching into `#file:{filter}` refreshes info content immediately instead of leaving stale non-file hit metadata behind.
 
+### `tests/screen/project/test_screen_project_file_mode_filter.lua`
+- Inline `#file:{filter}` help popup stays above the prompt, reuses prompt-style flag/arg highlighting, and closes as soon as focus leaves the prompt.
+
 ### `tests/screen/history/test_screen_history_browser.lua`
 - Saved prompt browser activation via `##`.
 - Keyboard navigation and accept flow restore selected saved query.

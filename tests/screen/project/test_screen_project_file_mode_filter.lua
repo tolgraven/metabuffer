@@ -60,4 +60,65 @@ T['backspacing from #file help does not leave an errmsg'] = H.timed_case(functio
   end, 6000)
 end)
 
+T['directive help popup stays above the prompt, mirrors prompt highlighting, and closes on focus loss'] = H.timed_case(function()
+  H.open_project_meta_from_file('README.md')
+  H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
+
+  H.type_prompt_text('#file:README')
+  local help = nil
+  H.wait_for(function()
+    help = H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not (s and s['directive-help-win'] and vim.api.nvim_win_is_valid(s['directive-help-win'])) then
+          return nil
+        end
+        local prompt_pos = vim.api.nvim_win_get_position(s['prompt-win'])
+        local help_pos = vim.api.nvim_win_get_position(s['directive-help-win'])
+        local ns = s['directive-help-hl-ns']
+        local marks = vim.api.nvim_buf_get_extmarks(s['directive-help-buf'], ns, { 0, 0 }, { 0, -1 }, { details = true })
+        local flag_hl, arg_hl = false, false
+        for _, mark in ipairs(marks or {}) do
+          local details = mark[4] or {}
+          if details.hl_group == 'MetaPromptFlagTextOn' then
+            flag_hl = true
+          elseif details.hl_group == 'MetaPromptFileArg' then
+            arg_hl = true
+          end
+        end
+        return {
+          prompt_row = prompt_pos[1],
+          help_row = help_pos[1],
+          flag_hl = flag_hl,
+          arg_hl = arg_hl,
+        }
+      end)()
+    ]])
+    return help ~= nil
+  end, 6000)
+
+  eq(help.help_row < help.prompt_row, true)
+  eq(help.flag_hl, true)
+  eq(help.arg_hl, true)
+
+  H.child.lua([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      vim.cmd('stopinsert')
+      vim.api.nvim_set_current_win(s.meta.win.window)
+    end)()
+  ]])
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        return not (s and s['directive-help-win'] and vim.api.nvim_win_is_valid(s['directive-help-win']))
+      end)()
+    ]])
+  end, 6000)
+end)
+
 return T

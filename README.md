@@ -6,6 +6,7 @@ Mostly vibecoded enhanced port of my old Python remote plugin [metabuffer.nvim](
 ![metabuffer screenshot](./metabuffer.png)
 
 The right-side info window now keeps a live winbar with visible-range/loading progress, and uses non-empty loading placeholders instead of flashing blank pages during project bootstrap, fast scroll refreshes, or source-mode switches like `#file`.
+Directive help popups now anchor above the active prompt token, close as soon as the prompt loses focus, and mirror prompt token highlighting so inline forms like `#file:{filter}` stay visually split between flag and arg.
 
 ## User Guide
 

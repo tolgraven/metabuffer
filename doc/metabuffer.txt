@@ -165,6 +165,11 @@ Info window:
 \tprogress and uses loading placeholders instead of blank rows while project
 \tstartup or source refreshes are still settling.
 
+Directive help:
+\tThe popup help float is anchored above the active prompt token, closes when
+\tthe prompt loses focus, and mirrors prompt token highlighting so inline
+\tforms like #file:{filter} keep distinct flag/arg coloring there too.
+
 ==============================================================================
 PROMPT DIRECTIVES\t\t\t*metabuffer-prompt-directives*
 
