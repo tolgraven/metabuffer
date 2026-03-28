@@ -60,6 +60,7 @@
  {:on-query-update! {:handler refresh-ui! :priority 40}
   :on-selection-change! {:handler refresh-selection-ui! :priority 40}
   :on-session-ready! {:handler refresh-ui! :priority 40}
+  :on-restore-ui! {:handler refresh-ui! :priority 40}
   :on-project-bootstrap! {:handler refresh-project-info! :priority 40}
   :on-project-complete! {:handler refresh-project-info! :priority 40}
   :on-source-switch! {:handler reset-source-derived-ui! :priority 30}}}

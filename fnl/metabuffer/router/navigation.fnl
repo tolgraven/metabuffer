@@ -275,23 +275,15 @@
 
 (fn M.maybe-sync-from-main!
   [deps session force-refresh]
-  (let [{: router : refresh : windows : mods} deps
+  (let [{: router : mods} deps
         active-by-prompt (. router :active-by-prompt)
-        update-preview-window (. refresh :preview!)
-        update-info-window (. refresh :info!)
-        context-window (. windows :context)
         session-view (. mods :session-view)]
     (session-view.maybe-sync-from-main!
     session
     force-refresh
     {:active-by-prompt active-by-prompt
      :schedule-source-syntax-refresh! (fn [s]
-                                        (schedule-source-syntax-refresh! deps s))
-     :update-preview-window! update-preview-window
-     :update-info-window update-info-window
-     :update-context-window! (fn [s]
-                               (when (and context-window context-window.update!)
-                                 (context-window.update! s)))})))
+                                        (schedule-source-syntax-refresh! deps s))})))
 
 (fn M.schedule-scroll-sync!
   [deps session]

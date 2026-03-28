@@ -320,34 +320,22 @@ M["scroll-main!"] = function(deps, prompt_buf, action)
 end
 M["maybe-sync-from-main!"] = function(deps, session, force_refresh)
   local router = deps.router
-  local refresh = deps.refresh
-  local windows = deps.windows
   local mods = deps.mods
   local active_by_prompt = router["active-by-prompt"]
-  local update_preview_window = refresh["preview!"]
-  local update_info_window = refresh["info!"]
-  local context_window = windows.context
   local session_view = mods["session-view"]
   local function _46_(s)
     return schedule_source_syntax_refresh_21(deps, s)
   end
-  local function _47_(s)
-    if (context_window and context_window["update!"]) then
-      return context_window["update!"](s)
-    else
-      return nil
-    end
-  end
-  return session_view["maybe-sync-from-main!"](session, force_refresh, {["active-by-prompt"] = active_by_prompt, ["schedule-source-syntax-refresh!"] = _46_, ["update-preview-window!"] = update_preview_window, ["update-info-window"] = update_info_window, ["update-context-window!"] = _47_})
+  return session_view["maybe-sync-from-main!"](session, force_refresh, {["active-by-prompt"] = active_by_prompt, ["schedule-source-syntax-refresh!"] = _46_})
 end
 M["schedule-scroll-sync!"] = function(deps, session)
   local timing = deps.timing
   local mods = deps.mods
   local scroll_sync_debounce_ms = timing["scroll-sync-debounce-ms"]
   local session_view = mods["session-view"]
-  local function _49_(s, force_refresh)
+  local function _47_(s, force_refresh)
     return M["maybe-sync-from-main!"](deps, s, force_refresh)
   end
-  return session_view["schedule-scroll-sync!"](session, {["scroll-sync-debounce-ms"] = scroll_sync_debounce_ms, ["maybe-sync-from-main!"] = _49_})
+  return session_view["schedule-scroll-sync!"](session, {["scroll-sync-debounce-ms"] = scroll_sync_debounce_ms, ["maybe-sync-from-main!"] = _47_})
 end
 return M

@@ -124,4 +124,4 @@ local function reset_source_derived_ui_21(args)
     return nil
   end
 end
-return {name = "core-events", domain = "core", events = {["on-query-update!"] = {handler = refresh_ui_21, priority = 40}, ["on-selection-change!"] = {handler = refresh_selection_ui_21, priority = 40}, ["on-session-ready!"] = {handler = refresh_ui_21, priority = 40}, ["on-project-bootstrap!"] = {handler = refresh_project_info_21, priority = 40}, ["on-project-complete!"] = {handler = refresh_project_info_21, priority = 40}, ["on-source-switch!"] = {handler = reset_source_derived_ui_21, priority = 30}}}
+return {name = "core-events", domain = "core", events = {["on-query-update!"] = {handler = refresh_ui_21, priority = 40}, ["on-selection-change!"] = {handler = refresh_selection_ui_21, priority = 40}, ["on-session-ready!"] = {handler = refresh_ui_21, priority = 40}, ["on-restore-ui!"] = {handler = refresh_ui_21, priority = 40}, ["on-project-bootstrap!"] = {handler = refresh_project_info_21, priority = 40}, ["on-project-complete!"] = {handler = refresh_project_info_21, priority = 40}, ["on-source-switch!"] = {handler = reset_source_derived_ui_21, priority = 30}}}
