@@ -302,7 +302,7 @@ M["scroll-main!"] = function(deps, prompt_buf, action)
       local animated_3f = result.animated
       if animated_3f then
         set_selected_index_21(session, target_row)
-        return pcall(session.meta.refresh_statusline)
+        return events.send("on-selection-change!", {session = session, ["line-nr"] = (1 + (session.meta.selected_index or 0)), ["refresh-lines"] = false})
       else
         return sync_selection_to_row_21(deps, session, target_row)
       end

@@ -266,7 +266,10 @@
                 (if animated?
                     (do
                       (set-selected-index! session target-row)
-                      (pcall session.meta.refresh_statusline))
+                      (events.send :on-selection-change!
+                        {:session session
+                         :line-nr (+ 1 (or session.meta.selected_index 0))
+                         :refresh-lines false}))
                     (sync-selection-to-row! deps session target-row))))]
         (let [mode (. (vim.api.nvim_get_mode) :mode)]
           (if (and (= (type mode) "string") (vim.startswith mode "i"))

@@ -53,12 +53,28 @@
       (when-let [f (. hooks :context!)]
         (pcall f session)))))
 
+(fn refresh-statusline-only!
+  [args]
+  (let [session (. args :session)
+        hooks (refresh-hooks session)]
+    (when session
+      (when-let [f (. hooks :statusline!)]
+        (pcall f session)))))
+
 (fn reset-source-derived-ui!
   [args]
   (let [session (. args :session)]
     (when session
       (set session.info-render-sig nil)
       (set session.info-line-meta-range-key nil))))
+
+(fn restore-view-only!
+  [args]
+  (let [session (. args :session)
+        hooks (refresh-hooks session)]
+    (when session
+      (when-let [f (. hooks :restore-view!)]
+        (pcall f session)))))
 
 {:name "core-events"
  :domain "core"
@@ -67,6 +83,10 @@
   :on-selection-change! {:handler refresh-selection-ui! :priority 40}
   :on-session-ready! {:handler refresh-ui! :priority 40}
   :on-restore-ui! {:handler refresh-ui! :priority 40}
+  :on-restore-view! {:handler restore-view-only! :priority 40}
+  :on-mode-switch! {:handler refresh-statusline-only! :priority 40}
+  :on-prompt-focus! {:handler refresh-statusline-only! :priority 40}
+  :on-loading-state! {:handler refresh-statusline-only! :priority 40}
   :on-project-bootstrap! {:handler refresh-project-info! :priority 40}
   :on-project-complete! {:handler refresh-project-info! :priority 40}
   :on-source-switch! {:handler reset-source-derived-ui! :priority 30}}}

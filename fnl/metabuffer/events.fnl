@@ -61,6 +61,8 @@
 ;;; Mode events
 ;;;   :on-insert-enter!      {:session ...}
 ;;;   :on-mode-switch!       {:session ... :kind str :old str :new str}
+;;;   :on-prompt-focus!      {:session ...}
+;;;   :on-loading-state!     {:session ...}
 ;;;
 ;;; Source / query events
 ;;;   :on-source-switch!     {:session ... :old-source str :new-source str}
@@ -79,6 +81,7 @@
 ;;;   :on-accept!            {:session ...}
 ;;;   :on-cancel!            {:session ...}
 ;;;   :on-restore-ui!        {:session ... :restore-view? bool}
+;;;   :on-restore-view!      {:session ...}
 ;;;
 ;;; Directive events
 ;;;   :on-directive!         {:session ...  :key str  :value any

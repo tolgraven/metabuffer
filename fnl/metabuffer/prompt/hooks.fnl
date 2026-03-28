@@ -16,8 +16,6 @@
          : schedule-scroll-sync! : maybe-restore-hidden-ui!
          : hide-visible-ui!
          : rebuild-source-set!
-         : maybe-refresh-preview-statusline!
-         : maybe-refresh-info-statusline!
          : sign-mod} opts]
     (let [animation-enabled? (. animation-mod :enabled?)
           animation-duration-ms (. animation-mod :duration-ms)]
@@ -32,8 +30,18 @@
     (fn switch-mode
   [session which]
       (let [meta session.meta]
+        (fn mode-label
+          [value]
+          (if (= (type value) "table")
+              (or (. value :name) (tostring value))
+              (tostring value)))
+        (let [old (mode-label ((. (. meta.mode which) :current)))]
         (meta.switch_mode which)
-        (pcall meta.refresh_statusline)))
+        (events.send :on-mode-switch!
+          {:session session
+           :kind which
+           :old old
+           :new (mode-label ((. (. meta.mode which) :current)))}))))
 
     (fn nvim-exiting?
       []
@@ -418,16 +426,16 @@
                 (set session.loading-idle-pending false)
                 (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
                 (set-results-loading-pulse! session)
-                (pcall session.meta.refresh_statusline)
+                (events.send :on-loading-state! {:session session})
                 (refresh-prompt-highlights! session)
                 (schedule-loading-indicator! session))
               (if session.loading-anim-phase
                   (if session.loading-idle-pending
-                      (when (session-actually-idle? session)
-                        (set session.loading-idle-pending false)
-                        (set session.loading-anim-phase nil)
-                        (set-results-loading-pulse! session)
-                        (pcall session.meta.refresh_statusline))
+                        (when (session-actually-idle? session)
+                          (set session.loading-idle-pending false)
+                          (set session.loading-anim-phase nil)
+                          (set-results-loading-pulse! session)
+                          (events.send :on-loading-state! {:session session}))
                       (do
                         (set session.loading-idle-pending true)
                         (schedule-loading-indicator! session)))
@@ -450,7 +458,7 @@
             (set session.loading-idle-pending false)
             (set session.loading-anim-phase 0)
             (set-results-loading-pulse! session)
-            (pcall session.meta.refresh_statusline))
+            (events.send :on-loading-state! {:session session}))
           (set session.loading-anim-pending true)
           (let [delay (if session.loading-idle-pending
                           120
@@ -1062,22 +1070,16 @@
       ;; switches) can overwrite local statusline state. Re-apply ours when the
       ;; prompt window regains focus.
         (au! ["BufEnter" "WinEnter" "FocusGained"] session.prompt-buf
-          (fn [] (pcall session.meta.refresh_statusline)))
+          (fn [] (events.send :on-prompt-focus! {:session session})))
       ;; Refresh mode segment when switching Insert/Normal/Replace in the prompt.
         (au! ["ModeChanged" "InsertEnter" "InsertLeave"] session.prompt-buf
           (fn []
-            (pcall session.meta.refresh_statusline)
+            (events.send :on-prompt-focus! {:session session})
             (maybe-show-directive-help! session)))
         (au! ["CursorMoved" "CursorMovedI"] session.prompt-buf
           (fn [] (maybe-show-directive-help! session)))
       (au! ["BufLeave" "WinLeave"] session.prompt-buf
         (fn [] (hide-directive-help! session)))
-      (au! ["BufEnter" "WinEnter" "FocusGained"] session.prompt-buf
-        (fn []
-          (when maybe-refresh-preview-statusline!
-            (pcall maybe-refresh-preview-statusline! session))
-          (when maybe-refresh-info-statusline!
-            (pcall maybe-refresh-info-statusline! session))))
       ;; Recompute floating info rendering/width when editor windows resize.
       ;; Guard: both VimResized/WinResized and OptionSet "wrap" can trigger
       ;; on-update which re-renders and may cause further resize/option events.

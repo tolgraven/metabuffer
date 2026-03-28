@@ -132,6 +132,21 @@ local function refresh_project_info_21(args)
     return nil
   end
 end
+local function refresh_statusline_only_21(args)
+  local session = args.session
+  local hooks = refresh_hooks(session)
+  if session then
+    local val_110_auto = hooks["statusline!"]
+    if val_110_auto then
+      local f = val_110_auto
+      return pcall(f, session)
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
 local function reset_source_derived_ui_21(args)
   local session = args.session
   if session then
@@ -142,4 +157,19 @@ local function reset_source_derived_ui_21(args)
     return nil
   end
 end
-return {name = "core-events", domain = "core", events = {["on-query-update!"] = {handler = refresh_ui_21, priority = 40}, ["on-selection-change!"] = {handler = refresh_selection_ui_21, priority = 40}, ["on-session-ready!"] = {handler = refresh_ui_21, priority = 40}, ["on-restore-ui!"] = {handler = refresh_ui_21, priority = 40}, ["on-project-bootstrap!"] = {handler = refresh_project_info_21, priority = 40}, ["on-project-complete!"] = {handler = refresh_project_info_21, priority = 40}, ["on-source-switch!"] = {handler = reset_source_derived_ui_21, priority = 30}}}
+local function restore_view_only_21(args)
+  local session = args.session
+  local hooks = refresh_hooks(session)
+  if session then
+    local val_110_auto = hooks["restore-view!"]
+    if val_110_auto then
+      local f = val_110_auto
+      return pcall(f, session)
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+return {name = "core-events", domain = "core", events = {["on-query-update!"] = {handler = refresh_ui_21, priority = 40}, ["on-selection-change!"] = {handler = refresh_selection_ui_21, priority = 40}, ["on-session-ready!"] = {handler = refresh_ui_21, priority = 40}, ["on-restore-ui!"] = {handler = refresh_ui_21, priority = 40}, ["on-restore-view!"] = {handler = restore_view_only_21, priority = 40}, ["on-mode-switch!"] = {handler = refresh_statusline_only_21, priority = 40}, ["on-prompt-focus!"] = {handler = refresh_statusline_only_21, priority = 40}, ["on-loading-state!"] = {handler = refresh_statusline_only_21, priority = 40}, ["on-project-bootstrap!"] = {handler = refresh_project_info_21, priority = 40}, ["on-project-complete!"] = {handler = refresh_project_info_21, priority = 40}, ["on-source-switch!"] = {handler = reset_source_derived_ui_21, priority = 30}}}

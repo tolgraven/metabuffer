@@ -161,7 +161,6 @@
   [deps session]
     (let [router (. deps :router)
         mods (. deps :mods)
-        windows (. deps :windows)
         prompt-hooks-mod (. mods :prompt-hooks)
         active-by-prompt router.active-by-prompt
         on-prompt-changed (. deps :on-prompt-changed)
@@ -171,8 +170,6 @@
         schedule-scroll-sync! (. deps :schedule-scroll-sync!)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)
         hide-visible-ui! (. deps :hide-visible-ui!)
-        preview-window (. windows :preview)
-        context-window (. windows :context)
         project-source (. deps :project-source)
         sign-mod (. deps :sign-mod)
         hooks
@@ -187,18 +184,6 @@
            :schedule-scroll-sync! schedule-scroll-sync!
            :maybe-restore-hidden-ui! maybe-restore-hidden-ui!
            :hide-visible-ui! hide-visible-ui!
-            :maybe-refresh-preview-statusline! (fn [s]
-                                                (when (and preview-window
-                                                           preview-window.refresh-statusline!)
-                                                  (preview-window.refresh-statusline! s)))
-            :maybe-refresh-info-statusline! (fn [s]
-                                             (let [info-window (. windows :info)]
-                                               (when (and info-window
-                                                          info-window.refresh-statusline!)
-                                                 (info-window.refresh-statusline! s))))
-            :update-context-window! (fn [s]
-                                      (when (and context-window context-window.update!)
-                                        (context-window.update! s)))
            :rebuild-source-set! (fn [s]
                                   (when (and project-source project-source.apply-source-set!)
                                     (project-source.apply-source-set! s)))
@@ -215,8 +200,6 @@
         animation-mod (. mods :animation)
         prompt-window-mod (. mods :prompt-window)
         preview-window (. (. deps :windows) :preview)
-        update-info-window (. deps :update-info-window)
-        session-view (. deps :session-view)
         sync-prompt-buffer-name! (. deps :sync-prompt-buffer-name!)
         ui-animation-prompt-ms (. (. (. deps :ui) :animation) :prompt :ms)
         prompt-buf session.prompt-buf
@@ -232,7 +215,7 @@
                  session.meta
                  session.meta.win
                  (vim.api.nvim_win_is_valid session.meta.win.window))
-        (session-view.restore-meta-view! session.meta session.source-view session update-info-window)))
+        (events.send :on-restore-view! {:session session})))
     (fn prompt-enter-duration-ms
       []
       (if (and animation-mod
@@ -258,20 +241,6 @@
          :width host-width
          :height (math.max 1 height)
          :style "minimal"}))
-    (fn schedule-layout-refresh!
-      []
-      (when (and session.project-mode update-info-window)
-        (let [base-delay (if (and animation-mod (animation-mod.enabled? session :prompt))
-                             (animation-mod.duration-ms session :prompt (or ui-animation-prompt-ms 140))
-                             0)]
-          (fn refresh-after!
-            [delay]
-            (vim.defer_fn
-              (fn []
-                (when (startup-live?)
-                  (events.send :on-session-ready! {:session session :refresh-lines true})))
-              delay))
-          (refresh-after! (+ 24 base-delay)))))
     (run-step! "activate-session-ui/sync-prompt-buffer-name"
       (fn [] (sync-prompt-buffer-name! session)))
     (run-step! "activate-session-ui/hide-startup-cursor"
@@ -362,7 +331,6 @@
                      target-height
                      duration
                      {:done! done!})))))))
-    (schedule-layout-refresh!)
     (vim.defer_fn
       (fn []
         (when (and (startup-live?)
@@ -383,7 +351,6 @@
   [deps curr session initial-query-active]
   (let [project-source (. deps :project-source)
         apply-prompt-lines (. deps :apply-prompt-lines)
-        context-window (. (. deps :windows) :context)
         active-by-prompt (. (. deps :router) :active-by-prompt)
         instances (. (. deps :router) :instances)
         startup-layout-unsettled? (clj.boolean session.prompt-animating?)]
@@ -392,12 +359,6 @@
       (and (= (. active-by-prompt session.prompt-buf) session)
            (not session.ui-hidden)
            (not session.closing)))
-    (fn schedule-aux-ui-refresh!
-      []
-      (vim.schedule
-        (fn []
-          (when (startup-live?)
-            (events.send :on-session-ready! {:session session :refresh-lines true})))))
     (fn schedule-single-file-info-phases!
       []
       (when-not session.project-mode
@@ -464,8 +425,6 @@
               (when (and session.project-mode (not session.project-bootstrapped))
                 (project-source.schedule-project-bootstrap! session 17)))
             (restore-startup-cursor! session))))
-    (when (and context-window context-window.update!)
-      (schedule-aux-ui-refresh!))
     (set (. instances session.instance-id) session)))
 
 (fn M.start!
