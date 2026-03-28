@@ -381,6 +381,19 @@ M["expanded-indices"] = function(session, indices, refs, opts)
   local read_file_lines_cached = opts["read-file-lines-cached"]
   local around = (opts["around-lines"] or 3)
   local max_blocks = math.max(1, (opts["max-blocks"] or 24))
+  local visible_source_indices = (opts["visible-source-indices"] or {})
+  local visible_source_set
+  do
+    local out0 = {}
+    for _, idx in ipairs(visible_source_indices) do
+      if idx then
+        out0[idx] = true
+      else
+      end
+    end
+    visible_source_set = out0
+  end
+  local visible_only_3f = (#visible_source_indices > 0)
   local refs_with_idx
   do
     local out0 = {}
@@ -400,32 +413,35 @@ M["expanded-indices"] = function(session, indices, refs, opts)
   local seen = {}
   if (mode == "none") then
     vim.deepcopy((indices or {}))
-  elseif (mode == "usage") then
-    local hit_refs = {}
-    for _, idx in ipairs((indices or {})) do
-      local ref = refs_with_idx[idx]
-      if (ref and ((ref.kind or "") ~= "file-entry")) then
-        table.insert(hit_refs, ref)
-      else
-      end
-    end
-    append_usage_indices_21(session, out, seen, hit_refs, read_file_lines_cached)
   else
     for _, idx in ipairs((indices or {})) do
       if (#out < (max_blocks * 400)) then
         local ref = refs_with_idx[idx]
         local path = (ref and ref.path)
         local items = by_path[path]
-        if (ref and items and ((ref.kind or "") ~= "file-entry")) then
-          local val_111_auto = mode_range(session, ref, mode, read_file_lines_cached, around)
-          if val_111_auto then
-            local rng = val_111_auto
-            append_range_indices_21(out, seen, items, rng.start, rng["end"])
-          else
+        local visible_3f = (not visible_only_3f or visible_source_set[idx])
+        if (ref and ((ref.kind or "") ~= "file-entry")) then
+          if not visible_3f then
             if not seen[idx] then
               seen[idx] = true
               table.insert(out, idx)
             else
+            end
+          else
+            if (mode == "usage") then
+              append_usage_indices_21(session, out, seen, {ref}, read_file_lines_cached)
+            else
+              local val_111_auto = (items and mode_range(session, ref, mode, read_file_lines_cached, around))
+              if val_111_auto then
+                local rng = val_111_auto
+                append_range_indices_21(out, seen, items, rng.start, rng["end"])
+              else
+                if not seen[idx] then
+                  seen[idx] = true
+                  table.insert(out, idx)
+                else
+                end
+              end
             end
           end
         else

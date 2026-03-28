@@ -52,6 +52,43 @@
          (~= v 0)
          (~= v ""))))
 
+(fn main-visible-source-indices
+  [self base-indices rendered-indices]
+  "Return visible base-hit source indices for the current main-window viewport.
+   Falls back to the visible slice of `base-indices` when no rendered mapping is
+   available. Expected output: [12 18 27]."
+  (let [win (and self self.win self.win.window)
+        total (# (or base-indices []))]
+    (if (or (<= total 0)
+            (not win)
+            (not (vim.api.nvim_win_is_valid win)))
+        []
+        (let [view (vim.api.nvim_win_call win (fn [] (vim.fn.winsaveview)))
+              top (math.max 1 (math.min total (or (. view :topline) 1)))
+              height (math.max 1 (vim.api.nvim_win_get_height win))
+              stop (math.min (math.max 1 (# (or rendered-indices [])))
+                             (+ top height -1))
+              base-ranks (let [out0 {}]
+                           (each [i src (ipairs (or base-indices []))]
+                             (when (and src (= (. out0 src) nil))
+                               (set (. out0 src) i)))
+                           out0)
+              out []]
+          (when (> stop 0)
+            (each [i src (ipairs (or rendered-indices []))]
+              (when (and (>= i top) (<= i stop))
+                (when-let [rank (. base-ranks src)]
+                  (table.insert out (. base-indices rank))))))
+          (if (> (# out) 0)
+              out
+              (let [fallback-stop (math.min total (+ top height -1))
+                    fallback []]
+                (for [i top fallback-stop]
+                  (let [src (. base-indices i)]
+                    (when src
+                      (table.insert fallback src))))
+                fallback))))))
+
 (fn results-group
   [session group]
   (or (and session
@@ -687,6 +724,7 @@
                           :line-count line-count
                           :full true}))))))
       (let [refs (or self.buf.source-refs [])
+            expansion-mode (or (and self.session self.session.expansion-mode) "none")
             file-filtered (apply-file-entry-filter
                             self.buf.indices
                             refs
@@ -694,16 +732,20 @@
                             ignorecase
                             self.include-files
                             (> (# queries) 0))
+            visible-source-indices (if (= expansion-mode "none")
+                                       []
+                                       (main-visible-source-indices self file-filtered prev-hits))
             expanded (expand_mod.expanded-indices
                        self.session
                        file-filtered
                        refs
-                       {:mode (or (and self.session self.session.expansion-mode) "none")
+                       {:mode expansion-mode
                         :read-file-lines-cached (or (and self.session self.session.read-file-lines-cached)
                                                     (fn [path _opts]
                                                       (vim.fn.readfile path)))
                         :around-lines (or vim.g.meta_context_around_lines 3)
-                        :max-blocks (or vim.g.meta_context_max_blocks 24)})
+                        :max-blocks (or vim.g.meta_context_max_blocks 24)
+                        :visible-source-indices visible-source-indices})
             _ (set self.buf.indices expanded)
             _ (if (= (# self.buf.indices) 0)
                   (set self._no-hits-anchor-line anchor-line)

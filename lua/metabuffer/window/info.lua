@@ -485,7 +485,7 @@ M.new = function(opts)
     local suffix_hls = (info_view["suffix-highlights"] or {})
     local icon_info
     if show_icon_3f then
-      icon_info = util["devicon-info"](icon_path, file_hl)
+      icon_info = util["file-icon-info"](icon_path, file_hl)
     else
       icon_info = {icon = "", ["icon-hl"] = file_hl, ["file-hl"] = file_hl}
     end

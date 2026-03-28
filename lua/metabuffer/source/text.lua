@@ -58,7 +58,7 @@ local function ext_range(file, file_start)
 end
 M["path-prefix"] = function(ref)
   local parts = split_source_path(ref.path)
-  local icon_info = util["devicon-info"]((ref.path or ""), "Normal")
+  local icon_info = util["file-icon-info"]((ref.path or ""), "Normal")
   local iconf = icon_field((icon_info.icon or ""))
   local icon_prefix = iconf.text
   local dir = (parts.dir or "")
