@@ -44,8 +44,8 @@ T['parse-query-lines supports prompt control short forms'] = function()
   eq(parsed.lines, { 'token' })
 end
 
-T['parse-query-lines consumes file flag and captures file token on that line only'] = function()
-  local parsed = query['parse-query-lines']({ 'alpha #file README.md', 'beta' })
+T['parse-query-lines consumes inline file filter and keeps other line text'] = function()
+  local parsed = query['parse-query-lines']({ 'alpha #file:README.md', 'beta' })
   eq(parsed.files, true)
   eq(parsed['include-files'], true)
   eq(parsed['file-lines'], { 'README.md' })
@@ -76,31 +76,39 @@ T['parse-query-lines supports full lgrep directive aliases'] = function()
   eq(parsed.lines, { 'alpha', 'beta' })
 end
 
-T['parse-query-lines keeps additional tokens after file filter in normal query'] = function()
-  local parsed = query['parse-query-lines']({ '#file query lua', 'meta #file src now' })
+T['parse-query-lines keeps additional tokens after inline file filter in normal query'] = function()
+  local parsed = query['parse-query-lines']({ '#file:query lua', 'meta #file:src now' })
   eq(parsed['file-lines'], { 'query', 'src' })
   eq(parsed.lines, { 'lua', 'meta now' })
 end
 
-T['parse-query-lines consumes lone token after file flag as file query'] = function()
+T['parse-query-lines keeps bare #file as mode toggle without consuming next token'] = function()
   local prev = vim.g['meta#prefix']
   vim.g['meta#prefix'] = '#'
   local parsed = query['parse-query-lines']({ '#file lua' })
   vim.g['meta#prefix'] = prev
-  eq(parsed['file-lines'], { 'lua' })
-  eq(parsed.lines, { '' })
+  eq(parsed['include-files'], true)
+  eq(parsed['file-lines'], {})
+  eq(parsed.lines, { 'lua' })
 end
 
-T['parse-query-lines supports short file alias'] = function()
-  local parsed = query['parse-query-lines']({ '#f lua meta' })
-  eq(parsed['file-lines'], { 'lua' })
+T['parse-query-lines supports short inline file alias with quoted filters'] = function()
+  local parsed = query['parse-query-lines']({ '#f:\"lua core\" meta' })
+  eq(parsed['file-lines'], { 'lua core' })
   eq(parsed.lines, { 'meta' })
 end
 
-T['parse-query-lines supports explicit file disable'] = function()
-  local parsed = query['parse-query-lines']({ '#file lua #-f meta' })
-  eq(parsed['include-files'], false)
+T['parse-query-lines no longer consumes legacy spaced file argument syntax'] = function()
+  local parsed = query['parse-query-lines']({ '#f lua meta' })
+  eq(parsed['include-files'], true)
+  eq(parsed['file-lines'], {})
+  eq(parsed.lines, { 'lua meta' })
+end
+
+T['parse-query-lines supports explicit file disable after inline file filter'] = function()
+  local parsed = query['parse-query-lines']({ '#file:lua #-f meta' })
   eq(parsed['file-lines'], { 'lua' })
+  eq(parsed['include-files'], false)
   eq(parsed.lines, { 'meta' })
 end
 
@@ -158,7 +166,7 @@ T['parse-query-text merges multiline settings and returns stripped query'] = fun
 end
 
 T['parse-query-text includes file directives'] = function()
-  local parsed = query['parse-query-text']('#file README.md\nmeta')
+  local parsed = query['parse-query-text']('#file:README.md\nmeta')
   eq(parsed['include-files'], true)
   eq(parsed['file-lines'], { 'README.md' })
   eq(parsed.query, '\nmeta')

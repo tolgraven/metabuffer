@@ -9,16 +9,45 @@
      [{:kind "toggle"
        :long "file"
        :token-key :include-files
-       :arg "{token}"
-       :doc "Switch to file-entry source filtering."
-       :await-when-true true
-       :await {:kind "file"}}])
+       :arg "[:{filter}]"
+       :doc "Switch to file-entry source filtering. Use #file:term for inline path filters."}])
+
+(fn option-prefix
+  []
+  (let [p (. vim.g "meta#prefix")]
+    (if (and (= (type p) "string") (~= p ""))
+        p
+        "#")))
+
+(fn inline-file-filter
+  [tok]
+  "Parse inline #file:#f filters. Expected output: \"lua\" or \"\"."
+  (let [t (or tok "")
+        prefix (option-prefix)
+        patterns [(.. "^" (vim.pesc prefix) "file:(.*)$")
+                  (.. "^" (vim.pesc prefix) "f:(.*)$")]
+        matched nil]
+    (var out matched)
+    (each [_ pat (ipairs patterns)]
+      (when (= out nil)
+        (let [value (string.match t pat)]
+          (when (~= value nil)
+            (set out value)))))
+    out))
 
 (fn M.parse-bare-token
   [state tok unquote-token]
   "Handle bare file-source shortcut tokens. Expected output: updated state or nil."
   (let [t (or tok "")]
-    (if (= t "./")
+    (if-let [inline (inline-file-filter t)]
+      (let [next (vim.deepcopy state)]
+        (set (. next :include-files) true)
+        (when (~= (vim.trim inline) "")
+          (table.insert (. next :file-lines) (unquote-token inline)))
+        (set (. next :file-await-token) false)
+        (set (. next :await-directive) nil)
+        next)
+        (if (= t "./")
         (let [next (vim.deepcopy state)]
           (set (. next :include-files) true)
           (set (. next :file-await-token) true)
@@ -30,7 +59,7 @@
             (table.insert (. next :file-lines) (unquote-token matched))
             (set (. next :file-await-token) false)
             next)
-          nil))))
+          nil)))))
 
 (fn M.hit-prefix
   [ref]

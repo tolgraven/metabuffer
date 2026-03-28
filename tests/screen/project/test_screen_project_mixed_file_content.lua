@@ -7,7 +7,7 @@ T['#file line + content lines yields content hits from matched files'] = H.timed
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
 
-  H.type_prompt_text('#file window\n(fn\nset')
+  H.type_prompt_text('#file:window\n(fn\nset')
 
   H.wait_for(function()
     return H.session_hit_count() > 0

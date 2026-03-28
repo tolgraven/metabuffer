@@ -7,7 +7,7 @@ T['file flag enables file-entry hits filtered by file token'] = H.timed_case(fun
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
 
-  H.type_prompt_text('#file README.md')
+  H.type_prompt_text('#file:README.md')
   H.wait_for(function() return H.session_query_text() == '' end, 6000)
   H.wait_for(function() return H.session_file_entry_hit_count() > 0 end, 6000)
   H.wait_for(function()

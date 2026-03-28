@@ -20,15 +20,29 @@
   [text]
   (let [parts (vim.split (or text "") "%s+" {:trimempty true})
         out []]
-    (each [_ tok (ipairs parts)]
-      (let [next (if (= tok "#+file")
-                     "#file"
-                     (= tok "#+binary")
-                     "#binary"
-                     (= tok "#+hex")
-                     "#hex"
-                     tok)]
-        (table.insert out next)))
+    (var idx 1)
+    (while (<= idx (# parts))
+      (let [tok (. parts idx)
+            next-tok (. parts (+ idx 1))
+            file-toggle? (or (= tok "#+file") (= tok "#file"))
+            file-arg? (and file-toggle?
+                           (= (type next-tok) "string")
+                           (~= next-tok "")
+                           (not (vim.startswith next-tok "#")))]
+        (if file-arg?
+            (do
+              (table.insert out (.. "#file:" next-tok))
+              (set idx (+ idx 2)))
+            (do
+              (table.insert out
+                            (if (= tok "#+file")
+                                "#file"
+                                (= tok "#+binary")
+                                "#binary"
+                                (= tok "#+hex")
+                                "#hex"
+                                tok))
+              (set idx (+ idx 1))))))
     (if (> (# out) 0)
         (table.concat out " ")
         (or text ""))))

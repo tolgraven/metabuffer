@@ -3,7 +3,7 @@ local child = H.child
 
 local T = MiniTest.new_set({ hooks = H.case_hooks() })
 
-T['history up-recall normalizes legacy #+file token into #file'] = H.timed_case(function()
+T['history up-recall normalizes legacy #+file token into #file:filter'] = H.timed_case(function()
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_active() end, 6000)
 
@@ -15,7 +15,7 @@ T['history up-recall normalizes legacy #+file token into #file'] = H.timed_case(
   ]])
 
   H.type_prompt('<Up>')
-  H.wait_for(function() return H.session_prompt_text() == '#file README.md' end, 6000)
+  H.wait_for(function() return H.session_prompt_text() == '#file:README.md' end, 6000)
 end)
 
 return T

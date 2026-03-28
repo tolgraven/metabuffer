@@ -489,6 +489,20 @@
           {:text-hl "MetaPromptLgrep"}
           nil)))
 
+    (fn inline-file-filter-style
+      [tok]
+      (let [token (or tok "")
+            colon (string.find token ":" 1 true)
+            prefix (option-prefix)]
+        (when colon
+          (let [flag-token (string.sub token 1 (- colon 1))
+                parsed (directive-mod.parse-token prefix flag-token)
+                style (and parsed (control-token-style flag-token))]
+            (when (= (or (and parsed (. parsed :token-key)) "") :include-files)
+              {:flag-style style
+               :arg-start colon
+               :arg-hl "MetaPromptFileArg"})))))
+
     (fn current-prompt-token
       [session]
       (when (and session.prompt-win
@@ -504,19 +518,37 @@
                   line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf (- row 1) row false) 1) "")]
               (directive-mod.token-under-cursor line col1))))))
 
+    (fn directive-help-token
+      [tok]
+      (let [token (or tok "")
+            prefix (option-prefix)
+            colon (string.find token ":" 1 true)]
+        (if colon
+            (let [stem (string.sub token 1 (- colon 1))]
+              (if (directive-mod.parse-token prefix stem)
+                  stem
+                  token))
+            token)))
+
     (fn hide-directive-help!
       [session]
       (when (and session.directive-help-win
                  (vim.api.nvim_win_is_valid session.directive-help-win))
         (pcall vim.api.nvim_win_close session.directive-help-win true))
-      (set session.directive-help-win nil))
+      (set session.directive-help-win nil)
+      (when (and session.directive-help-buf
+                 (not (vim.api.nvim_buf_is_valid session.directive-help-buf)))
+        (set session.directive-help-buf nil)))
 
     (fn show-directive-help!
       [session spec]
       (when (and session.prompt-win
                  (vim.api.nvim_win_is_valid session.prompt-win)
                  spec)
-        (let [buf (or session.directive-help-buf (vim.api.nvim_create_buf false true))
+        (let [buf0 (and session.directive-help-buf
+                        (vim.api.nvim_buf_is_valid session.directive-help-buf)
+                        session.directive-help-buf)
+              buf (or buf0 (vim.api.nvim_create_buf false true))
               _ (set session.directive-help-buf buf)
               help (or (. spec :help) "")
               display (or (. spec :display) "")
@@ -553,7 +585,7 @@
     (fn maybe-show-directive-help!
       [session]
       (if-let [span (current-prompt-token session)]
-        (let [token (or (. span :token) "")
+        (let [token (directive-help-token (or (. span :token) ""))
               prefix (option-prefix)
               matches (if (vim.startswith token prefix)
                         (directive-mod.matching-catalog prefix token)
@@ -611,22 +643,49 @@
                             r
                             s0
                             e0))
-                        (when-let [style (control-token-style token)]
-                          (vim.api.nvim_buf_add_highlight
-                            session.prompt-buf
-                            ns
-                            (or (. style :hash-hl) primary-hl)
-                            r
-                            s0
-                            (+ s0 1))
-                          (when (> e0 (+ s0 1))
+                        (if-let [inline-style (inline-file-filter-style token)]
+                          (let [flag-style (. inline-style :flag-style)
+                                arg-start (+ s0 (or (. inline-style :arg-start) 0))]
+                            (when flag-style
+                              (vim.api.nvim_buf_add_highlight
+                                session.prompt-buf
+                                ns
+                                (or (. flag-style :hash-hl) primary-hl)
+                                r
+                                s0
+                                (+ s0 1))
+                              (when (> arg-start (+ s0 1))
+                                (vim.api.nvim_buf_add_highlight
+                                  session.prompt-buf
+                                  ns
+                                  (or (. flag-style :text-hl) primary-hl)
+                                  r
+                                  (+ s0 1)
+                                  arg-start)))
+                            (when (> e0 arg-start)
+                              (vim.api.nvim_buf_add_highlight
+                                session.prompt-buf
+                                ns
+                                (or (. inline-style :arg-hl) "MetaPromptFileArg")
+                                r
+                                arg-start
+                                e0)))
+                          (when-let [style (control-token-style token)]
                             (vim.api.nvim_buf_add_highlight
                               session.prompt-buf
                               ns
-                              (or (. style :text-hl) primary-hl)
+                              (or (. style :hash-hl) primary-hl)
                               r
-                              (+ s0 1)
-                              e0)))
+                              s0
+                              (+ s0 1))
+                            (when (> e0 (+ s0 1))
+                              (vim.api.nvim_buf_add_highlight
+                                session.prompt-buf
+                                ns
+                                (or (. style :text-hl) primary-hl)
+                                r
+                                (+ s0 1)
+                                e0))))
                         (set await-style (directive-arg-style token))
                         (when (and (> (# token) 1) (= (string.sub token 1 1) "!"))
                           (vim.api.nvim_buf_add_highlight session.prompt-buf ns "MetaPromptNeg" r s0 e0))

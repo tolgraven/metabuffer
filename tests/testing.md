@@ -135,7 +135,7 @@ Key helper coverage:
 - Info rows for lgrep hits show a non-blank source marker in the sign column.
 
 ### `tests/screen/project/test_screen_project_file_mode_file_entries.lua`
-- `#file <token>` file-entry activation and file-only result sets.
+- `#file:{token}` file-entry activation and file-only result sets.
 
 ### `tests/screen/project/test_screen_project_file_mode_rename.lua`
 - Straight edits on file-entry rows rename only the targeted file path, both from project `:Meta!` and regular `:Meta` with `#file`.
@@ -279,7 +279,7 @@ Key helper coverage:
 - Up-recall does not accumulate duplicate consumed setting tokens.
 
 ### `tests/screen/persistence/test_screen_persistence_history_project_legacy.lua`
-- Legacy `#+file` history normalizes to `#file`.
+- Legacy `#+file foo` history normalizes to `#file:foo`.
 
 ### `tests/screen/persistence/test_screen_persistence_history_recall.lua`
 - Minimal replay-only coverage for `Meta !!` after accept.

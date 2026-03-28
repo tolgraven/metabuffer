@@ -468,6 +468,7 @@
     (hi 0 "MetaPromptAnchor" {:default true :link "SpecialChar"})
     (hi 0 "MetaPromptRegex" {:default true :link "MetaSearchHitRegex" :underline true})
     (hi 0 "MetaPromptLgrep" {:default true :link "MetaSearchHitLgrep"})
+    (hi 0 "MetaPromptFileArg" {:default true :link "Directory"})
     (hi 0 "MetaPromptFlagHashOn" (statusline-color-from "String"))
     (hi 0 "MetaPromptFlagHashOff" (statusline-color-from "ErrorMsg"))
     (hi 0 "MetaPromptFlagTextOn" (fg-only-hl-from "String"))

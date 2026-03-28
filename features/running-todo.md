@@ -73,3 +73,6 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 63 [] the info window loading view is not updating quickly enough, often showing only something like (51/300) and then skipping straight to done. Make it run at at least 10 fps...
 - 64 [] too much time is spent thinking -> run fennel-ls --lint -> thinking -> run compile -> thinking -> run test. These should all go sequentially (with abort on errors) in one call. Create a `make full` shortcut to do this, and note down to use it.
 - 65 [] file extensions are still not showing their color highlight as used to be the case. Neither are file glyphs colored.
+- 66 [x] `#file` mode broken if there is already other input before typing `#file`. Also we should simplify file search by using the format `#file:filter` (optionally quoted like `#f:"multiple words"`) for consistency and simplicity. This way we're never ambiguous.
+- 67 [] `#exp` should only run for hits in view, much too slow otherwise.
+- 68 [] `#ctx` / `#c` which acts similarly to `#exp` but: creates 3 splits, main hits in middle. Callers, globals etc referenced in a fn on the left, called fns on the right.

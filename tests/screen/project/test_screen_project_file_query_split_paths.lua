@@ -6,7 +6,10 @@ T['file token constrains regular hits to matching paths'] = H.timed_case(functio
   H.open_project_meta_from_file('README.md')
   H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
 
-  H.type_prompt_text('local #file lua')
+  H.type_prompt_text('local')
+  H.wait_for(function() return H.session_query_text() == 'local' end, 6000)
+
+  H.type_prompt_text('local #file:lua')
   H.wait_for(function() return H.session_query_text() == 'local' end, 6000)
   H.wait_for(function()
     return H.child.lua_get([[

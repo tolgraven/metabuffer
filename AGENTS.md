@@ -164,7 +164,7 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 **Source providers** (`source/`):
 - `init.fnl` — Provider index. Each source implements: `active?`, `hit-prefix`, `info-path`, `collect-source-set`, `apply-write-ops!`.
 - `text.fnl` — Default: current buffer lines.
-- `file.fnl` — `#file` directive: file-entry source filtering.
+- `file.fnl` — `#file` / `#file:{filter}` directive: file-entry source filtering.
 - `file_info.fnl` — File metadata extraction (size, type, git status).
 - `lgrep.fnl` — `#lgrep` directive: semantic search via lgrep binary.
 
@@ -198,7 +198,7 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 
 **Query & directives** (`query/`):
 - `query.fnl` (root) — Query parsing entry point.
-- `directive.fnl` — Directive parser/registry (`#file`, `#hex`, `#deps`, `#save`, etc.).
+- `directive.fnl` — Directive parser/registry (`#file`, `#file:{filter}`, `#hex`, `#deps`, `#save`, etc.).
 - `prompt_directives.fnl` — Prompt-specific directive handling.
 - `scope.fnl` — Query scope resolution (hidden, ignored, deps, binary).
 
@@ -229,6 +229,7 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 - **Barrel/index modules**: `window/init.fnl`, `prompt/init.fnl`, `matcher/init.fnl`, `transform/init.fnl`, `source/init.fnl`, `buffer/init.fnl` — return maps of sub-module requires.
 - **Transform registry**: Pluggable modules with a common contract. Each transform can be toggled via `#directive` in the prompt. Custom transforms follow the same interface.
 - **Source provider**: Pluggable backends (text, file, lgrep) with a common contract. Active source determined by prompt directives.
+- **Directive style rule**: When a directive takes an inline filter/value, use `#flag:filter` syntax instead of inferring the next word. For file mode specifically, use `#file:{filter}` / `#f:{filter}` and treat bare `#file` only as the toggle into file-entry mode.
 - **Session isolation**: Each `:Meta` invocation creates a fresh session object with its own prompt buffer, matchers, and state. Multiple concurrent sessions are tracked in `active-by-prompt`.
 - **Animation dual-backend**: `mini.animate` (preferred) or native `vim.uv.new_timer` frame loop. Per-session cancellation tokens prevent animation leaks across sessions.
 

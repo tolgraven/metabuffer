@@ -202,7 +202,7 @@ All #toggles
 	#xml / #x	Pretty-print minified XML lines.
 		Disable with #-xml, #noxml, #-x.
 	Sources:
-	#file / #f {token}	Switch to file-entry source filtering.
+	#file / #f [:{filter}]	Switch to file-entry source filtering. Use #file:term for inline path filters.
 		Disable with #-file, #nofile, #-f.
 	#lgrep / #lg {query}	Switch the source set to lgrep semantic search hits.
 	#lgrep:d / #lg:d {symbol}	Switch the source set to lgrep definitions for a symbol.

@@ -24,18 +24,30 @@ end
 local function normalize_history_prompt(text)
   local parts = vim.split((text or ""), "%s+", {trimempty = true})
   local out = {}
-  for _, tok in ipairs(parts) do
-    local next
-    if (tok == "#+file") then
-      next = "#file"
-    elseif (tok == "#+binary") then
-      next = "#binary"
-    elseif (tok == "#+hex") then
-      next = "#hex"
+  local idx = 1
+  while (idx <= #parts) do
+    local tok = parts[idx]
+    local next_tok = parts[(idx + 1)]
+    local file_toggle_3f = ((tok == "#+file") or (tok == "#file"))
+    local file_arg_3f = (file_toggle_3f and (type(next_tok) == "string") and (next_tok ~= "") and not vim.startswith(next_tok, "#"))
+    if file_arg_3f then
+      table.insert(out, ("#file:" .. next_tok))
+      idx = (idx + 2)
     else
-      next = tok
+      local function _4_()
+        if (tok == "#+file") then
+          return "#file"
+        elseif (tok == "#+binary") then
+          return "#binary"
+        elseif (tok == "#+hex") then
+          return "#hex"
+        else
+          return tok
+        end
+      end
+      table.insert(out, _4_())
+      idx = (idx + 1)
     end
-    table.insert(out, next)
   end
   if (#out > 0) then
     return table.concat(out, " ")

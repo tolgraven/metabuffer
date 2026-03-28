@@ -8,6 +8,7 @@
 - `M.new` — Factory that creates the hooks manager. Receives a large dependency table from `router/session.fnl` (avoids circular requires).
 - Registers all prompt-related autocmds: `TextChanged`, `TextChangedI`, `CursorMoved`, `CursorMovedI`, `InsertEnter`, `InsertLeave`, `WinEnter`, `WinLeave`, `BufEnter`, `BufLeave`, `BufWritePost`.
 - `on-prompt-changed` — Core event handler: reads prompt text, detects directive changes, dispatches to `router/query_flow.fnl`.
+- Directive UX: inline directive arguments should use `#flag:filter` form when available; prompt highlighting should clearly separate the directive prefix from the inline argument (`#file:` vs path filter text).
 - Mode switching: handles `switch-mode` for matcher/case/syntax cycling.
 - CMP integration: disables `nvim-cmp` in the prompt buffer.
 - Scroll sync: schedules preview/info updates after scroll events.

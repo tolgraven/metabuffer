@@ -4,26 +4,66 @@ local file_info = require("metabuffer.source.file_info")
 local util = require("metabuffer.util")
 local M = {}
 M["provider-key"] = "file-entry"
-M["query-directive-specs"] = {{kind = "toggle", long = "file", ["token-key"] = "include-files", arg = "{token}", doc = "Switch to file-entry source filtering.", ["await-when-true"] = true, await = {kind = "file"}}}
+M["query-directive-specs"] = {{kind = "toggle", long = "file", ["token-key"] = "include-files", arg = "[:{filter}]", doc = "Switch to file-entry source filtering. Use #file:term for inline path filters."}}
+local function option_prefix()
+  local p = vim.g["meta#prefix"]
+  if ((type(p) == "string") and (p ~= "")) then
+    return p
+  else
+    return "#"
+  end
+end
+local function inline_file_filter(tok)
+  local t = (tok or "")
+  local prefix = option_prefix()
+  local patterns = {("^" .. vim.pesc(prefix) .. "file:(.*)$"), ("^" .. vim.pesc(prefix) .. "f:(.*)$")}
+  local matched = nil
+  local out = matched
+  for _, pat in ipairs(patterns) do
+    if (out == nil) then
+      local value = string.match(t, pat)
+      if (value ~= nil) then
+        out = value
+      else
+      end
+    else
+    end
+  end
+  return out
+end
 M["parse-bare-token"] = function(state, tok, unquote_token)
   local t = (tok or "")
-  if (t == "./") then
+  local val_111_auto = inline_file_filter(t)
+  if val_111_auto then
+    local inline = val_111_auto
     local next = vim.deepcopy(state)
     next["include-files"] = true
-    next["file-await-token"] = true
-    next["await-directive"] = {kind = "file"}
+    if (vim.trim(inline) ~= "") then
+      table.insert(next["file-lines"], unquote_token(inline))
+    else
+    end
+    next["file-await-token"] = false
+    next["await-directive"] = nil
     return next
   else
-    local val_111_auto = string.match(t, "^%./(.+)$")
-    if val_111_auto then
-      local matched = val_111_auto
+    if (t == "./") then
       local next = vim.deepcopy(state)
       next["include-files"] = true
-      table.insert(next["file-lines"], unquote_token(matched))
-      next["file-await-token"] = false
+      next["file-await-token"] = true
+      next["await-directive"] = {kind = "file"}
       return next
     else
-      return nil
+      local val_111_auto0 = string.match(t, "^%./(.+)$")
+      if val_111_auto0 then
+        local matched = val_111_auto0
+        local next = vim.deepcopy(state)
+        next["include-files"] = true
+        table.insert(next["file-lines"], unquote_token(matched))
+        next["file-await-token"] = false
+        return next
+      else
+        return nil
+      end
     end
   end
 end

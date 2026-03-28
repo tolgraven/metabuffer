@@ -30,7 +30,7 @@ The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) 
 ### `query_flow.fnl` (375 lines)
 - `apply-prompt-lines!` — The core filter pipeline. Reads prompt text → parses directives → decides if source/transform needs reload → runs matcher filter → triggers buffer render.
 - Debounce logic: `queue-update-after-edit!` manages idle windows and prompt scheduler.
-- Source switching: detects when `#file`, `#lgrep`, or scope toggles change and reloads the source set.
+- Source switching: detects when `#file`, `#file:{filter}`, `#lgrep`, or scope toggles change and reloads the source set.
 - Transform switching: detects `#hex`, `#json`, etc. and applies/removes transforms.
 - Space-handling optimization: skips re-filter when whitespace-only edits don't change effective tokens.
 - Event emission: fires `:on-directive!` events for each changed directive key, comparing the new parsed query against `session.last-parsed-query`. This allows compat modules and other subsystems to react to directive changes without polling.
@@ -54,7 +54,7 @@ The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) 
 - `build-history-entry` — Constructs a history record from current prompt state including scope toggles, matcher name, and effective text.
 - `recall!` — Restores a history entry into the prompt, re-applying scope toggles and matcher mode.
 - `merge-persisted!` — Imports entries from `history_store` into session history.
-- `normalize-history-prompt` — Canonicalizes toggle syntax (`#+file` → `#file`).
+- `normalize-history-prompt` — Canonicalizes legacy history syntax (`#+file foo` / `#file foo` → `#file:foo`).
 
 ### `util.fnl` (512 lines)
 - State persistence: `read-prompt-height-state` / `write-prompt-height-state!`, `read-results-wrap-state` / `write-results-wrap-state!` — persist prompt window height and results wrap setting across Neovim restarts via `stdpath("state")` files.

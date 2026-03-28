@@ -21,7 +21,7 @@ T['project file-entry write renames file on straight line replacement'] = H.time
   local root = H.make_temp_project()
   H.open_project_meta_in_dir(root, 'main.txt')
 
-  H.type_prompt_text('#file README.md')
+  H.type_prompt_text('#file:README.md')
   H.wait_for(function() return H.session_file_entry_hit_count() > 0 end, 6000)
 
   focus_results_window()
@@ -45,7 +45,7 @@ T['regular Meta file-entry write renames file on straight line replacement'] = H
   child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(H.session_active, 3000)
 
-  H.type_prompt_text('#file README.md')
+  H.type_prompt_text('#file:README.md')
   H.wait_for(function() return H.session_file_entry_hit_count() > 0 end, 6000)
 
   focus_results_window()
