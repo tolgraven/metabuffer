@@ -127,7 +127,6 @@
         mods (. deps :mods)
         windows (. deps :windows)
         prompt-hooks-mod (. mods :prompt-hooks)
-        router-util-mod (. mods :router-util)
         active-by-prompt router.active-by-prompt
         on-prompt-changed (. deps :on-prompt-changed)
         update-info-window (. deps :update-info-window)
@@ -142,8 +141,7 @@
         sign-mod (. deps :sign-mod)
         hooks
         (prompt-hooks-mod.new
-          {:mark-prompt-buffer! router-util-mod.mark-prompt-buffer!
-           :default-prompt-keymaps router.prompt-keymaps
+          {:default-prompt-keymaps router.prompt-keymaps
            :default-main-keymaps router.main-keymaps
            :active-by-prompt active-by-prompt
            :on-prompt-changed on-prompt-changed
@@ -153,13 +151,18 @@
            :schedule-scroll-sync! schedule-scroll-sync!
            :maybe-restore-hidden-ui! maybe-restore-hidden-ui!
            :hide-visible-ui! hide-visible-ui!
-           :maybe-refresh-preview-statusline! (fn [s]
-                                               (when (and preview-window
-                                                          preview-window.refresh-statusline!)
-                                                 (preview-window.refresh-statusline! s)))
-           :update-context-window! (fn [s]
-                                     (when (and context-window context-window.update!)
-                                       (context-window.update! s)))
+            :maybe-refresh-preview-statusline! (fn [s]
+                                                (when (and preview-window
+                                                           preview-window.refresh-statusline!)
+                                                  (preview-window.refresh-statusline! s)))
+            :maybe-refresh-info-statusline! (fn [s]
+                                             (let [info-window (. windows :info)]
+                                               (when (and info-window
+                                                          info-window.refresh-statusline!)
+                                                 (info-window.refresh-statusline! s))))
+            :update-context-window! (fn [s]
+                                      (when (and context-window context-window.update!)
+                                        (context-window.update! s)))
            :rebuild-source-set! (fn [s]
                                   (when (and project-source project-source.apply-source-set!)
                                     (project-source.apply-source-set! s)))
@@ -171,7 +174,6 @@
   [deps session initial-lines]
   (let [router (. deps :router)
         mods (. deps :mods)
-        router-util-mod (. mods :router-util)
         active-by-source router.active-by-source
         active-by-prompt router.active-by-prompt
         animation-mod (. mods :animation)
@@ -240,8 +242,6 @@
       (fn [] (hide-startup-cursor! session)))
     (run-step! "activate-session-ui/set-prompt-lines"
       (fn [] (vim.api.nvim_buf_set_lines prompt-buf 0 -1 false initial-lines)))
-    (run-step! "activate-session-ui/mark-prompt-buffer"
-      (fn [] (router-util-mod.mark-prompt-buffer! prompt-buf)))
     (run-step! "activate-session-ui/register-prompt-hooks"
       (fn [] (register-prompt-hooks! deps session)))
     (set (. active-by-source session.source-buf) session)
@@ -340,8 +340,8 @@
                 col (# line)]
             (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col]))
           (when-not vim.g.meta_test_no_startinsert
-            (vim.api.nvim_set_current_win session.prompt-win)
-            (vim.cmd "startinsert!")))
+            (pcall vim.api.nvim_set_current_win session.prompt-win)
+            (pcall vim.cmd "startinsert!")))
         (when-not session.prompt-animated?
           (restore-main-view!)))
       (prompt-enter-duration-ms))))
@@ -479,7 +479,6 @@
         next-instance-id! (. deps :next-instance-id!)
         launching-by-source (. router :launching-by-source)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)]
-    (pcall vim.cmd "silent! nohlsearch")
     (let [current-buf (vim.api.nvim_get_current_buf)
           current-session (current-session-for-buffer router current-buf)]
       (if (and current-session
@@ -710,6 +709,7 @@
                     (set curr.session session)
                     (set curr.buf.session session)
                     (activate-session-ui! deps session initial-lines)
+                    (events.send :on-session-start! {:session session})
                     (finish-session-startup!
                       deps
                       curr

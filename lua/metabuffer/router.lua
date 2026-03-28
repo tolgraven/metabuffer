@@ -269,6 +269,9 @@ end
 M["prompt-yank"] = function(prompt_buf)
   return router_prompt_mod["prompt-yank!"](M["active-by-prompt"], prompt_buf)
 end
+M["prompt-newline"] = function(prompt_buf)
+  return router_prompt_mod["prompt-newline!"](M["active-by-prompt"], prompt_buf)
+end
 M["prompt-insert-text"] = function(prompt_buf, text)
   return router_prompt_mod["prompt-insert-text!"](M["active-by-prompt"], prompt_buf, text)
 end
@@ -365,6 +368,10 @@ M["toggle-info-file-entry-view"] = function(prompt_buf)
   return router_actions_mod["toggle-info-file-entry-view!"](actions_deps, prompt_buf)
 end
 M.start = function(query, mode, _meta, project_mode)
+  if (vim.fn.getcmdwintype() ~= "") then
+    return nil
+  else
+  end
   return router_session_mod["start!"](session_deps, query, mode, _meta, project_mode)
 end
 M.sync = function(meta, query)
@@ -373,14 +380,14 @@ M.sync = function(meta, query)
   else
   end
   if meta then
-    local function _47_()
+    local function _48_()
       if (query and (query ~= "")) then
         return {query}
       else
         return {}
       end
     end
-    meta["set-query-lines"](_47_())
+    meta["set-query-lines"](_48_())
     meta["on-update"](0)
     M._store_vars(meta)
     return meta
@@ -514,16 +521,16 @@ M["fail-safe-teardown!"] = function(where, err)
     M["_teardown-in-progress"] = false
   else
   end
-  local function _63_()
+  local function _64_()
     return vim.notify(("metabuffer: torn down after error in " .. tostring(where) .. "\n" .. tostring(err)), vim.log.levels.ERROR)
   end
-  return vim.schedule(_63_)
+  return vim.schedule(_64_)
 end
 local function wrap_public_api_with_failsafe_21()
   if not M["_failsafe-wrapped"] then
     for k, v in pairs(M) do
       if ((type(k) == "string") and (type(v) == "function") and not vim.startswith(k, "_") and (k ~= "configure") and (k ~= "fail-safe-teardown!")) then
-        local function _64_(...)
+        local function _65_(...)
           local res = {pcall(v, ...)}
           local ok = res[1]
           local result = res[2]
@@ -534,7 +541,7 @@ local function wrap_public_api_with_failsafe_21()
             return error(result)
           end
         end
-        M[k] = _64_
+        M[k] = _65_
       else
       end
     end

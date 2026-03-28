@@ -385,6 +385,11 @@
   "Insert prompt yank register content at cursor."
   (router_prompt_mod.prompt-yank! M.active-by-prompt prompt-buf))
 
+(fn M.prompt-newline
+  [prompt-buf]
+  "Insert a newline at the prompt cursor."
+  (router_prompt_mod.prompt-newline! M.active-by-prompt prompt-buf))
+
 (fn M.prompt-insert-text
   [prompt-buf text]
   "Insert arbitrary text at prompt cursor."
@@ -557,7 +562,11 @@
 
 (fn M.start
   [query mode _meta project-mode]
-  "Create a Meta session and wire prompt/result/project orchestration."
+  "Create a Meta session and wire prompt/result/project orchestration.
+  Bails out when invoked from the command-line window (q:, q/, q?)
+  where splits, floats, and nvim_set_current_win are forbidden."
+  (when (~= (vim.fn.getcmdwintype) "")
+    (lua "return nil"))
   (router_session_mod.start! session-deps query mode _meta project-mode))
 
 (fn M.sync

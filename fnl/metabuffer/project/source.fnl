@@ -134,12 +134,46 @@
                           :line (if (and (= (type rel) "string") (~= rel ""))
                                     rel
                                     path)
-                          :kind "file-entry"
-                          :open-lnum 1
-                          :preview-lnum 1})))
+                           :kind "file-entry"
+                           :open-lnum 1
+                           :preview-lnum 1})))
+
+  (fn file-query-matches?
+    [path q ignorecase]
+    (let [probe0 (or path "")
+          probe (if ignorecase (string.lower probe0) probe0)
+          query0 (vim.trim (or q ""))
+          query (if ignorecase (string.lower query0) query0)]
+      (if (= query "")
+          true
+          (not= nil (string.find probe query 1 true)))))
+
+  (fn path-matches-file-queries?
+    [path queries ignorecase]
+    (if (= (# (or queries [])) 0)
+        true
+        (let [path0 (or path "")
+              rel (if (~= path0 "") (vim.fn.fnamemodify path0 ":.") "")
+              probe (if (~= rel "")
+                        (.. rel " " path0)
+                        path0)
+              ok0 true]
+          (var ok ok0)
+          (each [_ q (ipairs (or queries []))]
+            (when (and ok (not (file-query-matches? probe q ignorecase)))
+              (set ok false)))
+          ok)))
+
+  (fn include-file-path?
+    [path file-filter]
+    (or (not (and file-filter file-filter.active?))
+        (path-matches-file-queries?
+          path
+          (or (and file-filter file-filter.queries) [])
+          (clj.boolean (and file-filter file-filter.ignorecase)))))
 
   (fn all-project-file-paths
-    [_session include-hidden include-ignored include-deps include-binary]
+    [_session include-hidden include-ignored include-deps include-binary file-filter]
     (let [root (vim.fn.getcwd)
           seen {}
           out []]
@@ -149,6 +183,7 @@
                      (= 1 (vim.fn.filereadable path))
                      (or include-binary (not (binary-file? path)))
                      (path-under-root? path root)
+                     (include-file-path? path file-filter)
                      (not (. seen path)))
             (set (. seen path) true)
             (table.insert out path))))
@@ -219,8 +254,30 @@
 
   (fn normal-query-active?
     [session]
-    (let [lines (or (and session.last-parsed-query session.last-parsed-query.lines) [])]
-      (prompt-has-active-query? {:last-parsed-query {:lines lines}})))
+    (let [lines (or (and session.last-parsed-query session.last-parsed-query.lines) [])
+          active? false]
+      (var on? active?)
+      (each [_ line (ipairs lines)]
+        (when (and (not on?) (~= (vim.trim (or line "")) ""))
+          (set on? true)))
+      on?))
+
+  (fn active-file-query-lines
+    [session]
+    (let [out []]
+      (each [_ q (ipairs (or session.file-query-lines []))]
+        (let [trimmed (vim.trim (or q ""))]
+          (when (~= trimmed "")
+            (table.insert out trimmed))))
+      out))
+
+  (fn current-file-filter
+    [session]
+    (let [queries (active-file-query-lines session)
+          active? (and session.effective-include-files (> (# queries) 0))]
+      {:active? active?
+       :queries queries
+       :ignorecase (clj.boolean (and session.meta session.meta.ignorecase (session.meta.ignorecase)))}))
 
   (fn file-only-mode?
     [session]
@@ -244,16 +301,17 @@
       (reset-meta-indices! meta)))
 
   (fn set-file-entry-source-content!
-    [session include-hidden include-ignored include-deps include-binary]
+    [session include-hidden include-ignored include-deps include-binary file-filter]
     (let [meta session.meta]
       (set meta.buf.content [])
       (set meta.buf.source-refs [])
       (each [_ path (ipairs (all-project-file-paths
                               session
-                              include-hidden
-                              include-ignored
-                              include-deps
-                              include-binary))]
+                               include-hidden
+                               include-ignored
+                               include-deps
+                               include-binary
+                               file-filter))]
         (push-file-entry-into-pool! session path))
       (bump-content-version! meta)
       (set meta.buf.show-source-prefix true)
@@ -310,10 +368,17 @@
                          (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
                 (if (and (not session.lazy-stream-done)
                          (not (prompt-has-active-query? session)))
-                    (do
-                      ;; During empty-query startup streaming, visible results stay stable.
-                      ;; Avoid re-running the full filter/render path on every batch and
-                      ;; update only progress/status UI until the stream completes.
+                    ;; During empty-query startup streaming, throttle full rerenders so
+                    ;; users can see the source pool grow without rendering each batch.
+                    (let [now (now-ms)
+                          last-render-ms (or session.lazy-last-render-ms 0)
+                          render-interval-ms 500
+                          should-render? (>= (- now last-render-ms) render-interval-ms)]
+                      (when should-render?
+                        (reset-meta-indices! session.meta)
+                        (pcall session.meta.buf.render)
+                        (restore-meta-view! session.meta session.source-view session update-info-window)
+                        (set session.lazy-last-render-ms now))
                       (pcall session.meta.refresh_statusline)
                       (pcall update-info-window session))
                     (let [[ok err] [(pcall session.meta.on-update 0)]]
@@ -432,6 +497,7 @@
     (let [root (vim.fn.getcwd)
           current-path (current-buffer-path session.source-buf)
           wrap-width (results-wrap-width session)
+          file-filter (current-file-filter session)
           file-cache (or session.preview-file-cache {})
           _ (set session.preview-file-cache file-cache)
           content []
@@ -443,7 +509,8 @@
                                     include-hidden
                                     include-ignored
                                     include-deps
-                                    include-binary))]
+                                    include-binary
+                                    file-filter))]
               (table.insert content "")
               (table.insert refs {:path path
                                   :lnum 1
@@ -467,19 +534,22 @@
             (when current-path
               (set (. file-cache current-path) (single-source-view session)))
             (when include-files
-              (each [_ path (ipairs (all-project-file-paths
-                                      session
-                                      include-hidden
-                                      include-ignored
-                                      include-deps
-                                      include-binary))]
-                (push-file-entry-into-pool! session path)))
+              (when-not (normal-query-active? session)
+                (each [_ path (ipairs (all-project-file-paths
+                                        session
+                                        include-hidden
+                                        include-ignored
+                                        include-deps
+                                        include-binary
+                                        file-filter))]
+                  (push-file-entry-into-pool! session path))))
             (each [_ path (ipairs (project-file-list root include-hidden include-ignored include-deps))]
               (let [rel (vim.fn.fnamemodify path ":.")]
                 (when (and (< (# content) settings.project-max-total-lines)
-                           (allow-project-path? rel include-hidden include-deps)
-                           (or include-binary
-                               (not (binary-file? path)))
+                            (allow-project-path? rel include-hidden include-deps)
+                            (include-file-path? path file-filter)
+                            (or include-binary
+                                (not (binary-file? path)))
                            (or (not current-path) (~= (vim.fn.fnamemodify path ":p") (vim.fn.fnamemodify current-path ":p")))
                            (= 1 (vim.fn.filereadable path)))
                   (let [size (vim.fn.getfsize path)]
@@ -504,16 +574,18 @@
           include-binary session.effective-include-binary
           wrap-width (results-wrap-width session)
           include-files session.effective-include-files
+          file-filter (current-file-filter session)
           current (canonical-path (current-buffer-path session.source-buf))
           open-paths (open-project-buffer-paths session root include-hidden include-deps)
           all-paths (project-file-list root include-hidden include-ignored include-deps)
-          file-entry-paths (if include-files
+          file-entry-paths (if (and include-files (not (normal-query-active? session)))
                                (all-project-file-paths
                                  session
                                  include-hidden
                                  include-ignored
                                  include-deps
-                                 include-binary)
+                                  include-binary
+                                  file-filter)
                                [])
           deferred []
           deferred-seen {}]
@@ -524,7 +596,8 @@
               include-hidden
               include-ignored
               include-deps
-              include-binary)
+              include-binary
+              file-filter)
             {:deferred-paths [] :estimated-lines 0})
           (do
       (set-single-source-content! session session.project-mode)
@@ -533,7 +606,9 @@
       ;; Prioritize nearby context by materializing already-open buffers first.
       (each [_ path (ipairs open-paths)]
         (let [p (canonical-path path)]
-          (when (and p (= 1 (vim.fn.filereadable p)))
+          (when (and p
+                     (= 1 (vim.fn.filereadable p))
+                     (include-file-path? p file-filter))
             (set (. deferred-seen p) true)
             (push-file-into-pool!
               session
@@ -549,9 +624,10 @@
         (let [p (canonical-path path)]
           (when (and p
                      (not (. deferred-seen p))
-                     (or include-binary
-                         (not (binary-file? p)))
-                     (or (not current) (~= p current)))
+                      (include-file-path? p file-filter)
+                      (or include-binary
+                          (not (binary-file? p)))
+                      (or (not current) (~= p current)))
             (set (. deferred-seen p) true)
             (table.insert deferred p))))
       {:deferred-paths deferred :estimated-lines (estimate-lines-from-files deferred)}))))
@@ -569,6 +645,7 @@
   (fn start-project-stream!
     [session prefilter init]
     (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
+    (set session.lazy-last-render-ms (now-ms))
     (set session.lazy-stream-done false)
     (set session.lazy-stream-next 1)
     (set session.lazy-stream-paths (or (. init :deferred-paths) []))
@@ -617,6 +694,11 @@
             (set session.meta.buf.visible-source-syntax-only false)
             (pcall session.meta.buf.apply-source-syntax-regions)
             (when-not (prompt-has-active-query? session)
+              ;; Streaming added content to meta.buf.content but indices was
+              ;; only built at bootstrap time.  Rebuild indices from the full
+              ;; content table and render so all streamed lines appear.
+              (reset-meta-indices! session.meta)
+              (pcall session.meta.buf.render)
               (restore-meta-view! session.meta session.source-view session update-info-window))
             ;; Always force one final UI refresh when streaming settles so the
             ;; info pane leaves its loading/empty state even if the last batch

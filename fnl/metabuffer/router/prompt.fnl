@@ -278,6 +278,11 @@
     (when (~= text "")
       (M.prompt-insert-at-cursor! active-by-prompt prompt-buf text))))
 
+(fn M.prompt-newline!
+  [active-by-prompt prompt-buf]
+  "Insert a newline at the current prompt cursor position."
+  (M.prompt-insert-at-cursor! active-by-prompt prompt-buf "\n"))
+
 (fn M.prompt-insert-text!
   [active-by-prompt prompt-buf text]
   (M.prompt-insert-at-cursor! active-by-prompt prompt-buf text))

@@ -187,13 +187,65 @@ M.new = function(opts)
     end
     return table.insert(refs, {path = path, lnum = 1, line = _20_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
   end
-  local function all_project_file_paths(_session, include_hidden, include_ignored, include_deps, include_binary)
+  local function file_query_matches_3f(path, q, ignorecase)
+    local probe0 = (path or "")
+    local probe
+    if ignorecase then
+      probe = string.lower(probe0)
+    else
+      probe = probe0
+    end
+    local query0 = vim.trim((q or ""))
+    local query
+    if ignorecase then
+      query = string.lower(query0)
+    else
+      query = query0
+    end
+    if (query == "") then
+      return true
+    else
+      return (nil ~= string.find(probe, query, 1, true))
+    end
+  end
+  local function path_matches_file_queries_3f(path, queries, ignorecase)
+    if (#(queries or {}) == 0) then
+      return true
+    else
+      local path0 = (path or "")
+      local rel
+      if (path0 ~= "") then
+        rel = vim.fn.fnamemodify(path0, ":.")
+      else
+        rel = ""
+      end
+      local probe
+      if (rel ~= "") then
+        probe = (rel .. " " .. path0)
+      else
+        probe = path0
+      end
+      local ok0 = true
+      local ok = ok0
+      for _, q in ipairs((queries or {})) do
+        if (ok and not file_query_matches_3f(probe, q, ignorecase)) then
+          ok = false
+        else
+        end
+      end
+      return ok
+    end
+  end
+  local function include_file_path_3f(path, file_filter)
+    return (not (file_filter and file_filter["active?"]) or path_matches_file_queries_3f(path, ((file_filter and file_filter.queries) or {}), clj.boolean((file_filter and file_filter.ignorecase))))
+  end
+  local function all_project_file_paths(_session, include_hidden, include_ignored, include_deps, include_binary, file_filter)
     local root = vim.fn.getcwd()
     local seen = {}
     local out = {}
     for _, p in ipairs(project_file_list(root, include_hidden, include_ignored, include_deps)) do
       local path = canonical_path(p)
-      if (path and (1 == vim.fn.filereadable(path)) and (include_binary or not binary_file_3f(path)) and path_under_root_3f(path, root) and not seen[path]) then
+      if (path and (1 == vim.fn.filereadable(path)) and (include_binary or not binary_file_3f(path)) and path_under_root_3f(path, root) and include_file_path_3f(path, file_filter) and not seen[path]) then
         seen[path] = true
         table.insert(out, path)
       else
@@ -264,7 +316,31 @@ M.new = function(opts)
   end
   local function normal_query_active_3f(session)
     local lines = ((session["last-parsed-query"] and session["last-parsed-query"].lines) or {})
-    return prompt_has_active_query_3f({["last-parsed-query"] = {lines = lines}})
+    local active_3f = false
+    local on_3f = active_3f
+    for _, line in ipairs(lines) do
+      if (not on_3f and (vim.trim((line or "")) ~= "")) then
+        on_3f = true
+      else
+      end
+    end
+    return on_3f
+  end
+  local function active_file_query_lines(session)
+    local out = {}
+    for _, q in ipairs((session["file-query-lines"] or {})) do
+      local trimmed = vim.trim((q or ""))
+      if (trimmed ~= "") then
+        table.insert(out, trimmed)
+      else
+      end
+    end
+    return out
+  end
+  local function current_file_filter(session)
+    local queries = active_file_query_lines(session)
+    local active_3f = (session["effective-include-files"] and (#queries > 0))
+    return {["active?"] = active_3f, queries = queries, ignorecase = clj.boolean((session.meta and session.meta.ignorecase and session.meta.ignorecase()))}
   end
   local function file_only_mode_3f(session)
     return (session["project-mode"] and session["effective-include-files"] and not normal_query_active_3f(session))
@@ -279,11 +355,11 @@ M.new = function(opts)
     meta.buf["show-source-separators"] = true
     return reset_meta_indices_21(meta)
   end
-  local function set_file_entry_source_content_21(session, include_hidden, include_ignored, include_deps, include_binary)
+  local function set_file_entry_source_content_21(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)
     local meta = session.meta
     meta.buf.content = {}
     meta.buf["source-refs"] = {}
-    for _, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)) do
+    for _, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)) do
       push_file_entry_into_pool_21(session, path)
     end
     bump_content_version_21(meta)
@@ -328,25 +404,36 @@ M.new = function(opts)
       match_idx = best_idx
     else
     end
-    local _34_
+    local _43_
     if match_idx then
-      _34_ = (match_idx - 1)
+      _43_ = (match_idx - 1)
     else
-      _34_ = fallback_idx
+      _43_ = fallback_idx
     end
-    return math.max(0, math.min(_34_, math.max(0, (#meta.buf.indices - 1))))
+    return math.max(0, math.min(_43_, math.max(0, (#meta.buf.indices - 1))))
   end
   local function schedule_lazy_refresh_21(session)
     if (session and session_active_3f(session) and not session.closing) then
       session["lazy-refresh-dirty"] = true
       if not session["lazy-refresh-pending"] then
         session["lazy-refresh-pending"] = true
-        local function _36_()
+        local function _45_()
           session["lazy-refresh-pending"] = false
           if (session and session_active_3f(session) and session["lazy-refresh-dirty"]) then
             session["lazy-refresh-dirty"] = false
             if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
               if (not session["lazy-stream-done"] and not prompt_has_active_query_3f(session)) then
+                local now = now_ms()
+                local last_render_ms = (session["lazy-last-render-ms"] or 0)
+                local render_interval_ms = 500
+                local should_render_3f = ((now - last_render_ms) >= render_interval_ms)
+                if should_render_3f then
+                  reset_meta_indices_21(session.meta)
+                  pcall(session.meta.buf.render)
+                  restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
+                  session["lazy-last-render-ms"] = now
+                else
+                end
                 pcall(session.meta.refresh_statusline)
                 pcall(update_info_window, session)
               else
@@ -356,7 +443,7 @@ M.new = function(opts)
                   pcall(update_info_window, session)
                 else
                   if (err and string.find(tostring(err), "E565")) then
-                    local function _37_()
+                    local function _47_()
                       if (session and session_active_3f(session) and session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
                         pcall(session.meta["on-update"], 0)
                         pcall(session.meta.refresh_statusline)
@@ -365,7 +452,7 @@ M.new = function(opts)
                         return nil
                       end
                     end
-                    vim.defer_fn(_37_, 1)
+                    vim.defer_fn(_47_, 1)
                   else
                   end
                 end
@@ -380,7 +467,7 @@ M.new = function(opts)
             return nil
           end
         end
-        return vim.defer_fn(_36_, math.max((settings["project-lazy-refresh-min-ms"] or 0), settings["project-lazy-refresh-debounce-ms"]))
+        return vim.defer_fn(_45_, math.max((settings["project-lazy-refresh-min-ms"] or 0), settings["project-lazy-refresh-debounce-ms"]))
       else
         return nil
       end
@@ -485,6 +572,7 @@ M.new = function(opts)
     local root = vim.fn.getcwd()
     local current_path = current_buffer_path(session["source-buf"])
     local wrap_width = results_wrap_width(session)
+    local file_filter = current_file_filter(session)
     local file_cache = (session["preview-file-cache"] or {})
     local _
     session["preview-file-cache"] = file_cache
@@ -492,18 +580,18 @@ M.new = function(opts)
     local content = {}
     local refs = {}
     if file_only_mode_3f(session) then
-      for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)) do
+      for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)) do
         table.insert(content, "")
-        local _59_
+        local _69_
         do
           local rel = vim.fn.fnamemodify(path, ":.")
           if ((type(rel) == "string") and (rel ~= "")) then
-            _59_ = rel
+            _69_ = rel
           else
-            _59_ = path
+            _69_ = path
           end
         end
-        table.insert(refs, {path = path, lnum = 1, line = _59_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
+        table.insert(refs, {path = path, lnum = 1, line = _69_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
       end
       return {content = content, refs = refs}
     else
@@ -514,14 +602,17 @@ M.new = function(opts)
       else
       end
       if include_files then
-        for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)) do
-          push_file_entry_into_pool_21(session, path)
+        if not normal_query_active_3f(session) then
+          for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)) do
+            push_file_entry_into_pool_21(session, path)
+          end
+        else
         end
       else
       end
       for _0, path in ipairs(project_file_list(root, include_hidden, include_ignored, include_deps)) do
         local rel = vim.fn.fnamemodify(path, ":.")
-        if ((#content < settings["project-max-total-lines"]) and allow_project_path_3f(rel, include_hidden, include_deps) and (include_binary or not binary_file_3f(path)) and (not current_path or (vim.fn.fnamemodify(path, ":p") ~= vim.fn.fnamemodify(current_path, ":p"))) and (1 == vim.fn.filereadable(path))) then
+        if ((#content < settings["project-max-total-lines"]) and allow_project_path_3f(rel, include_hidden, include_deps) and include_file_path_3f(path, file_filter) and (include_binary or not binary_file_3f(path)) and (not current_path or (vim.fn.fnamemodify(path, ":p") ~= vim.fn.fnamemodify(current_path, ":p"))) and (1 == vim.fn.filereadable(path))) then
           local size = vim.fn.getfsize(path)
           if ((size >= 0) and (size <= settings["project-max-file-bytes"])) then
             local view = read_file_view_cached(path, {["include-binary"] = include_binary, transforms = (session["effective-transforms"] or {}), ["wrap-width"] = wrap_width, linebreak = true})
@@ -546,19 +637,20 @@ M.new = function(opts)
     local include_binary = session["effective-include-binary"]
     local wrap_width = results_wrap_width(session)
     local include_files = session["effective-include-files"]
+    local file_filter = current_file_filter(session)
     local current = canonical_path(current_buffer_path(session["source-buf"]))
     local open_paths = open_project_buffer_paths(session, root, include_hidden, include_deps)
     local all_paths = project_file_list(root, include_hidden, include_ignored, include_deps)
     local file_entry_paths
-    if include_files then
-      file_entry_paths = all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary)
+    if (include_files and not normal_query_active_3f(session)) then
+      file_entry_paths = all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)
     else
       file_entry_paths = {}
     end
     local deferred = {}
     local deferred_seen = {}
     if file_only_mode_3f(session) then
-      set_file_entry_source_content_21(session, include_hidden, include_ignored, include_deps, include_binary)
+      set_file_entry_source_content_21(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)
       return {["deferred-paths"] = {}, ["estimated-lines"] = 0}
     else
       set_single_source_content_21(session, session["project-mode"])
@@ -567,7 +659,7 @@ M.new = function(opts)
       end
       for _, path in ipairs(open_paths) do
         local p = canonical_path(path)
-        if (p and (1 == vim.fn.filereadable(p))) then
+        if (p and (1 == vim.fn.filereadable(p)) and include_file_path_3f(p, file_filter)) then
           deferred_seen[p] = true
           push_file_into_pool_21(session, p, read_file_view_cached(p, {["include-binary"] = include_binary, transforms = (session["effective-transforms"] or {}), ["wrap-width"] = wrap_width, linebreak = true}), prefilter)
         else
@@ -575,7 +667,7 @@ M.new = function(opts)
       end
       for _, path in ipairs(all_paths) do
         local p = canonical_path(path)
-        if (p and not deferred_seen[p] and (include_binary or not binary_file_3f(p)) and (not current or (p ~= current))) then
+        if (p and not deferred_seen[p] and include_file_path_3f(p, file_filter) and (include_binary or not binary_file_3f(p)) and (not current or (p ~= current))) then
           deferred_seen[p] = true
           table.insert(deferred, p)
         else
@@ -589,6 +681,7 @@ M.new = function(opts)
   end
   local function start_project_stream_21(session, prefilter, init)
     session["lazy-stream-id"] = (1 + (session["lazy-stream-id"] or 0))
+    session["lazy-last-render-ms"] = now_ms()
     session["lazy-stream-done"] = false
     session["lazy-stream-next"] = 1
     session["lazy-stream-paths"] = (init["deferred-paths"] or {})
@@ -627,6 +720,8 @@ M.new = function(opts)
           session.meta.buf["visible-source-syntax-only"] = false
           pcall(session.meta.buf["apply-source-syntax-regions"])
           if not prompt_has_active_query_3f(session) then
+            reset_meta_indices_21(session.meta)
+            pcall(session.meta.buf.render)
             restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
           else
           end
@@ -715,7 +810,7 @@ M.new = function(opts)
       session["source-set-rebuild-token"] = (1 + (session["source-set-rebuild-token"] or 0))
       local token = session["source-set-rebuild-token"]
       session["source-set-rebuild-pending"] = true
-      local function _86_()
+      local function _97_()
         if (session and (token == session["source-set-rebuild-token"])) then
           session["source-set-rebuild-pending"] = false
         else
@@ -731,7 +826,7 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_86_, math.max(0, (wait_ms or 0)))
+      return vim.defer_fn(_97_, math.max(0, (wait_ms or 0)))
     else
       return nil
     end
@@ -760,7 +855,7 @@ M.new = function(opts)
       local delay = math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"] or 0))
       session["project-bootstrap-pending"] = true
       local run_bootstrap_21
-      local function _92_()
+      local function _103_()
         if (session and (token == session["project-bootstrap-token"])) then
           session["project-bootstrap-pending"] = false
         else
@@ -786,14 +881,14 @@ M.new = function(opts)
             restore_meta_view_21(session.meta, session["source-view"], session, update_info_window)
             pcall(session.meta.refresh_statusline)
             pcall(update_info_window, session, true)
-            local function _96_()
+            local function _107_()
               if (session and session_active_3f(session) and not session.closing) then
                 return pcall(update_info_window, session, true)
               else
                 return nil
               end
             end
-            vim.defer_fn(_96_, 17)
+            vim.defer_fn(_107_, 17)
           else
           end
           session["project-mode-starting?"] = false
@@ -802,7 +897,7 @@ M.new = function(opts)
           return nil
         end
       end
-      run_bootstrap_21 = _92_
+      run_bootstrap_21 = _103_
       return vim.defer_fn(run_bootstrap_21, delay)
     else
       return nil

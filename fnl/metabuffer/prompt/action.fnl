@@ -245,6 +245,10 @@
       (prompt.restore st)
       (prompt.update-text ch))))
 
+(fn _insert_newline
+  [prompt _]
+  (prompt.update-text "\n"))
+
 (set M.DEFAULT_ACTION (M.new))
 (M.DEFAULT_ACTION.register_from_rules
   [ ["prompt:accept" _accept]
@@ -275,8 +279,9 @@
     ["prompt:paste_from_register" _paste_from_register]
     ["prompt:paste_from_default_register" _paste_from_default_register]
     ["prompt:yank_to_register" _yank_to_register]
-    ["prompt:yank_to_default_register" _yank_to_default_register]
-    ["prompt:insert_special" _insert_special]
-    ["prompt:insert_digraph" _insert_digraph] ])
+     ["prompt:yank_to_default_register" _yank_to_default_register]
+     ["prompt:insert_special" _insert_special]
+     ["prompt:insert_digraph" _insert_digraph]
+     ["prompt:insert_newline" _insert_newline] ])
 
 M

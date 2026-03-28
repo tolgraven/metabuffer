@@ -71,12 +71,12 @@ M["apply-awaited-directive"] = function(state, directive, arg)
   local kind = (directive and directive.kind)
   if (kind == "file") then
     table.insert(next["file-lines"], arg)
-    next["file-await-token"] = false
   elseif (kind == "query-source") then
     next["line-source"] = {key = (directive["source-key"] or ""), kind = (directive.mode or "search"), query = arg}
   else
   end
   next["await-directive"] = nil
+  next["file-await-token"] = false
   return next
 end
 local function source_lines_for_key(parsed, key)

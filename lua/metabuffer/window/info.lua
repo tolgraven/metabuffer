@@ -262,12 +262,9 @@ M.new = function(opts)
       else
         row = 0
       end
-      local h
-      if has_winbar_3f then
-        h = math.max(1, (height - 1))
-      else
-        h = height
-      end
+      local host_height = vim.api.nvim_win_get_height(host_win)
+      local max_h = math.max(1, (host_height - row - 1))
+      local h = math.min(math.max(1, height), max_h)
       return {relative = "win", win = host_win, anchor = "NW", row = row, col = vim.api.nvim_win_get_width(host_win), width = width, height = h, focusable = false}
     else
       return {relative = "editor", anchor = "NE", row = 1, col = vim.o.columns, width = width, height = height, focusable = false}
@@ -275,7 +272,7 @@ M.new = function(opts)
   end
   info_window_config = _32_
   local ensure_info_window = nil
-  local function _36_(session)
+  local function _35_(session)
     if not valid_info_win_3f(session) then
       local buf = vim.api.nvim_create_buf(false, true)
       local width = info_min_width
@@ -325,9 +322,9 @@ M.new = function(opts)
         session["info-render-suspended?"] = true
         session["info-post-fade-refresh?"] = true
         pcall(vim.api.nvim_set_option_value, "winblend", 100, {win = session["info-win"]})
-        local function _38_()
+        local function _37_()
           if valid_info_win_3f(session) then
-            local function _39_(_)
+            local function _38_(_)
               if valid_info_win_3f(session) then
                 session["info-post-fade-refresh?"] = nil
                 session["info-render-suspended?"] = false
@@ -336,12 +333,12 @@ M.new = function(opts)
                 return nil
               end
             end
-            return animation_mod["animate-float!"](session, "info-enter", session["info-win"], cfg, target, 100, (vim.g.meta_float_winblend or 13), animation_mod["duration-ms"](session, "info", (info_fade_ms or 220)), {kind = "info", ["done!"] = _39_})
+            return animation_mod["animate-float!"](session, "info-enter", session["info-win"], cfg, target, 100, (vim.g.meta_float_winblend or 13), animation_mod["duration-ms"](session, "info", (info_fade_ms or 220)), {kind = "info", ["done!"] = _38_})
           else
             return nil
           end
         end
-        return vim.defer_fn(_38_, 17)
+        return vim.defer_fn(_37_, 17)
       else
         return nil
       end
@@ -349,13 +346,21 @@ M.new = function(opts)
       return nil
     end
   end
-  ensure_info_window = _36_
+  ensure_info_window = _35_
   local function settle_info_window_21(session)
     if valid_info_win_3f(session) then
       local width = vim.api.nvim_win_get_width(session["info-win"])
       local height = info_height(session)
       local cfg = info_window_config(session, width, height)
       return apply_info_config_if_changed_21(session, cfg)
+    else
+      return nil
+    end
+  end
+  local function refresh_info_statusline_21(session)
+    if valid_info_win_3f(session) then
+      pcall(vim.api.nvim_set_option_value, "statusline", "", {win = session["info-win"]})
+      return pcall(vim.api.nvim_set_option_value, "winbar", "", {win = session["info-win"]})
     else
       return nil
     end
@@ -1059,19 +1064,15 @@ M.new = function(opts)
       end
       settle_info_window_21(session)
       debug_log(join_str(" ", {"info enter", ("refresh=" .. str(refresh_lines)), ("selected=" .. session.meta.selected_index), ("info-win=" .. session["info-win"]), ("info-buf=" .. session["info-buf"])}))
-      if valid_info_win_3f(session) then
-        pcall(vim.api.nvim_set_option_value, "statusline", "", {win = session["info-win"]})
-        pcall(vim.api.nvim_set_option_value, "winbar", "", {win = session["info-win"]})
-      else
-      end
+      refresh_info_statusline_21(session)
       if (not session["info-render-suspended?"] and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
         local meta = session.meta
         local loading_finished_3f = clj.boolean(session["info-project-loading-active?"])
         local force_refresh_3f = (loading_finished_3f or clj.boolean(session["info-showing-project-loading?"]) or refresh_lines or (session["info-render-sig"] == nil) or (session["info-start-index"] == nil) or (session["info-stop-index"] == nil))
         local selected1 = (meta.selected_index + 1)
-        local _let_125_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-        local wanted_start = _let_125_[1]
-        local wanted_stop = _let_125_[2]
+        local _let_124_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
+        local wanted_start = _let_124_[1]
+        local wanted_stop = _let_124_[2]
         local start_index = (session["info-start-index"] or 1)
         local stop_index = (session["info-stop-index"] or 0)
         local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
@@ -1085,14 +1086,14 @@ M.new = function(opts)
             session["info-showing-project-loading?"] = false
             render_info_lines_21(session, meta, wanted_start, wanted_stop, wanted_start, wanted_stop)
             if loading_finished_3f then
-              local function _126_()
+              local function _125_()
                 if (session and valid_info_win_3f(session) and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"]) and not project_loading_pending_3f(session)) then
                   return update_21(session, true)
                 else
                   return nil
                 end
               end
-              vim.defer_fn(_126_, 17)
+              vim.defer_fn(_125_, 17)
             else
             end
           else
@@ -1105,7 +1106,7 @@ M.new = function(opts)
       end
     end
   end
-  local function _133_(session, refresh_lines)
+  local function _132_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -1118,7 +1119,7 @@ M.new = function(opts)
       return update_regular_21(session, refresh_lines0)
     end
   end
-  update_21 = _133_
-  return {["close-window!"] = close_info_window_21, ["update!"] = update_21}
+  update_21 = _132_
+  return {["close-window!"] = close_info_window_21, ["update!"] = update_21, ["refresh-statusline!"] = refresh_info_statusline_21}
 end
 return M

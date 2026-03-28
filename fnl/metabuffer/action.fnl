@@ -61,6 +61,10 @@
   [meta _]
   (meta.switch_mode "syntax"))
 
+(fn _prompt-newline
+  [_ _]
+  (vim.api.nvim_put [""] "c" true true))
+
 (fn _pause
   [_ _]
   4)
@@ -73,6 +77,7 @@
     ["meta:switch_matcher" _switch-matcher]
     ["meta:switch_case" _switch-case]
     ["meta:switch_highlight" _switch-highlight]
+    ["meta:prompt_newline" _prompt-newline]
     ["meta:pause_prompt" _pause]])
 
 (local default-action-keymap
@@ -86,6 +91,7 @@
     ["<C-J>" "<meta:select_next_candidate>" "noremap"]
     ["<Left>" "<meta:move_caret_to_left>" "noremap"]
     ["<Right>" "<meta:move_caret_to_right>" "noremap"]
+    ["<S-CR>" "<meta:prompt_newline>" "noremap"]
     ["<C-I>" "<meta:toggle_insert_mode>" "noremap"]
     ["<S-Tab>" "<meta:select_previous_candidate>" "noremap"]
     ["<Tab>" "<meta:select_next_candidate>" "noremap"]

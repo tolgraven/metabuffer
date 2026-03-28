@@ -75,15 +75,14 @@
   (let [next (vim.deepcopy state)
         kind (and directive (. directive :kind))]
     (if (= kind "file")
-        (do
-          (table.insert (. next :file-lines) arg)
-          (set (. next :file-await-token) false))
+        (table.insert (. next :file-lines) arg)
         (= kind "query-source")
         (set (. next :line-source)
              {:key (or (. directive :source-key) "")
               :kind (or (. directive :mode) "search")
               :query arg}))
     (set (. next :await-directive) nil)
+    (set (. next :file-await-token) false)
     next))
 
 (fn source-lines-for-key
@@ -106,7 +105,8 @@
 (fn M.consume-pending-token
   [state tok unquote-token]
   "Consume any pending source-specific followup token. Expected output: updated state or nil."
-  (when (and (. state :file-await-token) (~= (vim.trim (or tok "")) ""))
+  (when (and (. state :file-await-token)
+             (~= (vim.trim (or tok "")) ""))
     (let [next (vim.deepcopy state)]
       (table.insert (. next :file-lines) (unquote-token tok))
       (set (. next :file-await-token) false)

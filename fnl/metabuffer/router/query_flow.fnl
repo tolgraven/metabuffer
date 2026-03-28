@@ -82,6 +82,21 @@
         (~= next-lazy session.lazy-mode)
         (~= next-expansion session.expansion-mode))))
 
+(fn file-lines-changed?
+  [session parsed]
+  "Return true when the file-filter tokens differ from the previous update."
+  (let [prev (or session.file-query-lines [])
+        next (or (. parsed :file-lines) [])
+        n (# next)]
+    (if (~= n (# prev))
+        true
+        (do
+          (var diff false)
+          (for [i 1 n]
+            (when (and (not diff) (~= (. prev i) (. next i)))
+              (set diff true)))
+          diff))))
+
 (fn dispatch-directive-changes!
   [session parsed]
   "Compare parsed directives against session.last-parsed-query and fire
@@ -275,7 +290,7 @@
                 (vim.api.nvim_buf_set_lines session.prompt-buf 0 -1 false visible-lines)
                 (set session._rewriting-visible-controls false))))
           (set session.meta.debug_out "")
-          (when (or changed text-changed?)
+          (when (or changed text-changed? (file-lines-changed? session parsed))
             (invalidate-filter-cache! session))
           (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
             (pcall vim.api.nvim_buf_set_var session.meta.buf.buffer "meta_manual_edit_active" false))
@@ -330,6 +345,7 @@
             ;; a complete no-op.
             noop? (and (not force)
                        no-flag-change?
+                       (not (file-lines-changed? session parsed))
                        (= effective-text (or session.prompt-last-applied-text ""))
                        (= effective-text (or session.prompt-last-event-text "")))
             now (router_prompt_mod.now-ms)

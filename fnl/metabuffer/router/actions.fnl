@@ -141,6 +141,7 @@
         instances (. router :instances)]
     (when session
       (set session.closing true)
+      (events.send :on-session-stop! {:session session})
       (when (and animation-mod animation-mod.unmark-mini-session!)
         (animation-mod.unmark-mini-session! session))
       (when (and animation-mod animation-mod.cancel-session!)
@@ -389,8 +390,8 @@
     (vim.cmd "normal! zv")
     (let [vq (curr.vim_query)]
       (when (~= vq "")
-        (vim.fn.setreg "/" vq)
-        (set vim.o.hlsearch true)))
+        (vim.fn.setreg "/" vq)))
+    (events.send :on-accept! {:session session})
     ;; Accept should exit visible Meta UI, but keep resumable state so
     ;; returning to the results buffer restores prompt/info/selection.
      (pcall vim.cmd "stopinsert")
