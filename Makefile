@@ -1,4 +1,4 @@
-.PHONY: all compile check check-fnl check-lua test test-then-all test-profile
+.PHONY: all compile full check check-fnl check-lua test test-then-all test-profile
 
 XDG_STATE_HOME := /tmp
 XDG_DATA_HOME := /tmp
@@ -17,6 +17,10 @@ all: compile
 compile:
 	@echo "[make] compiling fennel..."
 	$(NVIM_ENV) ./scripts/compile-fennel.sh
+
+# Full local verification: lint fennel, then compile+test via `make test`.
+full: check-fnl test
+	@:
 
 # Run all linters
 check: check-fnl check-lua

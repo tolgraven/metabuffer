@@ -30,6 +30,9 @@
 
 - Compile all Fennel → Lua:
   - `make` (or `make compile`)
+- Run the normal one-shot local verification flow:
+  - `make full`
+  - runs `make check-fnl` and then `make test` (which already compiles)
 - Lint Fennel + Lua:
   - `make check` (both), `make check-fnl` (fennel-ls only), `make check-lua` (lua-language-server only)
   - Lint a single file: `make check-fnl -- fnl/metabuffer/window/info.fnl`
@@ -302,7 +305,7 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 
 ## General workflow
 
-- When making changes, run `fennel-ls --lint` to check for issues. Once that is ok, run `make` (compile). If that is ok, run `make test`. Only once all these are clear should you return to user.
+- When making changes, prefer `make full` as the standard verification flow. It runs `make check-fnl` and then `make test`, and `make test` already compiles. Only once that is clear should you return to user.
 - Treat a successful compile, targeted repro, or targeted test as a checkpoint, not an excuse to stop. Keep going until the full requested fix is implemented end-to-end unless the user must choose between materially different paths.
 - Before handing control back, ask: "Is there an obvious next step I can execute myself right now?" If yes, do it first. Only stop when blocked by ambiguity, missing secrets/access, or when the requested work is actually complete.
 - After any timed-out or interrupted test command, explicitly verify that no stray headless `nvim` test processes remain. If any do, kill them before the next run.
