@@ -88,8 +88,17 @@
 ### Autocmd Lifecycle
 Autocmds are created with a session-specific augroup. On session teardown, the entire augroup is cleared. This prevents stale autocmds from firing on destroyed buffers.
 
+### Autocmd Helpers
+Three helpers are defined inside `register!`, closing over `aug` (augroup) and `session`:
+
+- `au!` — Buffer-local + `schedule-when-valid` session guard. Signature: `(au! events buf body)` where `body` is a zero-arg function. Use for simple buffer-local autocmds that just need session-safe scheduling.
+- `au-buf!` — Buffer-local + raw callback. Signature: `(au-buf! events buf callback)` where `callback` receives the event object. Use when the callback needs complex synchronous logic, its own `vim.schedule`, or access to the event data.
+- `au-global!` — Global (no buffer scope) + raw callback with optional opts override. Signature: `(au-global! events callback ?opts)`. Use for non-buffer-scoped autocmds like `VimResized`, `WinNew`, `WinScrolled`, `BufWritePost`. Pass `{:pattern "wrap"}` etc. via `?opts` for pattern-based autocmds like `OptionSet`.
+
+All raw `vim.api.nvim_create_autocmd` calls inside `register!` use one of these three helpers. The only direct `nvim_create_autocmd` calls remaining in hooks.fnl are the helper definitions themselves.
+
 ## Caution Points
 
-- `hooks.fnl` is large (1112 lines) because it orchestrates all prompt-related events. Modifications should be carefully scoped — each autocmd callback has subtle interactions with debounce timing and animation delays.
+- `hooks.fnl` is large (~1230 lines) because it orchestrates all prompt-related events. Modifications should be carefully scoped — each autocmd callback has subtle interactions with debounce timing and animation delays.
 - The keystroke timer in `keystroke.fnl` can race with prompt TextChanged events. The sequence detector must consume the input before the regular prompt handler sees it.
 - History navigation (`history.fnl`) behavior changes when the history browser float is open — `<Up>`/`<Down>` move the browser selection instead of cycling session history. This dual behavior is coordinated through a flag on the session object.

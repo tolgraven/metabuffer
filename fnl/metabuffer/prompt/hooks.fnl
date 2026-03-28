@@ -927,6 +927,17 @@
          :buffer buf
          :callback (fn [_]
                      (schedule-when-valid session body))}))
+    (fn au-buf!
+      [events buf callback]
+      "Create buffer-local autocmd with a raw event callback."
+      (vim.api.nvim_create_autocmd events {:group aug :buffer buf :callback callback}))
+    (fn au-global!
+      [events callback ?opts]
+      "Create global autocmd with a raw callback and optional opts override."
+      (let [base {:group aug :callback callback}]
+        (each [k v (pairs (or ?opts {}))]
+          (tset base k v))
+        (vim.api.nvim_create_autocmd events base)))
       ;; Some environments/plugins do not reliably emit TextChangedI for this
       ;; scratch prompt buffer; keep a low-level line-change hook as a fallback.
         (vim.api.nvim_buf_attach session.prompt-buf false
@@ -947,20 +958,18 @@
                           (set (. active-by-prompt session.prompt-buf) nil)))})
       ;; Prompt text updates: rely on post-change autocmds to avoid pre-edit race
       ;; behavior that can leave matcher one character behind while typing.
-        (vim.api.nvim_create_autocmd ["TextChanged" "TextChangedI"]
-          {:group aug
-           :buffer session.prompt-buf
-           :callback (fn [_]
-                       (if (maybe-expand-history-shorthand! router session)
-                           nil
-                           (do
-                             (refresh-prompt-highlights! session)
-                             (maybe-show-directive-help! session)
-                             (maybe-trigger-directive-complete! session)
-                             (on-prompt-changed
-                               session.prompt-buf
-                               false
-                               (vim.api.nvim_buf_get_changedtick session.prompt-buf)))))})
+        (au-buf! ["TextChanged" "TextChangedI"] session.prompt-buf
+          (fn [_]
+            (if (maybe-expand-history-shorthand! router session)
+                nil
+                (do
+                  (refresh-prompt-highlights! session)
+                  (maybe-show-directive-help! session)
+                  (maybe-trigger-directive-complete! session)
+                  (on-prompt-changed
+                    session.prompt-buf
+                    false
+                    (vim.api.nvim_buf_get_changedtick session.prompt-buf))))))
       ;; Re-assert prompt maps when entering insert mode; this wins over late
       ;; plugin mappings (for example completion plugins).
         (au! "InsertEnter" session.prompt-buf
@@ -996,229 +1005,210 @@
       ;; window is in the list (user dragged a split border), latch
       ;; preview-user-resized? so ensure-preview-width! respects the manual
       ;; width.  VimResized (terminal resize) clears the latch.
-        (vim.api.nvim_create_autocmd ["VimResized" "WinResized"]
-          {:group aug
-           :callback (fn [ev]
-                        (when-not session.handling-layout-change?
-                          ;; Synchronous: capture resize info before schedule.
-                          (let [is-vim-resized? (= ev.event "VimResized")
-                                wins (or (?. vim.v :event :windows) [])
-                                manual-prompt-resize (and (not is-vim-resized?)
-                                                          (manual-prompt-resize? session wins))]
-                            (when is-vim-resized?
-                              (set session.preview-user-resized? false))
-                            (when (and (not is-vim-resized?)
-                                       session.preview-win
-                                       (vim.api.nvim_win_is_valid session.preview-win))
-                              (each [_ wid (ipairs wins)]
-                                (when (= wid session.preview-win)
-                                  (set session.preview-user-resized? true))))
-                            (if manual-prompt-resize
-                                (do
-                                  (set session.prompt-target-height (vim.api.nvim_win_get_height session.prompt-win))
-                                  (capture-expected-layout! session))
-                                (schedule-restore-expected-layout! session)))
-                          (set session.handling-layout-change? true)
-                          (schedule-when-valid session
-                            (fn []
-                             (let [results-wrap? (and session.meta
-                                                      session.meta.win
-                                                      (vim.api.nvim_win_is_valid session.meta.win.window)
-                                                      (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
-                               (when (and results-wrap? rebuild-source-set!)
-                                 (pcall rebuild-source-set! session)
-                                 (pcall session.meta.on-update 0)))
-                              (when-not session.prompt-animating?
-                                (pcall refresh-prompt-highlights! session)
-                                (when update-preview-window
-                                  (pcall update-preview-window session))
-                                (pcall update-info-window session))
-                              (when (= ev.event "VimResized")
-                                (capture-expected-layout! session))
-                              (set session.handling-layout-change? false)))))} )
-        (vim.api.nvim_create_autocmd "OptionSet"
-          {:group aug
-           :pattern "wrap"
-           :callback (fn [_]
-                       (when-not session.handling-layout-change?
-                         (set session.handling-layout-change? true)
-                         (schedule-when-valid session
-                           (fn []
-                             (when (and session.meta
-                                        session.meta.win
-                                        (vim.api.nvim_win_is_valid session.meta.win.window)
-                                        (= (vim.api.nvim_get_current_win) session.meta.win.window))
-                               (let [wrap? (clj.boolean (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
-                                 (pcall vim.api.nvim_set_option_value "linebreak" wrap? {:win session.meta.win.window})
-                                 (when rebuild-source-set!
-                                   (pcall rebuild-source-set! session)
-                                   (pcall session.meta.on-update 0)
-                                   (pcall update-info-window session true)
-                                   (when update-preview-window
-                                     (pcall update-preview-window session)))))
-                             (set session.handling-layout-change? false)))))})
+        (au-global! ["VimResized" "WinResized"]
+          (fn [ev]
+            (when-not session.handling-layout-change?
+              ;; Synchronous: capture resize info before schedule.
+              (let [is-vim-resized? (= ev.event "VimResized")
+                    wins (or (?. vim.v :event :windows) [])
+                    manual-prompt-resize (and (not is-vim-resized?)
+                                              (manual-prompt-resize? session wins))]
+                (when is-vim-resized?
+                  (set session.preview-user-resized? false))
+                (when (and (not is-vim-resized?)
+                           session.preview-win
+                           (vim.api.nvim_win_is_valid session.preview-win))
+                  (each [_ wid (ipairs wins)]
+                    (when (= wid session.preview-win)
+                      (set session.preview-user-resized? true))))
+                (if manual-prompt-resize
+                    (do
+                      (set session.prompt-target-height (vim.api.nvim_win_get_height session.prompt-win))
+                      (capture-expected-layout! session))
+                    (schedule-restore-expected-layout! session)))
+              (set session.handling-layout-change? true)
+              (schedule-when-valid session
+                (fn []
+                  (let [results-wrap? (and session.meta
+                                           session.meta.win
+                                           (vim.api.nvim_win_is_valid session.meta.win.window)
+                                           (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
+                    (when (and results-wrap? rebuild-source-set!)
+                      (pcall rebuild-source-set! session)
+                      (pcall session.meta.on-update 0)))
+                  (when-not session.prompt-animating?
+                    (pcall refresh-prompt-highlights! session)
+                    (when update-preview-window
+                      (pcall update-preview-window session))
+                    (pcall update-info-window session))
+                  (when (= ev.event "VimResized")
+                    (capture-expected-layout! session))
+                  (set session.handling-layout-change? false))))))
+        (au-global! "OptionSet"
+          (fn [_]
+            (when-not session.handling-layout-change?
+              (set session.handling-layout-change? true)
+              (schedule-when-valid session
+                (fn []
+                  (when (and session.meta
+                             session.meta.win
+                             (vim.api.nvim_win_is_valid session.meta.win.window)
+                             (= (vim.api.nvim_get_current_win) session.meta.win.window))
+                    (let [wrap? (clj.boolean (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
+                      (pcall vim.api.nvim_set_option_value "linebreak" wrap? {:win session.meta.win.window})
+                      (when rebuild-source-set!
+                        (pcall rebuild-source-set! session)
+                        (pcall session.meta.on-update 0)
+                        (pcall update-info-window session true)
+                        (when update-preview-window
+                          (pcall update-preview-window session)))))
+                  (set session.handling-layout-change? false)))))
+          {:pattern "wrap"})
       ;; Keep selection/status/info synced when user scrolls or moves in the
       ;; main meta window with regular motions/mouse while prompt is open.
         (au! ["CursorMoved" "CursorMovedI"] session.meta.buf.buffer
           (fn [] (maybe-sync-from-main! session)))
-        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
-          {:group aug
-           :buffer session.meta.buf.buffer
-           :callback (fn [_]
-                       (begin-direct-results-edit! session))})
-        (vim.api.nvim_create_autocmd ["TextChanged" "TextChangedI"]
-          {:group aug
-           :buffer session.meta.buf.buffer
-           :callback (fn [_]
-                       (when (and sign-mod session.meta session.meta.buf)
-                         (let [buf session.meta.buf.buffer
-                               internal? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_internal_render")]]
-                                           (and ok v))]
-                           (when-not internal?
-                             (begin-direct-results-edit! session))
-                           (vim.schedule
-                             (fn []
-                               (when (and session.prompt-buf
-                                          (= (. active-by-prompt session.prompt-buf) session))
-                                 (pcall router.sync-live-edits session.prompt-buf)
-                                 (pcall maybe-sync-from-main! session true)
-                                 (pcall update-info-window session true)
-                                 (pcall sign-mod.refresh-change-signs! session)))))))})
-        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
-          {:group aug
-           :buffer session.meta.buf.buffer
-            :callback (fn [_]
-                        (when (and (not session.closing)
-                                   session.meta
-                                   session.meta.buf
-                                   (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-                          (let [bo (. vim.bo session.meta.buf.buffer)]
-                            (set (. bo :buftype) "acwrite")
-                            (set (. bo :modifiable) true)
-                            (set (. bo :readonly) false)
-                            (set (. bo :bufhidden) "hide")))
-                        (when maybe-restore-hidden-ui!
-                          ;; Defer UI restoration until after the jump/BufEnter
-                          ;; command stack settles; restoring windows directly
-                          ;; inside BufEnter can surface invalid mark jumps.
-                          (vim.schedule
-                            (fn []
-                              (when (and (not session.closing)
-                                         session.prompt-buf
-                                         (= (. active-by-prompt session.prompt-buf) session))
-                              (pcall maybe-restore-hidden-ui! session))))))})
-        (vim.api.nvim_create_autocmd "WinNew"
-          {:group aug
-           :callback (fn [_]
-                       (vim.defer_fn
-                         (fn []
-                           (when (and hide-visible-ui!
-                                      (not session.ui-hidden)
-                                      session.prompt-buf
-                                      (= (. active-by-prompt session.prompt-buf) session))
-                             (let [win (vim.api.nvim_get_current_win)]
-                               (when (covered-by-new-window? session win)
-                                 (pcall hide-visible-ui! session)))))
-                         20))})
-        (vim.api.nvim_create_autocmd "BufWinEnter"
-          {:group aug
-           :callback (fn [ev]
-                       (vim.defer_fn
-                         (fn []
-                           (when (and hide-visible-ui!
-                                      (not session.ui-hidden)
-                                      session.prompt-buf
-                                      (= (. active-by-prompt session.prompt-buf) session))
-                             (let [buf (or ev.buf (vim.api.nvim_get_current_buf))
-                                   win (or (first-window-for-buffer buf)
-                                           (vim.api.nvim_get_current_win))]
-                               (when (or (transient-overlay-buffer? buf)
-                                         (covered-by-new-window? session win))
-                                 (pcall hide-visible-ui! session)))))
-                         20))})
+        (au-buf! ["BufEnter" "WinEnter" "FocusGained"] session.meta.buf.buffer
+          (fn [_]
+            (begin-direct-results-edit! session)))
+        (au-buf! ["TextChanged" "TextChangedI"] session.meta.buf.buffer
+          (fn [_]
+            (when (and sign-mod session.meta session.meta.buf)
+              (let [buf session.meta.buf.buffer
+                    internal? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_internal_render")]]
+                                (and ok v))]
+                (when-not internal?
+                  (begin-direct-results-edit! session))
+                (vim.schedule
+                  (fn []
+                    (when (and session.prompt-buf
+                               (= (. active-by-prompt session.prompt-buf) session))
+                      (pcall router.sync-live-edits session.prompt-buf)
+                      (pcall maybe-sync-from-main! session true)
+                      (pcall update-info-window session true)
+                      (pcall sign-mod.refresh-change-signs! session))))))))
+        (au-buf! ["BufEnter" "WinEnter" "FocusGained"] session.meta.buf.buffer
+          (fn [_]
+            (when (and (not session.closing)
+                       session.meta
+                       session.meta.buf
+                       (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
+              (let [bo (. vim.bo session.meta.buf.buffer)]
+                (set (. bo :buftype) "acwrite")
+                (set (. bo :modifiable) true)
+                (set (. bo :readonly) false)
+                (set (. bo :bufhidden) "hide")))
+            (when maybe-restore-hidden-ui!
+              ;; Defer UI restoration until after the jump/BufEnter
+              ;; command stack settles; restoring windows directly
+              ;; inside BufEnter can surface invalid mark jumps.
+              (vim.schedule
+                (fn []
+                  (when (and (not session.closing)
+                             session.prompt-buf
+                             (= (. active-by-prompt session.prompt-buf) session))
+                    (pcall maybe-restore-hidden-ui! session)))))))
+        (au-global! "WinNew"
+          (fn [_]
+            (vim.defer_fn
+              (fn []
+                (when (and hide-visible-ui!
+                           (not session.ui-hidden)
+                           session.prompt-buf
+                           (= (. active-by-prompt session.prompt-buf) session))
+                  (let [win (vim.api.nvim_get_current_win)]
+                    (when (covered-by-new-window? session win)
+                      (pcall hide-visible-ui! session)))))
+              20)))
+        (au-global! "BufWinEnter"
+          (fn [ev]
+            (vim.defer_fn
+              (fn []
+                (when (and hide-visible-ui!
+                           (not session.ui-hidden)
+                           session.prompt-buf
+                           (= (. active-by-prompt session.prompt-buf) session))
+                  (let [buf (or ev.buf (vim.api.nvim_get_current_buf))
+                        win (or (first-window-for-buffer buf)
+                                (vim.api.nvim_get_current_win))]
+                    (when (or (transient-overlay-buffer? buf)
+                              (covered-by-new-window? session win))
+                      (pcall hide-visible-ui! session)))))
+              20)))
         (au! ["BufEnter" "WinEnter" "FocusGained"] session.meta.buf.buffer
           (fn [] (pcall session.meta.refresh_statusline)))
-        (vim.api.nvim_create_autocmd ["BufEnter" "WinEnter" "FocusGained"]
-          {:group aug
-           :callback (fn [_]
-                       (vim.schedule
-                         (fn []
-                           (when (and session.ui-hidden
-                                      session.prompt-buf
-                                      (= (. active-by-prompt session.prompt-buf) session)
-                                      (not (hidden-session-reachable? session)))
-                             (pcall router.remove-session session)))))} )
-        (vim.api.nvim_create_autocmd "BufLeave"
-          {:group aug
-           :buffer session.meta.buf.buffer
-           :callback (fn [_]
-                       ;; When leaving the results buffer, check if the window it
-                       ;; was in is now showing something else. Project-mode
-                       ;; sessions should hide auxiliary UI and remain resumable;
-                       ;; regular sessions can close entirely.
-                       (vim.schedule
-                         (fn []
-                           (when (and (not session.ui-hidden)
-                                      session.prompt-buf
-                                      (vim.api.nvim_buf_is_valid session.prompt-buf)
-                                      (= (. active-by-prompt session.prompt-buf) session))
-                             (let [win session.meta.win.window]
-                               (if (not (vim.api.nvim_win_is_valid win))
-                                   (router.cancel session.prompt-buf)
-                                   (let [buf (vim.api.nvim_win_get_buf win)]
-                                     (when (not= buf session.meta.buf.buffer)
-                                       (if (and session.project-mode hide-visible-ui!)
-                                           (hide-visible-ui! session.prompt-buf)
-                                           (router.cancel session.prompt-buf))))))))))})
+        (au-global! ["BufEnter" "WinEnter" "FocusGained"]
+          (fn [_]
+            (vim.schedule
+              (fn []
+                (when (and session.ui-hidden
+                           session.prompt-buf
+                           (= (. active-by-prompt session.prompt-buf) session)
+                           (not (hidden-session-reachable? session)))
+                  (pcall router.remove-session session))))))
+        (au-buf! "BufLeave" session.meta.buf.buffer
+          (fn [_]
+            ;; When leaving the results buffer, check if the window it
+            ;; was in is now showing something else. Project-mode
+            ;; sessions should hide auxiliary UI and remain resumable;
+            ;; regular sessions can close entirely.
+            (vim.schedule
+              (fn []
+                (when (and (not session.ui-hidden)
+                           session.prompt-buf
+                           (vim.api.nvim_buf_is_valid session.prompt-buf)
+                           (= (. active-by-prompt session.prompt-buf) session))
+                  (let [win session.meta.win.window]
+                    (if (not (vim.api.nvim_win_is_valid win))
+                        (router.cancel session.prompt-buf)
+                        (let [buf (vim.api.nvim_win_get_buf win)]
+                          (when (not= buf session.meta.buf.buffer)
+                            (if (and session.project-mode hide-visible-ui!)
+                                (hide-visible-ui! session.prompt-buf)
+                                (router.cancel session.prompt-buf)))))))))))
         (apply-main-keymaps router session)
         (apply-results-edit-keymaps session)
       ;; External file writes: invalidate cached file data and rebuild sources
       ;; so the info sidebar reflects the latest on-disk state.
-        (vim.api.nvim_create_autocmd "BufWritePost"
-          {:group aug
-           :callback (fn [ev]
-                       (vim.schedule
-                         (fn []
-                           (when (and session.prompt-buf
-                                      (= (. active-by-prompt session.prompt-buf) session)
-                                      (not session.closing))
-                             (let [buf (or ev.buf (vim.api.nvim_get_current_buf))]
-                               (when (and (vim.api.nvim_buf_is_valid buf)
-                                          (not= buf session.meta.buf.buffer))
-                                 (let [raw (vim.api.nvim_buf_get_name buf)
-                                       path (when (and raw (~= raw ""))
-                                              (vim.fn.fnamemodify raw ":p"))]
-                                   (when path
-                                     ;; Clear per-session caches for this path.
-                                     (when session.preview-file-cache
-                                       (set (. session.preview-file-cache path) nil))
-                                     (when session.info-file-head-cache
-                                       (set (. session.info-file-head-cache path) nil))
-                                     (when session.info-file-meta-cache
-                                       (set (. session.info-file-meta-cache path) nil))
-                                     ;; Clear router-level project file cache entry.
-                                     (when router.project-file-cache
-                                       (set (. router.project-file-cache path) nil))
-                                     ;; Rebuild project source set and refresh info window.
-                                     (when rebuild-source-set!
-                                       (pcall rebuild-source-set! session))
-                                      (pcall update-info-window session true)))))))))})
-        (vim.api.nvim_create_autocmd "WinScrolled"
-          {:group aug
-           :callback (fn [_]
-                       (schedule-scroll-sync! session))})
-        (vim.api.nvim_create_autocmd "BufWriteCmd"
-          {:group aug
-           :buffer session.meta.buf.buffer
-           :callback (fn [_]
-                       (router.write-results session.prompt-buf))})
-        (vim.api.nvim_create_autocmd "BufWipeout"
-          {:group aug
-           :buffer session.meta.buf.buffer
-           :callback (fn [_]
-                        (vim.schedule
-                          (fn []
-                            (router.results-buffer-wiped session.meta.buf.buffer))))})
+        (au-global! "BufWritePost"
+          (fn [ev]
+            (vim.schedule
+              (fn []
+                (when (and session.prompt-buf
+                           (= (. active-by-prompt session.prompt-buf) session)
+                           (not session.closing))
+                  (let [buf (or ev.buf (vim.api.nvim_get_current_buf))]
+                    (when (and (vim.api.nvim_buf_is_valid buf)
+                               (not= buf session.meta.buf.buffer))
+                      (let [raw (vim.api.nvim_buf_get_name buf)
+                            path (when (and raw (~= raw ""))
+                                   (vim.fn.fnamemodify raw ":p"))]
+                        (when path
+                          ;; Clear per-session caches for this path.
+                          (when session.preview-file-cache
+                            (set (. session.preview-file-cache path) nil))
+                          (when session.info-file-head-cache
+                            (set (. session.info-file-head-cache path) nil))
+                          (when session.info-file-meta-cache
+                            (set (. session.info-file-meta-cache path) nil))
+                          ;; Clear router-level project file cache entry.
+                          (when router.project-file-cache
+                            (set (. router.project-file-cache path) nil))
+                          ;; Rebuild project source set and refresh info window.
+                          (when rebuild-source-set!
+                            (pcall rebuild-source-set! session))
+                          (pcall update-info-window session true))))))))))
+        (au-global! "WinScrolled"
+          (fn [_]
+            (schedule-scroll-sync! session)))
+        (au-buf! "BufWriteCmd" session.meta.buf.buffer
+          (fn [_]
+            (router.write-results session.prompt-buf)))
+        (au-buf! "BufWipeout" session.meta.buf.buffer
+          (fn [_]
+            (vim.schedule
+              (fn []
+                (router.results-buffer-wiped session.meta.buf.buffer)))))
         (refresh-prompt-highlights! session)
         (maybe-show-directive-help! session)
         ;; Prompt/footer layout can change one tick later after split/floating
