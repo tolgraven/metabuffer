@@ -854,6 +854,8 @@
         (fn [] (router.toggle-project-mode session.prompt-buf))
         (= action "toggle-info-file-entry-view")
         (fn [] (router.toggle-info-file-entry-view session.prompt-buf))
+        (= action "refresh-files")
+        (fn [] (router.refresh-files session.prompt-buf))
         nil))
 
     (fn apply-keymaps

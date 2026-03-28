@@ -367,6 +367,9 @@ end
 M["toggle-info-file-entry-view"] = function(prompt_buf)
   return router_actions_mod["toggle-info-file-entry-view!"](actions_deps, prompt_buf)
 end
+M["refresh-files"] = function(prompt_buf)
+  return router_actions_mod["refresh-files!"](actions_deps, prompt_buf)
+end
 M.start = function(query, mode, _meta, project_mode)
   if (vim.fn.getcmdwintype() ~= "") then
     return nil

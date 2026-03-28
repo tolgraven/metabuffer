@@ -627,6 +627,27 @@
       (set session.info-render-sig nil)
       (pcall update-info-window session true))))
 
+(fn M.refresh-files!
+  [deps prompt-buf]
+  (let [{: router : mods : refresh : project : windows} deps
+        router-util-mod (. mods :router-util)
+        project-source (. project :source)
+        apply-prompt-lines (. refresh :apply-prompt-lines!)
+        update-info-window (. refresh :info!)
+        preview-window (. windows :preview)
+        context-window (. windows :context)
+        session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
+    (when session
+      (router-util-mod.clear-file-caches! router session)
+      (when session.project-mode
+        (project-source.apply-source-set! session))
+      (apply-prompt-lines session)
+      (pcall update-info-window session true)
+      (pcall preview-window.maybe-update-for-selection! session)
+      (when (and context-window context-window.update!)
+        (pcall context-window.update! session))
+      (vim.notify "metabuffer: refreshed cached file views" vim.log.levels.INFO))))
+
 (fn M.remove-session!
   [deps session]
   (remove-session! deps session))

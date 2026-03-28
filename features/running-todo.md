@@ -80,4 +80,4 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 70 [] winbar for results view showing treesitter-derived info for the predominant category of selected line. For example, if on a fn signature it would show something like "fn abcd, 30 lines, called 27 places, makes 7 calls"
 - 71 [x] popup help window still gets in the way of current prompt line, needs to be further up. And still isn't always being closed properly. And should get equivalent syntax highlighting as prompt buffer itself.
 - 72 [x] info window still sometimes fails to update when ready, instead one needs to change selected line and it'll update correctly. Can get stuck on loading indicator, can get stuck empty, can get stuck showing wrong thing (after starting `#file` for example).
-- 73 [] meta doesn't update file cache even when closed and restarted (possibly due to session reusage?). Need a refresh keybind for now, and (later on) file watcher support.
+- 73 [x] meta doesn't update file cache even when closed and restarted (possibly due to session reusage?). Need a refresh keybind for now, and (later on) file watcher support.

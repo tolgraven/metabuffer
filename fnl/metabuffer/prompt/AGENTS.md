@@ -13,6 +13,7 @@
 - Mode switching: handles `switch-mode` for matcher/case/syntax cycling.
 - CMP integration: disables `nvim-cmp` in the prompt buffer.
 - Scroll sync: schedules preview/info updates after scroll events.
+- Default prompt/main keymaps include `<LocalLeader>r` for `refresh-files`, which clears cached file views and rebuilds the active source set from disk.
 - UI visibility management: hides/restores floating windows during mode transitions.
 - Digraph input: wires digraph key handler into prompt insert mode.
 - Animation-aware delays: adjusts prompt evaluation timing when animations are active.

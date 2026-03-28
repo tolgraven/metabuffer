@@ -545,6 +545,7 @@
                  (= (clj.boolean existing.project-mode) (clj.boolean project-mode))
                  (= source-buf existing.meta.buf.buffer))
                 (do
+                  (router-util-mod.clear-file-caches! router existing)
                   (maybe-restore-hidden-ui! existing true)
                   existing.meta)
                 (do

@@ -81,6 +81,7 @@ require("metabuffer").setup({
       { { "n", "i" }, "<C-f>", "scroll-main", "page-down" },
       { { "n", "i" }, "<C-b>", "scroll-main", "page-up" },
       { { "n", "i" }, "<C-t>", "toggle-project-mode" },
+      { { "n", "i" }, "<LocalLeader>r", "refresh-files" },
     },
     main = {
       { "n", "!", "exclude-symbol-under-cursor" },
@@ -220,6 +221,7 @@ Commandline history shorthands for `[query]`:
 ### Runtime Toggles
 
 - `<C-b>` toggle repo-wide source mode (shows floating source info window on the right)
+- `<LocalLeader>r` clear cached project file views and rebuild the current source set from disk
 
 ### Prompt Keys
 

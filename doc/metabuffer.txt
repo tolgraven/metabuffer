@@ -159,6 +159,7 @@ Prompt token operators:
 
 Main/results buffer:
 \t!\tAppend !<cword> to prompt query
+\t<LocalLeader>r\tClear cached file views and rebuild current source data.
 
 Info window:
 \tThe right-side info window keeps a winbar showing visible-range/loading
