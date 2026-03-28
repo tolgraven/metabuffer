@@ -70,3 +70,6 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 60 [x] project mode :Meta! no longer pulling in other sources/files than the one started in
 - 61 [x] after typing `#file` and space files load properly, but then typing something after the space doesn't actually filter.
 - 62 [x] the completion popup sometimes gets in the way of seeing the prompt cursorline, and sometimes doesn't close as it should.
+- 63 [] the info window loading view is not updating quickly enough, often showing only something like (51/300) and then skipping straight to done. Make it run at at least 10 fps...
+- 64 [] too much time is spent thinking -> run fennel-ls --lint -> thinking -> run compile -> thinking -> run test. These should all go sequentially (with abort on errors) in one call. Create a `make full` shortcut to do this, and note down to use it.
+- 65 [] file extensions are still not showing their color highlight as used to be the case. Neither are file glyphs colored.

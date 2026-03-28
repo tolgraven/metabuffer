@@ -239,7 +239,7 @@ Disables conjure, LSP, gitgutter, gitsigns, diagnostics on all Meta buffers. Dis
 - `:on-buf-create!` — 3 handlers at priorities 10, 20 (prompt-only), 20 (preview-only)
 
 ### `cmp.fnl`
-Disables nvim-cmp on prompt buffer via API + buffer-local flag. Re-disables on InsertEnter.
+Disables nvim-cmp on prompt buffer via API + buffer-local flag. Also suppresses native Neovim completion (`complete()`) and closes the preview popup to prevent unwanted completion UI. Re-disables on InsertEnter.
 - `:on-buf-create!` priority 30, role-filter `:prompt`
 - `:on-insert-enter!` priority 30
 
@@ -251,9 +251,10 @@ Clears hlsearch on session start/cancel/restore, restores on accept.
 - `:on-restore-ui!` priority 80
 
 ### `rainbow.fnl`
-Deactivates rainbow_parentheses on Meta buffers, reactivates on teardown.
+Deactivates rainbow_parentheses on Meta buffers, reactivates on teardown. Also restores rainbow on the origin buffer when the session stops.
 - `:on-buf-create!` priority 30
 - `:on-buf-teardown!` priority 70
+- `:on-session-stop!` priority 70 — restores rainbow_parentheses on the origin buffer
 
 ## Adding a New Compat Module
 

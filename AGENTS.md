@@ -151,7 +151,7 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 **Prompt subsystem** (`prompt/` — see `fnl/metabuffer/prompt/AGENTS.md`):
 - `hooks.fnl` — Autocmd registration, event dispatch, mode switching, UI sync.
 - `prompt.fnl` — Prompt object (buffer management, text get/set).
-- `action.fnl` — Prompt editing actions (kill, yank, home, end).
+- `action.fnl` — Prompt editing actions (kill, yank, home, end, newline).
 - `keymap.fnl` — Keymap registration and builder.
 - `key.fnl` — Key definition constants.
 - `keystroke.fnl` — Multi-key sequence detection (e.g. `!!`, `!$`).
@@ -174,15 +174,15 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 - Custom user transforms registered via `options.custom.transforms` in config.
 
 **Event bus** (`events.fnl`):
-- `events.fnl` — Standalone generic lifecycle event dispatcher. Collects handler specs from registered modules, sorts by priority, filters by `:role-filter`, pcall-dispatches. Public API: `events.send`, `events.register!`, `events.registered-events`, `events.handlers-for`, `events.set-profile!`. All subsystems use `(events.send :event-key {:key val ...})`.
+- `events.fnl` — Standalone generic lifecycle event dispatcher. Collects handler specs from registered modules, sorts by priority, filters by `:role-filter`, pcall-dispatches. Public API: `events.send`, `events.register!`, `events.registered-events`, `events.handlers-for`, `events.set-profile!`. The bus is used bidirectionally: compat modules consume events, and core subsystems (`prompt/hooks.fnl`, `router/session.fnl`, `router/actions.fnl`, `router/query_flow.fnl`) emit them. All lifecycle transitions — session start/stop, accept/cancel, insert-enter, mode switches, directive changes — flow through the bus.
 
 **Compat / Plugin shims** (`compat/` — see `fnl/metabuffer/compat/AGENTS.md`):
 - `init.fnl` — Pure side-effect loader. Requires the 5 builtin compat sub-modules and registers each into the event bus via `events.register!`. Returns `{}`.
 - `airline.fnl` — Airline statusline disable/re-enable on Meta windows.
 - `buffer_plugins.fnl` — Disables conjure, LSP, gitgutter, gitsigns, diagnostics, auto-pairs on Meta buffers (role-filtered).
-- `cmp.fnl` — Disables nvim-cmp on prompt buffer, re-disables on InsertEnter.
+- `cmp.fnl` — Disables nvim-cmp on prompt buffer, suppresses native completion, re-disables on InsertEnter.
 - `hlsearch.fnl` — Clears hlsearch on session start/cancel/restore, restores on accept.
-- `rainbow.fnl` — Deactivates rainbow_parentheses on Meta buffers, reactivates on teardown.
+- `rainbow.fnl` — Deactivates rainbow_parentheses on Meta buffers, reactivates on teardown and session stop.
 
 **Matcher modules** (`matcher/`):
 - `init.fnl` — Barrel module.
@@ -203,7 +203,7 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 - `scope.fnl` — Query scope resolution (hidden, ignored, deps, binary).
 
 **Project mode** (`project/`):
-- `source.fnl` — Lazy streaming project source collection. Walks repo tree, streams files async, respects ignore/deps/hidden scope toggles.
+- `source.fnl` — Lazy streaming project source collection. Walks repo tree, streams files async, respects ignore/deps/hidden scope toggles. Shares `settings.project-file-cache` with `router/util.fnl` — `binary-file?` populates cache entries without `:lines`, and `read-file-view-cached` reads file content on demand when `:lines` is missing.
 
 **Other modules:**
 - `action.fnl` — High-level action dispatch (keymap → router function mapping).

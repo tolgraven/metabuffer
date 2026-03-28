@@ -4,7 +4,7 @@
 
 ## Module Responsibilities
 
-### `hooks.fnl` (1112 lines — largest prompt module)
+### `hooks.fnl` (1229 lines — largest prompt module)
 - `M.new` — Factory that creates the hooks manager. Receives a large dependency table from `router/session.fnl` (avoids circular requires).
 - Registers all prompt-related autocmds: `TextChanged`, `TextChangedI`, `CursorMoved`, `CursorMovedI`, `InsertEnter`, `InsertLeave`, `WinEnter`, `WinLeave`, `BufEnter`, `BufLeave`, `BufWritePost`.
 - `on-prompt-changed` — Core event handler: reads prompt text, detects directive changes, dispatches to `router/query_flow.fnl`.
@@ -14,6 +14,8 @@
 - UI visibility management: hides/restores floating windows during mode transitions.
 - Digraph input: wires digraph key handler into prompt insert mode.
 - Animation-aware delays: adjusts prompt evaluation timing when animations are active.
+- Event bus emission: emits lifecycle events (`:on-insert-enter!`, `:on-session-start!`, `:on-session-stop!`, `:on-mode-switch!`, etc.) via `events.send` so that compat modules and other subsystems react to prompt lifecycle changes without direct coupling.
+- Window restore: monitors `WinNew`, `VimResized`, and `OptionSet` to auto-restore Meta window layout after external disturbances.
 
 ### `prompt.fnl`
 - Prompt object: wraps the prompt buffer.
@@ -26,6 +28,7 @@
   - `prompt-end` (`<C-e>`) — Move cursor to line end.
   - `prompt-kill-backward` (`<C-u>`) — Delete from start to cursor, stash killed text.
   - `prompt-yank` (`<C-y>`) — Re-insert previously killed text.
+  - `prompt-newline` (`<S-CR>`) — Insert a literal newline into the prompt for multi-line queries.
 
 ### `keymap.fnl`
 - Keymap registration engine.
@@ -99,6 +102,6 @@ All raw `vim.api.nvim_create_autocmd` calls inside `register!` use one of these 
 
 ## Caution Points
 
-- `hooks.fnl` is large (~1230 lines) because it orchestrates all prompt-related events. Modifications should be carefully scoped — each autocmd callback has subtle interactions with debounce timing and animation delays.
+- `hooks.fnl` is large (~1230 lines) because it orchestrates all prompt-related events and now also emits lifecycle events via the event bus. Modifications should be carefully scoped — each autocmd callback has subtle interactions with debounce timing and animation delays.
 - The keystroke timer in `keystroke.fnl` can race with prompt TextChanged events. The sequence detector must consume the input before the regular prompt handler sees it.
 - History navigation (`history.fnl`) behavior changes when the history browser float is open — `<Up>`/`<Down>` move the browser selection instead of cycling session history. This dual behavior is coordinated through a flag on the session object.

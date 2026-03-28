@@ -4,7 +4,7 @@
 
 ## Module Responsibilities
 
-### `base.fnl` (56 lines)
+### `base.fnl` (50 lines)
 - `M.new` — Creates a window wrapper around a Neovim window handle. Stashes/restores window-local options on creation/teardown.
 - `apply-metabuffer-window-highlights!` — Applies `winhighlight` remappings for Meta-owned windows.
 
@@ -18,19 +18,19 @@
 - Handles float positioning relative to host windows, accounting for winbar offsets.
 - Provides open/close/resize API for float lifecycle.
 
-### `prompt.fnl` (151 lines)
+### `prompt.fnl` (148 lines)
 - Prompt window: horizontal split below the results window.
 - Height persistence: reads/writes prompt height via `router/util.fnl` state files.
 - Manages prompt buffer attachment and focus.
 
-### `preview.fnl` (516 lines)
+### `preview.fnl` (517 lines)
 - Preview pane showing context around the currently selected hit.
 - `maybe-update-for-selection!` — Main entry: reads source file, centers on hit line, applies syntax highlighting.
 - Horizontal scroll: auto-scrolls to show indented content that would otherwise be off-screen.
 - Line wrap persistence: wrap setting survives across sessions via state file.
 - Statusline: shows file path of previewed file, positioned under the preview column.
 
-### `info.fnl` (986 lines — largest window module)
+### `info.fnl` (994 lines — largest window module)
 - Floating info panel showing metadata for the selected hit.
 - Two render modes:
   1. **Hit info**: file path, line number, git blame, file size, permissions, etc.
@@ -93,7 +93,7 @@ Airline compatibility is now handled by `compat/airline.fnl` via the event bus. 
 
 ## Caution Points
 
-- `info.fnl` is the most complex module (986 lines). The loading-vs-hit-info mode switch is sensitive — `project-loading-pending?` must only return true during actual bootstrap, not during lazy refresh operations (this was a previous bug).
+- `info.fnl` is the most complex module (994 lines). The loading-vs-hit-info mode switch is sensitive — `project-loading-pending?` must only return true during actual bootstrap, not during lazy refresh operations (this was a previous bug).
 - Animation cancellation tokens are per-session. Failing to cancel on teardown causes timer leaks and ghost updates to destroyed buffers.
 - Preview horizontal scroll interacts with wrap setting. When wrap is on, horizontal scroll is disabled.
 - Float positioning must account for winbar (row offset +1 when winbar present).
