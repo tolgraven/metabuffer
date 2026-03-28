@@ -73,7 +73,8 @@ Runner behavior:
 - Optional profiling (`--profile`) adds per-file and per-case breakdowns for:
   - wall time
   - CPU time
-  - blocked time (`wall - CPU`)
+  - blocked time (`wall - CPU - yielded wait`)
+  - yielded wait time from `wait_for()` / `vim.wait()` polling
   - explicit `wait_for()` time
   - simulated typing sleep time
   - child Neovim startup time

@@ -69,15 +69,17 @@ local function top_spans(case_stats, n)
 end
 
 local function print_case_summary(case_stats, idx)
-  local blocked = math.max(0, case_stats.wall - case_stats.cpu)
+  local yielded = case_stats.wait or 0
+  local blocked = math.max(0, case_stats.wall - case_stats.cpu - yielded)
   local lines = {
     string.format(
-    '[mini-profile]   %02d. %s | wall=%.1fms cpu=%.1fms blocked=%.1fms wait=%.1fms sleep=%.1fms child=%.1fms',
+    '[mini-profile]   %02d. %s | wall=%.1fms cpu=%.1fms blocked=%.1fms yielded=%.1fms wait=%.1fms sleep=%.1fms child=%.1fms',
     idx,
     case_stats.name,
     case_stats.wall,
     case_stats.cpu,
     blocked,
+    yielded,
     case_stats.wait or 0,
     case_stats.sleep or 0,
     case_stats.child or 0
@@ -206,11 +208,12 @@ function M.finish_file()
   table.sort(case_order, function(a, b) return a.wall > b.wall end)
   local lines = {
     string.format(
-    '[mini-profile] FILE SUMMARY | cases=%d wall=%.1fms cpu=%.1fms blocked=%.1fms wait=%.1fms sleep=%.1fms child=%.1fms',
+    '[mini-profile] FILE SUMMARY | cases=%d wall=%.1fms cpu=%.1fms blocked=%.1fms yielded=%.1fms wait=%.1fms sleep=%.1fms child=%.1fms',
     #case_order,
     file_totals.wall,
     file_totals.cpu,
-    math.max(0, file_totals.wall - file_totals.cpu),
+    math.max(0, file_totals.wall - file_totals.cpu - file_totals.wait),
+    file_totals.wait,
     file_totals.wait,
     file_totals.sleep,
     file_totals.child
