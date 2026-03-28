@@ -413,7 +413,7 @@
           suffix0 (or (. info-view :suffix) "")
           suffix-prefix (if (> (# suffix0) 0) (or (. info-view :suffix-prefix) "  ") "")
           suffix-hls (or (. info-view :suffix-highlights) [])
-          icon-info (if show-icon? (util.devicon-info icon-path file-hl) {:icon "" :icon-hl file-hl :file-hl file-hl})
+          icon-info (if show-icon? (util.file-icon-info icon-path file-hl) {:icon "" :icon-hl file-hl :file-hl file-hl})
           icon (or (. icon-info :icon) "")
           iconf (icon-field icon)
           icon-prefix (if show-icon? (. iconf :text) "")

@@ -44,7 +44,7 @@
 (fn M.path-prefix
   [ref]
   (let [parts (split-source-path ref.path)
-        icon-info (util.devicon-info (or ref.path "") "Normal")
+        icon-info (util.file-icon-info (or ref.path "") "Normal")
         iconf (icon-field (or (. icon-info :icon) ""))
         icon-prefix (. iconf :text)
         dir (or parts.dir "")
