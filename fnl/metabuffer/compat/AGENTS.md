@@ -237,6 +237,10 @@ vim.g["meta#debug"] = true  -- required: turns on debug logging
 require("metabuffer.events").set_profile(true)
 ```
 
+### `(events.profile-stats)` / `(events.reset-profile-stats!)` — Timing snapshots
+
+When profiling is enabled, the bus also accumulates per-event timing totals in memory. `profile-stats` returns a deep copy keyed by event name with total `elapsed_us`, `count`, and per-handler subtables keyed as `domain/source`. `reset-profile-stats!` clears those accumulators so screen tests or ad hoc profiling sessions can compare one interaction's end-to-end time against just the bus-handler portion.
+
 ## Builtin Modules
 
 ### `airline.fnl`

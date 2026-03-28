@@ -751,8 +751,6 @@ M["toggle-project-mode!"] = function(deps, prompt_buf)
 end
 M["toggle-info-file-entry-view!"] = function(deps, prompt_buf)
   local router = deps.router
-  local refresh = deps.refresh
-  local update_info_window = refresh["info!"]
   local session = session_by_prompt(router["active-by-prompt"], prompt_buf)
   if session then
     if ((session["info-file-entry-view"] or "meta") == "content") then
@@ -761,7 +759,7 @@ M["toggle-info-file-entry-view!"] = function(deps, prompt_buf)
       session["info-file-entry-view"] = "content"
     end
     session["info-render-sig"] = nil
-    return pcall(update_info_window, session, true)
+    return events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = true})
   else
     return nil
   end
@@ -771,13 +769,9 @@ M["refresh-files!"] = function(deps, prompt_buf)
   local mods = deps.mods
   local refresh = deps.refresh
   local project = deps.project
-  local windows = deps.windows
   local router_util_mod = mods["router-util"]
   local project_source = project.source
   local apply_prompt_lines = refresh["apply-prompt-lines!"]
-  local update_info_window = refresh["info!"]
-  local preview_window = windows.preview
-  local context_window = windows.context
   local session = session_by_prompt(router["active-by-prompt"], prompt_buf)
   if session then
     router_util_mod["clear-file-caches!"](router, session)
@@ -786,12 +780,7 @@ M["refresh-files!"] = function(deps, prompt_buf)
     else
     end
     apply_prompt_lines(session)
-    pcall(update_info_window, session, true)
-    pcall(preview_window["maybe-update-for-selection!"], session)
-    if (context_window and context_window["update!"]) then
-      pcall(context_window["update!"], session)
-    else
-    end
+    events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = true})
     return vim.notify("metabuffer: refreshed cached file views", vim.log.levels.INFO)
   else
     return nil
@@ -817,15 +806,15 @@ M["on-results-buffer-wipe!"] = function(deps, results_buf)
     session._results_wiped = true
     session.closing = true
     restore_main_window_opts_21(session)
-    local or_101_ = session["last-prompt-text"]
-    if not or_101_ then
+    local or_100_ = session["last-prompt-text"]
+    if not or_100_ then
       if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
-        or_101_ = router_util_mod["prompt-text"](session)
+        or_100_ = router_util_mod["prompt-text"](session)
       else
-        or_101_ = ""
+        or_100_ = ""
       end
     end
-    history_api["push-history-entry!"](session, or_101_)
+    history_api["push-history-entry!"](session, or_100_)
     router_util_mod["persist-prompt-height!"](session)
     if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
       pcall(vim.api.nvim_win_close, session["prompt-win"], true)
@@ -953,11 +942,11 @@ local function projected_rows_from_edits(session, baseline_rows, baseline_lines,
   local out = {}
   local idx = {old = 1, new = 1}
   for _, h in ipairs(hunks) do
-    local _let_116_ = hunk_indices(h)
-    local a_start = _let_116_[1]
-    local a_count = _let_116_[2]
-    local b_start = _let_116_[3]
-    local b_count = _let_116_[4]
+    local _let_115_ = hunk_indices(h)
+    local a_start = _let_115_[1]
+    local a_count = _let_115_[2]
+    local b_start = _let_115_[3]
+    local b_count = _let_115_[4]
     local common = math.min(a_count, b_count)
     while (idx.old < a_start) do
       local txt = (current_lines[idx.new] or "")
@@ -1107,11 +1096,11 @@ local function collect_file_ops(session)
   local state = {["processed-special-groups"] = {}, ["unsafe-structural?"] = false}
   session["live-edit-rows"] = current_rows
   for _, h in ipairs(hunks) do
-    local _let_127_ = hunk_indices(h)
-    local a_start = _let_127_[1]
-    local a_count = _let_127_[2]
-    local b_start = _let_127_[3]
-    local b_count = _let_127_[4]
+    local _let_126_ = hunk_indices(h)
+    local a_start = _let_126_[1]
+    local a_count = _let_126_[2]
+    local b_start = _let_126_[3]
+    local b_count = _let_126_[4]
     local common = math.min(a_count, b_count)
     local old_rows = slice_lines(baseline_rows, a_start, a_count)
     local new_lines = slice_lines(current_lines, b_start, b_count)
@@ -1146,13 +1135,13 @@ local function collect_file_ops(session)
       if (b_count > a_count) then
         local insert_op = (structural_op_from_current_rows(current_rows, (b_start + common), (b_count - common)) or pending_structural_op(session, (b_start + common), (b_count - common), current_lines, ((old_rows[common] and old_rows[common].kind) or (old_rows[(common + 1)] and old_rows[(common + 1)].kind) or "")))
         if insert_op then
-          local _133_
+          local _132_
           if (insert_op.side == "before") then
-            _133_ = "insert-before"
+            _132_ = "insert-before"
           else
-            _133_ = "insert-after"
+            _132_ = "insert-after"
           end
-          append_op_21(ops, insert_op.path, {kind = _133_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
+          append_op_21(ops, insert_op.path, {kind = _132_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
         else
           state["unsafe-structural?"] = true
         end
@@ -1162,13 +1151,13 @@ local function collect_file_ops(session)
       if (b_count > 0) then
         local insert_op = (structural_op_from_current_rows(current_rows, b_start, b_count) or pending_structural_op(session, b_start, b_count, current_lines, ""))
         if insert_op then
-          local _137_
+          local _136_
           if (insert_op.side == "before") then
-            _137_ = "insert-before"
+            _136_ = "insert-before"
           else
-            _137_ = "insert-after"
+            _136_ = "insert-after"
           end
-          append_op_21(ops, insert_op.path, {kind = _137_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
+          append_op_21(ops, insert_op.path, {kind = _136_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
         else
           state["unsafe-structural?"] = true
         end
@@ -1314,13 +1303,13 @@ M["write-results!"] = function(deps, prompt_buf)
       pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
       pcall(vim.api.nvim_buf_set_var, buf, "meta_manual_edit_active", false)
       events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = true, ["capture-sign-baseline?"] = not not sign_mod, ["refresh-signs?"] = not not sign_mod})
-      local _153_
+      local _152_
       if (result.changed > 0) then
-        _153_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+        _152_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
       else
-        _153_ = "metabuffer: no changes"
+        _152_ = "metabuffer: no changes"
       end
-      return vim.notify(_153_, vim.log.levels.INFO)
+      return vim.notify(_152_, vim.log.levels.INFO)
     end
   else
     return nil

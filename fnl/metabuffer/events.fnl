@@ -88,12 +88,34 @@
 
 (local default-priority 50)
 (local handlers-by-event {})
+(local profile-stats {})
 (var profile? false)
 
 (fn M.set-profile!
   [enabled]
   "Enable or disable per-handler timing logs (via debug.log)."
   (set profile? (not (not enabled))))
+
+(fn clear-profile-stats!
+  []
+  (each [k _ (pairs profile-stats)]
+    (set (. profile-stats k) nil)))
+
+(fn accumulate-profile!
+  [event-key spec elapsed-us ok err]
+  (let [event-stats (or (. profile-stats event-key) {})]
+    (when (= (. profile-stats event-key) nil)
+      (set (. profile-stats event-key) event-stats))
+    (set event-stats.count (+ 1 (or event-stats.count 0)))
+    (set event-stats.elapsed_us (+ elapsed-us (or event-stats.elapsed_us 0)))
+    (let [key (.. (or spec.domain "?") "/" (or spec.source "?"))
+          handler-stats (or (. event-stats key) {})]
+      (when (= (. event-stats key) nil)
+        (set (. event-stats key) handler-stats))
+      (set handler-stats.count (+ 1 (or handler-stats.count 0)))
+      (set handler-stats.elapsed_us (+ elapsed-us (or handler-stats.elapsed_us 0)))
+      (when (not ok)
+        (set handler-stats.last_error (tostring err)))))) 
 
 (fn normalize-spec
   [spec]
@@ -152,6 +174,7 @@
       (let [t0 (vim.uv.hrtime)
             (ok err) (pcall spec.handler args)
             elapsed-us (/ (- (vim.uv.hrtime) t0) 1000)]
+        (accumulate-profile! event-key spec elapsed-us ok err)
         (debug.log :event-bus
                    (string.format "%s  %s/%s  p=%d  %.1fµs%s"
                                   event-key
@@ -203,5 +226,15 @@
   [event-key]
   "Return the sorted handler list for event-key, or nil."
   (. handlers-by-event event-key))
+
+(fn M.profile-stats
+  []
+  "Return a deep copy of accumulated profile stats keyed by event name."
+  (vim.deepcopy profile-stats))
+
+(fn M.reset-profile-stats!
+  []
+  "Clear accumulated event profile stats."
+  (clear-profile-stats!))
 
 M

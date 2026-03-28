@@ -3,10 +3,40 @@ local M = {}
 local debug = require("metabuffer.debug")
 local default_priority = 50
 local handlers_by_event = {}
+local profile_stats = {}
 local profile_3f = false
 M["set-profile!"] = function(enabled)
   profile_3f = not not enabled
   return nil
+end
+local function clear_profile_stats_21()
+  for k, _ in pairs(profile_stats) do
+    profile_stats[k] = nil
+  end
+  return nil
+end
+local function accumulate_profile_21(event_key, spec, elapsed_us, ok, err)
+  local event_stats = (profile_stats[event_key] or {})
+  if (profile_stats[event_key] == nil) then
+    profile_stats[event_key] = event_stats
+  else
+  end
+  event_stats.count = (1 + (event_stats.count or 0))
+  event_stats.elapsed_us = (elapsed_us + (event_stats.elapsed_us or 0))
+  local key = ((spec.domain or "?") .. "/" .. (spec.source or "?"))
+  local handler_stats = (event_stats[key] or {})
+  if (event_stats[key] == nil) then
+    event_stats[key] = handler_stats
+  else
+  end
+  handler_stats.count = (1 + (handler_stats.count or 0))
+  handler_stats.elapsed_us = (elapsed_us + (handler_stats.elapsed_us or 0))
+  if not ok then
+    handler_stats.last_error = tostring(err)
+    return nil
+  else
+    return nil
+  end
 end
 local function normalize_spec(spec)
   if (type(spec) == "function") then
@@ -55,10 +85,10 @@ local function register_module_21(mod)
 end
 local function sort_handlers_21()
   for _, list in pairs(handlers_by_event) do
-    local function _8_(a, b)
+    local function _11_(a, b)
       return (a.priority < b.priority)
     end
-    table.sort(list, _8_)
+    table.sort(list, _11_)
   end
   return nil
 end
@@ -91,14 +121,15 @@ local function pcall_handler_21(spec, event_key, args)
     local t0 = vim.uv.hrtime()
     local ok, err = pcall(spec.handler, args)
     local elapsed_us = ((vim.uv.hrtime() - t0) / 1000)
-    local function _12_()
+    accumulate_profile_21(event_key, spec, elapsed_us, ok, err)
+    local function _15_()
       if ok then
         return ""
       else
         return ("  ERR: " .. tostring(err))
       end
     end
-    return debug.log("event-bus", string.format("%s  %s/%s  p=%d  %.1f\194\181s%s", event_key, (spec.domain or "?"), (spec.source or "?"), spec.priority, elapsed_us, _12_()))
+    return debug.log("event-bus", string.format("%s  %s/%s  p=%d  %.1f\194\181s%s", event_key, (spec.domain or "?"), (spec.source or "?"), spec.priority, elapsed_us, _15_()))
   else
     return pcall(spec.handler, args)
   end
@@ -138,5 +169,11 @@ M["registered-events"] = function()
 end
 M["handlers-for"] = function(event_key)
   return handlers_by_event[event_key]
+end
+M["profile-stats"] = function()
+  return vim.deepcopy(profile_stats)
+end
+M["reset-profile-stats!"] = function()
+  return clear_profile_stats_21()
 end
 return M

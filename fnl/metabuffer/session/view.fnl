@@ -36,7 +36,7 @@
         ctx)))
 
 (fn M.restore-meta-view!
-  [meta source-view session update-info-window]
+  [meta source-view session _update-info-window]
   "Restore cursor and viewport in the results window."
   (when (and meta (vim.api.nvim_win_is_valid meta.win.window))
     (let [line-count (vim.api.nvim_buf_line_count meta.buf.buffer)
@@ -71,8 +71,18 @@
             (when (~= (. base-view :col) nil)
               (set (. view :col) (. base-view :col)))
             (vim.fn.winrestview view)
-            (when (and update-info-window session)
-              (vim.defer_fn (fn [] (pcall update-info-window session true)) 50))))))))
+            (when session
+              (vim.defer_fn
+                (fn []
+                  (when (and session
+                             session.meta
+                             session.meta.win
+                             (vim.api.nvim_win_is_valid session.meta.win.window))
+                    (events.send :on-selection-change!
+                      {:session session
+                       :line-nr (+ 1 (or session.meta.selected_index 0))
+                       :refresh-lines true})))
+                50))))))))
 
 (fn M.sync-selected-from-main-cursor!
   [session]

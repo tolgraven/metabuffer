@@ -328,12 +328,9 @@
                                :height (math.max 1 (or session.prompt-target-height 1))})]
                   (set session.prompt-window split)
                   (set session.prompt-win split.window)
-                  (set session.prompt-floating? false)
-                  (pcall session.meta.refresh_statusline)))
-              (when (and preview-window preview-window.update!)
-                (pcall preview-window.update! session))
-              (pcall update-info-window session)
+                  (set session.prompt-floating? false)))
               (restore-main-view!)
+              (events.send :on-session-ready! {:session session :refresh-lines true})
               (vim.schedule
                 (fn []
                   (restore-main-view!)))

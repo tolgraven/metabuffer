@@ -45,7 +45,7 @@ M["setup-state"] = function(query, mode, source_view)
     return ctx
   end
 end
-M["restore-meta-view!"] = function(meta, source_view, session, update_info_window)
+M["restore-meta-view!"] = function(meta, source_view, session, _update_info_window)
   if (meta and vim.api.nvim_win_is_valid(meta.win.window)) then
     local line_count = vim.api.nvim_buf_line_count(meta.buf.buffer)
     local line = math.max(1, math.min(meta.selected_line(), line_count))
@@ -86,9 +86,13 @@ M["restore-meta-view!"] = function(meta, source_view, session, update_info_windo
       else
       end
       vim.fn.winrestview(view)
-      if (update_info_window and session) then
+      if session then
         local function _14_()
-          return pcall(update_info_window, session, true)
+          if (session and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
+            return events.send("on-selection-change!", {session = session, ["line-nr"] = (1 + (session.meta.selected_index or 0)), ["refresh-lines"] = true})
+          else
+            return nil
+          end
         end
         return vim.defer_fn(_14_, 50)
       else
@@ -123,9 +127,9 @@ M["sync-selected-from-main-cursor!"] = function(session)
   end
 end
 M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
-  local _let_20_ = (opts or {})
-  local active_by_prompt = _let_20_["active-by-prompt"]
-  local schedule_source_syntax_refresh_21 = _let_20_["schedule-source-syntax-refresh!"]
+  local _let_21_ = (opts or {})
+  local active_by_prompt = _let_21_["active-by-prompt"]
+  local schedule_source_syntax_refresh_21 = _let_21_["schedule-source-syntax-refresh!"]
   if (session and not session["ui-hidden"] and not session.closing and (not session["startup-initializing"] or session["project-mode"]) and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
     local before = session.meta.selected_index
     if (force_refresh and session.meta and ((session["expansion-mode"] or "none") ~= "none")) then
@@ -147,12 +151,12 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
   end
 end
 M["schedule-scroll-sync!"] = function(session, opts)
-  local _let_25_ = (opts or {})
-  local maybe_sync_from_main_21 = _let_25_["maybe-sync-from-main!"]
-  local scroll_sync_debounce_ms = _let_25_["scroll-sync-debounce-ms"]
+  local _let_26_ = (opts or {})
+  local maybe_sync_from_main_21 = _let_26_["maybe-sync-from-main!"]
+  local scroll_sync_debounce_ms = _let_26_["scroll-sync-debounce-ms"]
   if (session and not session["scroll-sync-pending"] and not session["scroll-animating?"] and not session["scroll-command-view"]) then
     session["scroll-sync-pending"] = true
-    local function _26_()
+    local function _27_()
       session["scroll-sync-pending"] = false
       if (not session["scroll-animating?"] and not session["scroll-command-view"]) then
         return maybe_sync_from_main_21(session, true)
@@ -160,7 +164,7 @@ M["schedule-scroll-sync!"] = function(session, opts)
         return nil
       end
     end
-    return vim.defer_fn(_26_, scroll_sync_debounce_ms)
+    return vim.defer_fn(_27_, scroll_sync_debounce_ms)
   else
     return nil
   end

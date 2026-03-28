@@ -611,8 +611,7 @@
 
 (fn M.toggle-info-file-entry-view!
   [deps prompt-buf]
-  (let [{: router : refresh} deps
-        update-info-window (. refresh :info!)
+  (let [{: router} deps
         session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when session
       (set session.info-file-entry-view
@@ -620,27 +619,27 @@
                "meta"
                "content"))
       (set session.info-render-sig nil)
-      (pcall update-info-window session true))))
+      (events.send :on-query-update!
+        {:session session
+         :query (or session.prompt-last-applied-text "")
+         :refresh-lines true}))))
 
 (fn M.refresh-files!
   [deps prompt-buf]
-  (let [{: router : mods : refresh : project : windows} deps
+  (let [{: router : mods : refresh : project} deps
         router-util-mod (. mods :router-util)
         project-source (. project :source)
         apply-prompt-lines (. refresh :apply-prompt-lines!)
-        update-info-window (. refresh :info!)
-        preview-window (. windows :preview)
-        context-window (. windows :context)
         session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when session
       (router-util-mod.clear-file-caches! router session)
       (when session.project-mode
         (project-source.apply-source-set! session))
       (apply-prompt-lines session)
-      (pcall update-info-window session true)
-      (pcall preview-window.maybe-update-for-selection! session)
-      (when (and context-window context-window.update!)
-        (pcall context-window.update! session))
+      (events.send :on-query-update!
+        {:session session
+         :query (or session.prompt-last-applied-text "")
+         :refresh-lines true})
       (vim.notify "metabuffer: refreshed cached file views" vim.log.levels.INFO))))
 
 (fn M.remove-session!

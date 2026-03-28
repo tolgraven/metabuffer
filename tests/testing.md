@@ -77,6 +77,8 @@ Runner behavior:
   - explicit `wait_for()` time
   - simulated typing sleep time
   - child Neovim startup time
+- Event-bus profiling can be enabled inside a test via `require('metabuffer.events')['set-profile!'](true)`.
+  Use `profile-stats()` / `reset-profile-stats!()` to compare a semantic event's handler time against the full observed interaction time.
 - Returns non-zero if any file has failing cases.
 
 ## Screen Tests
@@ -215,6 +217,10 @@ Key helper coverage:
 ### `tests/screen/persistence/test_screen_persistence_statusline_restore_basic.lua`
 - Cancel and project-cancel restore the original window-local `statusline`, `winhighlight`, and colorcolumn.
 - Help-hide cycles still restore the origin window correctly afterward.
+
+### `tests/screen/persistence/test_screen_persistence_event_bus_profile.lua`
+- Measures full query-update elapsed time against accumulated `:on-query-update!` bus-handler time.
+- Gives a regression check for leftover off-bus refresh work during prompt filtering.
 
 ### `tests/screen/persistence/test_screen_persistence_statusline_restore_resume.lua`
 - Accept from regular Meta restores the origin window, and jumplist resume reapplies Meta window styling.
