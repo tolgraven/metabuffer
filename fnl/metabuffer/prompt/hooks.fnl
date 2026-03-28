@@ -299,8 +299,6 @@
       (and session
            (or session.prompt-update-pending
                session.prompt-update-dirty
-               session.lazy-refresh-pending
-               session.lazy-refresh-dirty
                session.project-bootstrap-pending
                (and session.project-mode
                     (not session.project-bootstrapped)))))
@@ -309,8 +307,7 @@
       [session]
       (and session
            (not (session-busy? session))
-           (not session.prompt-update-dirty)
-           (not session.lazy-refresh-dirty)))
+           (not session.prompt-update-dirty)))
 
     (fn hl-rendered-fg
       [hl]

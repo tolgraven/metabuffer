@@ -21,18 +21,6 @@
     (when matcher
       (pcall matcher.remove-highlight matcher))))
 
-(fn silent-win-set-buf!
-  [win buf]
-  "Attach buffer to window without surfacing the old viewport first."
-  (when (and win buf
-             (vim.api.nvim_win_is_valid win)
-             (vim.api.nvim_buf_is_valid buf))
-    (or (pcall vim.api.nvim_win_call
-               win
-               (fn []
-                 (vim.cmd (.. "silent keepalt noautocmd buffer " buf))))
-        (pcall vim.api.nvim_win_set_buf win buf))))
-
 (fn clear-buffer-modified!
   [buf]
   (when (and buf (vim.api.nvim_buf_is_valid buf))
@@ -367,7 +355,7 @@
                      (vim.api.nvim_win_is_valid target-win)
                      target-buf
                      (vim.api.nvim_buf_is_valid target-buf))
-            (silent-win-set-buf! target-win target-buf)
+            (router-util-mod.silent-win-set-buf! target-win target-buf)
             (vim.api.nvim_win_call
               target-win
               (fn []

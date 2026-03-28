@@ -132,8 +132,6 @@
         (when closef (pcall closef timer))
         (set session.preview-update-timer nil)))
     (set session.preview-update-pending false)
-    (set session.lazy-refresh-dirty false)
-    (set session.lazy-refresh-pending false)
     (set session.syntax-refresh-dirty false)
     (set session.syntax-refresh-pending false)))
 

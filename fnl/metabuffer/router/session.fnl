@@ -6,18 +6,6 @@
 
 (local M {})
 
-(fn silent-win-set-buf!
-  [win buf]
-  "Attach buffer to a window without emitting the normal file info message."
-  (when (and win buf
-             (vim.api.nvim_win_is_valid win)
-             (vim.api.nvim_buf_is_valid buf))
-    (or (pcall vim.api.nvim_win_call
-               win
-               (fn []
-                 (vim.cmd (.. "silent keepalt noautocmd buffer " buf))))
-        (pcall vim.api.nvim_win_set_buf win buf))))
-
 (fn launch-source-label
   [session]
   (if session.project-mode
@@ -681,7 +669,7 @@
                                          (let [[ok wrap?] [(pcall vim.api.nvim_get_option_value "wrap" {:win origin-win})]]
                                            (and ok (clj.boolean wrap?)))))]
                   (when (vim.api.nvim_win_is_valid origin-win)
-                    (silent-win-set-buf! origin-win curr.buf.buffer))
+                    (router-util-mod.silent-win-set-buf! origin-win curr.buf.buffer))
                   (when (and curr.win curr.win.window (vim.api.nvim_win_is_valid curr.win.window))
                     (pcall vim.api.nvim_set_option_value "wrap" (clj.boolean start-wrap) {:win curr.win.window})
                     (pcall vim.api.nvim_set_option_value "linebreak" (clj.boolean start-wrap) {:win curr.win.window}))

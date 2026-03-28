@@ -55,6 +55,18 @@
         (fh:write (if enabled "1" "0"))
         (fh:close)))))
 
+(fn M.silent-win-set-buf!
+  [win buf]
+  "Attach buffer to a window without surfacing file/info messages."
+  (when (and win buf
+             (vim.api.nvim_win_is_valid win)
+             (vim.api.nvim_buf_is_valid buf))
+    (or (pcall vim.api.nvim_win_call
+               win
+               (fn []
+                 (vim.cmd (.. "silent keepalt noautocmd buffer " buf))))
+        (pcall vim.api.nvim_win_set_buf win buf))))
+
 (fn M.prompt-height
   []
   (or (tonumber vim.g.meta_prompt_height)

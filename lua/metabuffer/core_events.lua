@@ -93,10 +93,10 @@ local function refresh_selection_ui_21(args)
   local session = args.session
   local hooks = refresh_hooks(session)
   if (session and clj.boolean(args["force-refresh?"])) then
-    local val_110_auto = hooks["schedule-source-syntax-refresh!"]
+    local val_110_auto = hooks["source-syntax!"]
     if val_110_auto then
       local f = val_110_auto
-      pcall(f, session)
+      pcall(f, session, false)
     else
     end
   else

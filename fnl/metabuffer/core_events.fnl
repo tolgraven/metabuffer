@@ -51,8 +51,8 @@
   (let [session (. args :session)
         hooks (refresh-hooks session)]
     (when (and session (clj.boolean (. args :force-refresh?)))
-      (when-let [f (. hooks :schedule-source-syntax-refresh!)]
-        (pcall f session)))
+      (when-let [f (. hooks :source-syntax!)]
+        (pcall f session false)))
     (refresh-ui! args)))
 
 (fn refresh-project-info!
