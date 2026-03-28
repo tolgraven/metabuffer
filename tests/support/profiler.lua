@@ -8,6 +8,7 @@ local file_totals = nil
 local output_path = nil
 local file_finished = false
 local case_timings = nil
+local finalize_group = nil
 local pack = table.pack or function(...)
   return { n = select('#', ...), ... }
 end
@@ -281,6 +282,19 @@ function M.setup()
     sleep = 0,
     child = 0,
   }
+  if finalize_group ~= nil then
+    pcall(vim.api.nvim_del_augroup_by_id, finalize_group)
+  end
+  finalize_group = vim.api.nvim_create_augroup('MetaTestProfiler', { clear = true })
+  vim.api.nvim_create_autocmd('VimLeavePre', {
+    group = finalize_group,
+    callback = function()
+      if current_case ~= nil then
+        pcall(M.finish_case)
+      end
+      pcall(M.finish_file)
+    end,
+  })
   M.wrap_minitest_new_set()
 end
 
