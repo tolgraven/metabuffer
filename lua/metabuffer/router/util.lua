@@ -541,8 +541,19 @@ M["read-file-view-cached"] = function(settings, path, opts)
           if (type(found) == "table") then
             return found
           else
-            local raw_lines = (cached.lines or {})
-            local ctx = {size = size, head = cached.head, transforms = transforms, binary = false}
+            local raw_lines
+            local or_68_ = cached.lines
+            if not or_68_ then
+              local text = read_file_bytes(path)
+              local ls = bytes__3elines(text)
+              if (type(ls) == "table") then
+                cached["lines"] = ls
+              else
+              end
+              or_68_ = (ls or {})
+            end
+            raw_lines = or_68_
+            local ctx = {size = size, head = (cached.head or read_file_head_bytes(path, 4096)), transforms = transforms, binary = false}
             local view = transform_mod["apply-view"](path, raw_lines, ctx)
             views[transform_sig] = view
             cached["views"] = views

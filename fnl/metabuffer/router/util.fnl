@@ -446,19 +446,26 @@
                                   (set (. cached :views) views)
                                   view)))
                           nil)
-                      (let [views (or (. cached :views) {})
-                            found (. views transform-sig)]
-                        (if (= (type found) "table")
-                            found
-                            (let [raw-lines (or (. cached :lines) [])
-                                  ctx {:binary false
-                                       :size size
-                                       :head (. cached :head)
-                                       :transforms transforms}
-                                  view (transform-mod.apply-view path raw-lines ctx)]
-                              (set (. views transform-sig) view)
-                              (set (. cached :views) views)
-                              view))))
+                       (let [views (or (. cached :views) {})
+                             found (. views transform-sig)]
+                         (if (= (type found) "table")
+                             found
+                             ;; binary-file? may have created a cache entry without :lines;
+                             ;; read the file now if :lines is missing.
+                             (let [raw-lines (or (. cached :lines)
+                                                 (let [text (read-file-bytes path)
+                                                       ls (bytes->lines text)]
+                                                   (when (= (type ls) "table")
+                                                     (set (. cached :lines) ls))
+                                                   (or ls [])))
+                                   ctx {:binary false
+                                        :size size
+                                        :head (or (. cached :head) (read-file-head-bytes path 4096))
+                                        :transforms transforms}
+                                   view (transform-mod.apply-view path raw-lines ctx)]
+                               (set (. views transform-sig) view)
+                               (set (. cached :views) views)
+                               view))))
                   (let [head (read-file-head-bytes path 4096)]
                     (if (binary-head? head)
                         (let [entry {:size size :mtime mtime :binary true :head head}]
