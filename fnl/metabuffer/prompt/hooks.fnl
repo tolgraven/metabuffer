@@ -1027,41 +1027,43 @@
                       (capture-expected-layout! session))
                     (schedule-restore-expected-layout! session)))
               (set session.handling-layout-change? true)
-              (schedule-when-valid session
+              (vim.schedule
                 (fn []
-                  (let [results-wrap? (and session.meta
-                                           session.meta.win
-                                           (vim.api.nvim_win_is_valid session.meta.win.window)
-                                           (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
-                    (when (and results-wrap? rebuild-source-set!)
-                      (pcall rebuild-source-set! session)
-                      (pcall session.meta.on-update 0)))
-                  (when-not session.prompt-animating?
-                    (pcall refresh-prompt-highlights! session)
-                    (when update-preview-window
-                      (pcall update-preview-window session))
-                    (pcall update-info-window session))
-                  (when (= ev.event "VimResized")
-                    (capture-expected-layout! session))
+                  (when (session-prompt-valid? session)
+                    (let [results-wrap? (and session.meta
+                                             session.meta.win
+                                             (vim.api.nvim_win_is_valid session.meta.win.window)
+                                             (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
+                      (when (and results-wrap? rebuild-source-set!)
+                        (pcall rebuild-source-set! session)
+                        (pcall session.meta.on-update 0)))
+                    (when-not session.prompt-animating?
+                      (pcall refresh-prompt-highlights! session)
+                      (when update-preview-window
+                        (pcall update-preview-window session))
+                      (pcall update-info-window session))
+                    (when (= ev.event "VimResized")
+                      (capture-expected-layout! session)))
                   (set session.handling-layout-change? false))))))
         (au-global! "OptionSet"
           (fn [_]
             (when-not session.handling-layout-change?
               (set session.handling-layout-change? true)
-              (schedule-when-valid session
+              (vim.schedule
                 (fn []
-                  (when (and session.meta
-                             session.meta.win
-                             (vim.api.nvim_win_is_valid session.meta.win.window)
-                             (= (vim.api.nvim_get_current_win) session.meta.win.window))
-                    (let [wrap? (clj.boolean (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
-                      (pcall vim.api.nvim_set_option_value "linebreak" wrap? {:win session.meta.win.window})
-                      (when rebuild-source-set!
-                        (pcall rebuild-source-set! session)
-                        (pcall session.meta.on-update 0)
-                        (pcall update-info-window session true)
-                        (when update-preview-window
-                          (pcall update-preview-window session)))))
+                  (when (session-prompt-valid? session)
+                    (when (and session.meta
+                               session.meta.win
+                               (vim.api.nvim_win_is_valid session.meta.win.window)
+                               (= (vim.api.nvim_get_current_win) session.meta.win.window))
+                      (let [wrap? (clj.boolean (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
+                        (pcall vim.api.nvim_set_option_value "linebreak" wrap? {:win session.meta.win.window})
+                        (when rebuild-source-set!
+                          (pcall rebuild-source-set! session)
+                          (pcall session.meta.on-update 0)
+                          (pcall update-info-window session true)
+                          (when update-preview-window
+                            (pcall update-preview-window session))))))
                   (set session.handling-layout-change? false)))))
           {:pattern "wrap"})
       ;; Keep selection/status/info synced when user scrolls or moves in the

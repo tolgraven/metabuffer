@@ -4,8 +4,15 @@
 
 (fn close-completion-ui!
   []
-  "Close lingering completion preview windows."
-  (pcall vim.cmd "silent! pclose"))
+  "Close floating completion preview windows without affecting user :pedit splits.
+   Only closes windows that have both previewwindow set and are floating (relative ~= \"\"),
+   which matches completion popup previews but not regular preview splits."
+  (each [_ win (ipairs (vim.api.nvim_tabpage_list_wins 0))]
+    (let [[ok cfg] [(pcall vim.api.nvim_win_get_config win)]
+          floating? (and ok cfg (~= (or cfg.relative "") ""))
+          [pok pv] [(pcall vim.api.nvim_get_option_value "previewwindow" {:win win})]]
+      (when (and floating? pok pv)
+        (pcall vim.api.nvim_win_close win true)))))
 
 (fn disable-native-completion-for-buf!
   [buf]
