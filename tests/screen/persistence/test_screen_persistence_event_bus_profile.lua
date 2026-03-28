@@ -1,4 +1,5 @@
 local H = require('tests.screen.support.screen_helpers')
+local profiler = require('tests.support.profiler')
 local child, eq = H.child, H.eq
 
 local T = MiniTest.new_set({ hooks = H.case_hooks() })
@@ -44,6 +45,17 @@ T['query update profile stays below end-to-end elapsed time'] = H.timed_case(fun
 
   local stats = event_profile_stats()
   local query = stats['on-query-update!'] or {}
+  local event_ms = (query.elapsed_us or 0) / 1000
+  local total_ms = total_us / 1000
+  local uncovered_ms = math.max(0, total_ms - event_ms)
+
+  profiler.record(
+    'event',
+    string.format('query total=%.3fms event=%.3fms gap=%.3fms', total_ms, event_ms, uncovered_ms),
+    total_ms
+  )
+  profiler.record('event-handlers', 'on-query-update handlers', event_ms)
+  profiler.record('event-gap', 'query update outside event handlers', uncovered_ms)
 
   eq(type(query.elapsed_us), 'number')
   eq(query.elapsed_us > 0, true)

@@ -265,7 +265,7 @@
             (vim.defer_fn
               (fn []
                 (when (startup-live?)
-                  (pcall update-info-window session true)))
+                  (events.send :on-session-ready! {:session session :refresh-lines true})))
               delay))
           (refresh-after! (+ 24 base-delay)))))
     (run-step! "activate-session-ui/sync-prompt-buffer-name"
@@ -404,7 +404,7 @@
             (when (startup-live?)
               (set session.single-file-info-fetch-ready true)
               (set session.single-file-info-ready true)
-              (pcall update-info-window session true)))
+              (events.send :on-session-ready! {:session session :refresh-lines true})))
           (or session.startup-ui-delay-ms 320))))
     (run-step!
       (if session.project-mode

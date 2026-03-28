@@ -287,7 +287,7 @@ local function activate_session_ui_21(deps, session, initial_lines)
       local function refresh_after_21(delay)
         local function _45_()
           if startup_live_3f() then
-            return pcall(update_info_window, session, true)
+            return events.send("on-session-ready!", {session = session, ["refresh-lines"] = true})
           else
             return nil
           end
@@ -438,7 +438,7 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
         if startup_live_3f() then
           session["single-file-info-fetch-ready"] = true
           session["single-file-info-ready"] = true
-          return pcall(update_info_window, session, true)
+          return events.send("on-session-ready!", {session = session, ["refresh-lines"] = true})
         else
           return nil
         end
