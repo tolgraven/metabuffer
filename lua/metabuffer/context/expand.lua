@@ -412,8 +412,9 @@ M["expanded-indices"] = function(session, indices, refs, opts)
   local out = {}
   local seen = {}
   if (mode == "none") then
-    vim.deepcopy((indices or {}))
+    return vim.deepcopy((indices or {}))
   else
+    local _0
     for _, idx in ipairs((indices or {})) do
       if (#out < (max_blocks * 400)) then
         local ref = refs_with_idx[idx]
@@ -449,17 +450,21 @@ M["expanded-indices"] = function(session, indices, refs, opts)
       else
       end
     end
-  end
-  if (#out == 0) then
-    for _, idx in ipairs((indices or {})) do
-      if not seen[idx] then
-        seen[idx] = true
-        table.insert(out, idx)
-      else
+    _0 = nil
+    local _1
+    if (#out == 0) then
+      for _, idx in ipairs((indices or {})) do
+        if not seen[idx] then
+          seen[idx] = true
+          table.insert(out, idx)
+        else
+        end
       end
+      _1 = nil
+    else
+      _1 = nil
     end
-  else
+    return out
   end
-  return out
 end
 return M

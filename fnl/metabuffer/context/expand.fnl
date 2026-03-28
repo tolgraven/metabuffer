@@ -340,32 +340,31 @@
         by-path (index-refs-by-path refs-with-idx)
         out []
         seen {}]
-    (cond
-      (= mode "none") (vim.deepcopy (or indices []))
-      true
-      (each [_ idx (ipairs (or indices []))]
-        (when (< (# out) (* max-blocks 400))
-          (let [ref (. refs-with-idx idx)
-                path (and ref ref.path)
-                items (. by-path path)
-                visible? (or (not visible-only?) (. visible-source-set idx))]
-            (when (and ref (~= (or ref.kind "") "file-entry"))
-              (if (not visible?)
-                  (when-not (. seen idx)
-                    (set (. seen idx) true)
-                    (table.insert out idx))
-                  (if (= mode "usage")
-                      (append-usage-indices! session out seen [ref] read-file-lines-cached)
-                      (if-let [rng (and items (mode-range session ref mode read-file-lines-cached around))]
-                        (append-range-indices! out seen items rng.start rng.end)
-                        (when-not (. seen idx)
-                          (set (. seen idx) true)
-                          (table.insert out idx))))))))))
-    (when (= (# out) 0)
-      (each [_ idx (ipairs (or indices []))]
-        (when-not (. seen idx)
-          (set (. seen idx) true)
-          (table.insert out idx))))
-    out))
+    (if (= mode "none")
+        (vim.deepcopy (or indices []))
+        (let [_0 (each [_ idx (ipairs (or indices []))]
+                   (when (< (# out) (* max-blocks 400))
+                     (let [ref (. refs-with-idx idx)
+                           path (and ref ref.path)
+                           items (. by-path path)
+                           visible? (or (not visible-only?) (. visible-source-set idx))]
+                       (when (and ref (~= (or ref.kind "") "file-entry"))
+                         (if (not visible?)
+                             (when-not (. seen idx)
+                               (set (. seen idx) true)
+                               (table.insert out idx))
+                             (if (= mode "usage")
+                                 (append-usage-indices! session out seen [ref] read-file-lines-cached)
+                                 (if-let [rng (and items (mode-range session ref mode read-file-lines-cached around))]
+                                   (append-range-indices! out seen items rng.start rng.end)
+                                   (when-not (. seen idx)
+                                     (set (. seen idx) true)
+                                     (table.insert out idx)))))))))
+              _1 (when (= (# out) 0)
+                   (each [_ idx (ipairs (or indices []))]
+                     (when-not (. seen idx)
+                       (set (. seen idx) true)
+                       (table.insert out idx))))]
+          out))))
 
 M

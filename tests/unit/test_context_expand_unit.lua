@@ -85,4 +85,21 @@ T['expanded-indices expands only visible source hits when requested'] = function
   vim.fn.delete(path)
 end
 
+T['expanded-indices returns unchanged indices when expansion mode is none'] = function()
+  local refs = {
+    { path = 'a', lnum = 1, kind = 'text' },
+    { path = 'a', lnum = 2, kind = 'text' },
+    { path = 'a', lnum = 3, kind = 'text' },
+  }
+
+  local expanded = expand['expanded-indices']({}, { 3, 2, 3, 1 }, refs, {
+    mode = 'none',
+    ['read-file-lines-cached'] = function()
+      return {}
+    end,
+  })
+
+  eq(expanded, { 3, 2, 3, 1 })
+end
+
 return T

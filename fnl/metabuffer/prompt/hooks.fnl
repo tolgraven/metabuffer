@@ -913,6 +913,8 @@
         (fn [] (router.scroll-main session.prompt-buf arg))
         (= action "toggle-info-file-entry-view")
         (fn [] (router.toggle-info-file-entry-view session.prompt-buf))
+        (= action "refresh-files")
+        (fn [] (router.refresh-files session.prompt-buf))
         nil))
 
     (fn apply-main-keymaps
