@@ -9,7 +9,7 @@ T['second :Meta during active startup does not create a duplicate session'] = H.
     'alpha one', 'alpha two', 'beta three',
     'gamma four', 'delta five', 'epsilon six',
   })
-  child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
+  H.set_source_buf_to_current()
   child.type_keys(':', 'Meta', '<CR>', ':', 'Meta', '<CR>')
   H.dump_state('double/dup/after-double-meta')
 

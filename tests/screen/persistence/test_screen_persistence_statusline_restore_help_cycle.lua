@@ -14,7 +14,7 @@ T['cancel after help-hide cycle restores original window statusline and winhighl
     'alpha two',
     'beta three',
   })
-  H.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
+  H.set_source_buf_to_current()
   H.child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(H.session_active, 3000)
 

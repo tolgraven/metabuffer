@@ -16,14 +16,7 @@ T['editing results buffer directly and :write propagates edits to source files']
 
   H.type_prompt('<M-CR>')
   H.wait_for(function()
-    return child.lua_get([[
-      (function()
-        local router = require('metabuffer.router')
-        local s = router['active-by-source'][_G.__meta_source_buf]
-        if not s then return false end
-        return vim.api.nvim_get_current_win() == s.meta.win.window
-      end)()
-    ]])
+    return H.session_results_focused()
   end, 3000)
 
   local target = root .. '/doc/readme.md'
@@ -32,9 +25,7 @@ T['editing results buffer directly and :write propagates edits to source files']
   child.type_keys('<Esc>')
   child.cmd('write')
 
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], target)), {
+  eq(H.read_file(target), {
     'meta docs',
     'metam docs',
     'other',

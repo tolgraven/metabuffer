@@ -14,21 +14,15 @@ T['Meta startup is safe with global FileType Tree-sitter autocmd'] = H.timed_cas
     })
   ]])
 
-  local path = child.lua_get([[
-    (function()
-      local path = vim.fn.tempname() .. '.lua'
-      vim.fn.writefile({
-        'local function demo(x)',
-        '  return x + 1',
-        'end',
-        'return demo(41)',
-      }, path)
-      return path
-    end)()
-  ]])
+  local path = H.write_temp_file({
+    'local function demo(x)',
+    '  return x + 1',
+    'end',
+    'return demo(41)',
+  }, '.lua')
 
   child.cmd('edit ' .. path)
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.type_keys(':', 'Meta', '<CR>')
 
   H.wait_for(function()

@@ -12,7 +12,7 @@ T['regular Meta started low in file keeps info synced on immediate page-up'] = H
   H.child.cmd('enew')
   H.child.api.nvim_buf_set_lines(0, 0, -1, false, lines)
   H.child.cmd('normal! 240G')
-  H.child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   H.child.type_keys(':', 'Meta', '<CR>')
 
   H.wait_for(function()

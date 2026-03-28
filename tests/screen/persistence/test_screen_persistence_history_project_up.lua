@@ -12,7 +12,7 @@ T['history up-recall does not accumulate duplicate consumed setting tokens'] = H
   H.type_prompt('<CR>')
   H.wait_for(function() return not H.session_active() end, 6000)
 
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.cmd('Meta!')
   H.wait_for(function() return H.session_active() end, 6000)
   H.type_prompt('<Up>')
@@ -20,7 +20,7 @@ T['history up-recall does not accumulate duplicate consumed setting tokens'] = H
   H.type_prompt('<CR>')
   H.wait_for(function() return not H.session_active() end, 6000)
 
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.cmd('Meta!')
   H.wait_for(function() return H.session_active() end, 6000)
   H.type_prompt('<Up>')

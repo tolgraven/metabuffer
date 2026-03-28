@@ -9,7 +9,7 @@ T['second straight :Meta during startup remains a no-op'] = H.timed_case(functio
     'alpha one', 'alpha two', 'beta three',
     'gamma four', 'delta five', 'epsilon six',
   })
-  child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
+  H.set_source_buf_to_current()
   child.type_keys(':', 'Meta', '<CR>', ':', 'Meta', '<CR>')
   H.dump_state('double/noop/after-double-meta')
 

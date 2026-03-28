@@ -25,17 +25,11 @@ local function unnamed_buffers()
 end
 
 T['repeated Meta launch does not accumulate hidden unnamed buffers'] = H.timed_case(function()
-  local path = child.lua_get([[
-    (function()
-      local path = vim.fn.tempname() .. '.txt'
-      vim.fn.writefile({
-        'alpha one',
-        'beta two',
-        'gamma three',
-      }, path)
-      return path
-    end)()
-  ]])
+  local path = H.write_temp_file({
+    'alpha one',
+    'beta two',
+    'gamma three',
+  }, '.txt')
 
   child.cmd('edit ' .. path)
 

@@ -27,14 +27,14 @@ T['accept hands statusline control back to statusline plugins on origin window']
     'alpha two',
     'beta three',
   })
-  H.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
+  H.set_source_buf_to_current()
   H.child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(H.session_active, 3000)
 
   H.type_prompt('<CR>')
   H.wait_for(H.session_ui_hidden, 3000)
   H.wait_for(function()
-    return H.child.lua_get('vim.api.nvim_get_current_buf() == _G.__meta_source_buf')
+    return H.current_buf_is_source()
   end, 3000)
 
   H.wait_for(function()
@@ -73,7 +73,7 @@ T['cancel hands statusline control back to statusline plugins on origin window']
     'alpha two',
     'beta three',
   })
-  H.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
+  H.set_source_buf_to_current()
   H.child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(H.session_active, 3000)
 
@@ -81,7 +81,7 @@ T['cancel hands statusline control back to statusline plugins on origin window']
   H.child.type_keys('<Esc>')
   H.wait_for(H.session_ui_hidden, 3000)
   H.wait_for(function()
-    return H.child.lua_get('vim.api.nvim_get_current_buf() == _G.__meta_source_buf')
+    return H.current_buf_is_source()
   end, 3000)
 
   H.wait_for(function()

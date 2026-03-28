@@ -16,16 +16,10 @@ T['custom transform edits write back through reverse shell command'] = H.timed_c
     })
   ]])
 
-  local path = child.lua_get([[
-    (function()
-      local path = vim.fn.tempname() .. '.txt'
-      vim.fn.writefile({ 'hello world', 'tail' }, path)
-      return path
-    end)()
-  ]])
+  local path = H.write_temp_file({ 'hello world', 'tail' }, '.txt')
 
   child.cmd('edit ' .. path)
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(H.session_active, 3000)
 
@@ -37,13 +31,7 @@ T['custom transform edits write back through reverse shell command'] = H.timed_c
 
   H.type_prompt('<M-CR>')
   H.wait_for(function()
-    return child.lua_get([[
-      (function()
-        local router = require('metabuffer.router')
-        local s = router['active-by-source'][_G.__meta_source_buf]
-        return s and s.meta and s.meta.win and vim.api.nvim_get_current_win() == s.meta.win.window or false
-      end)()
-    ]])
+    return H.session_results_focused()
   end, 3000)
 
   child.type_keys('c', 'c')
@@ -51,9 +39,7 @@ T['custom transform edits write back through reverse shell command'] = H.timed_c
   child.type_keys('<Esc>')
   child.cmd('write')
 
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], path)), {
+  eq(H.read_file(path), {
     'changed text',
     'tail',
   })

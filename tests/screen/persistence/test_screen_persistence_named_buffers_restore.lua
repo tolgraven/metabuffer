@@ -64,20 +64,14 @@ T['accept and resume do not accumulate unnamed split buffers'] = H.timed_case(fu
 end)
 
 T['plain Meta then Esc does not leave unnamed listed buffers behind'] = H.timed_case(function()
-  local path = child.lua_get([[
-    (function()
-      local path = vim.fn.tempname() .. '.txt'
-      vim.fn.writefile({
-        'alpha one',
-        'beta two',
-        'gamma three',
-      }, path)
-      return path
-    end)()
-  ]])
+  local path = H.write_temp_file({
+    'alpha one',
+    'beta two',
+    'gamma three',
+  }, '.txt')
 
   child.cmd('edit ' .. path)
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(function()
     return H.session_active() and H.session_preview_visible() and H.session_info_snapshot() ~= nil
@@ -92,7 +86,7 @@ T['plain Meta then Esc does not leave unnamed listed buffers behind'] = H.timed_
     end)()
   ]])
   H.wait_for(function()
-    return child.lua_get('vim.api.nvim_get_current_buf() == _G.__meta_source_buf')
+    return H.current_buf_is_source()
   end, 3000)
 
   local unnamed = unnamed_buffers()

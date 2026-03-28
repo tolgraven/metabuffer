@@ -19,7 +19,7 @@ T['saved prompt replay does not duplicate explicit hidden and deps flags with sy
   H.close_meta_prompt()
   H.wait_for(H.session_not_visible, 6000)
 
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.cmd('Meta! ##flags')
   H.wait_for(function() return H.session_active() end, 6000)
 

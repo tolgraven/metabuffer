@@ -22,7 +22,7 @@ T['Esc during animated startup stays hidden after settle'] = H.timed_case(functi
 
   child.cmd('edit README.md')
   child.cmd('normal! 40G')
-  local before = child.lua_get('vim.api.nvim_win_get_cursor(0)')
+  local before = H.current_cursor()
 
   child.type_keys(':', 'Meta', '<CR>')
   H.dump_state('double/esc/after-open')
@@ -38,12 +38,12 @@ T['Esc during animated startup stays hidden after settle'] = H.timed_case(functi
   end, 3000)
   H.dump_state('double/esc/after-hidden')
 
-  local after_cancel = child.lua_get('vim.api.nvim_win_get_cursor(0)')
+  local after_cancel = H.current_cursor()
   child.lua('vim.wait(700)')
   H.dump_state('double/esc/after-wait')
-  local after_wait = child.lua_get('vim.api.nvim_win_get_cursor(0)')
+  local after_wait = H.current_cursor()
 
-  eq(child.lua_get('vim.fn.bufname(vim.api.nvim_get_current_buf())'), child.lua_get('vim.fn.bufname(1)'))
+  eq(H.current_buf_name(), H.buf_name(1))
   eq(after_cancel[1], before[1])
   eq(after_wait[1], before[1])
   eq(H.session_ui_hidden(), true)

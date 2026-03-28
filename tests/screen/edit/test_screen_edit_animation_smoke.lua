@@ -13,21 +13,15 @@ T['animated regular meta can open'] = H.timed_case(function()
     },
   })
 
-  local path = child.lua_get([[
-    (function()
-      local path = vim.fn.tempname() .. '.txt'
-      vim.fn.writefile({
-        'alpha one',
-        'alpha two',
-        'beta target',
-        'gamma four',
-      }, path)
-      return path
-    end)()
-  ]])
+  local path = H.write_temp_file({
+    'alpha one',
+    'alpha two',
+    'beta target',
+    'gamma four',
+  }, '.txt')
 
   child.cmd('edit ' .. path)
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(function() return H.session_active() end, 4000)
 end)

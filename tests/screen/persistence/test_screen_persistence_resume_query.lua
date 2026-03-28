@@ -11,11 +11,11 @@ T['Meta with initial query argument applies immediately'] = H.timed_case(functio
     'metamorph',
     'other',
   })
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.cmd('Meta meta')
 
   H.wait_for(function()
-    return child.lua_get("require('metabuffer.router')['active-by-source'][_G.__meta_source_buf] ~= nil")
+    return H.session_active()
   end)
   H.wait_for(function() return H.session_query_text() == 'meta' end)
   H.wait_for(function() return H.session_hit_count() == 2 end)

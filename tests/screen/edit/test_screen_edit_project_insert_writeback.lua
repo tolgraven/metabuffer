@@ -13,14 +13,7 @@ T['filtered project-meta direct inserts write back without explicit edit-mode en
   end, 6000)
   H.type_prompt('<M-CR>')
   H.wait_for(function()
-    return child.lua_get([[
-      (function()
-        local router = require('metabuffer.router')
-        local s = router['active-by-source'][_G.__meta_source_buf]
-        if not s then return false end
-        return vim.api.nvim_get_current_win() == s.meta.win.window
-      end)()
-    ]])
+    return H.session_results_focused()
   end, 3000)
 
   child.type_keys('o')
@@ -28,9 +21,7 @@ T['filtered project-meta direct inserts write back without explicit edit-mode en
   child.type_keys('<Esc>')
   child.cmd('write')
 
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/doc/readme.md')), {
+  eq(H.read_file(root .. '/doc/readme.md'), {
     'meta docs',
     'metam docs',
     'other',

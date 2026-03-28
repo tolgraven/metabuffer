@@ -14,7 +14,7 @@ T['Meta !! replay restores prompt after accept'] = H.timed_case(function()
   H.type_prompt('<CR>')
   H.wait_for(function() return not H.session_active() end)
 
-  H.child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   H.child.cmd('Meta !!')
   H.wait_for(function() return H.session_active() end)
   H.wait_for(function() return H.session_query_text() == 'alpha meta' end)

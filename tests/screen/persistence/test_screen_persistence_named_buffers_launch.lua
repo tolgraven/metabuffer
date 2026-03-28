@@ -25,20 +25,14 @@ local function unnamed_buffers()
 end
 
 T['Meta-owned buffers have stable names instead of [No Name]'] = H.timed_case(function()
-  local path = child.lua_get([[
-    (function()
-      local path = vim.fn.tempname() .. '.txt'
-      vim.fn.writefile({
-        'alpha one',
-        'beta two',
-        'gamma three',
-      }, path)
-      return path
-    end)()
-  ]])
+  local path = H.write_temp_file({
+    'alpha one',
+    'beta two',
+    'gamma three',
+  }, '.txt')
 
   child.cmd('edit ' .. path)
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(function()
     return H.session_active() and H.session_preview_visible() and H.session_info_snapshot() ~= nil
@@ -73,20 +67,14 @@ T['Meta-owned buffers have stable names instead of [No Name]'] = H.timed_case(fu
 end)
 
 T['preview split creation does not leave unnamed listed buffers behind'] = H.timed_case(function()
-  local path = child.lua_get([[
-    (function()
-      local path = vim.fn.tempname() .. '.lua'
-      vim.fn.writefile({
-        'local alpha = 1',
-        'local beta = 2',
-        'print(alpha + beta)',
-      }, path)
-      return path
-    end)()
-  ]])
+  local path = H.write_temp_file({
+    'local alpha = 1',
+    'local beta = 2',
+    'print(alpha + beta)',
+  }, '.lua')
 
   child.cmd('edit ' .. path)
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(function()
     return H.session_active() and H.session_preview_visible()

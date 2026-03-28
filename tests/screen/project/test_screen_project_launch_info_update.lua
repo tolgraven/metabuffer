@@ -8,7 +8,7 @@ T['info window updates automatically when typing in prompt during project mode']
   local root = H.make_temp_project()
   H.child.cmd("cd " .. root)
   H.child.cmd("edit " .. root .. "/main.txt")
-  H.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
+  H.set_source_buf_to_current()
   
   -- Start project mode
   H.child.type_keys(":", "Meta!", "<CR>")

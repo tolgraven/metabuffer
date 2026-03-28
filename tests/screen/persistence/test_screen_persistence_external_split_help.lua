@@ -25,7 +25,7 @@ T['opening help while Meta is visible hides Meta auxiliary UI'] = H.timed_case(f
 
   eq(H.session_ui_hidden(), true)
   eq(H.session_prompt_win_height(), -1)
-  eq(H.child.lua_get("vim.bo.filetype"), 'help')
+  eq(H.current_filetype(), 'help')
 end)
 
 return T

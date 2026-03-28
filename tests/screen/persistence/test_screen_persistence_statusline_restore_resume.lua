@@ -14,7 +14,7 @@ T['regular accept restores origin window statusline and reapplies Meta statuslin
     'alpha meta two',
     'beta three',
   })
-  H.child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
+  H.set_source_buf_to_current()
   H.child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(H.session_active, 3000)
 
@@ -34,7 +34,7 @@ T['regular accept restores origin window statusline and reapplies Meta statuslin
   H.type_prompt('<CR>')
   H.wait_for(H.session_ui_hidden, 3000)
   H.wait_for(function()
-    return H.child.lua_get('vim.api.nvim_get_current_buf() == _G.__meta_source_buf')
+    return H.current_buf_is_source()
   end, 3000)
 
   local restored = H.child.lua_get([[
@@ -51,7 +51,7 @@ T['regular accept restores origin window statusline and reapplies Meta statuslin
 
   H.child.cmd('normal! <C-o>')
   H.wait_for(function()
-    return H.child.lua_get(string.format('vim.api.nvim_get_current_buf() == %d', state.results_buf))
+    return H.current_buf_matches(state.results_buf)
   end, 3000)
   H.wait_for(function() return not H.session_ui_hidden() end, 3000)
 

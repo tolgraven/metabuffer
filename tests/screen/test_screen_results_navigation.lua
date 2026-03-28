@@ -18,7 +18,7 @@ local function focus_results_window()
 end
 
 local function cursor()
-  return H.child.lua_get('vim.api.nvim_win_get_cursor(vim.api.nvim_get_current_win())')
+  return H.current_cursor()
 end
 
 T['results buffer navigation'] = MiniTest.new_set()

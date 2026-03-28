@@ -9,7 +9,7 @@ T['open binary buffers are excluded from project results when binary mode is off
   H.child.cmd('vsplit ' .. root .. '/metabuffer.png')
   H.child.cmd('wincmd h')
 
-  H.child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   H.child.type_keys(':', 'Meta!', '<CR>')
 
   H.wait_for(function()

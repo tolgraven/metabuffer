@@ -68,8 +68,7 @@ function M.child_setup()
     local last_err = nil
     for attempt = 1, 4 do
       local ok, err = pcall(function()
-        M.stop_child_once()
-        M.child.start(
+        M.child.restart(
           { "-u", root .. "/tests/minimal_init.lua", "-n", "-i", "NONE" },
           { connection_timeout = 12000 }
         )
@@ -191,6 +190,74 @@ function M.session_prompt_focused()
   return M.child.lua_get(session_expr([[
     return not not (s and s['prompt-win'] and vim.api.nvim_get_current_win() == s['prompt-win'])
   ]]))
+end
+
+function M.session_results_focused()
+  return M.child.lua_get(session_expr([[
+    return not not (s and s.meta and s.meta.win and vim.api.nvim_get_current_win() == s.meta.win.window)
+  ]]))
+end
+
+function M.set_source_buf_to_current()
+  M.child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+end
+
+function M.source_buf()
+  return M.child.lua_get('_G.__meta_source_buf')
+end
+
+function M.current_buf()
+  return M.child.api.nvim_get_current_buf()
+end
+
+function M.current_buf_matches(bufnr)
+  return M.current_buf() == bufnr
+end
+
+function M.current_buf_is_source()
+  return M.current_buf() == M.source_buf()
+end
+
+function M.buf_name(bufnr)
+  return M.child.api.nvim_buf_get_name(bufnr or 0)
+end
+
+function M.current_buf_name()
+  return M.buf_name(0)
+end
+
+function M.current_buf_name_matches(path)
+  return M.current_buf_name() == path
+end
+
+function M.current_filetype()
+  return M.child.bo.filetype
+end
+
+function M.current_cursor()
+  return M.child.api.nvim_win_get_cursor(0)
+end
+
+function M.current_line()
+  return M.child.fn.line('.')
+end
+
+function M.read_file(path)
+  return M.child.fn.readfile(path)
+end
+
+function M.file_readable(path)
+  return M.child.fn.filereadable(path)
+end
+
+function M.write_temp_file(lines, suffix, mode)
+  local path = M.child.fn.tempname() .. (suffix or '')
+  if mode == nil then
+    M.child.fn.writefile(lines, path)
+  else
+    M.child.fn.writefile(lines, path, mode)
+  end
+  return path
 end
 
 function M.case_name()
@@ -334,7 +401,7 @@ function M.open_meta_with_lines(lines)
     if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end
   ]], vim.inspect(lines)))
   M.wait_for(function()
-    return M.child.lua_get("require('metabuffer.router')['active-by-source'][_G.__meta_source_buf] ~= nil")
+    return M.session_active()
   end)
 end
 
@@ -565,7 +632,7 @@ function M.open_project_meta_from_file(path)
     if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end
   ]], root, root, path))
   M.wait_for(function()
-    return M.child.lua_get("require('metabuffer.router')['active-by-source'][_G.__meta_source_buf] ~= nil")
+    return M.session_active()
   end, 6000)
 end
 
@@ -668,7 +735,7 @@ function M.open_project_meta_in_dir(root, relpath)
     if vim.g.meta_test_no_startinsert then pcall(vim.cmd, 'stopinsert') end
   ]], root, root, relpath))
   M.wait_for(function()
-    return M.child.lua_get("require('metabuffer.router')['active-by-source'][_G.__meta_source_buf] ~= nil")
+    return M.session_active()
   end, 6000)
 end
 
@@ -1280,7 +1347,7 @@ function M.resize_editor_columns(columns)
 end
 
 function M.editor_columns()
-  return M.child.lua_get('vim.o.columns')
+  return M.child.o.columns
 end
 
 function M.session_prompt_win_height()

@@ -4,22 +4,16 @@ local child, eq = H.child, H.eq
 local T = MiniTest.new_set({ hooks = H.case_hooks() })
 
 T['regular Meta keeps Tree-sitter highlighting active when available'] = H.timed_case(function()
-  local path = child.lua_get([[
-    (function()
-      local path = vim.fn.tempname() .. '.lua'
-      vim.fn.writefile({
-        'local function demo(x)',
-        '  return x + 1',
-        'end',
-        '',
-        'return demo(41)',
-      }, path)
-      return path
-    end)()
-  ]])
+  local path = H.write_temp_file({
+    'local function demo(x)',
+    '  return x + 1',
+    'end',
+    '',
+    'return demo(41)',
+  }, '.lua')
 
   child.cmd('edit ' .. path)
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
 
   local ts_available = child.lua_get([[
     (function()

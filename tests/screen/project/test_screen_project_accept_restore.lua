@@ -31,7 +31,7 @@ T['project <CR> hides Meta UI but restores full state when returning to results 
 
   child.cmd('stopinsert')
   H.type_prompt('<CR>')
-  local accepted_buf = child.lua_get('vim.api.nvim_get_current_buf()')
+  local accepted_buf = H.current_buf()
   eq(type(accepted_buf), 'number')
 
   H.wait_for(function()
@@ -49,7 +49,7 @@ T['project <CR> hides Meta UI but restores full state when returning to results 
   child.cmd('normal! <C-o>')
 
   H.wait_for(function()
-    return child.lua_get(string.format('vim.api.nvim_get_current_buf() == %d', state_before.results_buf))
+    return H.current_buf_matches(state_before.results_buf)
   end)
 
   H.wait_for(function()
@@ -64,7 +64,7 @@ T['project <CR> hides Meta UI but restores full state when returning to results 
     ]])
   end)
 
-  eq(child.lua_get(string.format('vim.api.nvim_get_current_buf() == %d', state_before.results_buf)), true)
+  eq(H.current_buf_matches(state_before.results_buf), true)
 
   local state_after = child.lua_get([[
     (function()
@@ -86,7 +86,7 @@ T['project <CR> hides Meta UI but restores full state when returning to results 
   child.cmd('normal! <C-i>')
 
   H.wait_for(function()
-    return child.lua_get(string.format('vim.api.nvim_get_current_buf() == %d', accepted_buf))
+    return H.current_buf_matches(accepted_buf)
   end)
   H.wait_for(function()
     return H.session_ui_hidden()
@@ -95,7 +95,7 @@ T['project <CR> hides Meta UI but restores full state when returning to results 
   child.cmd('normal! <C-o>')
 
   H.wait_for(function()
-    return child.lua_get(string.format('vim.api.nvim_get_current_buf() == %d', state_before.results_buf))
+    return H.current_buf_matches(state_before.results_buf)
   end)
   H.wait_for(function()
     return child.lua_get([[

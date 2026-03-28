@@ -13,21 +13,15 @@ T['focused results insert writes persists through accept and jump traversal'] = 
     },
   })
 
-  local path = child.lua_get([[
-    (function()
-      local path = vim.fn.tempname() .. '.txt'
-      vim.fn.writefile({
-        'alpha one',
-        'alpha two',
-        'beta target',
-        'gamma four',
-      }, path)
-      return path
-    end)()
-  ]])
+  local path = H.write_temp_file({
+    'alpha one',
+    'alpha two',
+    'beta target',
+    'gamma four',
+  }, '.txt')
 
   child.cmd('edit ' .. path)
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(function() return H.session_active() end, 4000)
   H.dump_state('after open')
@@ -37,10 +31,7 @@ T['focused results insert writes persists through accept and jump traversal'] = 
   H.dump_state('after filter')
   H.type_prompt('<M-CR>')
   H.wait_for(function()
-    return child.lua_get([[
-      local s = require('metabuffer.router')['active-by-source'][_G.__meta_source_buf]
-      return s and s.meta and s.meta.win and vim.api.nvim_get_current_win() == s.meta.win.window or false
-    ]])
+    return H.session_results_focused()
   end, 4000)
   H.dump_state('after focus results')
 
@@ -51,9 +42,7 @@ T['focused results insert writes persists through accept and jump traversal'] = 
   child.cmd('write')
   H.dump_state('after write')
 
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], path)), {
+  eq(H.read_file(path), {
     'alpha one',
     'alpha two',
     'beta target',
@@ -65,9 +54,7 @@ T['focused results insert writes persists through accept and jump traversal'] = 
   child.type_keys('<CR>')
   H.dump_state('after accept')
   H.wait_for(function()
-    return child.lua_get(string.format([[
-      vim.api.nvim_buf_get_name(0) == %q and vim.fn.line('.') == 4
-    ]], path))
+    return H.current_buf_name_matches(path) and H.current_line() == 4
   end, 4000)
 
   child.cmd('normal! <C-o>')
@@ -78,7 +65,7 @@ T['focused results insert writes persists through accept and jump traversal'] = 
   child.cmd('normal! <C-o>')
   H.dump_state('after second C-o')
   H.wait_for(function()
-    return child.lua_get(string.format('vim.api.nvim_buf_get_name(0) == %q', path))
+    return H.current_buf_name_matches(path)
   end, 4000)
 
   child.cmd('normal! <C-i>')
@@ -86,9 +73,7 @@ T['focused results insert writes persists through accept and jump traversal'] = 
   H.wait_for(function() return H.session_active() end, 4000)
   H.wait_for(function() return not H.session_ui_hidden() end, 4000)
 
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], path)), {
+  eq(H.read_file(path), {
     'alpha one',
     'alpha two',
     'beta target',

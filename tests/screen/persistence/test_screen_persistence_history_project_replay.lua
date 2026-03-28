@@ -12,7 +12,7 @@ T['project history replay keeps typed non-consumed flags and avoids synthetic de
   H.type_prompt('<CR>')
   H.wait_for(function() return not H.session_active() end, 6000)
 
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.cmd('Meta! !!')
   H.wait_for(function() return H.session_active() end, 6000)
   H.wait_for(function()

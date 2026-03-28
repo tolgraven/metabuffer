@@ -88,6 +88,9 @@ Key helper coverage:
 - Real-typing simulation with per-character delay.
 - Delayed token typing for special keys.
 - Session probes (query/hits/matcher/case/statusline/info window/selection/prompt height).
+- Prefer child helper wrappers and direct `child.api`/`child.bo` access for simple state reads such as current buffer, cursor, and filetype.
+- Keep `child.lua()` / `child.lua_get()` for genuinely child-side setup or multi-step inspection, not as the default way to read one API value.
+- When a child-side snippet repeats across files, move it into `tests/screen/support/screen_helpers.lua` instead of duplicating stringified Lua in each test.
 - Default generated project fixture with:
   - nested `lua/`, `fnl/`, `doc/`, `deps/`, hidden, ignored, and deeply nested dirs
   - text files containing stable query terms (`meta`, `metam`, `local`, `lua`, `preview-window`, `info-window`)

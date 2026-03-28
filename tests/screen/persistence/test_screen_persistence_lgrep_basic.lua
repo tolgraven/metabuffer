@@ -23,7 +23,7 @@ T['regular Meta uses lgrep source and keeps remaining tokens as normal filters']
 
   H.child.cmd('cd ' .. root)
   H.child.cmd('edit ' .. root .. '/main.txt')
-  H.child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   H.child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(H.session_active, 6000)
 
@@ -90,7 +90,7 @@ T['regular Meta plain lgrep search updates visible results buffer content'] = H.
 
   H.child.cmd('cd ' .. root)
   H.child.cmd('edit ' .. root .. '/main.txt')
-  H.child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   H.child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(H.session_active, 6000)
 

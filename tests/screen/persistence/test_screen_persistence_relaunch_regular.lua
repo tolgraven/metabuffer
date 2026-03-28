@@ -30,7 +30,7 @@ T['regular :Meta from origin buffer creates a fresh session after Esc hides prev
     return H.session_ui_hidden()
   end, 3000)
   H.dump_state('regular/after-hidden')
-  eq(child.lua_get('vim.api.nvim_get_current_buf() == _G.__meta_source_buf'), true)
+  eq(H.current_buf_is_source(), true)
 
   child.type_keys(':', 'Meta', '<CR>')
   H.dump_state('regular/after-relaunch-cmd')
@@ -62,7 +62,7 @@ end)
 
 T['raw prompt-mode Esc then :Meta relaunches without callback errors'] = H.timed_case(function()
   child.cmd('edit README.md')
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.cmd('Meta')
   vim.loop.sleep(150)
   H.dump_state('raw/after-open')

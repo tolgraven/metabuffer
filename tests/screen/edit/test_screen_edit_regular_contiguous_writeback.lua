@@ -15,16 +15,10 @@ local function enter_results_edit_mode()
 end
 
 T['contiguous plain-meta edits patch the real file region in place'] = H.timed_case(function()
-  local path = child.lua_get([[
-    (function()
-      local path = vim.fn.tempname() .. '.txt'
-      vim.fn.writefile({ 'alpha', 'beta', 'gamma' }, path)
-      return path
-    end)()
-  ]])
+  local path = H.write_temp_file({ 'alpha', 'beta', 'gamma' }, '.txt')
 
   child.cmd('edit ' .. path)
-  child.lua('_G.__meta_source_buf = vim.api.nvim_get_current_buf()')
+  H.set_source_buf_to_current()
   child.type_keys(':', 'Meta', '<CR>')
   H.wait_for(H.session_active, 3000)
 
@@ -36,9 +30,7 @@ T['contiguous plain-meta edits patch the real file region in place'] = H.timed_c
   child.type_keys('<Esc>')
   child.cmd('write')
 
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], path)), { 'alpha', 'insert-after-alpha', 'beta', 'gamma' })
+  eq(H.read_file(path), { 'alpha', 'insert-after-alpha', 'beta', 'gamma' })
 end)
 
 return T

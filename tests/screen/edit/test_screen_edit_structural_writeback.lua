@@ -16,12 +16,8 @@ end
 
 T['sparse project edits anchor inserts to one source line only'] = H.timed_case(function()
   local root = H.make_temp_project()
-  local main_before = child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/main.txt'))
-  local lua_before = child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/lua/mod.lua'))
+  local main_before = H.read_file(root .. '/main.txt')
+  local lua_before = H.read_file(root .. '/lua/mod.lua')
 
   H.open_project_meta_in_dir(root, 'main.txt')
   H.type_prompt_text('other')
@@ -51,22 +47,14 @@ T['sparse project edits anchor inserts to one source line only'] = H.timed_case(
   child.type_keys('<Esc>')
   child.cmd('write')
 
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/doc/readme.md')), { 'meta docs', 'metam docs', 'insert-before-other', 'other' })
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/main.txt')), main_before)
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/lua/mod.lua')), lua_before)
+  eq(H.read_file(root .. '/doc/readme.md'), { 'meta docs', 'metam docs', 'insert-before-other', 'other' })
+  eq(H.read_file(root .. '/main.txt'), main_before)
+  eq(H.read_file(root .. '/lua/mod.lua'), lua_before)
 end)
 
 T['sparse project lowercase o inserts after the owned line only'] = H.timed_case(function()
   local root = H.make_temp_project()
-  local main_before = child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/main.txt'))
+  local main_before = H.read_file(root .. '/main.txt')
 
   H.open_project_meta_in_dir(root, 'main.txt')
   H.type_prompt_text('other')
@@ -81,22 +69,14 @@ T['sparse project lowercase o inserts after the owned line only'] = H.timed_case
   child.type_keys('<Esc>')
   child.cmd('write')
 
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/doc/readme.md')), { 'meta docs', 'metam docs', 'other', 'insert-after-other' })
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/main.txt')), main_before)
+  eq(H.read_file(root .. '/doc/readme.md'), { 'meta docs', 'metam docs', 'other', 'insert-after-other' })
+  eq(H.read_file(root .. '/main.txt'), main_before)
 end)
 
 T['sparse project paste uses the owned line as after-anchor only'] = H.timed_case(function()
   local root = H.make_temp_project()
-  local doc_before = child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/doc/readme.md'))
-  local main_before = child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/main.txt'))
+  local doc_before = H.read_file(root .. '/doc/readme.md')
+  local main_before = H.read_file(root .. '/main.txt')
 
   H.open_project_meta_in_dir(root, 'main.txt')
   H.type_prompt_text('other')
@@ -110,20 +90,14 @@ T['sparse project paste uses the owned line as after-anchor only'] = H.timed_cas
   child.type_keys('p')
   child.cmd('write')
 
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/doc/readme.md')), { 'meta docs', 'metam docs', 'other', 'paste-after-other' })
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/main.txt')), main_before)
+  eq(H.read_file(root .. '/doc/readme.md'), { 'meta docs', 'metam docs', 'other', 'paste-after-other' })
+  eq(H.read_file(root .. '/main.txt'), main_before)
   eq(doc_before[1], 'meta docs')
 end)
 
 T['sparse project uppercase paste uses the owned line as before-anchor only'] = H.timed_case(function()
   local root = H.make_temp_project()
-  local main_before = child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/main.txt'))
+  local main_before = H.read_file(root .. '/main.txt')
 
   H.open_project_meta_in_dir(root, 'main.txt')
   H.type_prompt_text('other')
@@ -137,12 +111,8 @@ T['sparse project uppercase paste uses the owned line as before-anchor only'] = 
   child.type_keys('P')
   child.cmd('write')
 
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/doc/readme.md')), { 'meta docs', 'metam docs', 'paste-before-other', 'other' })
-  eq(child.lua_get(string.format([[
-    vim.fn.readfile(%q)
-  ]], root .. '/main.txt')), main_before)
+  eq(H.read_file(root .. '/doc/readme.md'), { 'meta docs', 'metam docs', 'paste-before-other', 'other' })
+  eq(H.read_file(root .. '/main.txt'), main_before)
 end)
 
 return T

@@ -32,13 +32,13 @@ T['regular <CR> hides Meta UI and remains resumable across back-forward traversa
   H.type_prompt('<CR>')
   H.wait_for(function() return H.session_ui_hidden() end, 3000)
   H.wait_for(function()
-    return child.lua_get('vim.api.nvim_get_current_buf() == _G.__meta_source_buf')
+    return H.current_buf_is_source()
   end, 3000)
 
   child.cmd('normal! <C-o>')
 
   H.wait_for(function()
-    return child.lua_get(string.format('vim.api.nvim_get_current_buf() == %d', state_before.results_buf))
+    return H.current_buf_matches(state_before.results_buf)
   end, 3000)
   H.wait_for(function()
     return not H.session_ui_hidden()
@@ -60,7 +60,7 @@ T['regular <CR> hides Meta UI and remains resumable across back-forward traversa
 
   child.cmd('normal! <C-o>')
   H.wait_for(function()
-    return child.lua_get('vim.api.nvim_get_current_buf() == _G.__meta_source_buf')
+    return H.current_buf_is_source()
   end, 3000)
   child.lua('vim.wait(120, function() return false end, 20)')
 
@@ -69,7 +69,7 @@ T['regular <CR> hides Meta UI and remains resumable across back-forward traversa
     return H.session_active()
   end, 3000)
   H.wait_for(function()
-    return child.lua_get(string.format('vim.api.nvim_get_current_buf() == %d', state_before.results_buf))
+    return H.current_buf_matches(state_before.results_buf)
   end, 3000)
   H.wait_for(function()
     return not H.session_ui_hidden()
@@ -114,7 +114,7 @@ T['regular <CR> does not reveal the old source viewport before jumping to the hi
 
   H.type_prompt('<CR>')
   H.wait_for(function()
-    return child.lua_get('vim.api.nvim_get_current_buf() == _G.__meta_source_buf')
+    return H.current_buf_is_source()
   end, 3000)
 
   local rows = child.lua_get([[

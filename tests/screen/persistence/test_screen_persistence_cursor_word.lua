@@ -10,7 +10,7 @@ T['MetaCursorWord starts append-ready at end of seeded prompt text'] = H.timed_c
     'second line',
   })
   child.api.nvim_win_set_cursor(0, { 1, 7 })
-  child.lua("_G.__meta_source_buf = vim.api.nvim_get_current_buf()")
+  H.set_source_buf_to_current()
 
   child.cmd('MetaCursorWord')
 

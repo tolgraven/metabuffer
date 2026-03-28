@@ -47,7 +47,7 @@ T['regular <Esc> hides Meta UI and remains resumable with jump forward'] = H.tim
       }
     end)()
   ]])
-  eq(cancel_state.current_buf, child.lua_get('_G.__meta_source_buf'))
+  eq(cancel_state.current_buf, H.source_buf())
   eq(cancel_state.session_exists, true)
   eq(cancel_state.ui_hidden, true)
 
@@ -57,7 +57,7 @@ T['regular <Esc> hides Meta UI and remains resumable with jump forward'] = H.tim
     return H.session_active()
   end, 3000)
   H.wait_for(function()
-    return child.lua_get(string.format('vim.api.nvim_get_current_buf() == %d', state_before.results_buf))
+    return H.current_buf_matches(state_before.results_buf)
   end, 3000)
   H.wait_for(function()
     return not H.session_ui_hidden()
@@ -102,7 +102,7 @@ T['Esc in normal-mode results buffer also hides Meta UI'] = H.timed_case(functio
   end, 3000)
 
   eq(H.session_ui_hidden(), true)
-  eq(child.lua_get('vim.api.nvim_get_current_buf() == _G.__meta_source_buf'), true)
+  eq(H.current_buf_is_source(), true)
 end)
 
 return T
