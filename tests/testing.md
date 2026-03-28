@@ -294,9 +294,6 @@ Key helper coverage:
 ### `tests/screen/persistence/test_screen_persistence_history_project_up.lua`
 - Up-recall does not accumulate duplicate consumed setting tokens.
 
-### `tests/screen/persistence/test_screen_persistence_history_project_legacy.lua`
-- Legacy `#+file foo` history normalizes to `#file:foo`.
-
 ### `tests/screen/persistence/test_screen_persistence_history_recall.lua`
 - Minimal replay-only coverage for `Meta !!` after accept.
 

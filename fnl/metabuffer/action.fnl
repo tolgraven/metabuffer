@@ -104,18 +104,8 @@
     ["<LeftRelease>" "<meta:select_clicked_candidate>" "noremap"]
     ["<C-z>" "<meta:pause_prompt>" "noremap"]])
 
-(set M.DEFAULT_ACTION_RULES
-  (if (= (type vim.g.meta_legacy_action_rules) "table")
-      vim.g.meta_legacy_action_rules
-      default-action-rules))
+(set M.DEFAULT_ACTION_RULES default-action-rules)
 
-(set M.DEFAULT_ACTION_KEYMAP
-  (if (= (type vim.g.meta_legacy_action_keymap) "table")
-      vim.g.meta_legacy_action_keymap
-      default-action-keymap))
-
-;; Backward compatibility aliases.
-(set M.DEFAULT-ACTION-RULES M.DEFAULT_ACTION_RULES)
-(set M.DEFAULT-ACTION-KEYMAP M.DEFAULT_ACTION_KEYMAP)
+(set M.DEFAULT_ACTION_KEYMAP default-action-keymap)
 
 M

@@ -186,11 +186,7 @@ M.from_rules = function(nvim, rules)
   return km
 end
 local default_keymap_rules = {{"<C-B>", "<prompt:move_caret_to_head>", "noremap"}, {"<C-E>", "<prompt:move_caret_to_tail>", "noremap"}, {"<BS>", "<prompt:delete_char_before_caret>", "noremap"}, {"<C-H>", "<prompt:delete_char_before_caret>", "noremap"}, {"<S-TAB>", "<prompt:assign_previous_text>", "noremap"}, {"<C-J>", "<prompt:accept>", "noremap"}, {"<C-K>", "<prompt:insert_digraph>", "noremap"}, {"<CR>", "<prompt:accept>", "noremap"}, {"<C-M>", "<prompt:accept>", "noremap"}, {"<C-N>", "<prompt:assign_next_text>", "noremap"}, {"<C-P>", "<prompt:assign_previous_text>", "noremap"}, {"<C-Q>", "<prompt:insert_special>", "noremap"}, {"<C-R>", "<prompt:paste_from_register>", "noremap"}, {"<C-U>", "<prompt:delete_entire_text>", "noremap"}, {"<C-V>", "<prompt:insert_special>", "noremap"}, {"<C-W>", "<prompt:delete_word_before_caret>", "noremap"}, {"<ESC>", "<prompt:cancel>", "noremap"}, {"<DEL>", "<prompt:delete_char_under_caret>", "noremap"}, {"<Left>", "<prompt:move_caret_to_left>", "noremap"}, {"<S-Left>", "<prompt:move_caret_to_one_word_left>", "noremap"}, {"<C-Left>", "<prompt:move_caret_to_one_word_left>", "noremap"}, {"<Right>", "<prompt:move_caret_to_right>", "noremap"}, {"<S-Right>", "<prompt:move_caret_to_one_word_right>", "noremap"}, {"<C-Right>", "<prompt:move_caret_to_one_word_right>", "noremap"}, {"<Up>", "<prompt:assign_previous_matched_text>", "noremap"}, {"<S-Up>", "<prompt:assign_previous_text>", "noremap"}, {"<Down>", "<prompt:assign_next_matched_text>", "noremap"}, {"<S-Down>", "<prompt:assign_next_text>", "noremap"}, {"<Home>", "<prompt:move_caret_to_head>", "noremap"}, {"<End>", "<prompt:move_caret_to_tail>", "noremap"}, {"<PageDown>", "<prompt:assign_next_text>", "noremap"}, {"<PageUp>", "<prompt:assign_previous_text>", "noremap"}, {"<INSERT>", "<prompt:toggle_insert_mode>", "noremap"}}
-if (type(vim.g.meta_legacy_prompt_keymap_rules) == "table") then
-  M.DEFAULT_KEYMAP_RULES = vim.g.meta_legacy_prompt_keymap_rules
-else
-  M.DEFAULT_KEYMAP_RULES = default_keymap_rules
-end
+M.DEFAULT_KEYMAP_RULES = default_keymap_rules
 M["default-keymap-rules"] = function()
   return M.DEFAULT_KEYMAP_RULES
 end

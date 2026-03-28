@@ -55,7 +55,6 @@ The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) 
 - `build-history-entry` — Constructs a history record from current prompt state including scope toggles, matcher name, and effective text.
 - `recall!` — Restores a history entry into the prompt, re-applying scope toggles and matcher mode.
 - `merge-persisted!` — Imports entries from `history_store` into session history.
-- `normalize-history-prompt` — Canonicalizes legacy history syntax (`#+file foo` / `#file foo` → `#file:foo`).
 
 ### `util.fnl` (512 lines)
 - State persistence: `read-prompt-height-state` / `write-prompt-height-state!`, `read-results-wrap-state` / `write-results-wrap-state!` — persist prompt window height and results wrap setting across Neovim restarts via `stdpath("state")` files.

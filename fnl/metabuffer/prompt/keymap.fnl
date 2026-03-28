@@ -176,10 +176,7 @@
     ["<PageUp>" "<prompt:assign_previous_text>" "noremap"]
     ["<INSERT>" "<prompt:toggle_insert_mode>" "noremap"] ])
 
-(set M.DEFAULT_KEYMAP_RULES
-  (if (= (type vim.g.meta_legacy_prompt_keymap_rules) "table")
-      vim.g.meta_legacy_prompt_keymap_rules
-      default-keymap-rules))
+(set M.DEFAULT_KEYMAP_RULES default-keymap-rules)
 
 (fn M.default-keymap-rules
   []

@@ -21,40 +21,6 @@ end
 local function explicit_setting_present_3f(parsed, key)
   return (parsed[key] ~= nil)
 end
-local function normalize_history_prompt(text)
-  local parts = vim.split((text or ""), "%s+", {trimempty = true})
-  local out = {}
-  local idx = 1
-  while (idx <= #parts) do
-    local tok = parts[idx]
-    local next_tok = parts[(idx + 1)]
-    local file_toggle_3f = ((tok == "#+file") or (tok == "#file"))
-    local file_arg_3f = (file_toggle_3f and (type(next_tok) == "string") and (next_tok ~= "") and not vim.startswith(next_tok, "#"))
-    if file_arg_3f then
-      table.insert(out, ("#file:" .. next_tok))
-      idx = (idx + 2)
-    else
-      local function _4_()
-        if (tok == "#+file") then
-          return "#file"
-        elseif (tok == "#+binary") then
-          return "#binary"
-        elseif (tok == "#+hex") then
-          return "#hex"
-        else
-          return tok
-        end
-      end
-      table.insert(out, _4_())
-      idx = (idx + 1)
-    end
-  end
-  if (#out > 0) then
-    return table.concat(out, " ")
-  else
-    return (text or "")
-  end
-end
 M.new = function(opts)
   local history_store = opts["history-store"]
   local router_util_mod = opts["router-util-mod"]
@@ -63,7 +29,7 @@ M.new = function(opts)
   local settings = opts.settings
   local api = {}
   api["history-entry-query"] = function(entry)
-    local parsed = query_mod["parse-query-text"](normalize_history_prompt(entry))
+    local parsed = query_mod["parse-query-text"](entry)
     return (parsed.query or "")
   end
   api["history-entry-token"] = function(entry)
@@ -211,7 +177,7 @@ M.new = function(opts)
       local val_110_auto = history_store["saved-entry"](tag)
       if val_110_auto then
         local saved = val_110_auto
-        router_util_mod["set-prompt-text!"](session, normalize_history_prompt(saved))
+        router_util_mod["set-prompt-text!"](session, saved)
         return true
       else
         return nil
@@ -230,7 +196,7 @@ M.new = function(opts)
     if (mode == "saved") then
       for _, item in ipairs(history_store["saved-items"]()) do
         local tag = (item.tag or "")
-        local prompt = normalize_history_prompt((item.prompt or ""))
+        local prompt = (item.prompt or "")
         local hay = string.lower((tag .. " " .. prompt))
         if ((filter0 == "") or (nil ~= string.find(hay, filter0, 1, true))) then
           table.insert(out, {label = ("##" .. tag .. "  " .. prompt), prompt = prompt, tag = tag})
@@ -240,7 +206,7 @@ M.new = function(opts)
     else
       local h = (session["history-cache"] or history_store.list())
       for i = #h, 1, -1 do
-        local entry = normalize_history_prompt((h[i] or ""))
+        local entry = (h[i] or "")
         local hay = string.lower(entry)
         if ((filter0 == "") or (nil ~= string.find(hay, filter0, 1, true))) then
           table.insert(out, {label = entry, prompt = entry})
@@ -282,7 +248,7 @@ M.new = function(opts)
           local val_110_auto0 = selected.prompt
           if val_110_auto0 then
             local prompt = val_110_auto0
-            router_util_mod["set-prompt-text!"](session, normalize_history_prompt(prompt))
+            router_util_mod["set-prompt-text!"](session, prompt)
           else
           end
         else
@@ -297,7 +263,7 @@ M.new = function(opts)
     local h = ((session and session["history-cache"]) or history_store.list())
     local n = #h
     if (n > 0) then
-      return normalize_history_prompt(h[n])
+      return h[n]
     else
       return ""
     end
@@ -335,22 +301,20 @@ M.new = function(opts)
             session["history-index"] = math.max(0, math.min((session["history-index"] + delta), n))
             if (session["history-index"] == 0) then
               session["last-history-text"] = ""
-              return router_util_mod["set-prompt-text!"](session, session["initial-prompt-text"])
+              router_util_mod["set-prompt-text!"](session, session["initial-prompt-text"])
             else
               local entry = h[((n - session["history-index"]) + 1)]
               if entry then
-                local norm_entry = normalize_history_prompt(entry)
-                session["last-history-text"] = norm_entry
-                return router_util_mod["set-prompt-text!"](session, norm_entry)
+                session["last-history-text"] = entry
+                router_util_mod["set-prompt-text!"](session, entry)
               else
-                return nil
               end
             end
           else
-            return nil
           end
-        else
           return move_selection_fn(prompt_buf, delta)
+        else
+          return nil
         end
       end
     else
