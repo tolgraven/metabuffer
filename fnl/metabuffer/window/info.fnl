@@ -24,6 +24,22 @@
       (table.insert out (str x)))
     (table.concat out (or sep ""))))
 
+(fn range-text
+  [start-index stop-index total]
+  (if (<= total 0)
+      "0/0"
+      (.. start-index "-" stop-index "/" total)))
+
+(fn placeholder-pulse-char
+  [session]
+  (let [phase (or (and session session.loading-anim-phase) 0)
+        frames ["·" "•" "●" "•"]]
+    (. frames (+ (% phase (# frames)) 1))))
+
+(fn info-placeholder-line
+  [session]
+  (.. (placeholder-pulse-char session) " loading info"))
+
 (fn indices-slice-sig
   [idxs start-index stop-index]
   "Return a stable signature string for a visible indices slice. Expected output: \"1,4,7\"."
@@ -90,6 +106,24 @@
              (when (and (= (type name) "string") (~= name ""))
                name)))
       ""))
+
+(fn refs-slice-sig
+  [session refs idxs start-index stop-index]
+  "Return a stable signature for the concrete refs shown in an info slice."
+  (let [out []
+        refs (or refs [])
+        idxs (or idxs [])]
+    (for [i start-index stop-index]
+      (let [src-idx (. idxs i)
+            ref (. refs src-idx)]
+        (table.insert out
+                      (join-str
+                        ":"
+                        [src-idx
+                         (or (ref-path session ref) "")
+                         (or (and ref ref.lnum) 0)
+                         (or (and ref ref.kind) "")]))))
+    (table.concat out "|")))
 
 (fn compact-dir
   [dir]
@@ -195,6 +229,7 @@
         info_fade_ms (. deps :info-fade-ms)]
   (var update! nil)
   (var info_window_config nil)
+  (var project-loading-pending? nil)
   (fn info-config-signature
     [cfg]
     (join-str "|"
@@ -323,8 +358,22 @@
     [session]
     "Re-apply float-local statusline options after focus/plugin redraw churn."
     (when (valid-info-win? session)
-      (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
-      (pcall vim.api.nvim_set_option_value "winbar" "" {:win session.info-win})))
+      (let [total (# (or (and session session.meta session.meta.buf session.meta.buf.indices) []))
+            start-index (or session.info-start-index 1)
+            stop-index (or session.info-stop-index (if (> total 0) total 0))
+            range (range-text start-index stop-index total)
+            title (if (project-loading-pending? session)
+                      (let [streamed (math.max 0 (- (or session.lazy-stream-next 1) 1))
+                            total-files (or session.lazy-stream-total 0)]
+                        (if (> total-files 0)
+                            (.. "Info  loading " streamed "/" total-files " files")
+                            "Info  loading project"))
+                      (if session.info-highlight-fill-pending?
+                          (.. "Info  loading " range)
+                          (.. "Info  " range)))
+            winbar (.. "%#Comment#" title)]
+        (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
+        (pcall vim.api.nvim_set_option_value "winbar" winbar {:win session.info-win}))))
 
   (fn close-info-window!
     [session]
@@ -413,7 +462,7 @@
           suffix0 (or (. info-view :suffix) "")
           suffix-prefix (if (> (# suffix0) 0) (or (. info-view :suffix-prefix) "  ") "")
           suffix-hls (or (. info-view :suffix-highlights) [])
-          icon-info (if show-icon? (util.devicon-info icon-path file-hl) {:icon "" :icon-hl file-hl :file-hl file-hl})
+          icon-info (if show-icon? (util.file-icon-info icon-path file-hl) {:icon "" :icon-hl file-hl :file-hl file-hl})
           icon (or (. icon-info :icon) "")
           iconf (icon-field icon)
           icon-prefix (if show-icon? (. iconf :text) "")
@@ -536,7 +585,7 @@
                 current
                 current
                 false
-                (vim.tbl_map (fn [_] "") (vim.fn.range (+ current 1) needed)))
+                (vim.tbl_map (fn [_] (info-placeholder-line session)) (vim.fn.range (+ current 1) needed)))
               (vim.api.nvim_buf_set_lines
                 session.info-buf
                 needed
@@ -673,7 +722,8 @@
       (schedule-info-highlight-fill! session ns refs (info-max-width-now session) lnum-digit-width deferred-rows)
       (let [bo (. vim.bo session.info-buf)]
         (set (. bo :modifiable) false))
-      (set-info-topline! session visible-start)))
+      (set-info-topline! session visible-start)
+      (refresh-info-statusline! session)))
 
   (fn sync-info-selection!
       [session meta]
@@ -719,7 +769,7 @@
                    (let [[start1 stop1] (render-current-range! session meta)]
                      (set session.info-start-index start1)
                      (set session.info-stop-index stop1))))))
-      (when (and session.single-file-info-fetch-ready
+    (when (and session.single-file-info-fetch-ready
                  (~= path "")
                  (= 1 (vim.fn.filereadable path)))
         (let [lnums []]
@@ -765,6 +815,7 @@
                session.info-buf
                (vim.api.nvim_buf_is_valid session.info-buf))
       (let [meta session.meta
+            _ (refresh-info-statusline! session)
             force-refresh? (or (= session.info-render-sig nil)
                                (= session.info-start-index nil)
                                (= session.info-stop-index nil))
@@ -797,8 +848,11 @@
                   "|"
                   [(# idxs)
                    (indices-slice-sig idxs render-start render-stop)
+                   (refs-slice-sig session meta.buf.source-refs idxs render-start render-stop)
                    render-start
                    render-stop
+                   (or session.active-source-key "")
+                   (or session.info-file-entry-view "")
                    (info-max-width-now session)
                    (info_height session)
                    vim.o.columns
@@ -811,6 +865,8 @@
                 rendered-range-changed
                 (~= session.info-render-sig sig))
             (do
+              (when refresh-lines
+                (set session.info-line-meta-range-key nil))
               (set session.info-render-sig sig)
               (render-info-lines! session meta render-start render-stop wanted-start wanted-stop)
               (set session.info-start-index wanted-start)
@@ -829,19 +885,19 @@
 
   ;; True only during genuine project bootstrap/stream — not during lazy
   ;; re-filter refreshes triggered by scroll or query changes.
-  (fn project-loading-pending?
-    [session]
-    (let [startup (startup-layout-pending? session)
-          bootstrap-pending (or session.project-bootstrap-pending false)
-          bootstrapped (or session.project-bootstrapped false)
-          stream-done (or session.lazy-stream-done false)
-          pending (and session
-                       session.project-mode
-                       (or startup
-                           bootstrap-pending
-                           (not bootstrapped)
-                           (not stream-done)))]
-      pending))
+  (set project-loading-pending?
+       (fn [session]
+         (let [startup (startup-layout-pending? session)
+               bootstrap-pending (or session.project-bootstrap-pending false)
+               bootstrapped (or session.project-bootstrapped false)
+               stream-done (or session.lazy-stream-done false)
+               pending (and session
+                            session.project-mode
+                            (or startup
+                                bootstrap-pending
+                                (not bootstrapped)
+                                (not stream-done)))]
+           pending)))
 
   (fn render-project-loading!
     [session]
@@ -949,8 +1005,11 @@
                               "|"
                               [(# idxs)
                                (indices-slice-sig idxs wanted-start wanted-stop)
+                               (refs-slice-sig session meta.buf.source-refs idxs wanted-start wanted-stop)
                                wanted-start
                                wanted-stop
+                               (or session.active-source-key "")
+                               (or session.info-file-entry-view "")
                                (info-max-width-now session)
                                (info_height session)
                                vim.o.columns])]

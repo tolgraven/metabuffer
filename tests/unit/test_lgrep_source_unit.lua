@@ -91,6 +91,36 @@ T['source marker sign uses configured MiniIcons branch safely'] = function()
   eq(sign.hl, 'MiniIconsCyan')
 end
 
+T['file-icon-info resolves MiniIcons file paths and extension highlights separately'] = function()
+  local prev = _G.MiniIcons
+  local calls = {}
+  _G.MiniIcons = {
+    get = function(category, name)
+      table.insert(calls, { category = category, name = name })
+      if category == 'file' then
+        return 'F', 'MiniIconsBlue', false
+      end
+      if category == 'extension' then
+        return 'E', 'MiniIconsGreen', false
+      end
+      return '', '', false
+    end,
+  }
+
+  local info = util['file-icon-info']('/tmp/nested/demo.lua', 'Normal')
+
+  _G.MiniIcons = prev
+
+  eq(info.icon, 'F')
+  eq(info['icon-hl'], 'MiniIconsBlue')
+  eq(info['ext-hl'], 'MiniIconsGreen')
+  eq(info['file-hl'], 'Normal')
+  eq(calls[1].category, 'file')
+  eq(calls[1].name, '/tmp/nested/demo.lua')
+  eq(calls[2].category, 'extension')
+  eq(calls[2].name, 'lua')
+end
+
 T['source markers cover plain text file, file source, and lgrep source kinds'] = function()
   local text_sign = util['icon-sign']({ category = '', name = '', fallback = '󰈔', hl = 'MetaSourceFile' })
   local file_sign = util['icon-sign']({ category = 'directory', name = '.', fallback = '󰉋', hl = 'MiniIconsAzure' })

@@ -190,6 +190,23 @@
         refs (or meta.buf.source-refs [])]
     (and src-idx (. refs src-idx))))
 
+(fn M.clear-file-caches!
+  [router session]
+  "Drop shared and per-session file/view caches so the next refresh rebuilds
+   from disk. Expected output: nil."
+  (when router
+    (set router.project-file-cache {}))
+  (when session
+    (set session.preview-file-cache {})
+    (set session.info-file-head-cache {})
+    (set session.info-file-meta-cache {})
+    (set session.ts-expand-bufs {})
+    (set session.info-line-meta-range-key nil)
+    (set session.info-render-sig nil)
+    (when (and session.meta (= (type (. session.meta :_filter-cache)) "table"))
+      (set (. session.meta :_filter-cache) {})
+      (set (. session.meta :_filter-cache-line-count) (# (or (. session.meta.buf :content) []))))))
+
 (fn hidden-path?
   [path]
   (let [parts (vim.split path "/" {:plain true})]

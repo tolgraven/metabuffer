@@ -49,4 +49,57 @@ T['context-blocks returns line-scoped block for line mode'] = function()
   vim.fn.delete(path)
 end
 
+T['expanded-indices expands only visible source hits when requested'] = function()
+  local path = vim.fn.tempname() .. '.lua'
+  local lines = {
+    'ctx A1',
+    'alpha A',
+    'ctx A2',
+    'ctx B1',
+    'alpha B',
+    'ctx B2',
+  }
+  local refs = {}
+  vim.fn.writefile(lines, path)
+  for i, _ in ipairs(lines) do
+    refs[i] = {
+      path = path,
+      lnum = i,
+      kind = 'text',
+    }
+  end
+
+  local expanded = expand['expanded-indices']({}, { 2, 5 }, refs, {
+    mode = 'around',
+    ['around-lines'] = 1,
+    ['max-blocks'] = 10,
+    ['visible-source-indices'] = { 2 },
+    ['read-file-lines-cached'] = function(read_path)
+      eq(read_path, path)
+      return lines
+    end,
+  })
+
+  eq(expanded, { 1, 2, 3, 5 })
+
+  vim.fn.delete(path)
+end
+
+T['expanded-indices returns unchanged indices when expansion mode is none'] = function()
+  local refs = {
+    { path = 'a', lnum = 1, kind = 'text' },
+    { path = 'a', lnum = 2, kind = 'text' },
+    { path = 'a', lnum = 3, kind = 'text' },
+  }
+
+  local expanded = expand['expanded-indices']({}, { 3, 2, 3, 1 }, refs, {
+    mode = 'none',
+    ['read-file-lines-cached'] = function()
+      return {}
+    end,
+  })
+
+  eq(expanded, { 3, 2, 3, 1 })
+end
+
 return T

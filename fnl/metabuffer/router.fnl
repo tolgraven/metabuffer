@@ -560,6 +560,11 @@
   "Cycle info-window file-entry rendering mode."
   (router_actions_mod.toggle-info-file-entry-view! actions-deps prompt-buf))
 
+(fn M.refresh-files
+  [prompt-buf]
+  "Public API: M.refresh-files."
+  (router_actions_mod.refresh-files! actions-deps prompt-buf))
+
 (fn M.start
   [query mode _meta project-mode]
   "Create a Meta session and wire prompt/result/project orchestration.

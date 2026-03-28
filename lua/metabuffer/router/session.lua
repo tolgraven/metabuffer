@@ -657,6 +657,7 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
       return (existing or existing_visible_meta(existing))
     else
       if (existing and existing["ui-hidden"] and maybe_restore_hidden_ui_21 and existing.meta and existing.meta.buf and (clj.boolean(existing["project-mode"]) == clj.boolean(project_mode)) and (source_buf == existing.meta.buf.buffer)) then
+        router_util_mod["clear-file-caches!"](router, existing)
         maybe_restore_hidden_ui_21(existing, true)
         return existing.meta
       else

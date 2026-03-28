@@ -107,6 +107,10 @@
                (vim.api.nvim_buf_is_valid session.prompt-buf)
                (= (. active-by-prompt session.prompt-buf) session))
       (let [before session.meta.selected_index]
+        (when (and force-refresh
+                   session.meta
+                   (~= (or session.expansion-mode "none") "none"))
+          (pcall session.meta.on-update 0))
         (M.sync-selected-from-main-cursor! session)
         (when force-refresh
           (schedule-source-syntax-refresh! session))

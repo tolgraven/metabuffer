@@ -131,6 +131,10 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
   local update_context_window_21 = _let_20_["update-context-window!"]
   if (session and not session["ui-hidden"] and not session.closing and (not session["startup-initializing"] or session["project-mode"]) and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
     local before = session.meta.selected_index
+    if (force_refresh and session.meta and ((session["expansion-mode"] or "none") ~= "none")) then
+      pcall(session.meta["on-update"], 0)
+    else
+    end
     M["sync-selected-from-main-cursor!"](session)
     if force_refresh then
       schedule_source_syntax_refresh_21(session)
@@ -156,12 +160,12 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
   end
 end
 M["schedule-scroll-sync!"] = function(session, opts)
-  local _let_26_ = (opts or {})
-  local maybe_sync_from_main_21 = _let_26_["maybe-sync-from-main!"]
-  local scroll_sync_debounce_ms = _let_26_["scroll-sync-debounce-ms"]
+  local _let_27_ = (opts or {})
+  local maybe_sync_from_main_21 = _let_27_["maybe-sync-from-main!"]
+  local scroll_sync_debounce_ms = _let_27_["scroll-sync-debounce-ms"]
   if (session and not session["scroll-sync-pending"] and not session["scroll-animating?"] and not session["scroll-command-view"]) then
     session["scroll-sync-pending"] = true
-    local function _27_()
+    local function _28_()
       session["scroll-sync-pending"] = false
       if (not session["scroll-animating?"] and not session["scroll-command-view"]) then
         return maybe_sync_from_main_21(session, true)
@@ -169,7 +173,7 @@ M["schedule-scroll-sync!"] = function(session, opts)
         return nil
       end
     end
-    return vim.defer_fn(_27_, scroll_sync_debounce_ms)
+    return vim.defer_fn(_28_, scroll_sync_debounce_ms)
   else
     return nil
   end

@@ -72,12 +72,12 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 62 [x] the completion popup sometimes gets in the way of seeing the prompt cursorline, and sometimes doesn't close as it should.
 - 63 [x] the info window loading view is not updating quickly enough, often showing only something like (51/300) and then skipping straight to done. Make it run at at least 10 fps...
 - 64 [x] too much time is spent thinking -> run fennel-ls --lint -> thinking -> run compile -> thinking -> run test. These should all go sequentially (with abort on errors) in one call. Create a `make full` shortcut to do this, and note down to use it.
-- 65 [] file extensions are still not showing their color highlight as used to be the case. Neither are file glyphs colored.
+- 65 [x] file extensions are still not showing their color highlight as used to be the case. Neither are file glyphs colored.
 - 66 [x] `#file` mode broken if there is already other input before typing `#file`. Also we should simplify file search by using the format `#file:filter` (optionally quoted like `#f:"multiple words"`) for consistency and simplicity. This way we're never ambiguous.
-- 67 [] `#exp` should only run for hits in view, much too slow otherwise.
+- 67 [x] `#exp` should only run for hits in view, much too slow otherwise.
 - 68 [] `#ctx` / `#c` which acts similarly to `#exp` but: creates 3 splits, main hits in middle. Callers, globals etc referenced in a fn on the left, called fns on the right.
-- 69 [] redo info window loading view. Ingest visible stuff directly so there's no flashing, then use a winbar on the info window showing loading progress. If scrolling so fast we haven't loaded info window lines for a page, use breathing placeholders while loading, never show an empty screen in info.
+- 69 [x] redo info window loading view. Ingest visible stuff directly so there's no flashing, then use a winbar on the info window showing loading progress. If scrolling so fast we haven't loaded info window lines for a page, use breathing placeholders while loading, never show an empty screen in info.
 - 70 [] winbar for results view showing treesitter-derived info for the predominant category of selected line. For example, if on a fn signature it would show something like "fn abcd, 30 lines, called 27 places, makes 7 calls"
-- 71 [] popup help window still gets in the way of current prompt line, needs to be further up. And still isn't always being closed properly. And should get equivalent syntax highlighting as prompt buffer itself.
-- 72 [] info window still sometimes fails to update when ready, instead one needs to change selected line and it'll update correctly. Can get stuck on loading indicator, can get stuck empty, can get stuck showing wrong thing (after starting `#file` for example).
-- 73 [] meta doesn't update file cache even when closed and restarted (possibly due to session reusage?). Need a refresh keybind for now, and (later on) file watcher support.
+- 71 [x] popup help window still gets in the way of current prompt line, needs to be further up. And still isn't always being closed properly. And should get equivalent syntax highlighting as prompt buffer itself.
+- 72 [x] info window still sometimes fails to update when ready, instead one needs to change selected line and it'll update correctly. Can get stuck on loading indicator, can get stuck empty, can get stuck showing wrong thing (after starting `#file` for example).
+- 73 [x] meta doesn't update file cache even when closed and restarted (possibly due to session reusage?). Need a refresh keybind for now, and (later on) file watcher support.

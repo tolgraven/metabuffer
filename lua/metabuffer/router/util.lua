@@ -213,6 +213,29 @@ M["selected-ref"] = function(meta)
   local refs = (meta.buf["source-refs"] or {})
   return (src_idx and refs[src_idx])
 end
+M["clear-file-caches!"] = function(router, session)
+  if router then
+    router["project-file-cache"] = {}
+  else
+  end
+  if session then
+    session["preview-file-cache"] = {}
+    session["info-file-head-cache"] = {}
+    session["info-file-meta-cache"] = {}
+    session["ts-expand-bufs"] = {}
+    session["info-line-meta-range-key"] = nil
+    session["info-render-sig"] = nil
+    if (session.meta and (type(session.meta["_filter-cache"]) == "table")) then
+      session.meta["_filter-cache"] = {}
+      session.meta["_filter-cache-line-count"] = #(session.meta.buf.content or {})
+      return nil
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
 local function hidden_path_3f(path)
   local parts = vim.split(path, "/", {plain = true})
   local step
@@ -258,29 +281,29 @@ M["allow-project-path?"] = function(settings, rel, include_hidden, include_deps)
 end
 M["project-file-list"] = function(settings, root, include_hidden, include_ignored, include_deps)
   local cache
-  local and_31_ = vim.g.__meta_project_file_list_cache
-  if and_31_ then
-    local _32_
+  local and_34_ = vim.g.__meta_project_file_list_cache
+  if and_34_ then
+    local _35_
     if include_hidden then
-      _32_ = "1"
+      _35_ = "1"
     else
-      _32_ = "0"
+      _35_ = "0"
     end
-    local _34_
+    local _37_
     if include_ignored then
-      _34_ = "1"
+      _37_ = "1"
     else
-      _34_ = "0"
+      _37_ = "0"
     end
-    local _36_
+    local _39_
     if include_deps then
-      _36_ = "1"
+      _39_ = "1"
     else
-      _36_ = "0"
+      _39_ = "0"
     end
-    and_31_ = vim.g.__meta_project_file_list_cache[(root .. "|" .. _32_ .. "|" .. _34_ .. "|" .. _36_)]
+    and_34_ = vim.g.__meta_project_file_list_cache[(root .. "|" .. _35_ .. "|" .. _37_ .. "|" .. _39_)]
   end
-  cache = and_31_
+  cache = and_34_
   if cache then
     return cache
   else
@@ -318,10 +341,10 @@ M["project-file-list"] = function(settings, root, include_hidden, include_ignore
         _2 = nil
       end
       local rel = vim.fn.systemlist(cmd)
-      local function _41_(p)
+      local function _44_(p)
         return vim.fn.fnamemodify((root .. "/" .. p), ":p")
       end
-      return vim.tbl_map(_41_, (rel or {}))
+      return vim.tbl_map(_44_, (rel or {}))
     else
       return vim.fn.globpath(root, (settings["project-fallback-glob-pattern"] or "**/*"), true, true)
     end
@@ -460,13 +483,13 @@ M["binary-file?"] = function(settings, path)
         local head = read_file_head_bytes(path, 256)
         local bin_3f = binary_head_3f(head)
         local prev_lines = ((type(cached) == "table") and cached.lines)
-        local _57_
+        local _60_
         if (type(prev_lines) == "table") then
-          _57_ = prev_lines
+          _60_ = prev_lines
         else
-          _57_ = nil
+          _60_ = nil
         end
-        cache[path] = {size = size, mtime = mtime, binary = clj.boolean(bin_3f), lines = _57_}
+        cache[path] = {size = size, mtime = mtime, binary = clj.boolean(bin_3f), lines = _60_}
         return clj.boolean(bin_3f)
       end
     end
@@ -496,13 +519,13 @@ M["read-file-view-cached"] = function(settings, path, opts)
     linebreak_3f = clj.boolean(opts.linebreak)
   end
   local transform_sig
-  local _64_
+  local _67_
   if linebreak_3f then
-    _64_ = "1"
+    _67_ = "1"
   else
-    _64_ = "0"
+    _67_ = "0"
   end
-  transform_sig = (transform_mod.signature(transforms) .. "|w:" .. tostring((wrap_width or 0)) .. "|lb:" .. _64_)
+  transform_sig = (transform_mod.signature(transforms) .. "|w:" .. tostring((wrap_width or 0)) .. "|lb:" .. _67_)
   if (not path or (0 == vim.fn.filereadable(path))) then
     return nil
   else
@@ -542,17 +565,17 @@ M["read-file-view-cached"] = function(settings, path, opts)
             return found
           else
             local raw_lines
-            local or_68_ = cached.lines
-            if not or_68_ then
+            local or_71_ = cached.lines
+            if not or_71_ then
               local text = read_file_bytes(path)
               local ls = bytes__3elines(text)
               if (type(ls) == "table") then
                 cached["lines"] = ls
               else
               end
-              or_68_ = (ls or {})
+              or_71_ = (ls or {})
             end
-            raw_lines = or_68_
+            raw_lines = or_71_
             local ctx = {size = size, head = (cached.head or read_file_head_bytes(path, 4096)), transforms = transforms, binary = false}
             local view = transform_mod["apply-view"](path, raw_lines, ctx)
             views[transform_sig] = view

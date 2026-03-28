@@ -346,6 +346,18 @@ Key helper coverage:
 - Rapid matcher/case/syntax toggles while lazy project loading is active.
 - Confirms query and hit state settle after mode churn.
 
+### `tests/screen/project/test_screen_project_launch_info_update.lua`
+- Project startup keeps the info window populated immediately and exposes loading/range state via the info winbar.
+
+### `tests/screen/project/test_screen_project_info_file_mode_refresh.lua`
+- Switching into `#file:{filter}` refreshes info content immediately instead of leaving stale non-file hit metadata behind.
+
+### `tests/screen/project/test_screen_project_file_mode_filter.lua`
+- Inline `#file:{filter}` help popup stays above the prompt, reuses prompt-style flag/arg highlighting, and closes as soon as focus leaves the prompt.
+
+### `tests/screen/project/test_screen_project_refresh_files.lua`
+- Hidden project-session restore drops stale file caches before reopening, and `<LocalLeader>r` forces an on-demand disk refresh for already-open project sessions.
+
 ### `tests/screen/history/test_screen_history_browser.lua`
 - Saved prompt browser activation via `##`.
 - Keyboard navigation and accept flow restore selected saved query.

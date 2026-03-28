@@ -5,6 +5,9 @@ Mostly vibecoded enhanced port of my old Python remote plugin [metabuffer.nvim](
 
 ![metabuffer screenshot](./metabuffer.png)
 
+The right-side info window now keeps a live winbar with visible-range/loading progress, and uses non-empty loading placeholders instead of flashing blank pages during project bootstrap, fast scroll refreshes, or source-mode switches like `#file`.
+Directive help popups now anchor above the active prompt token, close as soon as the prompt loses focus, and mirror prompt token highlighting so inline forms like `#file:{filter}` stay visually split between flag and arg.
+
 ## User Guide
 
 ### Setup
@@ -78,6 +81,7 @@ require("metabuffer").setup({
       { { "n", "i" }, "<C-f>", "scroll-main", "page-down" },
       { { "n", "i" }, "<C-b>", "scroll-main", "page-up" },
       { { "n", "i" }, "<C-t>", "toggle-project-mode" },
+      { { "n", "i" }, "<LocalLeader>r", "refresh-files" },
     },
     main = {
       { "n", "!", "exclude-symbol-under-cursor" },
@@ -217,6 +221,7 @@ Commandline history shorthands for `[query]`:
 ### Runtime Toggles
 
 - `<C-b>` toggle repo-wide source mode (shows floating source info window on the right)
+- `<LocalLeader>r` clear cached project file views and rebuild the current source set from disk
 
 ### Prompt Keys
 

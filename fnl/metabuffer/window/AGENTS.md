@@ -35,10 +35,13 @@
 - Two render modes:
   1. **Hit info**: file path, line number, git blame, file size, permissions, etc.
   2. **Project loading**: streaming progress (`N/M files`), shown during bootstrap.
+- Info window winbar mirrors current visible range and loading progress.
+- Buffer shaping must never introduce empty visible rows; use loading placeholders while async detail fill catches up.
 - `build-info-lines` — Constructs the info line table from hit metadata.
 - `render-info-lines!` — Writes lines to info buffer with highlight namespaces.
 - `schedule-info-highlight-fill!` — Async highlight application to avoid blocking.
 - `project-loading-pending?` — Determines whether to show loading view vs hit info. Only true during actual bootstrap (`startup`, `bootstrap-pending`, `not bootstrapped`, `not stream-done`), NOT during lazy refresh operations.
+- Info rerender signatures should include the concrete ref slice and active source mode, not just index counts, so source switches like `#file` cannot leave stale content in place.
 - Accounts for host window winbar when positioning (row offset).
 
 ### `animation.fnl` (580 lines)

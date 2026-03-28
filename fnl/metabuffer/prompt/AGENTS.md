@@ -9,9 +9,11 @@
 - Registers all prompt-related autocmds: `TextChanged`, `TextChangedI`, `CursorMoved`, `CursorMovedI`, `InsertEnter`, `InsertLeave`, `WinEnter`, `WinLeave`, `BufEnter`, `BufLeave`, `BufWritePost`.
 - `on-prompt-changed` — Core event handler: reads prompt text, detects directive changes, dispatches to `router/query_flow.fnl`.
 - Directive UX: inline directive arguments should use `#flag:filter` form when available; prompt highlighting should clearly separate the directive prefix from the inline argument (`#file:` vs path filter text).
+- Directive help float should anchor from the active token/cursor screen position, stay above the current prompt line, close immediately on prompt focus loss, and reuse prompt-style token highlighting in its display row.
 - Mode switching: handles `switch-mode` for matcher/case/syntax cycling.
 - CMP integration: disables `nvim-cmp` in the prompt buffer.
 - Scroll sync: schedules preview/info updates after scroll events.
+- Default prompt/main keymaps include `<LocalLeader>r` for `refresh-files`, which clears cached file views and rebuilds the active source set from disk.
 - UI visibility management: hides/restores floating windows during mode transitions.
 - Digraph input: wires digraph key handler into prompt insert mode.
 - Animation-aware delays: adjusts prompt evaluation timing when animations are active.

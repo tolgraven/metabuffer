@@ -133,24 +133,47 @@ M["ext-from-path"] = function(path)
     return ""
   end
 end
-M["devicon-info"] = function(path, fallback_hl)
+M["file-icon-info"] = function(path, fallback_hl)
   local file = vim.fn.fnamemodify((path or ""), ":t")
+  local full_path = (path or "")
+  local ext = M["ext-from-path"](full_path)
   local mini = ensure_mini_icons()
   if (mini and (type(mini.get) == "function")) then
-    local ok_i,icon,icon_hl = pcall(mini.get, "file", file)
+    local function _12_()
+      if (full_path ~= "") then
+        return full_path
+      else
+        return file
+      end
+    end
+    local ok_i,icon,icon_hl = pcall(mini.get, "file", _12_())
+    local function _13_()
+      if (ext ~= "") then
+        return pcall(mini.get, "extension", ext)
+      else
+        return {false, nil, nil}
+      end
+    end
+    local ok_ext,_,ext_hl0 = _13_()
     local next_hl
     if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
       next_hl = icon_hl
     else
       next_hl = fallback_hl
     end
-    local _13_
-    if (ok_i and (type(icon) == "string") and (icon ~= "")) then
-      _13_ = icon
+    local ext_hl
+    if (ok_ext and (type(ext_hl0) == "string") and (ext_hl0 ~= "")) then
+      ext_hl = ext_hl0
     else
-      _13_ = ""
+      ext_hl = next_hl
     end
-    return {icon = _13_, ["icon-hl"] = next_hl, ["ext-hl"] = next_hl, ["file-hl"] = fallback_hl}
+    local _16_
+    if (ok_i and (type(icon) == "string") and (icon ~= "")) then
+      _16_ = icon
+    else
+      _16_ = ""
+    end
+    return {icon = _16_, ["icon-hl"] = next_hl, ["ext-hl"] = ext_hl, ["file-hl"] = fallback_hl}
   else
     return {icon = "", ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
   end
@@ -226,13 +249,13 @@ M["combine-signs"] = function(primary, secondary)
     table.insert(highs, {start = #left, ["end"] = (#left + #right), hl = right_hl})
   else
   end
-  local _26_
+  local _29_
   if (left ~= "") then
-    _26_ = left_hl
+    _29_ = left_hl
   else
-    _26_ = right_hl
+    _29_ = right_hl
   end
-  return {text = text, hl = _26_, highlights = highs}
+  return {text = text, hl = _29_, highlights = highs}
 end
 M["buf-lines"] = function(buf)
   return vim.api.nvim_buf_get_lines(buf, 0, -1, false)

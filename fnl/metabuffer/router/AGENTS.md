@@ -62,6 +62,7 @@ The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) 
 - `resolve-option` — Resolves a config key with fallback chain (session → config → default).
 - `transform-apply-ops!` — Applies transform operations to source lines.
 - `read-file-view-cached` — Reads file content with caching. Handles partial cache entries created by `binary-file?` — if a cached entry has no `:lines` field, the file is read on demand via `read-file-bytes` → `bytes->lines` rather than falling back to an empty array.
+- `clear-file-caches!` — Drops router-global and per-session file/view caches so hidden-session restore or manual refresh can rebuild from disk immediately.
 
 ## Inter-Module Communication
 

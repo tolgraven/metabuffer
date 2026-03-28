@@ -138,19 +138,27 @@
         (string.sub file (+ dot 1))
         "")))
 
-(fn M.devicon-info
+(fn M.file-icon-info
   [path fallback-hl]
-  "Public API: M.devicon-info."
+  "Return MiniIcons-derived file icon and highlight metadata."
   (let [file (vim.fn.fnamemodify (or path "") ":t")
+        full-path (or path "")
+        ext (M.ext-from-path full-path)
         mini (ensure-mini-icons)]
     (if (and mini (= (type (. mini :get)) "function"))
-        (let [[ok-i icon icon-hl] [(pcall (. mini :get) "file" file)]
+        (let [[ok-i icon icon-hl] [(pcall (. mini :get) "file" (if (~= full-path "") full-path file))]
+              [ok-ext _ ext-hl0] [(if (~= ext "")
+                                      (pcall (. mini :get) "extension" ext)
+                                      [false nil nil])]
               next-hl (if (and ok-i (= (type icon-hl) "string") (~= icon-hl ""))
                           icon-hl
-                          fallback-hl)]
+                          fallback-hl)
+              ext-hl (if (and ok-ext (= (type ext-hl0) "string") (~= ext-hl0 ""))
+                         ext-hl0
+                         next-hl)]
           {:icon (if (and ok-i (= (type icon) "string") (~= icon "")) icon "")
            :icon-hl next-hl
-           :ext-hl next-hl
+           :ext-hl ext-hl
            :file-hl fallback-hl})
         {:icon ""
          :icon-hl fallback-hl
