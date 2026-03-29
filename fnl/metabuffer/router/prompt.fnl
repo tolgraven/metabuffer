@@ -54,47 +54,77 @@
   []
   (/ (vim.loop.hrtime) 1000000))
 
+(fn session-index-count
+  [session]
+  (if (and session session.meta session.meta.buf session.meta.buf.indices)
+      (# session.meta.buf.indices)
+      0))
+
+(fn parsed-prompt-lines
+  [query-mod prompt-lines session]
+  (let [lines (prompt-lines session)
+        include-default-source? (and session (query-mod.truthy? session.default-include-lgrep))
+        parsed0 (if (or session.project-mode include-default-source?)
+                    (query-mod.parse-query-lines lines)
+                    {:lines lines :lgrep-lines []})]
+    (query-mod.apply-default-source parsed0 include-default-source?)))
+
+(fn short-query-extra-ms
+  [settings qlen]
+  (let [extra-ms (or settings.prompt-short-query-extra-ms [180 120 70])]
+    (if (<= qlen 1)
+        (or (. extra-ms 1) 180)
+        (if (<= qlen 2)
+            (or (. extra-ms 2) 120)
+            (if (<= qlen 3)
+                (or (. extra-ms 3) 70)
+                0)))))
+
+(fn size-scale-extra-ms
+  [settings n]
+  (let [thresholds (or settings.prompt-size-scale-thresholds [2000 10000 50000])
+        extra (or settings.prompt-size-scale-extra [0 2 6 10])]
+    (if (< n (or (. thresholds 1) 2000))
+        (or (. extra 1) 0)
+        (if (< n (or (. thresholds 2) 10000))
+            (or (. extra 2) 2)
+            (if (< n (or (. thresholds 3) 50000))
+                (or (. extra 3) 6)
+                (or (. extra 4) 10))))))
+
+(fn streaming-extra-ms
+  [session]
+  (if (and session session.project-mode (not session.lazy-stream-done))
+      2
+      0))
+
+(fn source-extra-ms
+  [settings parsed base-ms]
+  (let [source-ms (source-mod.query-source-debounce-ms settings parsed)]
+    (if (> source-ms 0)
+        (math.max 0 (- source-ms base-ms))
+        0)))
+
+(fn directive-extra-ms
+  [settings prompt-lines subtotal-ms]
+  (if (incomplete-directive-token? prompt-lines)
+      (math.max 0 (- (or settings.prompt-incomplete-directive-ms 1000)
+                     subtotal-ms))
+      0))
+
 (fn M.prompt-update-delay-ms
   [settings query-mod prompt-lines session]
   (let [base (math.max 0 settings.prompt-update-debounce-ms)
-        n (if (and session session.meta session.meta.buf session.meta.buf.indices)
-              (# session.meta.buf.indices)
-              0)
-        short-extra-ms (or settings.prompt-short-query-extra-ms [180 120 70])
-        size-thresholds (or settings.prompt-size-scale-thresholds [2000 10000 50000])
-        size-extra (or settings.prompt-size-scale-extra [0 2 6 10])
-        lines (prompt-lines session)
-        parsed0 (if (or session.project-mode
-                        (and session (query-mod.truthy? session.default-include-lgrep)))
-                    (query-mod.parse-query-lines lines)
-                    {:lines lines :lgrep-lines []})
-        parsed (query-mod.apply-default-source
-                 parsed0
-                 (and session (query-mod.truthy? session.default-include-lgrep)))
+        parsed (parsed-prompt-lines query-mod prompt-lines session)
+        n (session-index-count session)
         qlen (let [last-active (last-non-empty-trimmed (or (. parsed :lines) []))]
                (# (or last-active "")))
-        short-extra (if (<= qlen 1)
-                        (or (. short-extra-ms 1) 180)
-                        (if (<= qlen 2)
-                            (or (. short-extra-ms 2) 120)
-                            (if (<= qlen 3) (or (. short-extra-ms 3) 70) 0)))
-        scale (if (< n (or (. size-thresholds 1) 2000))
-                  (or (. size-extra 1) 0)
-                  (if (< n (or (. size-thresholds 2) 10000))
-                      (or (. size-extra 2) 2)
-                      (if (< n (or (. size-thresholds 3) 50000))
-                          (or (. size-extra 3) 6)
-                          (or (. size-extra 4) 10))))
-        extra (if (and session session.project-mode (not session.lazy-stream-done)) 2 0)
-        source-extra-ms (source-mod.query-source-debounce-ms settings parsed)
-        source-extra (if (> source-extra-ms 0)
-                         (math.max 0 (- source-extra-ms
-                                        (+ base short-extra scale extra)))
-                         0)
-        directive-extra (if (incomplete-directive-token? (prompt-lines session))
-                            (math.max 0 (- (or settings.prompt-incomplete-directive-ms 1000)
-                                           (+ base short-extra scale extra source-extra)))
-                            0)]
+        short-extra (short-query-extra-ms settings qlen)
+        scale (size-scale-extra-ms settings n)
+        extra (streaming-extra-ms session)
+        source-extra (source-extra-ms settings parsed (+ base short-extra scale extra))
+        directive-extra (directive-extra-ms settings (prompt-lines session)
+                                            (+ base short-extra scale extra source-extra))]
     (+ base short-extra scale extra source-extra directive-extra)))
 
 (fn M.prompt-has-active-query?
@@ -115,6 +145,22 @@
       (set session.prompt-update-timer nil)
       (set session.prompt-update-pending false))))
 
+(fn cancel-preview-update!
+  [session]
+  (when session.preview-update-timer
+    (let [timer session.preview-update-timer
+          stopf (. timer :stop)
+          closef (. timer :close)]
+      (when stopf (pcall stopf timer))
+      (when closef (pcall closef timer))
+      (set session.preview-update-timer nil)))
+  (set session.preview-update-pending false))
+
+(fn clear-syntax-refresh-state!
+  [session]
+  (set session.syntax-refresh-dirty false)
+  (set session.syntax-refresh-pending false))
+
 (fn M.begin-session-close!
   [session cancel-prompt-update!]
   "Cancel all queued prompt/preview/refresh async work for a session."
@@ -124,55 +170,84 @@
     (set session.prompt-update-dirty false)
     (cancel-prompt-update! session)
     (set session.preview-update-token (+ 1 (or session.preview-update-token 0)))
-    (when session.preview-update-timer
-      (let [timer session.preview-update-timer
-            stopf (. timer :stop)
-            closef (. timer :close)]
-        (when stopf (pcall stopf timer))
-        (when closef (pcall closef timer))
-        (set session.preview-update-timer nil)))
-    (set session.preview-update-pending false)
-    (set session.syntax-refresh-dirty false)
-    (set session.syntax-refresh-pending false)))
+    (cancel-preview-update! session)
+    (clear-syntax-refresh-state! session)))
+
+(fn begin-prompt-update-wait!
+  [session]
+  (set session.prompt-update-pending true)
+  (set session.prompt-update-token (+ 1 (or session.prompt-update-token 0)))
+  session.prompt-update-token)
+
+(fn prompt-update-still-valid?
+  [active-by-prompt session token]
+  (and session
+       session.prompt-buf
+       (= (. active-by-prompt session.prompt-buf) session)
+       (= token session.prompt-update-token)
+       session.prompt-update-dirty))
+
+(fn reschedule-prompt-update!
+  [ctx session now-ms]
+  (let [need-quiet (math.max 0 ((. ctx :prompt-update-delay-ms) session))
+        quiet-for (- now-ms (or session.prompt-last-change-ms 0))]
+    (when (< quiet-for need-quiet)
+      (M.schedule-prompt-update! ctx session (math.max 1 (- need-quiet quiet-for)))
+      true)))
+
+(fn apply-scheduled-prompt-update!
+  [ctx session now-ms]
+  (set session.prompt-update-dirty false)
+  (set session.prompt-last-apply-ms now-ms)
+  ((. ctx :apply-prompt-lines) session))
+
+(fn run-scheduled-prompt-update!
+  [ctx session timer token]
+  (let [active-by-prompt (. ctx :active-by-prompt)
+        cancel-prompt-update! (. ctx :cancel-prompt-update!)
+        now-ms (. ctx :now-ms)]
+    (when (and session.prompt-update-timer (= session.prompt-update-timer timer))
+      (cancel-prompt-update! session))
+    (when (prompt-update-still-valid? active-by-prompt session token)
+      (let [now (now-ms)]
+        (when-not (reschedule-prompt-update! ctx session now)
+          (apply-scheduled-prompt-update! ctx session now))))))
+
+(fn start-prompt-update-timer!
+  [ctx session timer token wait-ms]
+  ((. timer :start)
+   timer
+   (math.max 0 wait-ms)
+   0
+   (vim.schedule_wrap
+     (fn []
+       (run-scheduled-prompt-update! ctx session timer token)))))
 
 (fn M.schedule-prompt-update!
   [ctx session wait-ms]
   "Schedule trailing-edge prompt application and coalesce rapid edits."
-  (let [{: active-by-prompt
-         : apply-prompt-lines
-         : prompt-update-delay-ms
-         : now-ms
-         : cancel-prompt-update!}
-        ctx]
-    (when session
-      (cancel-prompt-update! session)
-      (set session.prompt-update-pending true)
-      (set session.prompt-update-token (+ 1 (or session.prompt-update-token 0)))
-      (let [token session.prompt-update-token
-            timer (vim.loop.new_timer)]
-        (set session.prompt-update-timer timer)
-        ((. timer :start)
-         timer
-         (math.max 0 wait-ms)
-         0
-         (vim.schedule_wrap
-           (fn []
-             (when (and session.prompt-update-timer (= session.prompt-update-timer timer))
-               (cancel-prompt-update! session))
-             (when (and session
-                        session.prompt-buf
-                        (= (. active-by-prompt session.prompt-buf) session)
-                        (= token session.prompt-update-token)
-                        session.prompt-update-dirty)
-               (let [now (now-ms)
-                     quiet-for (- now (or session.prompt-last-change-ms 0))
-                     need-quiet (math.max 0 (prompt-update-delay-ms session))]
-                 (if (< quiet-for need-quiet)
-                     (M.schedule-prompt-update! ctx session (math.max 1 (- need-quiet quiet-for)))
-                     (do
-                       (set session.prompt-update-dirty false)
-                       (set session.prompt-last-apply-ms now)
-                       (apply-prompt-lines session))))))))))))
+  (when session
+    ((. ctx :cancel-prompt-update!) session)
+    (let [token (begin-prompt-update-wait! session)
+          timer (vim.loop.new_timer)]
+      (set session.prompt-update-timer timer)
+      (start-prompt-update-timer! ctx session timer token wait-ms))))
+
+(fn prompt-session-ready?
+  [session]
+  (and session
+       session.prompt-buf
+       session.prompt-win
+       (vim.api.nvim_buf_is_valid session.prompt-buf)
+       (vim.api.nvim_win_is_valid session.prompt-win)))
+
+(fn prompt-cursor!
+  [session]
+  (vim.api.nvim_win_get_cursor session.prompt-win))
+
+(fn set-prompt-cursor!
+  [session row col]
+  (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col]))
 
 (fn session-by-prompt
   [active-by-prompt prompt-buf]
@@ -181,14 +256,10 @@
 (fn M.prompt-insert-at-cursor!
   [active-by-prompt prompt-buf text]
   (let [session (session-by-prompt active-by-prompt prompt-buf)]
-    (when (and session
-               session.prompt-buf
-               session.prompt-win
-               (vim.api.nvim_buf_is_valid session.prompt-buf)
-               (vim.api.nvim_win_is_valid session.prompt-win)
+    (when (and (prompt-session-ready? session)
                (= (type text) "string")
                (~= text ""))
-      (let [[row col] (vim.api.nvim_win_get_cursor session.prompt-win)
+      (let [[row col] (prompt-cursor! session)
             row0 (math.max 0 (- row 1))
             chunks (vim.split text "\n" {:plain true})
             last-line (. chunks (# chunks))
@@ -197,7 +268,7 @@
                          (+ col (# last-line))
                          (# last-line))]
         (vim.api.nvim_buf_set_text session.prompt-buf row0 col row0 col chunks)
-        (pcall vim.api.nvim_win_set_cursor session.prompt-win [next-row next-col])))))
+        (set-prompt-cursor! session next-row next-col)))))
 
 (fn prompt-row-col
   [session]
@@ -215,51 +286,42 @@
   (let [lines (vim.api.nvim_buf_get_lines session.prompt-buf row0 (+ row0 1) false)]
     (or (. lines 1) "")))
 
+(fn prompt-line-at-cursor
+  [session]
+  (let [{: row0} (prompt-row-col session)]
+    (prompt-line-text session row0)))
+
 (fn M.prompt-home!
   [active-by-prompt prompt-buf]
   (let [session (session-by-prompt active-by-prompt prompt-buf)]
-    (when (and session
-               session.prompt-win
-               (vim.api.nvim_win_is_valid session.prompt-win))
+    (when (prompt-session-ready? session)
       (let [{: row} (prompt-row-col session)]
-        (pcall vim.api.nvim_win_set_cursor session.prompt-win [row 0])))))
+        (set-prompt-cursor! session row 0)))))
 
 (fn M.prompt-end!
   [active-by-prompt prompt-buf]
   (let [session (session-by-prompt active-by-prompt prompt-buf)]
-    (when (and session
-               session.prompt-buf
-               session.prompt-win
-               (vim.api.nvim_buf_is_valid session.prompt-buf)
-               (vim.api.nvim_win_is_valid session.prompt-win))
+    (when (prompt-session-ready? session)
       (let [{: row : row0} (prompt-row-col session)
             line (prompt-line-text session row0)]
-        (pcall vim.api.nvim_win_set_cursor session.prompt-win [row (# line)])))))
+        (set-prompt-cursor! session row (# line))))))
 
 (fn M.prompt-kill-backward!
   [active-by-prompt prompt-buf]
   (let [session (session-by-prompt active-by-prompt prompt-buf)]
-    (when (and session
-               session.prompt-buf
-               session.prompt-win
-               (vim.api.nvim_buf_is_valid session.prompt-buf)
-               (vim.api.nvim_win_is_valid session.prompt-win))
+    (when (prompt-session-ready? session)
       (let [{: row : row0 : col} (prompt-row-col session)]
         (when (> col 0)
           (let [line (prompt-line-text session row0)
                 killed (string.sub line 1 col)]
             (set session.prompt-yank-register (or killed ""))
             (vim.api.nvim_buf_set_text session.prompt-buf row0 0 row0 col [""])
-            (pcall vim.api.nvim_win_set_cursor session.prompt-win [row 0])))))))
+            (set-prompt-cursor! session row 0)))))))
 
 (fn M.prompt-kill-forward!
   [active-by-prompt prompt-buf]
   (let [session (session-by-prompt active-by-prompt prompt-buf)]
-    (when (and session
-               session.prompt-buf
-               session.prompt-win
-               (vim.api.nvim_buf_is_valid session.prompt-buf)
-               (vim.api.nvim_win_is_valid session.prompt-win))
+    (when (prompt-session-ready? session)
       (let [{: row : row0 : col} (prompt-row-col session)
             line (prompt-line-text session row0)
             len (# line)]
@@ -267,7 +329,7 @@
           (let [killed (string.sub line (+ col 1))]
             (set session.prompt-yank-register (or killed ""))
             (vim.api.nvim_buf_set_text session.prompt-buf row0 col row0 len [""])
-            (pcall vim.api.nvim_win_set_cursor session.prompt-win [row col])))))))
+            (set-prompt-cursor! session row col)))))))
 
 (fn M.prompt-yank!
   [active-by-prompt prompt-buf]
@@ -354,14 +416,10 @@
 (fn M.negate-current-token!
   [active-by-prompt prompt-buf]
   (let [session (session-by-prompt active-by-prompt prompt-buf)]
-    (when (and session
-               session.prompt-buf
-               session.prompt-win
-               (vim.api.nvim_buf_is_valid session.prompt-buf)
-               (vim.api.nvim_win_is_valid session.prompt-win))
-      (let [[row col] (vim.api.nvim_win_get_cursor session.prompt-win)
+    (when (prompt-session-ready? session)
+      (let [[row col] (prompt-cursor! session)
             row0 (math.max 0 (- row 1))
-            line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf row0 (+ row0 1) false) 1) "")]
+            line (prompt-line-at-cursor session)]
         (when-let [span (find-token-span line col)]
           (let [s (. span :s)
                 e (. span :e)
@@ -371,8 +429,6 @@
                 delta (- (# next-token) (# token))
                 s0 (- s 1)]
             (vim.api.nvim_buf_set_text session.prompt-buf row0 s0 row0 e [next-token])
-            (pcall vim.api.nvim_win_set_cursor
-                   session.prompt-win
-                   [row (math.max 0 (+ col (if (>= col s0) delta 0)))])))))))
+            (set-prompt-cursor! session row (math.max 0 (+ col (if (>= col s0) delta 0))))))))))
 
 M
