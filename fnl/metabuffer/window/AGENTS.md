@@ -30,7 +30,7 @@
 - Line wrap persistence: wrap setting survives across sessions via state file.
 - Statusline: shows file path of previewed file, positioned under the preview column.
 
-### `info.fnl` (994 lines — largest window module)
+### `info.fnl` (~620 lines after extraction passes)
 - Floating info panel showing metadata for the selected hit.
 - Two render modes:
   1. **Hit info**: file path, line number, git blame, file size, permissions, etc.
@@ -40,9 +40,13 @@
 - `build-info-lines` — Constructs the info line table from hit metadata.
 - `render-info-lines!` — Writes lines to info buffer with highlight namespaces.
 - `schedule-info-highlight-fill!` — Async highlight application to avoid blocking.
-- `project-loading-pending?` — Determines whether to show loading view vs hit info. Only true during actual bootstrap (`startup`, `bootstrap-pending`, `not bootstrapped`, `not stream-done`), NOT during lazy refresh operations.
+- `project-loading-pending?` / project-specific info loading policy no longer belongs under `window/`; it lives in `project/info_view.fnl` and is consumed by `window/info.fnl`.
 - Info rerender signatures should include the concrete ref slice and active source mode, not just index counts, so source switches like `#file` cannot leave stale content in place.
 - Accounts for host window winbar when positioning (row offset).
+
+### `info_float.fnl`
+- Float lifecycle and geometry helpers extracted from `info.fnl`.
+- Keeps float/window concerns separate from project-mode content policy.
 
 ### `animation.fnl` (580 lines)
 - Dual-backend animation system:
@@ -86,7 +90,7 @@ router → info.update!
 router → context.update!  (if visible)
 router → statusline rebuild
 ```
-Window modules receive their update call and act independently. They never import or call each other.
+Window modules receive their update call and act independently. They never import or call each other directly.
 
 ### Option Stash/Restore
 `base.fnl` provides the stash/restore mechanism inherited by all window wrappers. On creation, window-local options are saved; on teardown they are restored to their pre-Meta values. This prevents Meta from permanently altering the user's window configuration.
@@ -96,7 +100,7 @@ Airline compatibility is now handled by `compat/airline.fnl` via the event bus. 
 
 ## Caution Points
 
-- `info.fnl` is the most complex module (994 lines). The loading-vs-hit-info mode switch is sensitive — `project-loading-pending?` must only return true during actual bootstrap, not during lazy refresh operations (this was a previous bug).
+- `info.fnl` is still one of the more complex modules. Keep float/layout concerns in `window/` and project-specific content/loading policy in `project/` rather than letting them drift back together.
 - Animation cancellation tokens are per-session. Failing to cancel on teardown causes timer leaks and ghost updates to destroyed buffers.
 - Preview horizontal scroll interacts with wrap setting. When wrap is on, horizontal scroll is disabled.
 - Float positioning must account for winbar (row offset +1 when winbar present).

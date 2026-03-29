@@ -23,6 +23,7 @@ local router_history_mod = require("metabuffer.router.history")
 local router_prompt_mod = require("metabuffer.router.prompt")
 local router_query_flow_mod = require("metabuffer.router.query_flow")
 local router_actions_mod = require("metabuffer.router.actions")
+local router_failsafe_mod = require("metabuffer.router.failsafe")
 local router_navigation_mod = require("metabuffer.router.navigation")
 local router_session_mod = require("metabuffer.router.session")
 local M = {}
@@ -442,117 +443,9 @@ M.entry_cursor_word = function(resume)
     return M.entry_start(w, false)
   end
 end
-local function clear_table_21(tbl)
-  for k, _ in pairs((tbl or {})) do
-    tbl[k] = nil
-  end
-  return nil
+do
+  local failsafe = router_failsafe_mod.new({router = M, ["base-buffer"] = base_buffer, ["router-actions-mod"] = router_actions_mod, ["actions-deps"] = actions_deps, ["info-window"] = info_window, ["preview-window"] = preview_window, ["context-window"] = context_window, ["history-api"] = history_api})
+  M["fail-safe-teardown!"] = failsafe["fail-safe-teardown!"]
+  failsafe["wrap-public-api-with-failsafe!"]()
 end
-local function add_session_21(seen, sessions, session)
-  if (session and (type(session) == "table") and not seen[session]) then
-    seen[session] = true
-    return table.insert(sessions, session)
-  else
-    return nil
-  end
-end
-local function maybe_close_win_21(win)
-  if (win and vim.api.nvim_win_is_valid(win)) then
-    return pcall(vim.api.nvim_win_close, win, true)
-  else
-    return nil
-  end
-end
-local function maybe_delete_buf_21(buf)
-  if (buf and vim.api.nvim_buf_is_valid(buf)) then
-    base_buffer["clear-modified!"](buf)
-    return pcall(vim.api.nvim_buf_delete, buf, {force = true})
-  else
-    return nil
-  end
-end
-M["fail-safe-teardown!"] = function(where, err)
-  M["_last-failsafe"] = {where = where, error = tostring(err)}
-  if not M["_teardown-in-progress"] then
-    M["_teardown-in-progress"] = true
-    do
-      local seen = {}
-      local sessions = {}
-      for _, session in pairs((M.instances or {})) do
-        add_session_21(seen, sessions, session)
-      end
-      for _, session in pairs((M["active-by-prompt"] or {})) do
-        add_session_21(seen, sessions, session)
-      end
-      for _, session in pairs((M["active-by-source"] or {})) do
-        add_session_21(seen, sessions, session)
-      end
-      for _, session in ipairs(sessions) do
-        pcall(router_actions_mod["remove-session!"], actions_deps, session)
-        maybe_close_win_21(session["prompt-win"])
-        maybe_delete_buf_21(session["prompt-buf"])
-        if (session.meta and session.meta.win) then
-          maybe_close_win_21(session.meta.win.window)
-        else
-        end
-        if (session.meta and session.meta.buf) then
-          maybe_delete_buf_21(session.meta.buf.buffer)
-        else
-        end
-        if ((type(info_window) == "table") and info_window["close-window!"]) then
-          pcall(info_window["close-window!"], session)
-        else
-        end
-        if ((type(preview_window) == "table") and preview_window["close-window!"]) then
-          pcall(preview_window["close-window!"], session)
-        else
-        end
-        if ((type(context_window) == "table") and context_window["close-window!"]) then
-          pcall(context_window["close-window!"], session)
-        else
-        end
-        if history_api then
-          pcall(history_api["close-history-browser!"], session)
-        else
-        end
-      end
-    end
-    clear_table_21(M.instances)
-    clear_table_21(M["active-by-prompt"])
-    clear_table_21(M["active-by-source"])
-    clear_table_21(M["launching-by-source"])
-    M["_teardown-in-progress"] = false
-  else
-  end
-  local function _63_()
-    return vim.notify(("metabuffer: torn down after error in " .. tostring(where) .. "\n" .. tostring(err)), vim.log.levels.ERROR)
-  end
-  return vim.schedule(_63_)
-end
-local function wrap_public_api_with_failsafe_21()
-  if not M["_failsafe-wrapped"] then
-    for k, v in pairs(M) do
-      if ((type(k) == "string") and (type(v) == "function") and not vim.startswith(k, "_") and (k ~= "configure") and (k ~= "fail-safe-teardown!")) then
-        local function _64_(...)
-          local res = {pcall(v, ...)}
-          local ok = res[1]
-          local result = res[2]
-          if ok then
-            return unpack(res, 2)
-          else
-            M["fail-safe-teardown!"](k, result)
-            return error(result)
-          end
-        end
-        M[k] = _64_
-      else
-      end
-    end
-    M["_failsafe-wrapped"] = true
-    return nil
-  else
-    return nil
-  end
-end
-wrap_public_api_with_failsafe_21()
 return M

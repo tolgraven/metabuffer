@@ -1057,6 +1057,98 @@ local function pending_structural_op(session, start, count, current_lines, fallb
     return nil
   end
 end
+local function append_replace_ops_21(ops, old_rows, new_lines, common, current_rows, state)
+  for i = 1, common do
+    local row = old_rows[i]
+    local text = (new_lines[i] or "")
+    if (valid_row_3f(row) and ((row.text or "") ~= text)) then
+      if special_projected_row_3f(row) then
+        local err = append_group_op_21(ops, row, current_rows, state["processed-special-groups"])
+        if err then
+          state["unsafe-structural?"] = true
+        else
+        end
+      else
+        append_op_21(ops, row.path, {kind = "replace", lnum = row.lnum, text = text, ["old-text"] = (row.text or ""), ["ref-kind"] = (row.kind or "")})
+      end
+    else
+    end
+  end
+  return nil
+end
+local function append_delete_ops_21(ops, old_rows, common, a_count, state)
+  if (a_count > common) then
+    for i = (common + 1), a_count do
+      local row = old_rows[i]
+      if (valid_row_3f(row) and not special_projected_row_3f(row)) then
+        append_op_21(ops, row.path, {kind = "delete", lnum = row.lnum, ["ref-kind"] = (row.kind or "")})
+      else
+        state["unsafe-structural?"] = true
+      end
+    end
+    return nil
+  else
+    return nil
+  end
+end
+local function insertion_op(session, current_rows, current_lines, b_start, common, b_count, old_rows)
+  return (structural_op_from_current_rows(current_rows, (b_start + common), (b_count - common)) or pending_structural_op(session, (b_start + common), (b_count - common), current_lines, ((old_rows[common] and old_rows[common].kind) or (old_rows[(common + 1)] and old_rows[(common + 1)].kind) or "")))
+end
+local function append_insert_ops_21(ops, insert_op, state)
+  if insert_op then
+    local _128_
+    if (insert_op.side == "before") then
+      _128_ = "insert-before"
+    else
+      _128_ = "insert-after"
+    end
+    return append_op_21(ops, insert_op.path, {kind = _128_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
+  else
+    state["unsafe-structural?"] = true
+    return nil
+  end
+end
+local function handle_modified_hunk_21(session, ops, current_rows, current_lines, state, h, baseline_rows)
+  local _let_131_ = hunk_indices(h)
+  local a_start = _let_131_[1]
+  local a_count = _let_131_[2]
+  local b_start = _let_131_[3]
+  local b_count = _let_131_[4]
+  local common = math.min(a_count, b_count)
+  local old_rows = slice_lines(baseline_rows, a_start, a_count)
+  local new_lines = slice_lines(current_lines, b_start, b_count)
+  append_replace_ops_21(ops, old_rows, new_lines, common, current_rows, state)
+  append_delete_ops_21(ops, old_rows, common, a_count, state)
+  if (b_count > a_count) then
+    return append_insert_ops_21(ops, insertion_op(session, current_rows, current_lines, b_start, common, b_count, old_rows), state)
+  else
+    return nil
+  end
+end
+local function handle_insert_only_hunk_21(session, ops, current_rows, current_lines, state, h)
+  local _let_133_ = hunk_indices(h)
+  local _ = _let_133_[1]
+  local _0 = _let_133_[2]
+  local b_start = _let_133_[3]
+  local b_count = _let_133_[4]
+  if (b_count > 0) then
+    return append_insert_ops_21(ops, (structural_op_from_current_rows(current_rows, b_start, b_count) or pending_structural_op(session, b_start, b_count, current_lines, "")), state)
+  else
+    return nil
+  end
+end
+local function apply_hunk_file_ops_21(session, ops, current_rows, current_lines, state, h, baseline_rows)
+  local _let_135_ = hunk_indices(h)
+  local _ = _let_135_[1]
+  local a_count = _let_135_[2]
+  local _0 = _let_135_[3]
+  local _1 = _let_135_[4]
+  if (a_count > 0) then
+    return handle_modified_hunk_21(session, ops, current_rows, current_lines, state, h, baseline_rows)
+  else
+    return handle_insert_only_hunk_21(session, ops, current_rows, current_lines, state, h)
+  end
+end
 local function collect_file_ops(session)
   local meta = session.meta
   local buf = meta.buf.buffer
@@ -1069,74 +1161,7 @@ local function collect_file_ops(session)
   local state = {["processed-special-groups"] = {}, ["unsafe-structural?"] = false}
   session["live-edit-rows"] = current_rows
   for _, h in ipairs(hunks) do
-    local _let_123_ = hunk_indices(h)
-    local a_start = _let_123_[1]
-    local a_count = _let_123_[2]
-    local b_start = _let_123_[3]
-    local b_count = _let_123_[4]
-    local common = math.min(a_count, b_count)
-    local old_rows = slice_lines(baseline_rows, a_start, a_count)
-    local new_lines = slice_lines(current_lines, b_start, b_count)
-    if (a_count > 0) then
-      for i = 1, common do
-        local row = old_rows[i]
-        local text = (new_lines[i] or "")
-        if (valid_row_3f(row) and ((row.text or "") ~= text)) then
-          if special_projected_row_3f(row) then
-            local err = append_group_op_21(ops, row, current_rows, state["processed-special-groups"])
-            if err then
-              state["unsafe-structural?"] = true
-            else
-            end
-          else
-            append_op_21(ops, row.path, {kind = "replace", lnum = row.lnum, text = text, ["old-text"] = (row.text or ""), ["ref-kind"] = (row.kind or "")})
-          end
-        else
-        end
-      end
-      if (a_count > b_count) then
-        for i = (common + 1), a_count do
-          local row = old_rows[i]
-          if (valid_row_3f(row) and not special_projected_row_3f(row)) then
-            append_op_21(ops, row.path, {kind = "delete", lnum = row.lnum, ["ref-kind"] = (row.kind or "")})
-          else
-            state["unsafe-structural?"] = true
-          end
-        end
-      else
-      end
-      if (b_count > a_count) then
-        local insert_op = (structural_op_from_current_rows(current_rows, (b_start + common), (b_count - common)) or pending_structural_op(session, (b_start + common), (b_count - common), current_lines, ((old_rows[common] and old_rows[common].kind) or (old_rows[(common + 1)] and old_rows[(common + 1)].kind) or "")))
-        if insert_op then
-          local _129_
-          if (insert_op.side == "before") then
-            _129_ = "insert-before"
-          else
-            _129_ = "insert-after"
-          end
-          append_op_21(ops, insert_op.path, {kind = _129_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
-        else
-          state["unsafe-structural?"] = true
-        end
-      else
-      end
-    else
-      if (b_count > 0) then
-        local insert_op = (structural_op_from_current_rows(current_rows, b_start, b_count) or pending_structural_op(session, b_start, b_count, current_lines, ""))
-        if insert_op then
-          local _133_
-          if (insert_op.side == "before") then
-            _133_ = "insert-before"
-          else
-            _133_ = "insert-after"
-          end
-          append_op_21(ops, insert_op.path, {kind = _133_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
-        else
-          state["unsafe-structural?"] = true
-        end
-      else
-      end
-    end
+    apply_hunk_file_ops_21(session, ops, current_rows, current_lines, state, h, baseline_rows)
   end
   return {ops = ops, ["current-lines"] = current_lines, ["current-rows"] = current_rows, ["unsafe-structural?"] = state["unsafe-structural?"]}
 end
@@ -1276,13 +1301,13 @@ M["write-results!"] = function(deps, prompt_buf)
       pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
       pcall(vim.api.nvim_buf_set_var, buf, "meta_manual_edit_active", false)
       events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = true, ["capture-sign-baseline?"] = not not sign_mod, ["refresh-signs?"] = not not sign_mod})
-      local _149_
+      local _148_
       if (result.changed > 0) then
-        _149_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+        _148_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
       else
-        _149_ = "metabuffer: no changes"
+        _148_ = "metabuffer: no changes"
       end
-      return vim.notify(_149_, vim.log.levels.INFO)
+      return vim.notify(_148_, vim.log.levels.INFO)
     end
   else
     return nil

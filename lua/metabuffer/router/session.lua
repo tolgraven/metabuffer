@@ -736,12 +736,12 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
     local start_transforms = _let_103_["start-transforms"]
     local source_buf = vim.api.nvim_get_current_buf()
     local existing = active_by_source[source_buf]
-    if (launching_by_source[source_buf] and existing and (clj.boolean(existing["project-mode"]) == clj.boolean(project_mode))) then
+    local already_launching_3f = (launching_by_source[source_buf] and existing and (clj.boolean(existing["project-mode"]) == clj.boolean(project_mode)))
+    local restored = (not already_launching_3f and restored_hidden_session(router, router_util_mod, maybe_restore_hidden_ui_21, source_buf, existing, project_mode))
+    if already_launching_3f then
       return (existing or existing_visible_meta(existing))
     else
-      local val_113_auto = restored_hidden_session(router, router_util_mod, maybe_restore_hidden_ui_21, source_buf, existing, project_mode)
-      if (nil ~= val_113_auto) then
-        local restored = val_113_auto
+      if restored then
         return restored
       else
         launching_by_source[source_buf] = true
