@@ -10,7 +10,7 @@
 (local base-window-mod (require :metabuffer.window.base))
 (local file-info (require :metabuffer.source.file_info))
 (local events (require :metabuffer.events))
-(local info-window-mod (require :metabuffer.window.info_window))
+(local info-float-mod (require :metabuffer.window.info_float))
 (local apply-metabuffer-window-highlights! (. base-window-mod :apply-metabuffer-window-highlights!))
 
 (local info-content-ns (vim.api.nvim_create_namespace "MetaInfoWindow"))
@@ -572,7 +572,7 @@
                                 (not bootstrapped)
                                 (not stream-done)))]
            pending)))
-  (let [info-window (info-window-mod.new
+  (let [info-float (info-float-mod.new
                       {:floating-window-mod floating_window_mod
                        :info-min-width info_min_width
                        :info-height info_height
@@ -590,11 +590,11 @@
                        :info-buffer-mod info-buffer-mod})]
     (set ensure_info_window
          (fn [session]
-           ((. info-window :ensure-window!) session update!)))
-    (set settle-info-window! (. info-window :settle-window!))
-    (set resize-info-window! (. info-window :resize-window!))
-    (set refresh-info-statusline! (. info-window :refresh-statusline!))
-    (set close-info-window! (. info-window :close-window!)))
+           ((. info-float :ensure-window!) session update!)))
+    (set settle-info-window! (. info-float :settle-window!))
+    (set resize-info-window! (. info-float :resize-window!))
+    (set refresh-info-statusline! (. info-float :refresh-statusline!))
+    (set close-info-window! (. info-float :close-window!)))
 
   (fn render-project-loading!
     [session]

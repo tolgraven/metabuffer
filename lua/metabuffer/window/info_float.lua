@@ -1,4 +1,4 @@
--- [nfnl] fnl/metabuffer/window/info_window.fnl
+-- [nfnl] fnl/metabuffer/window/info_float.fnl
 local M = {}
 M.new = function(opts)
   local floating_window_mod = opts["floating-window-mod"]

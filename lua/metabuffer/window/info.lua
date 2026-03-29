@@ -10,7 +10,7 @@ local util = require("metabuffer.util")
 local base_window_mod = require("metabuffer.window.base")
 local file_info = require("metabuffer.source.file_info")
 local events = require("metabuffer.events")
-local info_window_mod = require("metabuffer.window.info_window")
+local info_float_mod = require("metabuffer.window.info_float")
 local apply_metabuffer_window_highlights_21 = base_window_mod["apply-metabuffer-window-highlights!"]
 local info_content_ns = vim.api.nvim_create_namespace("MetaInfoWindow")
 local info_selection_ns = vim.api.nvim_create_namespace("MetaInfoSelection")
@@ -678,19 +678,19 @@ M.new = function(opts)
   end
   project_loading_pending_3f = _75_
   do
-    local info_window
+    local info_float
     local function _76_(session)
       return project_loading_pending_3f(session)
     end
-    info_window = info_window_mod.new({["floating-window-mod"] = floating_window_mod, ["info-min-width"] = info_min_width, ["info-height"] = info_height, ["animation-mod"] = animation_mod, ["animate-enter?"] = animate_enter_3f, ["info-fade-ms"] = info_fade_ms, ["valid-info-win?"] = valid_info_win_3f, ["session-host-win"] = session_host_win, ["effective-info-height"] = effective_info_height, ["info-winbar-active?"] = info_winbar_active_3f, ["project-loading-pending?"] = _76_, events = events, ["apply-metabuffer-window-highlights!"] = apply_metabuffer_window_highlights_21, ["info-buffer-mod"] = info_buffer_mod})
+    info_float = info_float_mod.new({["floating-window-mod"] = floating_window_mod, ["info-min-width"] = info_min_width, ["info-height"] = info_height, ["animation-mod"] = animation_mod, ["animate-enter?"] = animate_enter_3f, ["info-fade-ms"] = info_fade_ms, ["valid-info-win?"] = valid_info_win_3f, ["session-host-win"] = session_host_win, ["effective-info-height"] = effective_info_height, ["info-winbar-active?"] = info_winbar_active_3f, ["project-loading-pending?"] = _76_, events = events, ["apply-metabuffer-window-highlights!"] = apply_metabuffer_window_highlights_21, ["info-buffer-mod"] = info_buffer_mod})
     local function _77_(session)
-      return info_window["ensure-window!"](session, update_21)
+      return info_float["ensure-window!"](session, update_21)
     end
     ensure_info_window = _77_
-    settle_info_window_21 = info_window["settle-window!"]
-    resize_info_window_21 = info_window["resize-window!"]
-    refresh_info_statusline_21 = info_window["refresh-statusline!"]
-    close_info_window_21 = info_window["close-window!"]
+    settle_info_window_21 = info_float["settle-window!"]
+    resize_info_window_21 = info_float["resize-window!"]
+    refresh_info_statusline_21 = info_float["refresh-statusline!"]
+    close_info_window_21 = info_float["close-window!"]
   end
   local function render_project_loading_21(session)
     local lines = loading_skeleton_lines(info_height(session))

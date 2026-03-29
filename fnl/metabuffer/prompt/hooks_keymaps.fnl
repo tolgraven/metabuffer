@@ -8,82 +8,37 @@
          : schedule-when-valid : switch-mode : sign-mod} opts]
     (fn resolve-map-action
       [router session action arg]
-      (if
-        (= action "accept")
-        (fn [] (router.accept session.prompt-buf))
-        (= action "enter-edit-mode")
-        (fn [] (router.enter-edit-mode session.prompt-buf))
-        (= action "cancel")
-        (fn [] (router.cancel session.prompt-buf))
-        (= action "move-selection")
-        (fn [] (router.move-selection session.prompt-buf arg))
-        (= action "history-or-move")
-        (fn [] (router.history-or-move session.prompt-buf arg))
-        (= action "prompt-home")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.prompt-home session.prompt-buf))))
-        (= action "prompt-end")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.prompt-end session.prompt-buf))))
-        (= action "prompt-kill-backward")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.prompt-kill-backward session.prompt-buf))))
-        (= action "prompt-kill-forward")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.prompt-kill-forward session.prompt-buf))))
-        (= action "prompt-yank")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.prompt-yank session.prompt-buf))))
-        (= action "prompt-newline")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.prompt-newline session.prompt-buf))))
-        (= action "insert-last-prompt")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.insert-last-prompt session.prompt-buf))))
-        (= action "insert-last-token")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.insert-last-token session.prompt-buf))))
-        (= action "insert-last-tail")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.insert-last-tail session.prompt-buf))))
-        (= action "toggle-prompt-results-focus")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.toggle-prompt-results-focus session.prompt-buf))))
-        (= action "negate-current-token")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.negate-current-token session.prompt-buf))))
-        (= action "history-searchback")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.open-history-searchback session.prompt-buf))))
-        (= action "merge-history")
-        (fn [] (schedule-when-valid session
-                 (fn []
-                   (router.merge-history-cache session.prompt-buf))))
-        (= action "switch-mode")
-        (fn [] (switch-mode session arg))
-        (= action "toggle-scan-option")
-        (fn [] (router.toggle-scan-option session.prompt-buf arg))
-        (= action "scroll-main")
-        (fn [] (router.scroll-main session.prompt-buf arg))
-        (= action "toggle-project-mode")
-        (fn [] (router.toggle-project-mode session.prompt-buf))
-        (= action "toggle-info-file-entry-view")
-        (fn [] (router.toggle-info-file-entry-view session.prompt-buf))
-        (= action "refresh-files")
-        (fn [] (router.refresh-files session.prompt-buf))
-        nil))
+      (let [defer-router (fn [method]
+                           (fn []
+                             (schedule-when-valid session
+                               (fn []
+                                 (method router session.prompt-buf)))))
+            dispatch
+            {:accept (fn [] (router.accept session.prompt-buf))
+             :enter-edit-mode (fn [] (router.enter-edit-mode session.prompt-buf))
+             :cancel (fn [] (router.cancel session.prompt-buf))
+             :move-selection (fn [] (router.move-selection session.prompt-buf arg))
+             :history-or-move (fn [] (router.history-or-move session.prompt-buf arg))
+             :prompt-home (defer-router (. router :prompt-home))
+             :prompt-end (defer-router (. router :prompt-end))
+             :prompt-kill-backward (defer-router (. router :prompt-kill-backward))
+             :prompt-kill-forward (defer-router (. router :prompt-kill-forward))
+             :prompt-yank (defer-router (. router :prompt-yank))
+             :prompt-newline (defer-router (. router :prompt-newline))
+             :insert-last-prompt (defer-router (. router :insert-last-prompt))
+             :insert-last-token (defer-router (. router :insert-last-token))
+             :insert-last-tail (defer-router (. router :insert-last-tail))
+             :toggle-prompt-results-focus (defer-router (. router :toggle-prompt-results-focus))
+             :negate-current-token (defer-router (. router :negate-current-token))
+             :history-searchback (defer-router (. router :open-history-searchback))
+             :merge-history (defer-router (. router :merge-history-cache))
+             :switch-mode (fn [] (switch-mode session arg))
+             :toggle-scan-option (fn [] (router.toggle-scan-option session.prompt-buf arg))
+             :scroll-main (fn [] (router.scroll-main session.prompt-buf arg))
+             :toggle-project-mode (fn [] (router.toggle-project-mode session.prompt-buf))
+             :toggle-info-file-entry-view (fn [] (router.toggle-info-file-entry-view session.prompt-buf))
+             :refresh-files (fn [] (router.refresh-files session.prompt-buf))}]
+        (. dispatch action)))
 
     (fn apply-keymaps
       [router session]
@@ -121,28 +76,18 @@
 
     (fn resolve-main-map-action
       [router session action arg]
-      (if
-        (= action "cancel")
-        (fn [] (router.cancel session.prompt-buf))
-        (= action "accept-main")
-        (fn [] (router.accept-main session.prompt-buf))
-        (= action "enter-edit-mode")
-        (fn [] (router.enter-edit-mode session.prompt-buf))
-        (= action "exclude-symbol-under-cursor")
-        (fn [] (router.exclude-symbol-under-cursor session.prompt-buf))
-        (= action "insert-symbol-under-cursor")
-        (fn [] (router.insert-symbol-under-cursor session.prompt-buf))
-        (= action "insert-symbol-under-cursor-newline")
-        (fn [] (router.insert-symbol-under-cursor-newline session.prompt-buf))
-        (= action "toggle-prompt-results-focus")
-        (fn [] (router.toggle-prompt-results-focus session.prompt-buf))
-        (= action "scroll-main")
-        (fn [] (router.scroll-main session.prompt-buf arg))
-        (= action "toggle-info-file-entry-view")
-        (fn [] (router.toggle-info-file-entry-view session.prompt-buf))
-        (= action "refresh-files")
-        (fn [] (router.refresh-files session.prompt-buf))
-        nil))
+      (let [dispatch
+            {:cancel (fn [] (router.cancel session.prompt-buf))
+             :accept-main (fn [] (router.accept-main session.prompt-buf))
+             :enter-edit-mode (fn [] (router.enter-edit-mode session.prompt-buf))
+             :exclude-symbol-under-cursor (fn [] (router.exclude-symbol-under-cursor session.prompt-buf))
+             :insert-symbol-under-cursor (fn [] (router.insert-symbol-under-cursor session.prompt-buf))
+             :insert-symbol-under-cursor-newline (fn [] (router.insert-symbol-under-cursor-newline session.prompt-buf))
+             :toggle-prompt-results-focus (fn [] (router.toggle-prompt-results-focus session.prompt-buf))
+             :scroll-main (fn [] (router.scroll-main session.prompt-buf arg))
+             :toggle-info-file-entry-view (fn [] (router.toggle-info-file-entry-view session.prompt-buf))
+             :refresh-files (fn [] (router.refresh-files session.prompt-buf))}]
+        (. dispatch action)))
 
     (fn apply-main-keymaps
       [router session]
