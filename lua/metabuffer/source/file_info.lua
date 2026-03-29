@@ -217,84 +217,105 @@ local function cached_file_status(session, path)
     return nil
   end
 end
-M["ensure-file-status-async!"] = function(session, path, on_ready)
-  if (session and path and (1 == vim.fn.filereadable(path))) then
-    local mtime = vim.fn.getftime(path)
-    local cache = (session["info-file-status-cache"] or {})
-    local found = cache[path]
-    local pending = (session["info-file-status-pending"] or {})
-    local key = (path .. ":" .. tostring(mtime))
-    if ((type(found) == "table") and (found.mtime == mtime) and (type(found.status) == "string")) then
-      do local _ = found.status end
+local function file_status_cache_hit(session, path, mtime)
+  local cache = (session["info-file-status-cache"] or {})
+  local found = cache[path]
+  return ((type(found) == "table") and (found.mtime == mtime) and (type(found.status) == "string") and found.status)
+end
+local function pending_file_status_key(path, mtime)
+  return (path .. ":" .. tostring(mtime))
+end
+local function mark_file_status_pending_21(session, key)
+  local pending = (session["info-file-status-pending"] or {})
+  if not pending[key] then
+    pending[key] = true
+    session["info-file-status-pending"] = pending
+    return true
+  else
+    return nil
+  end
+end
+local function clear_file_status_pending_21(session, key)
+  local pending = (session["info-file-status-pending"] or {})
+  pending[key] = nil
+  session["info-file-status-pending"] = pending
+  return nil
+end
+local function cache_file_status_21(session, path, mtime, status)
+  local cache = (session["info-file-status-cache"] or {})
+  cache[path] = {mtime = mtime, status = status}
+  session["info-file-status-cache"] = cache
+  return status
+end
+local function git_status_line__3estatus(line)
+  if ((line or "") == "") then
+  else
+    if vim.startswith(line, "??") then
     else
-      if not pending[key] then
-        pending[key] = true
-        session["info-file-status-pending"] = pending
-        local function _27_(obj)
-          local function _28_()
-            do
-              local pending1 = (session["info-file-status-pending"] or {})
-              pending1[key] = nil
-              session["info-file-status-pending"] = pending1
-            end
-            local line
-            if (obj.code == 0) then
-              line = (vim.split((obj.stdout or ""), "\n", {plain = true})[1] or "")
-            else
-              line = ""
-            end
-            local status
-            if (line == "") then
-              status = "clean"
-            else
-              if vim.startswith(line, "??") then
-                status = "untracked"
-              else
-                local x = string.sub(line, 1, 1)
-                local y = string.sub(line, 2, 2)
-                local staged_3f = (x ~= " ")
-                local dirty_3f = (y ~= " ")
-                if (staged_3f and dirty_3f) then
-                  status = "staged+dirty"
-                else
-                  if staged_3f then
-                    status = "staged"
-                  else
-                    if dirty_3f then
-                      status = "dirty"
-                    else
-                      status = "changed"
-                    end
-                  end
-                end
-              end
-            end
-            local cache1 = (session["info-file-status-cache"] or {})
-            cache1[path] = {mtime = mtime, status = status}
-            session["info-file-status-cache"] = cache1
-            if on_ready then
-              return on_ready()
-            else
-              return nil
-            end
-          end
-          return vim.schedule(_28_)
-        end
-        vim.system({"git", "-C", vim.fn.getcwd(), "status", "--porcelain", "--", vim.fn.fnamemodify(path, ":.")}, {}, _27_)
+      local x = string.sub(line, 1, 1)
+      local y = string.sub(line, 2, 2)
+      local staged_3f = (x ~= " ")
+      local dirty_3f = (y ~= " ")
+      if (staged_3f and dirty_3f) then
       else
+        if staged_3f then
+        else
+          if dirty_3f then
+          else
+          end
+        end
       end
     end
-  else
   end
-  M["line-meta-data"] = function(session0, path0, lnum)
-    local cache = (session0["info-line-meta-cache"] or {})
-    local key = (path0 .. ":" .. tostring(lnum))
-    local mtime = vim.fn.getftime(path0)
+  local function schedule_file_status_fetch_21(session, path, mtime, key, on_ready)
+    local function _33_(obj)
+      local function _34_()
+        clear_file_status_pending_21(session, key)
+        local line0
+        if (obj.code == 0) then
+          line0 = (vim.split((obj.stdout or ""), "\n", {plain = true})[1] or "")
+        else
+          line0 = ""
+        end
+        local status = git_status_line__3estatus(line0)
+        cache_file_status_21(session, path, mtime, status)
+        if on_ready then
+          return on_ready()
+        else
+          return nil
+        end
+      end
+      return vim.schedule(_34_)
+    end
+    return vim.system({"git", "-C", vim.fn.getcwd(), "status", "--porcelain", "--", vim.fn.fnamemodify(path, ":.")}, {}, _33_)
+  end
+  M["ensure-file-status-async!"] = function(session, path, on_ready)
+    if (session and path and (1 == vim.fn.filereadable(path))) then
+      local mtime = vim.fn.getftime(path)
+      local key = pending_file_status_key(path, mtime)
+      local cached = file_status_cache_hit(session, path, mtime)
+      if cached then
+        return cached
+      else
+        if mark_file_status_pending_21(session, key) then
+          return schedule_file_status_fetch_21(session, path, mtime, key, on_ready)
+        else
+          return nil
+        end
+      end
+    else
+      return nil
+    end
+  end
+  M["line-meta-data"] = function(session, path, lnum)
+    local cache = (session["info-line-meta-cache"] or {})
+    local key = (path .. ":" .. tostring(lnum))
+    local mtime = vim.fn.getftime(path)
     local found = cache[key]
     if ((type(found) == "table") and (found.mtime == mtime) and (found.lnum == lnum) and (type(found.text) == "string") and (type(found.status) == "string")) then
       return found
     else
-      local blame = git_line_blame_info(path0, lnum)
+      local blame = git_line_blame_info(path, lnum)
       local author_time = (blame["author-time"] or 0)
       local author
       do
@@ -306,20 +327,20 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
         end
       end
       local meta
-      local _40_
+      local _41_
       if (author_time > 0) then
-        _40_ = vim.fn.strftime("%y%m%d", author_time)
+        _41_ = vim.fn.strftime("%y%m%d", author_time)
       else
-        _40_ = "000000"
+        _41_ = "000000"
       end
-      meta = {mtime = mtime, lnum = lnum, ["mtime-text"] = _40_, status = git_file_status(path0), age = compact_relative_age_from_epoch(author_time), author = author}
+      meta = {mtime = mtime, lnum = lnum, ["mtime-text"] = _41_, status = git_file_status(path), age = compact_relative_age_from_epoch(author_time), author = author}
       local text = file_meta_line(meta)
       cache[key] = vim.tbl_extend("force", meta, {text = text})
-      session0["info-line-meta-cache"] = cache
+      session["info-line-meta-cache"] = cache
       return cache[key]
     end
   end
-  local function line_meta_from_blame(session0, path0, lnum, mtime, blame)
+  local function line_meta_from_blame(session, path, lnum, mtime, blame)
     local author_time = (blame["author-time"] or 0)
     local author
     do
@@ -331,26 +352,26 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
       end
     end
     local meta
-    local _44_
+    local _45_
     if (author_time > 0) then
-      _44_ = vim.fn.strftime("%y%m%d", author_time)
+      _45_ = vim.fn.strftime("%y%m%d", author_time)
     else
-      _44_ = "000000"
+      _45_ = "000000"
     end
-    meta = {mtime = mtime, lnum = lnum, ["mtime-text"] = _44_, status = (cached_file_status(session0, path0) or "clean"), age = compact_relative_age_from_epoch(author_time), author = author}
+    meta = {mtime = mtime, lnum = lnum, ["mtime-text"] = _45_, status = (cached_file_status(session, path) or "clean"), age = compact_relative_age_from_epoch(author_time), author = author}
     local text = file_meta_line(meta)
     return vim.tbl_extend("force", meta, {text = text})
   end
-  local function _46_(path0, lnum)
-    return (path0 .. ":" .. tostring(lnum))
+  local function _47_(path, lnum)
+    return (path .. ":" .. tostring(lnum))
   end
-  line_meta_key = _46_
-  local function _47_(cache, path0, lnum, mtime)
-    local found = cache[line_meta_key(path0, lnum)]
+  line_meta_key = _47_
+  local function _48_(cache, path, lnum, mtime)
+    local found = cache[line_meta_key(path, lnum)]
     return ((type(found) == "table") and (found.mtime == mtime) and (found.lnum == lnum))
   end
-  line_meta_cache_hit_3f = _47_
-  local function _48_(lnums)
+  line_meta_cache_hit_3f = _48_
+  local function _49_(lnums)
     local vals = {}
     for _, lnum in ipairs((lnums or {})) do
       if ((type(lnum) == "number") and (lnum > 0)) then
@@ -360,38 +381,38 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
     end
     return vals
   end
-  normalized_line_numbers = _48_
-  local function _50_(cache, path0, lnums, mtime)
+  normalized_line_numbers = _49_
+  local function _51_(cache, path, lnums, mtime)
     local missing = {}
     for _, lnum in ipairs(lnums) do
-      if not line_meta_cache_hit_3f(cache, path0, lnum, mtime) then
+      if not line_meta_cache_hit_3f(cache, path, lnum, mtime) then
         table.insert(missing, lnum)
       else
       end
     end
     return missing
   end
-  missing_line_numbers = _50_
-  local function _52_(session0, key)
-    local pending = (session0["info-line-meta-pending"] or {})
+  missing_line_numbers = _51_
+  local function _53_(session, key)
+    local pending = (session["info-line-meta-pending"] or {})
     pending[key] = nil
-    session0["info-line-meta-pending"] = pending
+    session["info-line-meta-pending"] = pending
     return nil
   end
-  clear_pending_line_meta = _52_
-  local function _53_(stdout)
+  clear_pending_line_meta = _53_
+  local function _54_(stdout)
     local rows = {}
     local state = {author = "", ["author-time"] = 0}
-    for _, line in ipairs(vim.split((stdout or ""), "\n", {plain = true})) do
-      if vim.startswith(line, "author ") then
-        state["author"] = string.sub(line, 8)
+    for _, line0 in ipairs(vim.split((stdout or ""), "\n", {plain = true})) do
+      if vim.startswith(line0, "author ") then
+        state["author"] = string.sub(line0, 8)
       else
       end
-      if vim.startswith(line, "author-time ") then
-        state["author-time"] = (tonumber(string.sub(line, 13)) or 0)
+      if vim.startswith(line0, "author-time ") then
+        state["author-time"] = (tonumber(string.sub(line0, 13)) or 0)
       else
       end
-      if vim.startswith(line, "\t") then
+      if vim.startswith(line0, "\t") then
         table.insert(rows, {author = state.author, ["author-time"] = state["author-time"]})
         state["author"] = ""
         state["author-time"] = 0
@@ -400,46 +421,46 @@ M["ensure-file-status-async!"] = function(session, path, on_ready)
     end
     return rows
   end
-  parse_range_blame_stdout = _53_
-  M["ensure-line-meta-range-async!"] = function(session0, path0, lnums, on_ready0)
+  parse_range_blame_stdout = _54_
+  M["ensure-line-meta-range-async!"] = function(session, path, lnums, on_ready)
     local vals = normalized_line_numbers(lnums)
-    if (session0 and (1 == vim.fn.filereadable(path0)) and (#vals > 0)) then
-      local cache = (session0["info-line-meta-cache"] or {})
-      local mtime = vim.fn.getftime(path0)
-      local rel = vim.fn.fnamemodify(path0, ":.")
-      local missing = missing_line_numbers(cache, path0, vals, mtime)
+    if (session and (1 == vim.fn.filereadable(path)) and (#vals > 0)) then
+      local cache = (session["info-line-meta-cache"] or {})
+      local mtime = vim.fn.getftime(path)
+      local rel = vim.fn.fnamemodify(path, ":.")
+      local missing = missing_line_numbers(cache, path, vals, mtime)
       if (#missing > 0) then
         local start_lnum = missing[1]
         local stop_lnum = missing[#missing]
-        local key = (path0 .. ":" .. tostring(start_lnum) .. ":" .. tostring(stop_lnum) .. ":" .. tostring(mtime))
-        local pending = (session0["info-line-meta-pending"] or {})
+        local key = (path .. ":" .. tostring(start_lnum) .. ":" .. tostring(stop_lnum) .. ":" .. tostring(mtime))
+        local pending = (session["info-line-meta-pending"] or {})
         if not pending[key] then
           pending[key] = true
-          session0["info-line-meta-pending"] = pending
-          local function _57_(obj)
-            local function _58_()
-              clear_pending_line_meta(session0, key)
-              if ((obj.code == 0) and (1 == vim.fn.filereadable(path0))) then
+          session["info-line-meta-pending"] = pending
+          local function _58_(obj)
+            local function _59_()
+              clear_pending_line_meta(session, key)
+              if ((obj.code == 0) and (1 == vim.fn.filereadable(path))) then
                 local rows = parse_range_blame_stdout(obj.stdout)
-                local cache1 = (session0["info-line-meta-cache"] or {})
+                local cache1 = (session["info-line-meta-cache"] or {})
                 for i = 1, math.min(#missing, #rows) do
                   local lnum = missing[i]
                   local blame = rows[i]
-                  local meta = line_meta_from_blame(session0, path0, lnum, mtime, blame)
-                  cache1[line_meta_key(path0, lnum)] = meta
+                  local meta = line_meta_from_blame(session, path, lnum, mtime, blame)
+                  cache1[line_meta_key(path, lnum)] = meta
                 end
-                session0["info-line-meta-cache"] = cache1
+                session["info-line-meta-cache"] = cache1
               else
               end
-              if on_ready0 then
-                return on_ready0()
+              if on_ready then
+                return on_ready()
               else
                 return nil
               end
             end
-            return vim.schedule(_58_)
+            return vim.schedule(_59_)
           end
-          return vim.system({"git", "-C", vim.fn.getcwd(), "blame", "--line-porcelain", "-L", (tostring(start_lnum) .. "," .. tostring(stop_lnum)), "--", rel}, {}, _57_)
+          return vim.system({"git", "-C", vim.fn.getcwd(), "blame", "--line-porcelain", "-L", (tostring(start_lnum) .. "," .. tostring(stop_lnum)), "--", rel}, {}, _58_)
         else
           return nil
         end

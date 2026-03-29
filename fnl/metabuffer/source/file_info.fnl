@@ -177,51 +177,85 @@
         (. found :status)
         nil)))
 
+(fn file-status-cache-hit
+  [session path mtime]
+  (let [cache (or session.info-file-status-cache {})
+        found (. cache path)]
+    (and (= (type found) "table")
+         (= (. found :mtime) mtime)
+         (= (type (. found :status)) "string")
+         (. found :status))))
+
+(fn pending-file-status-key
+  [path mtime]
+  (.. path ":" (tostring mtime)))
+
+(fn mark-file-status-pending!
+  [session key]
+  (let [pending (or session.info-file-status-pending {})]
+    (when-not (. pending key)
+      (set (. pending key) true)
+      (set session.info-file-status-pending pending)
+      true)))
+
+(fn clear-file-status-pending!
+  [session key]
+  (let [pending (or session.info-file-status-pending {})]
+    (set (. pending key) nil)
+    (set session.info-file-status-pending pending)))
+
+(fn cache-file-status!
+  [session path mtime status]
+  (let [cache (or session.info-file-status-cache {})]
+    (set (. cache path) {:mtime mtime :status status})
+    (set session.info-file-status-cache cache)
+    status))
+
+(fn git-status-line->status
+  [line]
+  (if (= (or line "") "")
+      "clean"
+      (if (vim.startswith line "??")
+          "untracked"
+          (let [x (string.sub line 1 1)
+                y (string.sub line 2 2)
+                staged? (~= x " ")
+                dirty? (~= y " ")]
+            (if (and staged? dirty?)
+                "staged+dirty"
+                (if staged?
+                    "staged"
+                    (if dirty?
+                        "dirty"
+                        "changed"))))))
+
+(fn schedule-file-status-fetch!
+  [session path mtime key on-ready]
+  (vim.system
+    ["git" "-C" (vim.fn.getcwd) "status" "--porcelain" "--" (vim.fn.fnamemodify path ":.")]
+    {}
+    (fn [obj]
+      (vim.schedule
+        (fn []
+          (clear-file-status-pending! session key)
+          (let [line (if (= (. obj :code) 0)
+                         (or (. (vim.split (or (. obj :stdout) "") "\n" {:plain true}) 1) "")
+                         "")
+                status (git-status-line->status line)]
+            (cache-file-status! session path mtime status)
+            (when on-ready
+              (on-ready))))))))
+
 (fn M.ensure-file-status-async!
   [session path on-ready]
   (when (and session path (= 1 (vim.fn.filereadable path)))
     (let [mtime (vim.fn.getftime path)
-          cache (or session.info-file-status-cache {})
-          found (. cache path)
-          pending (or session.info-file-status-pending {})
-          key (.. path ":" (tostring mtime))]
-      (if (and (= (type found) "table")
-               (= (. found :mtime) mtime)
-               (= (type (. found :status)) "string"))
-          (. found :status)
-          (when-not (. pending key)
-            (set (. pending key) true)
-            (set session.info-file-status-pending pending)
-            (vim.system
-              ["git" "-C" (vim.fn.getcwd) "status" "--porcelain" "--" (vim.fn.fnamemodify path ":.")]
-              {}
-              (fn [obj]
-                (vim.schedule
-                  (fn []
-                    (let [pending1 (or session.info-file-status-pending {})]
-                      (set (. pending1 key) nil)
-                      (set session.info-file-status-pending pending1))
-                    (let [line (if (= (. obj :code) 0)
-                                   (or (. (vim.split (or (. obj :stdout) "") "\n" {:plain true}) 1) "")
-                                   "")
-                          status (if (= line "")
-                                     "clean"
-                                     (if (vim.startswith line "??")
-                                         "untracked"
-                                         (let [x (string.sub line 1 1)
-                                               y (string.sub line 2 2)
-                                               staged? (~= x " ")
-                                               dirty? (~= y " ")]
-                                           (if (and staged? dirty?)
-                                               "staged+dirty"
-                                               (if staged?
-                                                   "staged"
-                                                   (if dirty? "dirty" "changed"))))))
-                          cache1 (or session.info-file-status-cache {})]
-                      (set (. cache1 path) {:mtime mtime :status status})
-                      (set session.info-file-status-cache cache1)
-                      (when on-ready
-                        (on-ready)))))))))))
+          key (pending-file-status-key path mtime)
+          cached (file-status-cache-hit session path mtime)]
+      (if cached
+          cached
+          (when (mark-file-status-pending! session key)
+            (schedule-file-status-fetch! session path mtime key on-ready))))))
 
 (fn M.line-meta-data
   [session path lnum]
