@@ -460,6 +460,96 @@
           (restore-startup-cursor! session))))
     (set (. instances session.instance-id) session)))
 
+(fn expand-history-query
+  [history-api start-query]
+  (let [latest-history (history-api.history-latest nil)]
+    (if (= start-query "!!")
+        latest-history
+        (= start-query "!$")
+        (history-api.history-entry-token latest-history)
+        (= start-query "!^!")
+        (history-api.history-entry-tail latest-history)
+        start-query)))
+
+(fn start-option-value
+  [parsed-query query-mod settings parsed-key settings-key]
+  (if-some [v (. parsed-query parsed-key)]
+    v
+    (query-mod.truthy? (. settings settings-key))))
+
+(fn prompt-query-text
+  [parsed-query expanded-query]
+  (let [query0 (. parsed-query :query)
+        prompt-query0 (if (~= (. parsed-query :include-files) nil)
+                          expanded-query
+                          query0)]
+    {:query query0
+     :prompt-query (if (and (= (type prompt-query0) "string")
+                            (~= prompt-query0 "")
+                            (not (vim.endswith prompt-query0 " "))
+                            (not (vim.endswith prompt-query0 "\n")))
+                       (.. prompt-query0 " ")
+                       prompt-query0)}))
+
+(fn resolve-start-query-state
+  [query history-api query-mod settings]
+  (let [start-query (or query "")
+        expanded-query (expand-history-query history-api start-query)
+        parsed-query (query-mod.apply-default-source
+                       (query-mod.parse-query-text expanded-query)
+                       (query-mod.truthy? settings.default-include-lgrep))
+        {: query : prompt-query} (prompt-query-text parsed-query expanded-query)
+        start-transforms (transform-mod.enabled-map parsed-query nil settings)]
+    {:parsed-query parsed-query
+     :query query
+     :prompt-query prompt-query
+     :start-hidden (start-option-value parsed-query query-mod settings :include-hidden :default-include-hidden)
+     :start-ignored (start-option-value parsed-query query-mod settings :include-ignored :default-include-ignored)
+     :start-deps (start-option-value parsed-query query-mod settings :include-deps :default-include-deps)
+     :start-binary (start-option-value parsed-query query-mod settings :include-binary :default-include-binary)
+     :start-files (start-option-value parsed-query query-mod settings :include-files :default-include-files)
+     :start-prefilter (start-option-value parsed-query query-mod settings :prefilter :project-lazy-prefilter-enabled)
+     :start-lazy (start-option-value parsed-query query-mod settings :lazy :project-lazy-enabled)
+     :start-expansion (or (. parsed-query :expansion) "none")
+     :start-transforms start-transforms}))
+
+(fn build-animation-settings
+  [ui-animation ui-animation-prompt ui-animation-preview ui-animation-info ui-animation-loading ui-animation-scroll fast-test-startup?]
+  {:enabled (and (not fast-test-startup?)
+                 (not (= false (. ui-animation :enabled))))
+   :backend (or (. ui-animation :backend) "native")
+   :time-scale (or (. ui-animation :time-scale) 1.0)
+   :prompt {:enabled (not (= false (. ui-animation-prompt :enabled)))
+            :ms (. ui-animation-prompt :ms)
+            :time-scale (or (. ui-animation-prompt :time-scale) 1.0)
+            :backend (or (. ui-animation-prompt :backend) "native")}
+   :preview {:enabled (not (= false (. ui-animation-preview :enabled)))
+             :ms (. ui-animation-preview :ms)
+             :time-scale (or (. ui-animation-preview :time-scale) 1.0)}
+   :info {:enabled (not (= false (. ui-animation-info :enabled)))
+          :ms (. ui-animation-info :ms)
+          :time-scale (or (. ui-animation-info :time-scale) 1.0)
+          :backend (or (. ui-animation-info :backend) "native")}
+   :loading {:enabled (not (= false (. ui-animation-loading :enabled)))
+             :ms (. ui-animation-loading :ms)
+             :time-scale (or (. ui-animation-loading :time-scale) 1.0)}
+   :scroll {:enabled (not (= false (. ui-animation-scroll :enabled)))
+            :ms (. ui-animation-scroll :ms)
+            :time-scale (or (. ui-animation-scroll :time-scale) 1.0)
+            :backend (or (. ui-animation-scroll :backend) "native")}})
+
+(fn prompt-animates?
+  [ui-animation ui-animation-prompt fast-test-startup?]
+  (and (not fast-test-startup?)
+       (. ui-animation :enabled)
+       (not (= false (. ui-animation-prompt :enabled)))))
+
+(fn prompt-start-height
+  [router-util-mod prompt-animates?]
+  (if prompt-animates?
+      1
+      (router-util-mod.prompt-height)))
+
 (fn M.start!
   [deps query mode _meta project-mode]
   (let [router (. deps :router)
@@ -490,52 +580,19 @@
       (if (and current-session
                (existing-visible-meta current-session))
           (existing-visible-meta current-session)
-          (let [start-query (or query "")
-          latest-history (history-api.history-latest nil)
-          expanded-query (if (= start-query "!!")
-                             latest-history
-                             (= start-query "!$")
-                             (history-api.history-entry-token latest-history)
-                             (= start-query "!^!")
-                             (history-api.history-entry-tail latest-history)
-                             start-query)
-          parsed-query (query-mod.apply-default-source
-                         (query-mod.parse-query-text expanded-query)
-                         (query-mod.truthy? settings.default-include-lgrep))
-          query0 (. parsed-query :query)
-          prompt-query (if (~= (. parsed-query :include-files) nil)
-                           expanded-query
-                           query0)
-          prompt-query (if (and (= (type prompt-query) "string")
-                                (~= prompt-query "")
-                                (not (vim.endswith prompt-query " "))
-                                (not (vim.endswith prompt-query "\n")))
-                           (.. prompt-query " ")
-                           prompt-query)
-          start-hidden (if-some [v (. parsed-query :include-hidden)]
-                               v
-                               (query-mod.truthy? settings.default-include-hidden))
-          start-ignored (if-some [v (. parsed-query :include-ignored)]
-                                v
-                                (query-mod.truthy? settings.default-include-ignored))
-          start-deps (if-some [v (. parsed-query :include-deps)]
-                             v
-                             (query-mod.truthy? settings.default-include-deps))
-          start-binary (if-some [v (. parsed-query :include-binary)]
-                               v
-                               (query-mod.truthy? settings.default-include-binary))
-          start-files (if-some [v (. parsed-query :include-files)]
-                              v
-                              (query-mod.truthy? settings.default-include-files))
-          start-prefilter (if-some [v (. parsed-query :prefilter)]
-                                  v
-                                  (query-mod.truthy? settings.project-lazy-prefilter-enabled))
-          start-lazy (if-some [v (. parsed-query :lazy)]
-                             v
-                             (query-mod.truthy? settings.project-lazy-enabled))
-          start-expansion (or (. parsed-query :expansion) "none")
-          start-transforms (transform-mod.enabled-map parsed-query nil settings)
-          query query0]
+          (let [{: parsed-query
+                 : query
+                 : prompt-query
+                 : start-hidden
+                 : start-ignored
+                 : start-deps
+                 : start-binary
+                 : start-files
+                 : start-prefilter
+                 : start-lazy
+                 : start-expansion
+                 : start-transforms}
+                (resolve-start-query-state query history-api query-mod settings)]
       (let [source-buf (vim.api.nvim_get_current_buf)
             existing (. active-by-source source-buf)]
         (if (and (. launching-by-source source-buf)
@@ -582,35 +639,19 @@
                    (let [initial-lines (if (and prompt-query (~= prompt-query ""))
                                          (vim.split prompt-query "\n" {:plain true})
                                          [""])
-                      prompt-animates? (and (not fast-test-startup?)
-                                            (. ui-animation :enabled)
-                                            (not (= false (. ui-animation-prompt :enabled))))
-                      animation-settings {:enabled (and (not fast-test-startup?)
-                                                        (not (= false (. ui-animation :enabled))))
-                                          :backend (or (. ui-animation :backend) "native")
-                                          :time-scale (or (. ui-animation :time-scale) 1.0)
-                                          :prompt {:enabled (not (= false (. ui-animation-prompt :enabled)))
-                                                   :ms (. ui-animation-prompt :ms)
-                                                   :time-scale (or (. ui-animation-prompt :time-scale) 1.0)
-                                                   :backend (or (. ui-animation-prompt :backend) "native")}
-                                          :preview {:enabled (not (= false (. ui-animation-preview :enabled)))
-                                                    :ms (. ui-animation-preview :ms)
-                                                    :time-scale (or (. ui-animation-preview :time-scale) 1.0)}
-                                          :info {:enabled (not (= false (. ui-animation-info :enabled)))
-                                                 :ms (. ui-animation-info :ms)
-                                                 :time-scale (or (. ui-animation-info :time-scale) 1.0)
-                                                 :backend (or (. ui-animation-info :backend) "native")}
-                                          :loading {:enabled (not (= false (. ui-animation-loading :enabled)))
-                                                    :ms (. ui-animation-loading :ms)
-                                                    :time-scale (or (. ui-animation-loading :time-scale) 1.0)}
-                                          :scroll {:enabled (not (= false (. ui-animation-scroll :enabled)))
-                                                   :ms (. ui-animation-scroll :ms)
-                                                   :time-scale (or (. ui-animation-scroll :time-scale) 1.0)
-                                                   :backend (or (. ui-animation-scroll :backend) "native")}}
+                      prompt-animates? (prompt-animates? ui-animation ui-animation-prompt fast-test-startup?)
+                      animation-settings (build-animation-settings
+                                           ui-animation
+                                           ui-animation-prompt
+                                           ui-animation-preview
+                                           ui-animation-info
+                                           ui-animation-loading
+                                           ui-animation-scroll
+                                           fast-test-startup?)
                       prompt-win (prompt-window-mod.new
                                    vim
                                    {:height (router-util-mod.prompt-height)
-                                    :start-height (if prompt-animates? 1 (router-util-mod.prompt-height))
+                                    :start-height (prompt-start-height router-util-mod prompt-animates?)
                                     :floating? prompt-animates?
                                     :window-local-layout settings.window-local-layout
                                     :origin-win origin-win})

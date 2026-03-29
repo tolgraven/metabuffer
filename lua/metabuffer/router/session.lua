@@ -514,6 +514,66 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
   instances[session["instance-id"]] = session
   return nil
 end
+local function expand_history_query(history_api, start_query)
+  local latest_history = history_api["history-latest"](nil)
+  if (start_query == "!!") then
+    return latest_history
+  elseif (start_query == "!$") then
+    return history_api["history-entry-token"](latest_history)
+  elseif (start_query == "!^!") then
+    return history_api["history-entry-tail"](latest_history)
+  else
+    return start_query
+  end
+end
+local function start_option_value(parsed_query, query_mod, settings, parsed_key, settings_key)
+  local val_113_auto = parsed_query[parsed_key]
+  if (nil ~= val_113_auto) then
+    local v = val_113_auto
+    return v
+  else
+    return query_mod["truthy?"](settings[settings_key])
+  end
+end
+local function prompt_query_text(parsed_query, expanded_query)
+  local query0 = parsed_query.query
+  local prompt_query0
+  if (parsed_query["include-files"] ~= nil) then
+    prompt_query0 = expanded_query
+  else
+    prompt_query0 = query0
+  end
+  local _94_
+  if ((type(prompt_query0) == "string") and (prompt_query0 ~= "") and not vim.endswith(prompt_query0, " ") and not vim.endswith(prompt_query0, "\n")) then
+    _94_ = (prompt_query0 .. " ")
+  else
+    _94_ = prompt_query0
+  end
+  return {query = query0, ["prompt-query"] = _94_}
+end
+local function resolve_start_query_state(query, history_api, query_mod, settings)
+  local start_query = (query or "")
+  local expanded_query = expand_history_query(history_api, start_query)
+  local parsed_query = query_mod["apply-default-source"](query_mod["parse-query-text"](expanded_query), query_mod["truthy?"](settings["default-include-lgrep"]))
+  local _let_96_ = prompt_query_text(parsed_query, expanded_query)
+  local query0 = _let_96_.query
+  local prompt_query = _let_96_["prompt-query"]
+  local start_transforms = transform_mod["enabled-map"](parsed_query, nil, settings)
+  return {["parsed-query"] = parsed_query, query = query0, ["prompt-query"] = prompt_query, ["start-hidden"] = start_option_value(parsed_query, query_mod, settings, "include-hidden", "default-include-hidden"), ["start-ignored"] = start_option_value(parsed_query, query_mod, settings, "include-ignored", "default-include-ignored"), ["start-deps"] = start_option_value(parsed_query, query_mod, settings, "include-deps", "default-include-deps"), ["start-binary"] = start_option_value(parsed_query, query_mod, settings, "include-binary", "default-include-binary"), ["start-files"] = start_option_value(parsed_query, query_mod, settings, "include-files", "default-include-files"), ["start-prefilter"] = start_option_value(parsed_query, query_mod, settings, "prefilter", "project-lazy-prefilter-enabled"), ["start-lazy"] = start_option_value(parsed_query, query_mod, settings, "lazy", "project-lazy-enabled"), ["start-expansion"] = (parsed_query.expansion or "none"), ["start-transforms"] = start_transforms}
+end
+local function build_animation_settings(ui_animation, ui_animation_prompt, ui_animation_preview, ui_animation_info, ui_animation_loading, ui_animation_scroll, fast_test_startup_3f)
+  return {enabled = (not fast_test_startup_3f and not (false == ui_animation.enabled)), backend = (ui_animation.backend or "native"), ["time-scale"] = (ui_animation["time-scale"] or 1), prompt = {enabled = not (false == ui_animation_prompt.enabled), ms = ui_animation_prompt.ms, ["time-scale"] = (ui_animation_prompt["time-scale"] or 1), backend = (ui_animation_prompt.backend or "native")}, preview = {enabled = not (false == ui_animation_preview.enabled), ms = ui_animation_preview.ms, ["time-scale"] = (ui_animation_preview["time-scale"] or 1)}, info = {enabled = not (false == ui_animation_info.enabled), ms = ui_animation_info.ms, ["time-scale"] = (ui_animation_info["time-scale"] or 1), backend = (ui_animation_info.backend or "native")}, loading = {enabled = not (false == ui_animation_loading.enabled), ms = ui_animation_loading.ms, ["time-scale"] = (ui_animation_loading["time-scale"] or 1)}, scroll = {enabled = not (false == ui_animation_scroll.enabled), ms = ui_animation_scroll.ms, ["time-scale"] = (ui_animation_scroll["time-scale"] or 1), backend = (ui_animation_scroll.backend or "native")}}
+end
+local function prompt_animates_3f(ui_animation, ui_animation_prompt, fast_test_startup_3f)
+  return (not fast_test_startup_3f and ui_animation.enabled and not (false == ui_animation_prompt.enabled))
+end
+local function prompt_start_height(router_util_mod, prompt_animates_3f0)
+  if prompt_animates_3f0 then
+    return 1
+  else
+    return router_util_mod["prompt-height"]()
+  end
+end
 M["start!"] = function(deps, query, mode, _meta, project_mode)
   local router = deps.router
   local mods = deps.mods
@@ -543,105 +603,19 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
   if (current_session and existing_visible_meta(current_session)) then
     return existing_visible_meta(current_session)
   else
-    local start_query = (query or "")
-    local latest_history = history_api["history-latest"](nil)
-    local expanded_query
-    if (start_query == "!!") then
-      expanded_query = latest_history
-    elseif (start_query == "!$") then
-      expanded_query = history_api["history-entry-token"](latest_history)
-    elseif (start_query == "!^!") then
-      expanded_query = history_api["history-entry-tail"](latest_history)
-    else
-      expanded_query = start_query
-    end
-    local parsed_query = query_mod["apply-default-source"](query_mod["parse-query-text"](expanded_query), query_mod["truthy?"](settings["default-include-lgrep"]))
-    local query0 = parsed_query.query
-    local prompt_query
-    if (parsed_query["include-files"] ~= nil) then
-      prompt_query = expanded_query
-    else
-      prompt_query = query0
-    end
-    local prompt_query0
-    if ((type(prompt_query) == "string") and (prompt_query ~= "") and not vim.endswith(prompt_query, " ") and not vim.endswith(prompt_query, "\n")) then
-      prompt_query0 = (prompt_query .. " ")
-    else
-      prompt_query0 = prompt_query
-    end
-    local start_hidden
-    do
-      local val_113_auto = parsed_query["include-hidden"]
-      if (nil ~= val_113_auto) then
-        local v = val_113_auto
-        start_hidden = v
-      else
-        start_hidden = query_mod["truthy?"](settings["default-include-hidden"])
-      end
-    end
-    local start_ignored
-    do
-      local val_113_auto = parsed_query["include-ignored"]
-      if (nil ~= val_113_auto) then
-        local v = val_113_auto
-        start_ignored = v
-      else
-        start_ignored = query_mod["truthy?"](settings["default-include-ignored"])
-      end
-    end
-    local start_deps
-    do
-      local val_113_auto = parsed_query["include-deps"]
-      if (nil ~= val_113_auto) then
-        local v = val_113_auto
-        start_deps = v
-      else
-        start_deps = query_mod["truthy?"](settings["default-include-deps"])
-      end
-    end
-    local start_binary
-    do
-      local val_113_auto = parsed_query["include-binary"]
-      if (nil ~= val_113_auto) then
-        local v = val_113_auto
-        start_binary = v
-      else
-        start_binary = query_mod["truthy?"](settings["default-include-binary"])
-      end
-    end
-    local start_files
-    do
-      local val_113_auto = parsed_query["include-files"]
-      if (nil ~= val_113_auto) then
-        local v = val_113_auto
-        start_files = v
-      else
-        start_files = query_mod["truthy?"](settings["default-include-files"])
-      end
-    end
-    local start_prefilter
-    do
-      local val_113_auto = parsed_query.prefilter
-      if (nil ~= val_113_auto) then
-        local v = val_113_auto
-        start_prefilter = v
-      else
-        start_prefilter = query_mod["truthy?"](settings["project-lazy-prefilter-enabled"])
-      end
-    end
-    local start_lazy
-    do
-      local val_113_auto = parsed_query.lazy
-      if (nil ~= val_113_auto) then
-        local v = val_113_auto
-        start_lazy = v
-      else
-        start_lazy = query_mod["truthy?"](settings["project-lazy-enabled"])
-      end
-    end
-    local start_expansion = (parsed_query.expansion or "none")
-    local start_transforms = transform_mod["enabled-map"](parsed_query, nil, settings)
-    local query1 = query0
+    local _let_98_ = resolve_start_query_state(query, history_api, query_mod, settings)
+    local parsed_query = _let_98_["parsed-query"]
+    local query0 = _let_98_.query
+    local prompt_query = _let_98_["prompt-query"]
+    local start_hidden = _let_98_["start-hidden"]
+    local start_ignored = _let_98_["start-ignored"]
+    local start_deps = _let_98_["start-deps"]
+    local start_binary = _let_98_["start-binary"]
+    local start_files = _let_98_["start-files"]
+    local start_prefilter = _let_98_["start-prefilter"]
+    local start_lazy = _let_98_["start-lazy"]
+    local start_expansion = _let_98_["start-expansion"]
+    local start_transforms = _let_98_["start-transforms"]
     local source_buf = vim.api.nvim_get_current_buf()
     local existing = active_by_source[source_buf]
     if (launching_by_source[source_buf] and existing and (clj.boolean(existing["project-mode"]) == clj.boolean(project_mode))) then
@@ -663,7 +637,7 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
         local _
         source_view["_meta_win_height"] = vim.api.nvim_win_get_height(origin_win)
         _ = nil
-        local condition = session_view["setup-state"](query1, mode, source_view)
+        local condition = session_view["setup-state"](query0, mode, source_view)
         local _0
         condition["selected-index"] = project_start_selected_index(project_mode, mode, source_view, condition)
         _0 = nil
@@ -683,30 +657,23 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
         pcall(vim.api.nvim_buf_set_var, curr.buf.buffer, "meta_internal_render", false)
         pcall(curr.buf.render)
         local initial_lines
-        if (prompt_query0 and (prompt_query0 ~= "")) then
-          initial_lines = vim.split(prompt_query0, "\n", {plain = true})
+        if (prompt_query and (prompt_query ~= "")) then
+          initial_lines = vim.split(prompt_query, "\n", {plain = true})
         else
           initial_lines = {""}
         end
-        local prompt_animates_3f = (not fast_test_startup_3f and ui_animation.enabled and not (false == ui_animation_prompt.enabled))
-        local animation_settings = {enabled = (not fast_test_startup_3f and not (false == ui_animation.enabled)), backend = (ui_animation.backend or "native"), ["time-scale"] = (ui_animation["time-scale"] or 1), prompt = {enabled = not (false == ui_animation_prompt.enabled), ms = ui_animation_prompt.ms, ["time-scale"] = (ui_animation_prompt["time-scale"] or 1), backend = (ui_animation_prompt.backend or "native")}, preview = {enabled = not (false == ui_animation_preview.enabled), ms = ui_animation_preview.ms, ["time-scale"] = (ui_animation_preview["time-scale"] or 1)}, info = {enabled = not (false == ui_animation_info.enabled), ms = ui_animation_info.ms, ["time-scale"] = (ui_animation_info["time-scale"] or 1), backend = (ui_animation_info.backend or "native")}, loading = {enabled = not (false == ui_animation_loading.enabled), ms = ui_animation_loading.ms, ["time-scale"] = (ui_animation_loading["time-scale"] or 1)}, scroll = {enabled = not (false == ui_animation_scroll.enabled), ms = ui_animation_scroll.ms, ["time-scale"] = (ui_animation_scroll["time-scale"] or 1), backend = (ui_animation_scroll.backend or "native")}}
-        local prompt_win
-        local _103_
-        if prompt_animates_3f then
-          _103_ = 1
-        else
-          _103_ = router_util_mod["prompt-height"]()
-        end
-        prompt_win = prompt_window_mod.new(vim, {height = router_util_mod["prompt-height"](), ["start-height"] = _103_, ["floating?"] = prompt_animates_3f, ["window-local-layout"] = settings["window-local-layout"], ["origin-win"] = origin_win})
+        local prompt_animates_3f0 = prompt_animates_3f(ui_animation, ui_animation_prompt, fast_test_startup_3f)
+        local animation_settings = build_animation_settings(ui_animation, ui_animation_prompt, ui_animation_preview, ui_animation_info, ui_animation_loading, ui_animation_scroll, fast_test_startup_3f)
+        local prompt_win = prompt_window_mod.new(vim, {height = router_util_mod["prompt-height"](), ["start-height"] = prompt_start_height(router_util_mod, prompt_animates_3f0), ["floating?"] = prompt_animates_3f0, ["window-local-layout"] = settings["window-local-layout"], ["origin-win"] = origin_win})
         local prompt_buf = prompt_win.buffer
         local session
-        local _105_
+        local _101_
         if query_mod["query-lines-has-active?"](parsed_query.lines) then
-          _105_ = settings["project-bootstrap-delay-ms"]
+          _101_ = settings["project-bootstrap-delay-ms"]
         else
-          _105_ = settings["project-bootstrap-idle-delay-ms"]
+          _101_ = settings["project-bootstrap-idle-delay-ms"]
         end
-        session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-window"] = prompt_win, ["prompt-win"] = prompt_win.window, ["prompt-target-height"] = router_util_mod["prompt-height"](), ["prompt-buf"] = prompt_buf, ["prompt-floating?"] = prompt_win["floating?"], ["window-local-layout"] = settings["window-local-layout"], ["prompt-keymaps"] = settings["prompt-keymaps"], ["main-keymaps"] = settings["main-keymaps"], ["prompt-fallback-keymaps"] = settings["prompt-fallback-keymaps"], ["info-file-entry-view"] = (settings["info-file-entry-view"] or "meta"), ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["animate-enter?"] = (not fast_test_startup_3f and clj.boolean(ui_animation.enabled)), ["startup-ui-delay-ms"] = startup_ui_delay_ms(clj.boolean(ui_animation.enabled), animation_settings), ["loading-indicator?"] = clj.boolean(ui["loading-indicator"]), ["animation-settings"] = animation_settings, ["project-mode"] = (project_mode or false), ["project-mode-starting?"] = clj.boolean(project_mode), ["read-file-lines-cached"] = read_file_lines_cached, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-files"] = start_files, ["default-include-lgrep"] = query_mod["truthy?"](settings["default-include-lgrep"]), ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["effective-include-binary"] = start_binary, ["effective-include-files"] = start_files, ["transform-flags"] = vim.deepcopy(start_transforms), ["effective-transforms"] = vim.deepcopy(start_transforms), ["active-source-key"] = source_mod["query-source-key"](parsed_query), ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _105_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["expansion-mode"] = start_expansion, ["project-source-syntax-chunk-lines"] = settings["project-source-syntax-chunk-lines"], ["project-lazy-refresh-min-ms"] = settings["project-lazy-refresh-min-ms"], ["project-lazy-refresh-debounce-ms"] = settings["project-lazy-refresh-debounce-ms"], ["last-parsed-query"] = vim.tbl_extend("force", {lines = (parsed_query.lines or {""}), ["lgrep-lines"] = (parsed_query["lgrep-lines"] or {}), ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-files"] = start_files, ["file-lines"] = (parsed_query["file-lines"] or {}), prefilter = start_prefilter, lazy = start_lazy, expansion = start_expansion}, transform_mod["compat-view"](start_transforms)), ["file-query-lines"] = (parsed_query["file-lines"] or {}), ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), ["instance-id"] = next_instance_id_21(), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-animating?"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
+        session = {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["prompt-window"] = prompt_win, ["prompt-win"] = prompt_win.window, ["prompt-target-height"] = router_util_mod["prompt-height"](), ["prompt-buf"] = prompt_buf, ["prompt-floating?"] = prompt_win["floating?"], ["window-local-layout"] = settings["window-local-layout"], ["prompt-keymaps"] = settings["prompt-keymaps"], ["main-keymaps"] = settings["main-keymaps"], ["prompt-fallback-keymaps"] = settings["prompt-fallback-keymaps"], ["info-file-entry-view"] = (settings["info-file-entry-view"] or "meta"), ["initial-prompt-text"] = table.concat(initial_lines, "\n"), ["last-prompt-text"] = table.concat(initial_lines, "\n"), ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = table.concat(initial_lines, "\n"), ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["animate-enter?"] = (not fast_test_startup_3f and clj.boolean(ui_animation.enabled)), ["startup-ui-delay-ms"] = startup_ui_delay_ms(clj.boolean(ui_animation.enabled), animation_settings), ["loading-indicator?"] = clj.boolean(ui["loading-indicator"]), ["animation-settings"] = animation_settings, ["project-mode"] = (project_mode or false), ["project-mode-starting?"] = clj.boolean(project_mode), ["read-file-lines-cached"] = read_file_lines_cached, ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-files"] = start_files, ["default-include-lgrep"] = query_mod["truthy?"](settings["default-include-lgrep"]), ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["effective-include-binary"] = start_binary, ["effective-include-files"] = start_files, ["transform-flags"] = vim.deepcopy(start_transforms), ["effective-transforms"] = vim.deepcopy(start_transforms), ["active-source-key"] = source_mod["query-source-key"](parsed_query), ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _101_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["expansion-mode"] = start_expansion, ["project-source-syntax-chunk-lines"] = settings["project-source-syntax-chunk-lines"], ["project-lazy-refresh-min-ms"] = settings["project-lazy-refresh-min-ms"], ["project-lazy-refresh-debounce-ms"] = settings["project-lazy-refresh-debounce-ms"], ["last-parsed-query"] = vim.tbl_extend("force", {lines = (parsed_query.lines or {""}), ["lgrep-lines"] = (parsed_query["lgrep-lines"] or {}), ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-files"] = start_files, ["file-lines"] = (parsed_query["file-lines"] or {}), prefilter = start_prefilter, lazy = start_lazy, expansion = start_expansion}, transform_mod["compat-view"](start_transforms)), ["file-query-lines"] = (parsed_query["file-lines"] or {}), ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), ["instance-id"] = next_instance_id_21(), meta = curr, ["project-bootstrap-pending"] = false, ["prompt-animating?"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
         session["refresh-hooks"] = build_refresh_hooks(deps)
         transform_mod["apply-flags!"](session, start_transforms)
         transform_mod["apply-flags!"](curr, start_transforms)
