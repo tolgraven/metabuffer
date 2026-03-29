@@ -652,7 +652,7 @@
 (fn maybe-delete-buf!
   [buf]
   (when (and buf (vim.api.nvim_buf_is_valid buf))
-    (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
+    (base_buffer.clear-modified! buf)
     (pcall vim.api.nvim_buf_delete buf {:force true})))
 
 (fn M.fail-safe-teardown!

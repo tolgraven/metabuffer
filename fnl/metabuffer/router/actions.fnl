@@ -1,6 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 
 (local M {})
+(local base-buffer-mod (require :metabuffer.buffer.base))
 (local source-mod (require :metabuffer.source))
 (local transform-mod (require :metabuffer.transform))
 (local events (require :metabuffer.events))
@@ -24,8 +25,7 @@
 
 (fn clear-buffer-modified!
   [buf]
-  (when (and buf (vim.api.nvim_buf_is_valid buf))
-    (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})))
+  (base-buffer-mod.clear-modified! buf))
 
 (fn clear-managed-buffer-modified!
   [buf-wrapper]

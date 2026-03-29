@@ -333,10 +333,10 @@ M.new = function(nvim, model)
       bo["modifiable"] = true
       bo["readonly"] = false
     end
-    return pcall(vim.api.nvim_set_option_value, "modified", false, {buf = self.buffer})
+    return base["clear-modified!"](self.buffer)
   end
   self["clear-modified!"] = function()
-    return pcall(vim.api.nvim_set_option_value, "modified", false, {buf = self.buffer})
+    return base["clear-modified!"](self.buffer)
   end
   self["model-valid?"] = function()
     return (self.model and vim.api.nvim_buf_is_valid(self.model))

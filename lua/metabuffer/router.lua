@@ -465,7 +465,7 @@ local function maybe_close_win_21(win)
 end
 local function maybe_delete_buf_21(buf)
   if (buf and vim.api.nvim_buf_is_valid(buf)) then
-    pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
+    base_buffer["clear-modified!"](buf)
     return pcall(vim.api.nvim_buf_delete, buf, {force = true})
   else
     return nil

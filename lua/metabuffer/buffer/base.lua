@@ -25,6 +25,13 @@ M["apply-buffer-opts!"] = function(buf, opts)
   end
   return buf
 end
+M["clear-modified!"] = function(buf)
+  if (buf and vim.api.nvim_buf_is_valid(buf)) then
+    pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
+  else
+  end
+  return buf
+end
 M["register-managed-buffer!"] = function(buf, role, name, opts, event_extra)
   events.send("on-buf-create!", vim.tbl_extend("force", {buf = buf, role = role}, (event_extra or {})))
   if ((type(name) == "string") and (name ~= "")) then

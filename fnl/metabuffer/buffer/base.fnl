@@ -28,6 +28,13 @@
         (set (. bo name) value))))
   buf)
 
+(fn M.clear-modified!
+  [buf]
+  "Clear modified state for BUF when it is still valid. Returns BUF."
+  (when (and buf (vim.api.nvim_buf_is_valid buf))
+    (pcall vim.api.nvim_set_option_value "modified" false {:buf buf}))
+  buf)
+
 (fn M.register-managed-buffer!
   [buf role name opts event-extra]
   "Register BUF as managed Meta buffer ROLE, assign NAME, and apply OPTS. Returns BUF."
