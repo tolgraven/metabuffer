@@ -505,6 +505,63 @@ M.new = function(opts)
     end
     return math.floor((bytes / 80))
   end
+  local function project_view_opts(session, wrap_width)
+    return {["include-binary"] = session["effective-include-binary"], transforms = (session["effective-transforms"] or {}), ["wrap-width"] = wrap_width, linebreak = true}
+  end
+  local function cached_project_view(session, path, wrap_width)
+    return (path and read_file_view_cached(path, project_view_opts(session, wrap_width)))
+  end
+  local function set_project_pool_21(session, pool)
+    local meta = session.meta
+    meta.buf.content = pool.content
+    meta.buf["source-refs"] = pool.refs
+    return bump_content_version_21(meta)
+  end
+  local function enable_full_source_syntax_21(session)
+    if (session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
+      session.meta.buf["visible-source-syntax-only"] = false
+      return events.send("on-source-syntax-refresh!", {session = session, ["immediate?"] = true})
+    else
+      return nil
+    end
+  end
+  local function emit_source_pool_change_21(session, opts0)
+    return events.send("on-source-pool-change!", vim.tbl_extend("force", {session = session}, (opts0 or {})))
+  end
+  local function finish_project_stream_21(session, sent_complete_3f)
+    session["lazy-stream-done"] = true
+    enable_full_source_syntax_21(session)
+    if not sent_complete_3f then
+      return emit_source_pool_change_21(session, {phase = "complete", ["phase-only?"] = true, ["force?"] = true, ["refresh-lines"] = true})
+    else
+      return nil
+    end
+  end
+  local function maybe_finish_project_stream_21(session)
+    if (session["lazy-stream-done"] and session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
+      local has_query_3f = prompt_has_active_query_3f(session)
+      local sent_complete_3f = false
+      local sent_complete = sent_complete_3f
+      if not has_query_3f then
+        emit_source_pool_change_21(session, {phase = "complete", ["force?"] = true, ["refresh-lines"] = true, ["restore-view?"] = true})
+        sent_complete = true
+      else
+      end
+      return finish_project_stream_21(session, sent_complete)
+    else
+      return nil
+    end
+  end
+  local function stream_next_path_21(session, path, prefilter)
+    local before = #session.meta.buf.content
+    local view = cached_project_view(session, path, results_wrap_width(session))
+    if view then
+      push_file_into_pool_21(session, path, view, prefilter)
+      return (#session.meta.buf.content > before)
+    else
+      return nil
+    end
+  end
   local function collect_project_sources(session, include_hidden, include_ignored, include_deps, include_binary, include_files, prefilter)
     local root = vim.fn.getcwd()
     local current_path = current_buffer_path(session["source-buf"])
@@ -519,16 +576,16 @@ M.new = function(opts)
     if file_only_mode_3f(session) then
       for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)) do
         table.insert(content, "")
-        local _57_
+        local _62_
         do
           local rel = vim.fn.fnamemodify(path, ":.")
           if ((type(rel) == "string") and (rel ~= "")) then
-            _57_ = rel
+            _62_ = rel
           else
-            _57_ = path
+            _62_ = path
           end
         end
-        table.insert(refs, {path = path, lnum = 1, line = _57_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
+        table.insert(refs, {path = path, lnum = 1, line = _62_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
       end
       return {content = content, refs = refs}
     else
@@ -552,7 +609,7 @@ M.new = function(opts)
         if ((#content < settings["project-max-total-lines"]) and allow_project_path_3f(rel, include_hidden, include_deps) and include_file_path_3f(path, file_filter) and (include_binary or not binary_file_3f(path)) and (not current_path or (vim.fn.fnamemodify(path, ":p") ~= vim.fn.fnamemodify(current_path, ":p"))) and (1 == vim.fn.filereadable(path))) then
           local size = vim.fn.getfsize(path)
           if ((size >= 0) and (size <= settings["project-max-file-bytes"])) then
-            local view = read_file_view_cached(path, {["include-binary"] = include_binary, transforms = (session["effective-transforms"] or {}), ["wrap-width"] = wrap_width, linebreak = true})
+            local view = read_file_view_cached(path, project_view_opts(session, wrap_width))
             if (type(view) == "table") then
               file_cache[path] = view
               push_file_into_pool_21(pool_session, path, view, prefilter)
@@ -598,7 +655,7 @@ M.new = function(opts)
         local p = canonical_path(path)
         if (p and (1 == vim.fn.filereadable(p)) and include_file_path_3f(p, file_filter)) then
           deferred_seen[p] = true
-          push_file_into_pool_21(session, p, read_file_view_cached(p, {["include-binary"] = include_binary, transforms = (session["effective-transforms"] or {}), ["wrap-width"] = wrap_width, linebreak = true}), prefilter)
+          push_file_into_pool_21(session, p, cached_project_view(session, p, wrap_width), prefilter)
         else
         end
       end
@@ -628,7 +685,7 @@ M.new = function(opts)
     local stream_id = session["lazy-stream-id"]
     local run_batch0 = nil
     local run_batch = run_batch0
-    local function _70_()
+    local function _75_()
       if (session_active_3f(session) and (stream_id == session["lazy-stream-id"]) and not session["lazy-stream-done"]) then
         local paths = session["lazy-stream-paths"]
         local total = #paths
@@ -639,14 +696,8 @@ M.new = function(opts)
         local touched = false
         while ((consumed < chunk) and ((now_ms() - batch_start) < frame_budget) and (session["lazy-stream-next"] <= total) and (#session.meta.buf.content < settings["project-max-total-lines"])) do
           local path = paths[session["lazy-stream-next"]]
-          local view = (path and read_file_view_cached(path, {["include-binary"] = session["effective-include-binary"], transforms = (session["effective-transforms"] or {}), ["wrap-width"] = results_wrap_width(session), linebreak = true}))
-          local before = #session.meta.buf.content
-          if view then
-            push_file_into_pool_21(session, path, view, prefilter)
-            if (#session.meta.buf.content > before) then
-              touched = true
-            else
-            end
+          if stream_next_path_21(session, path, prefilter) then
+            touched = true
           else
           end
           consumed = (consumed + 1)
@@ -656,30 +707,15 @@ M.new = function(opts)
           session["lazy-stream-done"] = true
         else
         end
-        if (session["lazy-stream-done"] and session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
-          local sent_complete0 = false
-          local sent_complete_3f = sent_complete0
-          session.meta.buf["visible-source-syntax-only"] = false
-          events.send("on-source-syntax-refresh!", {session = session, ["immediate?"] = true})
-          if not prompt_has_active_query_3f(session) then
-            events.send("on-source-pool-change!", {session = session, phase = "complete", ["force?"] = true, ["refresh-lines"] = true, ["restore-view?"] = true})
-            sent_complete_3f = true
-          else
-          end
-          if not sent_complete_3f then
-            events.send("on-source-pool-change!", {session = session, phase = "complete", ["phase-only?"] = true, ["force?"] = true, ["refresh-lines"] = true})
-          else
-          end
-        else
-        end
+        maybe_finish_project_stream_21(session)
         if touched then
-          local _77_
+          local _78_
           if prompt_has_active_query_3f(session) then
-            _77_ = nil
+            _78_ = nil
           else
-            _77_ = "bootstrap"
+            _78_ = "bootstrap"
           end
-          events.send("on-source-pool-change!", {session = session, phase = _77_, ["refresh-lines"] = false})
+          emit_source_pool_change_21(session, {phase = _78_, ["refresh-lines"] = false})
         else
         end
         if (not session["lazy-stream-done"] and (stream_id == session["lazy-stream-id"]) and session_active_3f(session)) then
@@ -691,7 +727,7 @@ M.new = function(opts)
         return nil
       end
     end
-    run_batch = _70_
+    run_batch = _75_
     return vim.defer_fn(run_batch, 0)
   end
   local function apply_source_set_21(session)
@@ -717,15 +753,9 @@ M.new = function(opts)
         start_project_stream_21(session, prefilter, init)
       else
         local pool = collect_project_sources(session, session["effective-include-hidden"], session["effective-include-ignored"], session["effective-include-deps"], session["effective-include-binary"], session["effective-include-files"], prefilter)
-        meta.buf.content = pool.content
-        meta.buf["source-refs"] = pool.refs
-        bump_content_version_21(meta)
+        set_project_pool_21(session, pool)
         session["lazy-stream-done"] = true
-        if (session.meta and session.meta.buf and not session["prompt-animating?"] and not session["startup-initializing"]) then
-          session.meta.buf["visible-source-syntax-only"] = false
-          events.send("on-source-syntax-refresh!", {session = session, ["immediate?"] = true})
-        else
-        end
+        enable_full_source_syntax_21(session)
       end
     else
       session["lazy-stream-id"] = (1 + (session["lazy-stream-id"] or 0))
@@ -815,7 +845,7 @@ M.new = function(opts)
         if (session and (token == session["project-bootstrap-token"]) and session["project-mode"] and session["prompt-buf"] and session_active_3f(session) and not session["project-bootstrapped"]) then
           local has_query = prompt_has_active_query_3f(session)
           apply_source_set_21(session)
-          events.send("on-source-pool-change!", {session = session, phase = "bootstrap", ["force?"] = true, ["refresh-lines"] = true})
+          emit_source_pool_change_21(session, {phase = "bootstrap", ["force?"] = true, ["refresh-lines"] = true})
           session["project-bootstrapped"] = true
           if has_query then
             session["prompt-update-dirty"] = true
@@ -830,7 +860,7 @@ M.new = function(opts)
           else
           end
           if not has_query then
-            events.send("on-source-pool-change!", {session = session, phase = "complete", ["force?"] = true, ["restore-view?"] = true, ["refresh-lines"] = true})
+            emit_source_pool_change_21(session, {phase = "complete", ["force?"] = true, ["restore-view?"] = true, ["refresh-lines"] = true})
           else
           end
           session["project-mode-starting?"] = false

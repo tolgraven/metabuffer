@@ -441,6 +441,86 @@
           (set bytes (+ bytes size)))))
     (math.floor (/ bytes 80)))
 
+  (fn project-view-opts
+    [session wrap-width]
+    {:include-binary session.effective-include-binary
+     :transforms (or session.effective-transforms {})
+     :wrap-width wrap-width
+     :linebreak true})
+
+  (fn cached-project-view
+    [session path wrap-width]
+    (and path
+         (read-file-view-cached
+           path
+           (project-view-opts session wrap-width))))
+
+  (fn set-project-pool!
+    [session pool]
+    (let [meta session.meta]
+      (set meta.buf.content pool.content)
+      (set meta.buf.source-refs pool.refs)
+      (bump-content-version! meta)))
+
+  (fn enable-full-source-syntax!
+    [session]
+    (when (and session.meta
+               session.meta.buf
+               (not session.prompt-animating?)
+               (not session.startup-initializing))
+      (set session.meta.buf.visible-source-syntax-only false)
+      (events.send :on-source-syntax-refresh!
+        {:session session
+         :immediate? true})))
+
+  (fn emit-source-pool-change!
+    [session opts]
+    (events.send :on-source-pool-change!
+      (vim.tbl_extend "force" {:session session} (or opts {}))))
+
+  (fn finish-project-stream!
+    [session sent-complete?]
+    (set session.lazy-stream-done true)
+    (enable-full-source-syntax! session)
+    ;; Always force one final UI refresh when streaming settles so the info pane
+    ;; leaves its loading/empty state even if the last batch did not append any
+    ;; new visible lines.
+    (when-not sent-complete?
+      (emit-source-pool-change!
+        session
+        {:phase :complete
+         :phase-only? true
+         :force? true
+         :refresh-lines true})))
+
+  (fn maybe-finish-project-stream!
+    [session]
+    (when (and session.lazy-stream-done
+               session.meta
+               session.meta.buf
+               (not session.prompt-animating?)
+               (not session.startup-initializing))
+      (let [has-query? (prompt-has-active-query? session)
+            sent-complete? false]
+        (var sent-complete sent-complete?)
+        (when-not has-query?
+          (emit-source-pool-change!
+            session
+            {:phase :complete
+             :force? true
+             :refresh-lines true
+             :restore-view? true})
+          (set sent-complete true))
+        (finish-project-stream! session sent-complete))))
+
+  (fn stream-next-path!
+    [session path prefilter]
+    (let [before (# session.meta.buf.content)
+          view (cached-project-view session path (results-wrap-width session))]
+      (when view
+        (push-file-into-pool! session path view prefilter)
+        (> (# session.meta.buf.content) before))))
+
   (fn collect-project-sources
     [session include-hidden include-ignored include-deps include-binary include-files prefilter]
     "Collect eager project-mode content/ref pools. Returns {:content [] :refs []}."
@@ -506,10 +586,7 @@
                     (when (and (>= size 0) (<= size settings.project-max-file-bytes))
                       (let [view (read-file-view-cached
                                    path
-                                   {:include-binary include-binary
-                                    :transforms (or session.effective-transforms {})
-                                    :wrap-width wrap-width
-                                    :linebreak true})]
+                                   (project-view-opts session wrap-width))]
                         (when (= (type view) "table")
                           (set (. file-cache path) view)
                           (push-file-into-pool! pool-session path view prefilter))))))))
@@ -563,12 +640,7 @@
             (push-file-into-pool!
               session
               p
-              (read-file-view-cached
-                p
-                {:include-binary include-binary
-                 :transforms (or session.effective-transforms {})
-                 :wrap-width wrap-width
-                 :linebreak true})
+              (cached-project-view session p wrap-width)
               prefilter))))
       (each [_ path (ipairs all-paths)]
         (let [p (canonical-path path)]
@@ -626,57 +698,19 @@
                           (< (- (now-ms) batch-start) frame-budget)
                           (<= session.lazy-stream-next total)
                           (< (# session.meta.buf.content) settings.project-max-total-lines))
-                (let [path (. paths session.lazy-stream-next)
-                      view (and path
-                                (read-file-view-cached
-                                  path
-                                  {:include-binary session.effective-include-binary
-                                   :transforms (or session.effective-transforms {})
-                                   :wrap-width (results-wrap-width session)
-                                   :linebreak true}))
-                      before (# session.meta.buf.content)]
-                  (when view
-                    (push-file-into-pool! session path view prefilter)
-                    (when (> (# session.meta.buf.content) before)
-                      (set touched true)))
+                (let [path (. paths session.lazy-stream-next)]
+                  (when (stream-next-path! session path prefilter)
+                    (set touched true))
                   (set consumed (+ consumed 1))
                   (set session.lazy-stream-next (+ session.lazy-stream-next 1))))
               (when (or (> session.lazy-stream-next total)
                         (>= (# session.meta.buf.content) settings.project-max-total-lines))
                 (set session.lazy-stream-done true))
-              (when (and session.lazy-stream-done
-                         session.meta
-                         session.meta.buf
-                         (not session.prompt-animating?)
-                         (not session.startup-initializing))
-                (let [sent-complete0 false]
-                  (var sent-complete? sent-complete0)
-                  (set session.meta.buf.visible-source-syntax-only false)
-                  (events.send :on-source-syntax-refresh!
-                    {:session session
-                     :immediate? true})
-                  (when-not (prompt-has-active-query? session)
-                    (events.send :on-source-pool-change!
-                      {:session session
-                       :phase :complete
-                       :force? true
-                       :refresh-lines true
-                       :restore-view? true})
-                    (set sent-complete? true))
-                  ;; Always force one final UI refresh when streaming settles so the
-                  ;; info pane leaves its loading/empty state even if the last batch
-                  ;; did not append any new visible lines.
-                  (when-not sent-complete?
-                    (events.send :on-source-pool-change!
-                      {:session session
-                       :phase :complete
-                       :phase-only? true
-                       :force? true
-                       :refresh-lines true}))))
+              (maybe-finish-project-stream! session)
               (when touched
-                (events.send :on-source-pool-change!
-                  {:session session
-                   :phase (if (prompt-has-active-query? session) nil :bootstrap)
+                (emit-source-pool-change!
+                  session
+                  {:phase (if (prompt-has-active-query? session) nil :bootstrap)
                    :refresh-lines false}))
               (when (and (not session.lazy-stream-done)
                          (= stream-id session.lazy-stream-id)
@@ -721,18 +755,9 @@
                                                   session.effective-include-binary
                                                   session.effective-include-files
                                                   prefilter)]
-                (set meta.buf.content pool.content)
-                (set meta.buf.source-refs pool.refs)
-                (bump-content-version! meta)
+                (set-project-pool! session pool)
                 (set session.lazy-stream-done true)
-                (when (and session.meta
-                           session.meta.buf
-                           (not session.prompt-animating?)
-                           (not session.startup-initializing))
-                  (set session.meta.buf.visible-source-syntax-only false)
-                  (events.send :on-source-syntax-refresh!
-                    {:session session
-                     :immediate? true})))))
+                (enable-full-source-syntax! session))))
         (do
           (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
           (set session.lazy-stream-done true)
@@ -825,9 +850,9 @@
                            (not session.project-bootstrapped))
                   (let [has-query (prompt-has-active-query? session)]
                     (apply-source-set! session)
-                    (events.send :on-source-pool-change!
-                      {:session session
-                       :phase :bootstrap
+                    (emit-source-pool-change!
+                      session
+                      {:phase :bootstrap
                        :force? true
                        :refresh-lines true})
                     (set session.project-bootstrapped true)
@@ -847,9 +872,9 @@
                             (schedule-prompt-update! session 0))))
                     ;; Keep selection/view stable even when no prompt filter is applied.
                     (when-not has-query
-                      (events.send :on-source-pool-change!
-                        {:session session
-                         :phase :complete
+                      (emit-source-pool-change!
+                        session
+                        {:phase :complete
                          :force? true
                          :restore-view? true
                          :refresh-lines true}))
