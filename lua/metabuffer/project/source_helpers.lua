@@ -4,6 +4,222 @@ local M = {}
 local events = require("metabuffer.events")
 local source_mod = require("metabuffer.source")
 local transform_mod = require("metabuffer.transform")
+local function parse_prefilter_terms(query_lines, ignorecase)
+  local function unclosed_pattern_delims_3f(token)
+    local s = (token or "")
+    local n = #s
+    local i = 1
+    local paren = 0
+    local bracket = 0
+    while (i <= n) do
+      local ch = string.sub(s, i, i)
+      if (ch == "%") then
+        i = (i + 2)
+      else
+        if (ch == "(") then
+          paren = (paren + 1)
+        elseif (ch == ")") then
+          paren = math.max(0, (paren - 1))
+        else
+        end
+        if (ch == "[") then
+          bracket = (bracket + 1)
+        elseif (ch == "]") then
+          bracket = math.max(0, (bracket - 1))
+        else
+        end
+        i = (i + 1)
+      end
+    end
+    return ((paren > 0) or (bracket > 0))
+  end
+  local function regex_token_3f(token)
+    local and_4_ = (type(token) == "string") and (token ~= "") and not string.match(token, "^[%?%*%+%|%.]$") and not unclosed_pattern_delims_3f(token) and (nil ~= string.find(token, "[\\%[%]%(%)%+%*%?%|%.]"))
+    if and_4_ then
+      local ok = pcall(vim.regex, ("\\C" .. token))
+      and_4_ = ok
+    end
+    return and_4_
+  end
+  local function prefilter_safe_token(tok)
+    local raw = (tok or "")
+    local escaped_neg_3f = vim.startswith(raw, "\\!")
+    local negated_3f = ((string.sub(raw, 1, 1) == "!") and not escaped_neg_3f)
+    local body0
+    if escaped_neg_3f then
+      body0 = string.sub(raw, 2)
+    elseif negated_3f then
+      body0 = string.sub(raw, 2)
+    else
+      body0 = raw
+    end
+    local anchor_start = ((#body0 > 0) and not vim.startswith(body0, "\\^") and (string.sub(body0, 1, 1) == "^"))
+    local body1
+    if anchor_start then
+      body1 = string.sub(body0, 2)
+    else
+      body1 = body0
+    end
+    local anchor_end = ((#body1 > 0) and not vim.endswith(body1, "\\$") and (string.sub(body1, #body1) == "$"))
+    local body2
+    if anchor_end then
+      body2 = string.sub(body1, 1, (#body1 - 1))
+    else
+      body2 = body1
+    end
+    local unescaped = string.gsub(string.gsub(string.gsub(body2, "\\\\!", "!"), "\\%^", "^"), "\\%$", "$")
+    if negated_3f then
+      return nil
+    else
+      if regex_token_3f(unescaped) then
+        return nil
+      else
+        if (unescaped ~= "") then
+          return unescaped
+        else
+          return nil
+        end
+      end
+    end
+  end
+  local groups = {}
+  for _, line in ipairs((query_lines or {})) do
+    local trimmed = vim.trim((line or ""))
+    if (trimmed ~= "") then
+      local toks = {}
+      for _0, tok in ipairs(vim.split(trimmed, "%s+")) do
+        local val_110_auto = prefilter_safe_token(tok)
+        if val_110_auto then
+          local needle = val_110_auto
+          local function _12_()
+            if ignorecase then
+              return string.lower(needle)
+            else
+              return needle
+            end
+          end
+          table.insert(toks, _12_())
+        else
+        end
+      end
+      if (#toks > 0) then
+        table.insert(groups, toks)
+      else
+      end
+    else
+    end
+  end
+  return groups
+end
+local function line_matches_prefilter_3f(line, spec)
+  if (not spec or not spec.groups or (#spec.groups == 0)) then
+    return true
+  else
+    local probe0 = (line or "")
+    local probe
+    if spec.ignorecase then
+      probe = string.lower(probe0)
+    else
+      probe = probe0
+    end
+    local all_groups = true
+    for _, grp in ipairs(spec.groups) do
+      local grp_ok = true
+      for _0, tok in ipairs(grp) do
+        if (grp_ok and not string.find(probe, tok, 1, true)) then
+          grp_ok = false
+        else
+        end
+      end
+      if (all_groups and not grp_ok) then
+        all_groups = false
+      else
+      end
+    end
+    return all_groups
+  end
+end
+local function reset_meta_indices_21(meta)
+  local all_indices = {}
+  for i = 1, #meta.buf.content do
+    table.insert(all_indices, i)
+  end
+  meta.buf["all-indices"] = all_indices
+  meta.buf.indices = vim.deepcopy(all_indices)
+  return nil
+end
+local function bump_content_version_21(meta)
+  meta.buf["content-version"] = (1 + (meta.buf["content-version"] or 0))
+  return nil
+end
+local function file_query_matches_3f(path, q, ignorecase)
+  local probe0 = (path or "")
+  local probe
+  if ignorecase then
+    probe = string.lower(probe0)
+  else
+    probe = probe0
+  end
+  local query0 = vim.trim((q or ""))
+  local query
+  if ignorecase then
+    query = string.lower(query0)
+  else
+    query = query0
+  end
+  if (query == "") then
+    return true
+  else
+    return (nil ~= string.find(probe, query, 1, true))
+  end
+end
+local function path_matches_file_queries_3f(path, queries, ignorecase)
+  if (#(queries or {}) == 0) then
+    return true
+  else
+    local path0 = (path or "")
+    local rel
+    if (path0 ~= "") then
+      rel = vim.fn.fnamemodify(path0, ":.")
+    else
+      rel = ""
+    end
+    local probe
+    if (rel ~= "") then
+      probe = (rel .. " " .. path0)
+    else
+      probe = path0
+    end
+    local ok0 = true
+    local ok = ok0
+    for _, q in ipairs((queries or {})) do
+      if (ok and not file_query_matches_3f(probe, q, ignorecase)) then
+        ok = false
+      else
+      end
+    end
+    return ok
+  end
+end
+local function active_file_query_lines(session)
+  local out = {}
+  for _, q in ipairs((session["file-query-lines"] or {})) do
+    local trimmed = vim.trim((q or ""))
+    if (trimmed ~= "") then
+      table.insert(out, trimmed)
+    else
+    end
+  end
+  return out
+end
+local function current_file_filter(session)
+  local queries = active_file_query_lines(session)
+  local active_3f = (session["effective-include-files"] and (#queries > 0))
+  return {["active?"] = active_3f, queries = queries, ignorecase = clj.boolean((session.meta and session.meta.ignorecase and session.meta.ignorecase()))}
+end
+local function file_only_mode_3f(session, normal_query_active_3f)
+  return (session["project-mode"] and session["effective-include-files"] and not normal_query_active_3f(session))
+end
 M.new = function(opts)
   local settings = opts.settings
   local truthy_3f = opts["truthy?"]
@@ -15,154 +231,6 @@ M.new = function(opts)
   local binary_file_3f = opts["binary-file?"]
   local read_file_view_cached = opts["read-file-view-cached"]
   local prompt_has_active_query_3f = opts["prompt-has-active-query?"]
-  local function parse_prefilter_terms(query_lines, ignorecase)
-    local function unclosed_pattern_delims_3f(token)
-      local s = (token or "")
-      local n = #s
-      local i = 1
-      local paren = 0
-      local bracket = 0
-      while (i <= n) do
-        local ch = string.sub(s, i, i)
-        if (ch == "%") then
-          i = (i + 2)
-        else
-          if (ch == "(") then
-            paren = (paren + 1)
-          elseif (ch == ")") then
-            paren = math.max(0, (paren - 1))
-          else
-          end
-          if (ch == "[") then
-            bracket = (bracket + 1)
-          elseif (ch == "]") then
-            bracket = math.max(0, (bracket - 1))
-          else
-          end
-          i = (i + 1)
-        end
-      end
-      return ((paren > 0) or (bracket > 0))
-    end
-    local function regex_token_3f(token)
-      local and_4_ = (type(token) == "string") and (token ~= "") and not string.match(token, "^[%?%*%+%|%.]$") and not unclosed_pattern_delims_3f(token) and (nil ~= string.find(token, "[\\%[%]%(%)%+%*%?%|%.]"))
-      if and_4_ then
-        local ok = pcall(vim.regex, ("\\C" .. token))
-        and_4_ = ok
-      end
-      return and_4_
-    end
-    local function prefilter_safe_token(tok)
-      local raw = (tok or "")
-      local escaped_neg_3f = vim.startswith(raw, "\\!")
-      local negated_3f = ((string.sub(raw, 1, 1) == "!") and not escaped_neg_3f)
-      local body0
-      if escaped_neg_3f then
-        body0 = string.sub(raw, 2)
-      elseif negated_3f then
-        body0 = string.sub(raw, 2)
-      else
-        body0 = raw
-      end
-      local anchor_start = ((#body0 > 0) and not vim.startswith(body0, "\\^") and (string.sub(body0, 1, 1) == "^"))
-      local body1
-      if anchor_start then
-        body1 = string.sub(body0, 2)
-      else
-        body1 = body0
-      end
-      local anchor_end = ((#body1 > 0) and not vim.endswith(body1, "\\$") and (string.sub(body1, #body1) == "$"))
-      local body2
-      if anchor_end then
-        body2 = string.sub(body1, 1, (#body1 - 1))
-      else
-        body2 = body1
-      end
-      local unescaped = string.gsub(string.gsub(string.gsub(body2, "\\\\!", "!"), "\\%^", "^"), "\\%$", "$")
-      if negated_3f then
-        return nil
-      else
-        if regex_token_3f(unescaped) then
-          return nil
-        else
-          if (unescaped ~= "") then
-            return unescaped
-          else
-            return nil
-          end
-        end
-      end
-    end
-    local groups = {}
-    for _, line in ipairs((query_lines or {})) do
-      local trimmed = vim.trim((line or ""))
-      if (trimmed ~= "") then
-        local toks = {}
-        for _0, tok in ipairs(vim.split(trimmed, "%s+")) do
-          local val_110_auto = prefilter_safe_token(tok)
-          if val_110_auto then
-            local needle = val_110_auto
-            local function _12_()
-              if ignorecase then
-                return string.lower(needle)
-              else
-                return needle
-              end
-            end
-            table.insert(toks, _12_())
-          else
-          end
-        end
-        if (#toks > 0) then
-          table.insert(groups, toks)
-        else
-        end
-      else
-      end
-    end
-    return groups
-  end
-  local function line_matches_prefilter_3f(line, spec)
-    if (not spec or not spec.groups or (#spec.groups == 0)) then
-      return true
-    else
-      local probe0 = (line or "")
-      local probe
-      if spec.ignorecase then
-        probe = string.lower(probe0)
-      else
-        probe = probe0
-      end
-      local all_groups = true
-      for _, grp in ipairs(spec.groups) do
-        local grp_ok = true
-        for _0, tok in ipairs(grp) do
-          if (grp_ok and not string.find(probe, tok, 1, true)) then
-            grp_ok = false
-          else
-          end
-        end
-        if (all_groups and not grp_ok) then
-          all_groups = false
-        else
-        end
-      end
-      return all_groups
-    end
-  end
-  local function reset_meta_indices_21(meta)
-    local all_indices = {}
-    for i = 1, #meta.buf.content do
-      table.insert(all_indices, i)
-    end
-    meta.buf["all-indices"] = all_indices
-    meta.buf.indices = vim.deepcopy(all_indices)
-    return nil
-  end
-  local function bump_content_version_21(meta)
-    meta.buf["content-version"] = (1 + (meta.buf["content-version"] or 0))
-    return nil
-  end
   local function push_file_entry_into_pool_21(session, path)
     local meta = session.meta
     local content = meta.buf.content
@@ -170,62 +238,13 @@ M.new = function(opts)
     local rel = vim.fn.fnamemodify(path, ":.")
     local line = ""
     table.insert(content, line)
-    local _20_
+    local _28_
     if ((type(rel) == "string") and (rel ~= "")) then
-      _20_ = rel
+      _28_ = rel
     else
-      _20_ = path
+      _28_ = path
     end
-    return table.insert(refs, {path = path, lnum = 1, line = _20_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
-  end
-  local function file_query_matches_3f(path, q, ignorecase)
-    local probe0 = (path or "")
-    local probe
-    if ignorecase then
-      probe = string.lower(probe0)
-    else
-      probe = probe0
-    end
-    local query0 = vim.trim((q or ""))
-    local query
-    if ignorecase then
-      query = string.lower(query0)
-    else
-      query = query0
-    end
-    if (query == "") then
-      return true
-    else
-      return (nil ~= string.find(probe, query, 1, true))
-    end
-  end
-  local function path_matches_file_queries_3f(path, queries, ignorecase)
-    if (#(queries or {}) == 0) then
-      return true
-    else
-      local path0 = (path or "")
-      local rel
-      if (path0 ~= "") then
-        rel = vim.fn.fnamemodify(path0, ":.")
-      else
-        rel = ""
-      end
-      local probe
-      if (rel ~= "") then
-        probe = (rel .. " " .. path0)
-      else
-        probe = path0
-      end
-      local ok0 = true
-      local ok = ok0
-      for _, q in ipairs((queries or {})) do
-        if (ok and not file_query_matches_3f(probe, q, ignorecase)) then
-          ok = false
-        else
-        end
-      end
-      return ok
-    end
+    return table.insert(refs, {path = path, lnum = 1, line = _28_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
   end
   local function include_file_path_3f(path, file_filter)
     return (not (file_filter and file_filter["active?"]) or path_matches_file_queries_3f(path, ((file_filter and file_filter.queries) or {}), clj.boolean((file_filter and file_filter.ignorecase))))
@@ -316,25 +335,6 @@ M.new = function(opts)
       end
     end
     return on_3f
-  end
-  local function active_file_query_lines(session)
-    local out = {}
-    for _, q in ipairs((session["file-query-lines"] or {})) do
-      local trimmed = vim.trim((q or ""))
-      if (trimmed ~= "") then
-        table.insert(out, trimmed)
-      else
-      end
-    end
-    return out
-  end
-  local function current_file_filter(session)
-    local queries = active_file_query_lines(session)
-    local active_3f = (session["effective-include-files"] and (#queries > 0))
-    return {["active?"] = active_3f, queries = queries, ignorecase = clj.boolean((session.meta and session.meta.ignorecase and session.meta.ignorecase()))}
-  end
-  local function file_only_mode_3f(session)
-    return (session["project-mode"] and session["effective-include-files"] and not normal_query_active_3f(session))
   end
   local function set_query_source_content_21(session)
     local meta = session.meta
@@ -543,6 +543,9 @@ M.new = function(opts)
       return nil
     end
   end
-  return {["parse-prefilter-terms"] = parse_prefilter_terms, ["line-matches-prefilter?"] = line_matches_prefilter_3f, ["reset-meta-indices!"] = reset_meta_indices_21, ["bump-content-version!"] = bump_content_version_21, ["push-file-entry-into-pool!"] = push_file_entry_into_pool_21, ["include-file-path?"] = include_file_path_3f, ["all-project-file-paths"] = all_project_file_paths, ["results-wrap-width"] = results_wrap_width, ["single-source-view"] = single_source_view, ["set-single-source-content!"] = set_single_source_content_21, ["normal-query-active?"] = normal_query_active_3f, ["current-file-filter"] = current_file_filter, ["file-only-mode?"] = file_only_mode_3f, ["set-query-source-content!"] = set_query_source_content_21, ["set-file-entry-source-content!"] = set_file_entry_source_content_21, ["best-project-selection-index"] = best_project_selection_index, ["push-file-into-pool!"] = push_file_into_pool_21, ["current-project-prefilter"] = current_project_prefilter, ["open-project-buffer-paths"] = open_project_buffer_paths, ["estimate-lines-from-files"] = estimate_lines_from_files, ["project-view-opts"] = project_view_opts, ["cached-project-view"] = cached_project_view, ["set-project-pool!"] = set_project_pool_21, ["enable-full-source-syntax!"] = enable_full_source_syntax_21, ["emit-source-pool-change!"] = emit_source_pool_change_21, ["finish-project-stream!"] = finish_project_stream_21, ["maybe-finish-project-stream!"] = maybe_finish_project_stream_21}
+  local function _61_(session)
+    return file_only_mode_3f(session, normal_query_active_3f)
+  end
+  return {["parse-prefilter-terms"] = parse_prefilter_terms, ["line-matches-prefilter?"] = line_matches_prefilter_3f, ["reset-meta-indices!"] = reset_meta_indices_21, ["bump-content-version!"] = bump_content_version_21, ["push-file-entry-into-pool!"] = push_file_entry_into_pool_21, ["include-file-path?"] = include_file_path_3f, ["all-project-file-paths"] = all_project_file_paths, ["results-wrap-width"] = results_wrap_width, ["single-source-view"] = single_source_view, ["set-single-source-content!"] = set_single_source_content_21, ["normal-query-active?"] = normal_query_active_3f, ["current-file-filter"] = current_file_filter, ["file-only-mode?"] = _61_, ["set-query-source-content!"] = set_query_source_content_21, ["set-file-entry-source-content!"] = set_file_entry_source_content_21, ["best-project-selection-index"] = best_project_selection_index, ["push-file-into-pool!"] = push_file_into_pool_21, ["current-project-prefilter"] = current_project_prefilter, ["open-project-buffer-paths"] = open_project_buffer_paths, ["estimate-lines-from-files"] = estimate_lines_from_files, ["project-view-opts"] = project_view_opts, ["cached-project-view"] = cached_project_view, ["set-project-pool!"] = set_project_pool_21, ["enable-full-source-syntax!"] = enable_full_source_syntax_21, ["emit-source-pool-change!"] = emit_source_pool_change_21, ["finish-project-stream!"] = finish_project_stream_21, ["maybe-finish-project-stream!"] = maybe_finish_project_stream_21}
 end
 return M

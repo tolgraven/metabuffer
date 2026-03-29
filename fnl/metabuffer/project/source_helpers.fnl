@@ -5,115 +5,164 @@
 (local source-mod (require :metabuffer.source))
 (local transform-mod (require :metabuffer.transform))
 
+(fn parse-prefilter-terms
+  [query-lines ignorecase]
+  (fn unclosed-pattern-delims?
+    [token]
+    (let [s (or token "")
+          n (# s)]
+      (var i 1)
+      (var paren 0)
+      (var bracket 0)
+      (while (<= i n)
+        (let [ch (string.sub s i i)]
+          (if (= ch "%")
+              (set i (+ i 2))
+              (do
+                (if (= ch "(")
+                    (set paren (+ paren 1))
+                    (= ch ")")
+                    (set paren (math.max 0 (- paren 1))))
+                (if (= ch "[")
+                    (set bracket (+ bracket 1))
+                    (= ch "]")
+                    (set bracket (math.max 0 (- bracket 1))))
+                (set i (+ i 1))))))
+      (or (> paren 0) (> bracket 0))))
+
+  (fn regex-token?
+    [token]
+    (and (= (type token) "string")
+         (~= token "")
+         (not (string.match token "^[%?%*%+%|%.]$"))
+         (not (unclosed-pattern-delims? token))
+         (not= nil (string.find token "[\\%[%]%(%)%+%*%?%|%.]"))
+         (let [[ok] [(pcall vim.regex (.. "\\C" token))]]
+           ok)))
+
+  (fn prefilter-safe-token
+    [tok]
+    (let [raw (or tok "")
+          escaped-neg? (vim.startswith raw "\\!")
+          negated? (and (= (string.sub raw 1 1) "!")
+                        (not escaped-neg?))
+          body0 (if escaped-neg?
+                    (string.sub raw 2)
+                    negated?
+                    (string.sub raw 2)
+                    raw)
+          anchor-start (and (> (# body0) 0)
+                            (not (vim.startswith body0 "\\^"))
+                            (= (string.sub body0 1 1) "^"))
+          body1 (if anchor-start (string.sub body0 2) body0)
+          anchor-end (and (> (# body1) 0)
+                          (not (vim.endswith body1 "\\$"))
+                          (= (string.sub body1 (# body1)) "$"))
+          body2 (if anchor-end (string.sub body1 1 (- (# body1) 1)) body1)
+          unescaped (-> body2
+                        (string.gsub "\\\\!" "!")
+                        (string.gsub "\\%^" "^")
+                        (string.gsub "\\%$" "$"))]
+      (if negated?
+          nil
+          (if (regex-token? unescaped)
+              nil
+              (if (~= unescaped "") unescaped nil)))))
+  (let [groups []]
+    (each [_ line (ipairs (or query-lines []))]
+      (let [trimmed (vim.trim (or line ""))]
+        (when (~= trimmed "")
+          (let [toks []]
+            (each [_ tok (ipairs (vim.split trimmed "%s+"))]
+              (when-let [needle (prefilter-safe-token tok)]
+                (table.insert toks (if ignorecase (string.lower needle) needle))))
+            (when (> (# toks) 0)
+              (table.insert groups toks))))))
+    groups))
+
+(fn line-matches-prefilter?
+  [line spec]
+  (if (or (not spec) (not spec.groups) (= (# spec.groups) 0))
+      true
+      (let [probe0 (or line "")
+            probe (if spec.ignorecase (string.lower probe0) probe0)]
+        (var all-groups true)
+        (each [_ grp (ipairs spec.groups)]
+          (var grp-ok true)
+          (each [_ tok (ipairs grp)]
+            (when (and grp-ok (not (string.find probe tok 1 true)))
+              (set grp-ok false)))
+          (when (and all-groups (not grp-ok))
+            (set all-groups false)))
+        all-groups)))
+
+(fn reset-meta-indices!
+  [meta]
+  (let [all-indices []]
+    (for [i 1 (# meta.buf.content)]
+      (table.insert all-indices i))
+    (set meta.buf.all-indices all-indices)
+    (set meta.buf.indices (vim.deepcopy all-indices))))
+
+(fn bump-content-version!
+  [meta]
+  (set meta.buf.content-version (+ 1 (or meta.buf.content-version 0))))
+
+(fn file-query-matches?
+  [path q ignorecase]
+  (let [probe0 (or path "")
+        probe (if ignorecase (string.lower probe0) probe0)
+        query0 (vim.trim (or q ""))
+        query (if ignorecase (string.lower query0) query0)]
+    (if (= query "")
+        true
+        (not= nil (string.find probe query 1 true)))))
+
+(fn path-matches-file-queries?
+  [path queries ignorecase]
+  (if (= (# (or queries [])) 0)
+      true
+      (let [path0 (or path "")
+            rel (if (~= path0 "") (vim.fn.fnamemodify path0 ":.") "")
+            probe (if (~= rel "")
+                      (.. rel " " path0)
+                      path0)
+            ok0 true]
+        (var ok ok0)
+        (each [_ q (ipairs (or queries []))]
+          (when (and ok (not (file-query-matches? probe q ignorecase)))
+            (set ok false)))
+        ok)))
+
+(fn active-file-query-lines
+  [session]
+  (let [out []]
+    (each [_ q (ipairs (or session.file-query-lines []))]
+      (let [trimmed (vim.trim (or q ""))]
+        (when (~= trimmed "")
+          (table.insert out trimmed))))
+    out))
+
+(fn current-file-filter
+  [session]
+  (let [queries (active-file-query-lines session)
+        active? (and session.effective-include-files (> (# queries) 0))]
+    {:active? active?
+     :queries queries
+     :ignorecase (clj.boolean (and session.meta session.meta.ignorecase (session.meta.ignorecase)))}))
+
+(fn file-only-mode?
+  [session normal-query-active?]
+  (and session.project-mode
+       session.effective-include-files
+       (not (normal-query-active? session))))
+
 (fn M.new
   [opts]
   (let [{: settings : truthy? : canonical-path
          : current-buffer-path : path-under-root? : allow-project-path?
          : project-file-list : binary-file? : read-file-view-cached
          : prompt-has-active-query?} opts]
-
-    (fn parse-prefilter-terms
-      [query-lines ignorecase]
-      (fn unclosed-pattern-delims?
-        [token]
-        (let [s (or token "")
-              n (# s)]
-          (var i 1)
-          (var paren 0)
-          (var bracket 0)
-          (while (<= i n)
-            (let [ch (string.sub s i i)]
-              (if (= ch "%")
-                  (set i (+ i 2))
-                  (do
-                    (if (= ch "(")
-                        (set paren (+ paren 1))
-                        (= ch ")")
-                        (set paren (math.max 0 (- paren 1))))
-                    (if (= ch "[")
-                        (set bracket (+ bracket 1))
-                        (= ch "]")
-                        (set bracket (math.max 0 (- bracket 1))))
-                    (set i (+ i 1))))))
-          (or (> paren 0) (> bracket 0))))
-
-      (fn regex-token?
-        [token]
-        (and (= (type token) "string")
-             (~= token "")
-             (not (string.match token "^[%?%*%+%|%.]$"))
-             (not (unclosed-pattern-delims? token))
-             (not= nil (string.find token "[\\%[%]%(%)%+%*%?%|%.]"))
-             (let [[ok] [(pcall vim.regex (.. "\\C" token))]]
-               ok)))
-
-      (fn prefilter-safe-token
-        [tok]
-        (let [raw (or tok "")
-              escaped-neg? (vim.startswith raw "\\!")
-              negated? (and (= (string.sub raw 1 1) "!")
-                            (not escaped-neg?))
-              body0 (if escaped-neg?
-                        (string.sub raw 2)
-                        negated?
-                        (string.sub raw 2)
-                        raw)
-              anchor-start (and (> (# body0) 0)
-                                (not (vim.startswith body0 "\\^"))
-                                (= (string.sub body0 1 1) "^"))
-              body1 (if anchor-start (string.sub body0 2) body0)
-              anchor-end (and (> (# body1) 0)
-                              (not (vim.endswith body1 "\\$"))
-                              (= (string.sub body1 (# body1)) "$"))
-              body2 (if anchor-end (string.sub body1 1 (- (# body1) 1)) body1)
-              unescaped (-> body2
-                            (string.gsub "\\\\!" "!")
-                            (string.gsub "\\%^" "^")
-                            (string.gsub "\\%$" "$"))]
-          (if negated?
-              nil
-              (if (regex-token? unescaped)
-                  nil
-                  (if (~= unescaped "") unescaped nil)))))
-      (let [groups []]
-        (each [_ line (ipairs (or query-lines []))]
-          (let [trimmed (vim.trim (or line ""))]
-            (when (~= trimmed "")
-              (let [toks []]
-                (each [_ tok (ipairs (vim.split trimmed "%s+"))]
-                  (when-let [needle (prefilter-safe-token tok)]
-                    (table.insert toks (if ignorecase (string.lower needle) needle))))
-                (when (> (# toks) 0)
-                  (table.insert groups toks))))))
-        groups))
-
-    (fn line-matches-prefilter?
-      [line spec]
-      (if (or (not spec) (not spec.groups) (= (# spec.groups) 0))
-          true
-          (let [probe0 (or line "")
-                probe (if spec.ignorecase (string.lower probe0) probe0)]
-            (var all-groups true)
-            (each [_ grp (ipairs spec.groups)]
-              (var grp-ok true)
-              (each [_ tok (ipairs grp)]
-                (when (and grp-ok (not (string.find probe tok 1 true)))
-                  (set grp-ok false)))
-              (when (and all-groups (not grp-ok))
-                (set all-groups false)))
-            all-groups)))
-
-    (fn reset-meta-indices!
-      [meta]
-      (let [all-indices []]
-        (for [i 1 (# meta.buf.content)]
-          (table.insert all-indices i))
-        (set meta.buf.all-indices all-indices)
-        (set meta.buf.indices (vim.deepcopy all-indices))))
-
-    (fn bump-content-version!
-      [meta]
-      (set meta.buf.content-version (+ 1 (or meta.buf.content-version 0))))
 
     (fn push-file-entry-into-pool!
       [session path]
@@ -131,32 +180,6 @@
                             :kind "file-entry"
                             :open-lnum 1
                             :preview-lnum 1})))
-
-    (fn file-query-matches?
-      [path q ignorecase]
-      (let [probe0 (or path "")
-            probe (if ignorecase (string.lower probe0) probe0)
-            query0 (vim.trim (or q ""))
-            query (if ignorecase (string.lower query0) query0)]
-        (if (= query "")
-            true
-            (not= nil (string.find probe query 1 true)))))
-
-    (fn path-matches-file-queries?
-      [path queries ignorecase]
-      (if (= (# (or queries [])) 0)
-          true
-          (let [path0 (or path "")
-                rel (if (~= path0 "") (vim.fn.fnamemodify path0 ":.") "")
-                probe (if (~= rel "")
-                          (.. rel " " path0)
-                          path0)
-                ok0 true]
-            (var ok ok0)
-            (each [_ q (ipairs (or queries []))]
-              (when (and ok (not (file-query-matches? probe q ignorecase)))
-                (set ok false)))
-            ok)))
 
     (fn include-file-path?
       [path file-filter]
@@ -255,29 +278,6 @@
           (when (and (not on?) (~= (vim.trim (or line "")) ""))
             (set on? true)))
         on?))
-
-    (fn active-file-query-lines
-      [session]
-      (let [out []]
-        (each [_ q (ipairs (or session.file-query-lines []))]
-          (let [trimmed (vim.trim (or q ""))]
-            (when (~= trimmed "")
-              (table.insert out trimmed))))
-        out))
-
-    (fn current-file-filter
-      [session]
-      (let [queries (active-file-query-lines session)
-            active? (and session.effective-include-files (> (# queries) 0))]
-        {:active? active?
-         :queries queries
-         :ignorecase (clj.boolean (and session.meta session.meta.ignorecase (session.meta.ignorecase)))}))
-
-    (fn file-only-mode?
-      [session]
-      (and session.project-mode
-           session.effective-include-files
-           (not (normal-query-active? session))))
 
     (fn set-query-source-content!
       [session]
@@ -513,7 +513,7 @@
      :set-single-source-content! set-single-source-content!
      :normal-query-active? normal-query-active?
      :current-file-filter current-file-filter
-     :file-only-mode? file-only-mode?
+     :file-only-mode? (fn [session] (file-only-mode? session normal-query-active?))
      :set-query-source-content! set-query-source-content!
      :set-file-entry-source-content! set-file-entry-source-content!
      :best-project-selection-index best-project-selection-index
