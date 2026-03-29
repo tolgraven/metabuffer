@@ -1,4 +1,3 @@
-(import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local base-buffer-mod (require :metabuffer.buffer.base))
 (local directive-mod (require :metabuffer.query.directive))
 (local M {})
