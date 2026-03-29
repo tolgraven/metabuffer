@@ -2,8 +2,8 @@
 local clj = require("io.gitlab.andreyorst.cljlib.core")
 local base = require("metabuffer.window.base")
 local animation_mod = require("metabuffer.window.animation")
-local directive_mod = require("metabuffer.query.directive")
-local events = require("metabuffer.events")
+local prompt_buffer_mod = require("metabuffer.buffer.prompt")
+local events_mod = require("metabuffer.events")
 local util = require("metabuffer.util")
 local M = {}
 local apply_metabuffer_window_highlights_21 = base["apply-metabuffer-window-highlights!"]
@@ -12,28 +12,12 @@ local with_split_mins = animation_mod["with-split-mins"]
 local function prompt_winhighlight()
   return (metabuffer_winhighlight() .. ",StatusLine:MetaStatuslineMiddle,StatusLineNC:MetaStatuslineMiddle")
 end
-local function apply_prompt_buffer_opts_21(buf)
-  if (buf and vim.api.nvim_buf_is_valid(buf)) then
-    local bo = vim.bo[buf]
-    bo["buftype"] = "nofile"
-    bo["bufhidden"] = "hide"
-    bo["swapfile"] = false
-    bo["modifiable"] = true
-    _G.__meta_directive_completefunc = directive_mod.completefunc
-    bo["completefunc"] = "v:lua.__meta_directive_completefunc"
-    bo["filetype"] = "metabufferprompt"
-  else
-  end
-  return buf
-end
 local function prompt_buffer_21(win)
   local buf = vim.api.nvim_win_get_buf(win)
-  events.send("on-buf-create!", {buf = buf, role = "prompt"})
-  util["set-buffer-name!"](buf, "[Metabuffer Prompt]")
-  return apply_prompt_buffer_opts_21(buf)
+  return prompt_buffer_mod.new(buf)
 end
 local function prompt_window_opts_21(win)
-  events.send("on-win-create!", {win = win, role = "prompt"})
+  events_mod.send("on-win-create!", {win = win, role = "prompt"})
   apply_metabuffer_window_highlights_21(win)
   local wo = vim.wo[win]
   wo["winfixheight"] = true
@@ -53,19 +37,19 @@ local function prompt_window_opts_21(win)
 end
 local function open_split_win_21(origin_win, local_layout_3f, start_height)
   local open_21
-  local function _2_()
+  local function _1_()
     if (local_layout_3f and origin_win and vim.api.nvim_win_is_valid(origin_win)) then
-      local function _3_()
+      local function _2_()
         vim.cmd(("belowright " .. tostring(start_height) .. "new"))
         return vim.api.nvim_get_current_win()
       end
-      return vim.api.nvim_win_call(origin_win, _3_)
+      return vim.api.nvim_win_call(origin_win, _2_)
     else
       vim.cmd(("botright " .. tostring(start_height) .. "new"))
       return vim.api.nvim_get_current_win()
     end
   end
-  open_21 = _2_
+  open_21 = _1_
   local win = with_split_mins(open_21)
   if (win and vim.api.nvim_win_is_valid(win)) then
     util["mark-transient-unnamed-buffer!"](vim.api.nvim_win_get_buf(win))
@@ -140,14 +124,14 @@ M["handoff-to-split!"] = function(nvim, prompt_win, opts)
   local old_win = prompt_win.window
   local buf = prompt_win.buffer
   local saved_view
-  local and_12_ = origin_win and vim.api.nvim_win_is_valid(origin_win)
-  if and_12_ then
-    local function _13_()
+  local and_11_ = origin_win and vim.api.nvim_win_is_valid(origin_win)
+  if and_11_ then
+    local function _12_()
       return vim.fn.winsaveview()
     end
-    and_12_ = vim.api.nvim_win_call(origin_win, _13_)
+    and_11_ = vim.api.nvim_win_call(origin_win, _12_)
   end
-  saved_view = and_12_
+  saved_view = and_11_
   local split_win = open_split_win_21(origin_win, local_layout_3f, height)
   local old_buf = (split_win and vim.api.nvim_win_is_valid(split_win) and vim.api.nvim_win_get_buf(split_win))
   pcall(vim.api.nvim_win_set_buf, split_win, buf)
@@ -155,10 +139,10 @@ M["handoff-to-split!"] = function(nvim, prompt_win, opts)
   pcall(vim.api.nvim_win_set_height, split_win, height)
   prompt_window_opts_21(split_win)
   if (origin_win and saved_view and vim.api.nvim_win_is_valid(origin_win)) then
-    local function _14_()
+    local function _13_()
       return pcall(vim.fn.winrestview, saved_view)
     end
-    vim.api.nvim_win_call(origin_win, _14_)
+    vim.api.nvim_win_call(origin_win, _13_)
   else
   end
   if (old_win and vim.api.nvim_win_is_valid(old_win)) then
@@ -182,7 +166,7 @@ M["restore-hidden!"] = function(nvim, prompt_buf, opts)
   pcall(vim.api.nvim_win_set_buf, split_win, prompt_buf)
   wipe_replaced_split_buffer_21(old_buf)
   pcall(vim.api.nvim_win_set_height, split_win, height)
-  apply_prompt_buffer_opts_21(prompt_buf)
+  prompt_buffer_mod["prepare-buffer!"](prompt_buf)
   prompt_window_opts_21(split_win)
   return new_prompt_wrapper(nvim, split_win, prompt_buf)
 end
@@ -200,5 +184,5 @@ M["restore-cursor!"] = function(prompt_win, cursor)
     return nil
   end
 end
-M["prepare-buffer!"] = apply_prompt_buffer_opts_21
+M["prepare-buffer!"] = prompt_buffer_mod["prepare-buffer!"]
 return M

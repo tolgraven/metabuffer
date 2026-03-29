@@ -19,6 +19,26 @@
     (vim.cmd (.. "noautocmd keepjumps buffer " buf)))
   (vim.api.nvim_get_current_buf))
 
+(fn M.apply-buffer-opts!
+  [buf opts]
+  "Apply generic buffer-local OPTS to BUF. Returns BUF."
+  (when (and buf (vim.api.nvim_buf_is_valid buf))
+    (let [bo (. vim.bo buf)]
+      (each [name value (pairs (or opts {}))]
+        (set (. bo name) value))))
+  buf)
+
+(fn M.register-managed-buffer!
+  [buf role name opts event-extra]
+  "Register BUF as managed Meta buffer ROLE, assign NAME, and apply OPTS. Returns BUF."
+  (events.send :on-buf-create!
+               (vim.tbl_extend "force"
+                               {:buf buf :role role}
+                               (or event-extra {})))
+  (when (and (= (type name) "string") (~= name ""))
+    (util.set-buffer-name! buf name))
+  (M.apply-buffer-opts! buf opts))
+
 (fn M.new
   [nvim opts]
   "Public API: M.new."

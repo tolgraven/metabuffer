@@ -4,6 +4,7 @@ local M = {}
 local lineno_mod = require("metabuffer.window.lineno")
 local source_mod = require("metabuffer.source")
 local path_hl = require("metabuffer.path_highlight")
+local info_buffer_mod = require("metabuffer.buffer.info")
 local util = require("metabuffer.util")
 local base_window_mod = require("metabuffer.window.base")
 local file_info = require("metabuffer.source.file_info")
@@ -341,16 +342,9 @@ M.new = function(opts)
     end
   end
   local function configure_info_buffer_21(session, buf)
-    events.send("on-buf-create!", {buf = buf, role = "info"})
-    util["set-buffer-name!"](buf, "[Metabuffer Info]")
+    info_buffer_mod.new(buf)
     session["info-buf"] = buf
-    local bo = vim.bo[buf]
-    bo["buftype"] = "nofile"
-    bo["bufhidden"] = "wipe"
-    bo["swapfile"] = false
-    bo["modifiable"] = false
-    bo["filetype"] = ""
-    return nil
+    return buf
   end
   local function configure_info_window_21(session, target, win)
     session["info-win"] = win.window

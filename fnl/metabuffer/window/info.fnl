@@ -4,6 +4,7 @@
 (local lineno-mod (require :metabuffer.window.lineno))
 (local source-mod (require :metabuffer.source))
 (local path-hl (require :metabuffer.path_highlight))
+(local info-buffer-mod (require :metabuffer.buffer.info))
 (local util (require :metabuffer.util))
 (local base-window-mod (require :metabuffer.window.base))
 (local file-info (require :metabuffer.source.file_info))
@@ -329,15 +330,9 @@
         target))
   (fn configure-info-buffer!
     [session buf]
-    (events.send :on-buf-create! {:buf buf :role :info})
-    (util.set-buffer-name! buf "[Metabuffer Info]")
+    (info-buffer-mod.new buf)
     (set session.info-buf buf)
-    (let [bo (. vim.bo buf)]
-      (set (. bo :buftype) "nofile")
-      (set (. bo :bufhidden) "wipe")
-      (set (. bo :swapfile) false)
-      (set (. bo :modifiable) false)
-      (set (. bo :filetype) "")))
+    buf)
   (fn configure-info-window!
     [session target win]
     (set session.info-win win.window)

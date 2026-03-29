@@ -10,6 +10,7 @@
 (local history_browser_window_mod (require :metabuffer.window.history_browser))
 (local project_source_mod (require :metabuffer.project.source))
 (local base_buffer (require :metabuffer.buffer.base))
+(local prompt_buffer_mod (require :metabuffer.buffer.prompt))
 (local session_view (require :metabuffer.session.view))
 (local debug (require :metabuffer.debug))
 (local config (require :metabuffer.config))
@@ -29,17 +30,7 @@
 
 (fn sync-prompt-buffer-name!
   [session]
-  (when (and session
-             session.prompt-buf
-             (vim.api.nvim_buf_is_valid session.prompt-buf)
-             session.meta
-             session.meta.buf
-             (= (type session.meta.buf.name) "string")
-             (~= session.meta.buf.name ""))
-    (pcall
-      vim.api.nvim_buf_set_name
-      session.prompt-buf
-      (.. session.meta.buf.name " [Prompt]"))))
+  (prompt_buffer_mod.sync-name! session))
 
 (set M.instances {})
 (set M._instance-seq 0)

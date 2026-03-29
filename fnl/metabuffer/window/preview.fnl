@@ -1,6 +1,7 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
+(local preview-buffer-mod (require :metabuffer.buffer.preview))
 (local source-mod (require :metabuffer.source))
 (local statusline-mod (require :metabuffer.window.statusline))
 (local util (require :metabuffer.util))
@@ -43,11 +44,6 @@
   [win opts]
   (each [name value (pairs (or opts {}))]
     (pcall vim.api.nvim_set_option_value name value {:win win})))
-
-(fn set-buffer-options!
-  [buf opts]
-  (each [name value (pairs (or opts {}))]
-    (set (. vim.bo buf name) value)))
 
 (fn delete-window-match!
   [win id]
@@ -151,18 +147,11 @@
 
   (local mark-preview-buffer!
     (fn [buf transient?]
-      (when (and buf (vim.api.nvim_buf_is_valid buf))
-        (events.send :on-buf-create!
-                     {:buf buf
-                      :role :preview
-                      :transient? (if (= transient? nil) true (clj.boolean transient?))}))))
+      (preview-buffer-mod.mark-preview-buffer! buf transient?)))
 
   (local unmark-preview-buffer!
     (fn [buf]
-      (when (and buf
-                 (vim.api.nvim_buf_is_valid buf)
-                 (not (= true (pcall vim.api.nvim_buf_get_var buf "meta_preview"))))
-        (events.send :on-buf-teardown! {:buf buf :role :preview}))))
+      (preview-buffer-mod.unmark-preview-buffer! buf)))
 
   (local file-backed-preview-ref?
     (fn [ref]
@@ -261,21 +250,11 @@
                            (vim.api.nvim_win_get_buf win-id))]
           (when old-buf
             (util.mark-transient-unnamed-buffer! old-buf))
-        (util.set-buffer-name! buf "[Metabuffer Preview]")
-        (pcall vim.api.nvim_win_set_buf win-id buf)
+          (preview-buffer-mod.new-scratch buf)
+          (pcall vim.api.nvim_win_set_buf win-id buf)
           (wipe-replaced-split-buffer! old-buf))
         (when-not float-start?
           (pcall vim.api.nvim_win_set_width win-id width))
-        ;; Keep scratch alive even when preview window temporarily shows source
-        ;; buffers, and disable swapfile side effects.
-        (set-buffer-options!
-          buf
-          {:bufhidden "hide"
-           :buftype "nofile"
-           :swapfile false
-           :modifiable false
-           :filetype ""})
-        (mark-preview-buffer! buf true)
         (ensure-preview-statusline-autocmds! session)
         (apply-preview-window-opts! session session.preview-win)
         (set session.preview-animated? true))))
@@ -322,15 +301,7 @@
     [session]
     (when (or (not session.preview-scratch-buf) (not (vim.api.nvim_buf_is_valid session.preview-scratch-buf)))
       (set session.preview-scratch-buf (vim.api.nvim_create_buf false true))
-      (util.set-buffer-name! session.preview-scratch-buf "[Metabuffer Preview]")
-      (set-buffer-options!
-        session.preview-scratch-buf
-        {:bufhidden "hide"
-         :buftype "nofile"
-         :swapfile false
-         :modifiable false
-         :filetype ""})
-      (mark-preview-buffer! session.preview-scratch-buf true)))
+      (preview-buffer-mod.new-scratch session.preview-scratch-buf)))
 
   (fn preview-context
     [session]

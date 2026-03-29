@@ -2,8 +2,8 @@
 (local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local base (require :metabuffer.window.base))
 (local animation-mod (require :metabuffer.window.animation))
-(local directive-mod (require :metabuffer.query.directive))
-(local events (require :metabuffer.events))
+(local prompt-buffer-mod (require :metabuffer.buffer.prompt))
+(local events-mod (require :metabuffer.events))
 (local util (require :metabuffer.util))
 (local M {})
 (local apply-metabuffer-window-highlights! (. base :apply-metabuffer-window-highlights!))
@@ -15,29 +15,14 @@
   (.. (metabuffer-winhighlight)
       ",StatusLine:MetaStatuslineMiddle,StatusLineNC:MetaStatuslineMiddle"))
 
-(fn apply-prompt-buffer-opts!
-  [buf]
-  (when (and buf (vim.api.nvim_buf_is_valid buf))
-    (let [bo (. vim.bo buf)]
-      (set (. bo :buftype) "nofile")
-      (set (. bo :bufhidden) "hide")
-      (set (. bo :swapfile) false)
-      (set (. bo :modifiable) true)
-      (set _G.__meta_directive_completefunc (. directive-mod :completefunc))
-      (set (. bo :completefunc) "v:lua.__meta_directive_completefunc")
-      (set (. bo :filetype) "metabufferprompt")))
-  buf)
-
 (fn prompt-buffer!
   [win]
   (let [buf (vim.api.nvim_win_get_buf win)]
-    (events.send :on-buf-create! {:buf buf :role :prompt})
-    (util.set-buffer-name! buf "[Metabuffer Prompt]")
-    (apply-prompt-buffer-opts! buf)))
+    (prompt-buffer-mod.new buf)))
 
 (fn prompt-window-opts!
   [win]
-  (events.send :on-win-create! {:win win :role :prompt})
+  (events-mod.send :on-win-create! {:win win :role :prompt})
   (apply-metabuffer-window-highlights! win)
   (let [wo (. vim.wo win)]
     (set (. wo :winfixheight) true)
@@ -167,7 +152,7 @@
     (pcall vim.api.nvim_win_set_buf split-win prompt-buf)
     (wipe-replaced-split-buffer! old-buf)
     (pcall vim.api.nvim_win_set_height split-win height)
-    (apply-prompt-buffer-opts! prompt-buf)
+    (prompt-buffer-mod.prepare-buffer! prompt-buf)
     (prompt-window-opts! split-win)
     (new-prompt-wrapper nvim split-win prompt-buf)))
 
@@ -183,6 +168,6 @@
           col* (math.min col (# line))]
       (pcall vim.api.nvim_win_set_cursor prompt-win [row* col*]))))
 
-(set M.prepare-buffer! apply-prompt-buffer-opts!)
+(set M.prepare-buffer! prompt-buffer-mod.prepare-buffer!)
 
 M

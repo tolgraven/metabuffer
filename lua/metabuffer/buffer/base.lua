@@ -15,6 +15,24 @@ M["switch-buf"] = function(buf)
   end
   return vim.api.nvim_get_current_buf()
 end
+M["apply-buffer-opts!"] = function(buf, opts)
+  if (buf and vim.api.nvim_buf_is_valid(buf)) then
+    local bo = vim.bo[buf]
+    for name, value in pairs((opts or {})) do
+      bo[name] = value
+    end
+  else
+  end
+  return buf
+end
+M["register-managed-buffer!"] = function(buf, role, name, opts, event_extra)
+  events.send("on-buf-create!", vim.tbl_extend("force", {buf = buf, role = role}, (event_extra or {})))
+  if ((type(name) == "string") and (name ~= "")) then
+    util["set-buffer-name!"](buf, name)
+  else
+  end
+  return M["apply-buffer-opts!"](buf, opts)
+end
 M.new = function(nvim, opts)
   local model = (opts.model or vim.api.nvim_get_current_buf())
   local target = (opts.buffer or M["new-buffer"]())
