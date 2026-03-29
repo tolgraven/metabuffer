@@ -353,65 +353,6 @@
                 (math.min (if match-idx (- match-idx 1) fallback-idx)
                           (math.max 0 (- (# meta.buf.indices) 1))))))
 
-  (fn schedule-lazy-refresh!
-    [session]
-    (when (and session (session-active? session) (not session.closing))
-      (set session.lazy-refresh-dirty true)
-      (when-not session.lazy-refresh-pending
-        (set session.lazy-refresh-pending true)
-        (vim.defer_fn
-          (fn []
-            (set session.lazy-refresh-pending false)
-            (when (and session (session-active? session) session.lazy-refresh-dirty)
-              (set session.lazy-refresh-dirty false)
-              (when (and session.meta
-                         session.meta.buf
-                         (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-                (if (and (not session.lazy-stream-done)
-                         (not (prompt-has-active-query? session)))
-                    ;; During empty-query startup streaming, throttle full rerenders so
-                    ;; users can see the source pool grow without rendering each batch.
-                    (let [now (now-ms)
-                          last-render-ms (or session.lazy-last-render-ms 0)
-                          render-interval-ms 500
-                          should-render? (>= (- now last-render-ms) render-interval-ms)]
-                      (when should-render?
-                        (reset-meta-indices! session.meta)
-                        (pcall session.meta.buf.render)
-                        (events.send :on-project-bootstrap!
-                          {:session session
-                           :refresh-lines false
-                           :restore-view? true})
-                        (set session.lazy-last-render-ms now))
-                      (events.send :on-project-bootstrap!
-                        {:session session
-                         :refresh-lines false}))
-                    (let [[ok err] [(pcall session.meta.on-update 0)]]
-                      (if ok
-                          (events.send :on-query-update!
-                            {:session session
-                             :query (or session.prompt-last-applied-text "")
-                             :refresh-lines false})
-                          (when (and err (string.find (tostring err) "E565"))
-                            (vim.defer_fn
-                              (fn []
-                                (when (and session
-                                           (session-active? session)
-                                           session.meta
-                                           session.meta.buf
-                                           (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-                                  (pcall session.meta.on-update 0)
-                                  (events.send :on-query-update!
-                                    {:session session
-                                     :query (or session.prompt-last-applied-text "")
-                                     :refresh-lines false})))
-                              1)))))))
-            (when (and session (session-active? session) session.lazy-refresh-dirty)
-              (schedule-lazy-refresh! session)))
-          (math.max
-            (or settings.project-lazy-refresh-min-ms 0)
-            settings.project-lazy-refresh-debounce-ms)))))
-
   (fn push-file-into-pool!
     [session path view prefilter]
     (let [lines (and view (. view :lines))
@@ -704,15 +645,14 @@
                 (let [sent-complete0 false]
                   (var sent-complete? sent-complete0)
                   (set session.meta.buf.visible-source-syntax-only false)
-                  (pcall session.meta.buf.apply-source-syntax-regions)
+                  (events.send :on-source-syntax-refresh!
+                    {:session session
+                     :immediate? true})
                   (when-not (prompt-has-active-query? session)
-                    ;; Streaming added content to meta.buf.content but indices was
-                    ;; only built at bootstrap time. Rebuild indices from the full
-                    ;; content table and render so all streamed lines appear.
-                    (reset-meta-indices! session.meta)
-                    (pcall session.meta.buf.render)
-                    (events.send :on-project-complete!
+                    (events.send :on-source-pool-change!
                       {:session session
+                       :phase :complete
+                       :force? true
                        :refresh-lines true
                        :restore-view? true})
                     (set sent-complete? true))
@@ -720,14 +660,17 @@
                   ;; info pane leaves its loading/empty state even if the last batch
                   ;; did not append any new visible lines.
                   (when-not sent-complete?
-                    (events.send :on-project-complete!
+                    (events.send :on-source-pool-change!
                       {:session session
+                       :phase :complete
+                       :phase-only? true
+                       :force? true
                        :refresh-lines true}))))
               (when touched
-                (events.send :on-project-bootstrap!
+                (events.send :on-source-pool-change!
                   {:session session
-                   :refresh-lines false})
-                (schedule-lazy-refresh! session))
+                   :phase (if (prompt-has-active-query? session) nil :bootstrap)
+                   :refresh-lines false}))
               (when (and (not session.lazy-stream-done)
                          (= stream-id session.lazy-stream-id)
                          (session-active? session))
@@ -772,7 +715,9 @@
                            (not session.prompt-animating?)
                            (not session.startup-initializing))
                   (set session.meta.buf.visible-source-syntax-only false)
-                  (pcall session.meta.buf.apply-source-syntax-regions)))))
+                  (events.send :on-source-syntax-refresh!
+                    {:session session
+                     :immediate? true})))))
         (do
           (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
           (set session.lazy-stream-done true)
@@ -858,8 +803,10 @@
                            (not session.project-bootstrapped))
                   (let [has-query (prompt-has-active-query? session)]
                     (apply-source-set! session)
-                    (events.send :on-project-bootstrap!
+                    (events.send :on-source-pool-change!
                       {:session session
+                       :phase :bootstrap
+                       :force? true
                        :refresh-lines true})
                     (set session.project-bootstrapped true)
                     ;; Avoid a bootstrap-triggered filter/view update for plain `:Meta!`
@@ -878,16 +825,16 @@
                             (schedule-prompt-update! session 0))))
                     ;; Keep selection/view stable even when no prompt filter is applied.
                     (when-not has-query
-                      (pcall session.meta.buf.render)
-                      (events.send :on-project-complete!
+                      (events.send :on-source-pool-change!
                         {:session session
+                         :phase :complete
+                         :force? true
                          :restore-view? true
                          :refresh-lines true}))
                     (set session.project-mode-starting? false))))]
           (vim.defer_fn run-bootstrap! delay)))))
 
-  (let [api {:schedule-lazy-refresh! schedule-lazy-refresh!
-             :apply-source-set! apply-source-set!
+  (let [api {:apply-source-set! apply-source-set!
              :schedule-source-set-rebuild! schedule-source-set-rebuild!
              :apply-minimal-source-set! apply-minimal-source-set!
              :schedule-project-bootstrap! schedule-project-bootstrap!}]

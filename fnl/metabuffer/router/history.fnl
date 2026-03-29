@@ -16,37 +16,6 @@
   [parsed key]
   (~= (. parsed key) nil))
 
-(fn normalize-history-prompt
-  [text]
-  (let [parts (vim.split (or text "") "%s+" {:trimempty true})
-        out []]
-    (var idx 1)
-    (while (<= idx (# parts))
-      (let [tok (. parts idx)
-            next-tok (. parts (+ idx 1))
-            file-toggle? (or (= tok "#+file") (= tok "#file"))
-            file-arg? (and file-toggle?
-                           (= (type next-tok) "string")
-                           (~= next-tok "")
-                           (not (vim.startswith next-tok "#")))]
-        (if file-arg?
-            (do
-              (table.insert out (.. "#file:" next-tok))
-              (set idx (+ idx 2)))
-            (do
-              (table.insert out
-                            (if (= tok "#+file")
-                                "#file"
-                                (= tok "#+binary")
-                                "#binary"
-                                (= tok "#+hex")
-                                "#hex"
-                                tok))
-              (set idx (+ idx 1))))))
-    (if (> (# out) 0)
-        (table.concat out " ")
-        (or text ""))))
-
 (fn M.new
   [opts]
   (let [history-store (. opts :history-store)
@@ -58,7 +27,7 @@
 
     (fn api.history-entry-query
       [entry]
-      (let [parsed (query-mod.parse-query-text (normalize-history-prompt entry))]
+      (let [parsed (query-mod.parse-query-text entry)]
         (or (. parsed :query) "")))
 
     (fn api.history-entry-token
@@ -168,11 +137,11 @@
 
     (fn api.restore-saved-prompt-tag!
       [session tag]
-      (when (and session
+        (when (and session
                  (= (type tag) "string")
                  (~= (vim.trim tag) ""))
         (when-let [saved (history-store.saved-entry tag)]
-          (router-util-mod.set-prompt-text! session (normalize-history-prompt saved))
+          (router-util-mod.set-prompt-text! session saved)
           true)))
 
     (fn api.history-browser-filter
@@ -187,7 +156,7 @@
         (if (= mode "saved")
             (each [_ item (ipairs (history-store.saved-items))]
               (let [tag (or (. item :tag) "")
-                    prompt (normalize-history-prompt (or (. item :prompt) ""))
+                    prompt (or (. item :prompt) "")
                     hay (string.lower (.. tag " " prompt))]
                 (when (or (= filter0 "")
                           (not= nil (string.find hay filter0 1 true)))
@@ -196,7 +165,7 @@
                                      :tag tag}))))
             (let [h (or session.history-cache (history-store.list))]
               (for [i (# h) 1 -1]
-                (let [entry (normalize-history-prompt (or (. h i) ""))
+                (let [entry (or (. h i) "")
                       hay (string.lower entry)]
                   (when (or (= filter0 "")
                             (not= nil (string.find hay filter0 1 true)))
@@ -222,17 +191,17 @@
 
     (fn api.apply-history-browser-selection!
       [session]
-        (when (and history-browser-window session.history-browser-active)
-          (when-let [selected (history-browser-window.selected! session)]
-            (when-let [prompt (. selected :prompt)]
-            (router-util-mod.set-prompt-text! session (normalize-history-prompt prompt))))
+      (when (and history-browser-window session.history-browser-active)
+        (when-let [selected (history-browser-window.selected! session)]
+          (when-let [prompt (. selected :prompt)]
+            (router-util-mod.set-prompt-text! session prompt)))
         (api.close-history-browser! session)))
 
     (fn api.history-latest
       [session]
       (let [h (or (and session session.history-cache) (history-store.list))
             n (# h)]
-        (if (> n 0) (normalize-history-prompt (. h n)) "")))
+        (if (> n 0) (. h n) "")))
 
     (fn api.history-latest-token
       [session]
@@ -280,10 +249,9 @@
                               (router-util-mod.set-prompt-text! session session.initial-prompt-text))
                             (let [entry (. h (+ (- n session.history-index) 1))]
                               (when entry
-                                (let [norm-entry (normalize-history-prompt entry)]
-                                  (set session.last-history-text norm-entry)
-                                  (router-util-mod.set-prompt-text! session norm-entry)))))))
-                    (move-selection-fn prompt-buf delta)))))))
+                                (set session.last-history-text entry)
+                                (router-util-mod.set-prompt-text! session entry)))))
+                    (move-selection-fn prompt-buf delta))))))))
 
     (fn api.open-history-searchback
       [prompt-buf active-by-prompt]

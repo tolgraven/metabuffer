@@ -331,6 +331,10 @@
   [session]
   (router_navigation_mod.schedule-scroll-sync! navigation-deps session))
 
+(fn refresh-source-syntax!
+  [session immediate?]
+  (router_navigation_mod.refresh-source-syntax! navigation-deps session immediate?))
+
 (fn M.history-or-move
   [prompt-buf delta]
   "Public API: M.history-or-move."
@@ -503,6 +507,7 @@
                         (M.on-prompt-changed prompt-buf force event-tick))
    :maybe-sync-from-main! maybe-sync-from-main!
    :schedule-scroll-sync! schedule-scroll-sync!
+   :refresh-source-syntax! refresh-source-syntax!
    :maybe-restore-hidden-ui! (fn [session-or-prompt-buf force]
                                (let [prompt-buf (if (= (type session-or-prompt-buf) "table")
                                                     session-or-prompt-buf.prompt-buf

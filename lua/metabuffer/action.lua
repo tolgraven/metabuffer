@@ -68,16 +68,6 @@ local function _pause(_, _0)
 end
 local default_action_rules = {{"meta:select_next_candidate", _select_next}, {"meta:select_previous_candidate", _select_prev}, {"meta:select_clicked_candidate", _select_clicked}, {"meta:ignore", _ignore}, {"meta:switch_matcher", _switch_matcher}, {"meta:switch_case", _switch_case}, {"meta:switch_highlight", _switch_highlight}, {"meta:prompt_newline", _prompt_newline}, {"meta:pause_prompt", _pause}}
 local default_action_keymap = {{"<PageUp>", "<meta:select_previous_candidate>", "noremap"}, {"<PageDown>", "<meta:select_next_candidate>", "noremap"}, {"<C-A>", "<meta:move_caret_to_head>", "noremap"}, {"<C-E>", "<meta:move_caret_to_tail>", "noremap"}, {"<C-P>", "<meta:select_previous_candidate>", "noremap"}, {"<C-N>", "<meta:select_next_candidate>", "noremap"}, {"<C-K>", "<meta:select_previous_candidate>", "noremap"}, {"<C-J>", "<meta:select_next_candidate>", "noremap"}, {"<Left>", "<meta:move_caret_to_left>", "noremap"}, {"<Right>", "<meta:move_caret_to_right>", "noremap"}, {"<S-CR>", "<meta:prompt_newline>", "noremap"}, {"<C-I>", "<meta:toggle_insert_mode>", "noremap"}, {"<S-Tab>", "<meta:select_previous_candidate>", "noremap"}, {"<Tab>", "<meta:select_next_candidate>", "noremap"}, {"<C-^>", "<meta:switch_matcher>", "noremap"}, {"<C-6>", "<meta:switch_matcher>", "noremap"}, {"<C-_>", "<meta:switch_case>", "noremap"}, {"<C-O>", "<meta:switch_case>", "noremap"}, {"<C-S>", "<meta:switch_highlight>", "noremap"}, {"<LeftMouse>", "<meta:select_clicked_candidate>", "noremap"}, {"<LeftRelease>", "<meta:select_clicked_candidate>", "noremap"}, {"<C-z>", "<meta:pause_prompt>", "noremap"}}
-if (type(vim.g.meta_legacy_action_rules) == "table") then
-  M.DEFAULT_ACTION_RULES = vim.g.meta_legacy_action_rules
-else
-  M.DEFAULT_ACTION_RULES = default_action_rules
-end
-if (type(vim.g.meta_legacy_action_keymap) == "table") then
-  M.DEFAULT_ACTION_KEYMAP = vim.g.meta_legacy_action_keymap
-else
-  M.DEFAULT_ACTION_KEYMAP = default_action_keymap
-end
-M["DEFAULT-ACTION-RULES"] = M.DEFAULT_ACTION_RULES
-M["DEFAULT-ACTION-KEYMAP"] = M.DEFAULT_ACTION_KEYMAP
+M.DEFAULT_ACTION_RULES = default_action_rules
+M.DEFAULT_ACTION_KEYMAP = default_action_keymap
 return M

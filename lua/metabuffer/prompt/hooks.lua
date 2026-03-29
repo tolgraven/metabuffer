@@ -303,10 +303,10 @@ M.new = function(opts)
     end
   end
   local function session_busy_3f(session)
-    return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["lazy-refresh-pending"] or session["lazy-refresh-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["project-bootstrapped"])))
+    return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["project-bootstrapped"])))
   end
   local function session_actually_idle_3f(session)
-    return (session and not session_busy_3f(session) and not session["prompt-update-dirty"] and not session["lazy-refresh-dirty"])
+    return (session and not session_busy_3f(session) and not session["prompt-update-dirty"])
   end
   local function hl_rendered_fg(hl)
     if (hl and hl.reverse) then

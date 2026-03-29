@@ -183,8 +183,6 @@ M["begin-session-close!"] = function(session, cancel_prompt_update_21)
     else
     end
     session["preview-update-pending"] = false
-    session["lazy-refresh-dirty"] = false
-    session["lazy-refresh-pending"] = false
     session["syntax-refresh-dirty"] = false
     session["syntax-refresh-pending"] = false
     return nil

@@ -91,6 +91,19 @@ local function register_module_21(mod)
   local events = (mod.events or {})
   local mod_name = (mod.name or "?")
   local mod_domain = (mod.domain or "?")
+  for _, list in pairs(handlers_by_event) do
+    local i = #list
+    while (i > 0) do
+      do
+        local spec = list[i]
+        if (((spec.source or "?") == mod_name) and ((spec.domain or "?") == mod_domain)) then
+          table.remove(list, i)
+        else
+        end
+      end
+      i = (i - 1)
+    end
+  end
   for event_key, raw in pairs(events) do
     local specs
     if ((type(raw) == "table") and raw[1]) then
@@ -122,10 +135,10 @@ local function register_module_21(mod)
 end
 local function sort_handlers_21()
   for _, list in pairs(handlers_by_event) do
-    local function _13_(a, b)
+    local function _14_(a, b)
       return (a.priority < b.priority)
     end
-    table.sort(list, _13_)
+    table.sort(list, _14_)
   end
   return nil
 end
@@ -161,14 +174,14 @@ local function pcall_handler_21(spec, event_key, args, event_stats, emission)
     local elapsed_us = ((vim.uv.hrtime() - t0) / 1000)
     local cpu_elapsed_us = math.max(0, (cpu_us() - cpu0))
     accumulate_profile_21(event_stats, emission, spec, elapsed_us, cpu_elapsed_us, ok, err)
-    local function _17_()
+    local function _18_()
       if ok then
         return ""
       else
         return ("  ERR: " .. tostring(err))
       end
     end
-    return debug.log("event-bus", string.format("%s  %s/%s  p=%d  wall=%.1f\194\181s cpu=%.1f\194\181s%s", event_key, (spec.domain or "?"), (spec.source or "?"), spec.priority, elapsed_us, cpu_elapsed_us, _17_()))
+    return debug.log("event-bus", string.format("%s  %s/%s  p=%d  wall=%.1f\194\181s cpu=%.1f\194\181s%s", event_key, (spec.domain or "?"), (spec.source or "?"), spec.priority, elapsed_us, cpu_elapsed_us, _18_()))
   else
     return pcall(spec.handler, args)
   end
@@ -176,16 +189,16 @@ end
 M.send = function(event_key, args)
   local list = handlers_by_event[event_key]
   local args_2a = (args or {})
-  local function _19_()
+  local function _20_()
     if (profile_3f and list) then
       return start_emission_21(event_key)
     else
       return {nil, nil}
     end
   end
-  local _let_20_ = _19_()
-  local event_stats = _let_20_[1]
-  local emission = _let_20_[2]
+  local _let_21_ = _20_()
+  local event_stats = _let_21_[1]
+  local emission = _let_21_[2]
   if list then
     for _, spec in ipairs(list) do
       if matches_filter_3f(spec, args_2a) then

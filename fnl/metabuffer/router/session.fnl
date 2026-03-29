@@ -6,18 +6,6 @@
 
 (local M {})
 
-(fn silent-win-set-buf!
-  [win buf]
-  "Attach buffer to a window without emitting the normal file info message."
-  (when (and win buf
-             (vim.api.nvim_win_is_valid win)
-             (vim.api.nvim_buf_is_valid buf))
-    (or (pcall vim.api.nvim_win_call
-               win
-               (fn []
-                 (vim.cmd (.. "silent keepalt noautocmd buffer " buf))))
-        (pcall vim.api.nvim_win_set_buf win buf))))
-
 (fn launch-source-label
   [session]
   (if session.project-mode
@@ -127,6 +115,7 @@
         session-view (. deps :session-view)
         update-preview-window (. deps :update-preview-window)
         update-info-window (. deps :update-info-window)
+        refresh-source-syntax! (. deps :refresh-source-syntax!)
         context-window (. windows :context)
         preview-window (. windows :preview)
         info-window (. windows :info)
@@ -150,6 +139,9 @@
      :context! (fn [session]
                  (when (and context-window context-window.update!)
                    (pcall context-window.update! session)))
+     :source-syntax! (fn [session immediate?]
+                       (when refresh-source-syntax!
+                         (pcall refresh-source-syntax! session immediate?)))
      :refresh-change-signs! (fn [session]
                               (when (and sign-mod sign-mod.refresh-change-signs!)
                                 (pcall sign-mod.refresh-change-signs! session)))
@@ -404,27 +396,29 @@
     (schedule-single-file-info-phases!)
     (vim.schedule
       (fn []
-        (if (startup-live?)
-            (do
-              (set session.startup-initializing false)
-              (when-not session.project-mode
-                (set session.project-mode-starting? false))
-              (events.send :on-session-ready! {:session session :refresh-lines false})
-              (vim.defer_fn
-                (fn []
-                  (when (startup-live?)
-                    (set session.animate-enter? false)
-                    (restore-startup-cursor! session)
-                    (when (and session.project-mode
-                               session.meta
-                               session.meta.buf
-                               session.lazy-stream-done)
-                      (set session.meta.buf.visible-source-syntax-only false)
-                      (pcall session.meta.buf.apply-source-syntax-regions))))
-                (or session.startup-ui-delay-ms 320))
-              (when (and session.project-mode (not session.project-bootstrapped))
-                (project-source.schedule-project-bootstrap! session 17)))
-            (restore-startup-cursor! session))))
+        (when (startup-live?)
+          (set session.startup-initializing false)
+          (when-not session.project-mode
+            (set session.project-mode-starting? false))
+          (events.send :on-session-ready! {:session session :refresh-lines false})
+          (vim.defer_fn
+            (fn []
+              (when (startup-live?)
+                (set session.animate-enter? false)
+                (restore-startup-cursor! session)
+                (when (and session.project-mode
+                           session.meta
+                           session.meta.buf
+                           session.lazy-stream-done)
+                  (set session.meta.buf.visible-source-syntax-only false)
+                  (events.send :on-source-syntax-refresh!
+                    {:session session
+                     :immediate? true}))))
+            (or session.startup-ui-delay-ms 320))
+          (when (and session.project-mode (not session.project-bootstrapped))
+            (project-source.schedule-project-bootstrap! session 17)))
+        (when-not (startup-live?)
+          (restore-startup-cursor! session))))
     (set (. instances session.instance-id) session)))
 
 (fn M.start!
@@ -645,6 +639,8 @@
                                :lazy-mode start-lazy
                                :expansion-mode start-expansion
                                :project-source-syntax-chunk-lines settings.project-source-syntax-chunk-lines
+                               :project-lazy-refresh-min-ms settings.project-lazy-refresh-min-ms
+                               :project-lazy-refresh-debounce-ms settings.project-lazy-refresh-debounce-ms
                                :last-parsed-query (vim.tbl_extend
                                                     "force"
                                                     {:lines (or (. parsed-query :lines) [""])
@@ -673,7 +669,7 @@
                                          (let [[ok wrap?] [(pcall vim.api.nvim_get_option_value "wrap" {:win origin-win})]]
                                            (and ok (clj.boolean wrap?)))))]
                   (when (vim.api.nvim_win_is_valid origin-win)
-                    (silent-win-set-buf! origin-win curr.buf.buffer))
+                    (router-util-mod.silent-win-set-buf! origin-win curr.buf.buffer))
                   (when (and curr.win curr.win.window (vim.api.nvim_win_is_valid curr.win.window))
                     (pcall vim.api.nvim_set_option_value "wrap" (clj.boolean start-wrap) {:win curr.win.window})
                     (pcall vim.api.nvim_set_option_value "linebreak" (clj.boolean start-wrap) {:win curr.win.window}))

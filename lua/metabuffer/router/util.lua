@@ -69,6 +69,16 @@ local function write_results_wrap_state_21(enabled)
     return nil
   end
 end
+M["silent-win-set-buf!"] = function(win, buf)
+  if (win and buf and vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(buf)) then
+    local function _10_()
+      return vim.cmd(("silent keepalt noautocmd buffer " .. buf))
+    end
+    return (pcall(vim.api.nvim_win_call, win, _10_) or pcall(vim.api.nvim_win_set_buf, win, buf))
+  else
+    return nil
+  end
+end
 M["prompt-height"] = function()
   return (tonumber(vim.g.meta_prompt_height) or tonumber(vim.g["meta#prompt_height"]) or read_prompt_height_state() or 7)
 end
@@ -168,16 +178,16 @@ M["set-prompt-text!"] = function(session, text)
   end
 end
 M["current-buffer-path"] = function(buf)
-  local and_21_ = buf and vim.api.nvim_buf_is_valid(buf)
-  if and_21_ then
+  local and_23_ = buf and vim.api.nvim_buf_is_valid(buf)
+  if and_23_ then
     local ok,name = pcall(vim.api.nvim_buf_get_name, buf)
     if (ok and (type(name) == "string") and (name ~= "")) then
-      and_21_ = name
+      and_23_ = name
     else
-      and_21_ = nil
+      and_23_ = nil
     end
   end
-  return and_21_
+  return and_23_
 end
 M["meta-buffer-name"] = function(session)
   if session["project-mode"] then
@@ -281,29 +291,29 @@ M["allow-project-path?"] = function(settings, rel, include_hidden, include_deps)
 end
 M["project-file-list"] = function(settings, root, include_hidden, include_ignored, include_deps)
   local cache
-  local and_34_ = vim.g.__meta_project_file_list_cache
-  if and_34_ then
-    local _35_
-    if include_hidden then
-      _35_ = "1"
-    else
-      _35_ = "0"
-    end
+  local and_36_ = vim.g.__meta_project_file_list_cache
+  if and_36_ then
     local _37_
-    if include_ignored then
+    if include_hidden then
       _37_ = "1"
     else
       _37_ = "0"
     end
     local _39_
-    if include_deps then
+    if include_ignored then
       _39_ = "1"
     else
       _39_ = "0"
     end
-    and_34_ = vim.g.__meta_project_file_list_cache[(root .. "|" .. _35_ .. "|" .. _37_ .. "|" .. _39_)]
+    local _41_
+    if include_deps then
+      _41_ = "1"
+    else
+      _41_ = "0"
+    end
+    and_36_ = vim.g.__meta_project_file_list_cache[(root .. "|" .. _37_ .. "|" .. _39_ .. "|" .. _41_)]
   end
-  cache = and_34_
+  cache = and_36_
   if cache then
     return cache
   else
@@ -341,10 +351,10 @@ M["project-file-list"] = function(settings, root, include_hidden, include_ignore
         _2 = nil
       end
       local rel = vim.fn.systemlist(cmd)
-      local function _44_(p)
+      local function _46_(p)
         return vim.fn.fnamemodify((root .. "/" .. p), ":p")
       end
-      return vim.tbl_map(_44_, (rel or {}))
+      return vim.tbl_map(_46_, (rel or {}))
     else
       return vim.fn.globpath(root, (settings["project-fallback-glob-pattern"] or "**/*"), true, true)
     end
@@ -483,13 +493,13 @@ M["binary-file?"] = function(settings, path)
         local head = read_file_head_bytes(path, 256)
         local bin_3f = binary_head_3f(head)
         local prev_lines = ((type(cached) == "table") and cached.lines)
-        local _60_
+        local _62_
         if (type(prev_lines) == "table") then
-          _60_ = prev_lines
+          _62_ = prev_lines
         else
-          _60_ = nil
+          _62_ = nil
         end
-        cache[path] = {size = size, mtime = mtime, binary = clj.boolean(bin_3f), lines = _60_}
+        cache[path] = {size = size, mtime = mtime, binary = clj.boolean(bin_3f), lines = _62_}
         return clj.boolean(bin_3f)
       end
     end
@@ -519,13 +529,13 @@ M["read-file-view-cached"] = function(settings, path, opts)
     linebreak_3f = clj.boolean(opts.linebreak)
   end
   local transform_sig
-  local _67_
+  local _69_
   if linebreak_3f then
-    _67_ = "1"
+    _69_ = "1"
   else
-    _67_ = "0"
+    _69_ = "0"
   end
-  transform_sig = (transform_mod.signature(transforms) .. "|w:" .. tostring((wrap_width or 0)) .. "|lb:" .. _67_)
+  transform_sig = (transform_mod.signature(transforms) .. "|w:" .. tostring((wrap_width or 0)) .. "|lb:" .. _69_)
   if (not path or (0 == vim.fn.filereadable(path))) then
     return nil
   else
@@ -565,17 +575,17 @@ M["read-file-view-cached"] = function(settings, path, opts)
             return found
           else
             local raw_lines
-            local or_71_ = cached.lines
-            if not or_71_ then
+            local or_73_ = cached.lines
+            if not or_73_ then
               local text = read_file_bytes(path)
               local ls = bytes__3elines(text)
               if (type(ls) == "table") then
                 cached["lines"] = ls
               else
               end
-              or_71_ = (ls or {})
+              or_73_ = (ls or {})
             end
-            raw_lines = or_71_
+            raw_lines = or_73_
             local ctx = {size = size, head = (cached.head or read_file_head_bytes(path, 4096)), transforms = transforms, binary = false}
             local view = transform_mod["apply-view"](path, raw_lines, ctx)
             views[transform_sig] = view

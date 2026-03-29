@@ -66,6 +66,10 @@
 ;;;
 ;;; Source / query events
 ;;;   :on-source-switch!     {:session ... :old-source str :new-source str}
+;;;   :on-source-pool-change! {:session ... :refresh-lines bool
+;;;                            :phase kw-or-nil :force? bool
+;;;                            :restore-view? bool :phase-only? bool}
+;;;   :on-source-syntax-refresh! {:session ... :immediate? bool}
 ;;;   :on-query-update!      {:session ... :query str :refresh-lines bool
 ;;;                           :refresh-signs? bool :capture-sign-baseline? bool}
 ;;;   :on-selection-change!  {:session ... :line-nr N :refresh-lines bool
@@ -193,6 +197,14 @@
   (let [events (or (. mod :events) {})
         mod-name (or (. mod :name) "?")
         mod-domain (or (. mod :domain) "?")]
+    (each [_ list (pairs handlers-by-event)]
+      (var i (# list))
+      (while (> i 0)
+        (let [spec (. list i)]
+          (when (and (= (or spec.source "?") mod-name)
+                     (= (or spec.domain "?") mod-domain))
+            (table.remove list i)))
+        (set i (- i 1))))
     (each [event-key raw (pairs events)]
       (let [specs (if (and (= (type raw) :table) (. raw 1)) raw [raw])]
         (each [_ raw-spec (ipairs specs)]

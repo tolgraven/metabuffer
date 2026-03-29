@@ -82,7 +82,7 @@ local function bvar(buf, name, default)
 end
 local function session_has_pending_work(self)
   local session = self.session
-  return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["lazy-refresh-pending"] or session["lazy-refresh-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["project-bootstrapped"])))
+  return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["project-bootstrapped"])))
 end
 local function any_non_empty_line_3f(lines)
   local active = false

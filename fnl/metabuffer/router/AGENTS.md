@@ -26,7 +26,7 @@ The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) 
 - Writeback: `sync-changes!` propagates edits from the metabuffer back to origin files.
 - Push: `push-to-origin!` writes metabuffer content over origin entirely.
 - Window teardown orchestration: destroys windows in correct order, restores airline, clears autocmds.
-- Contains `silent-win-set-buf!` helper (also in session.fnl — intentional local duplication to avoid cross-require).
+- Uses shared `router.util/silent-win-set-buf!` when swapping buffers into windows without surfacing transient file messages.
 
 ### `query_flow.fnl` (375 lines)
 - `apply-prompt-lines!` — The core filter pipeline. Reads prompt text → parses directives → decides if source/transform needs reload → runs matcher filter → triggers buffer render.
@@ -55,7 +55,6 @@ The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) 
 - `build-history-entry` — Constructs a history record from current prompt state including scope toggles, matcher name, and effective text.
 - `recall!` — Restores a history entry into the prompt, re-applying scope toggles and matcher mode.
 - `merge-persisted!` — Imports entries from `history_store` into session history.
-- `normalize-history-prompt` — Canonicalizes legacy history syntax (`#+file foo` / `#file foo` → `#file:foo`).
 
 ### `util.fnl` (512 lines)
 - State persistence: `read-prompt-height-state` / `write-prompt-height-state!`, `read-results-wrap-state` / `write-results-wrap-state!` — persist prompt window height and results wrap setting across Neovim restarts via `stdpath("state")` files.
@@ -88,7 +87,6 @@ This pattern prevents Lua `require` cycles. Submodules never require `router.fnl
 ## Caution Points
 
 - `actions.fnl` is the largest file (1216 lines) and handles many responsibilities. When modifying accept/cancel flow, trace the full teardown sequence carefully — window destruction order matters.
-- `silent-win-set-buf!` is duplicated in `actions.fnl` and `session.fnl` intentionally. Each needs it locally to avoid requiring the other.
 - The debounce in `query_flow.fnl` interacts with the idle-window detection in `prompt.fnl` — changes to timing must consider both.
 - Project mode bootstrap in `session.fnl` sets up an async streaming callback. The session must stay alive until `stream-done` is set; premature teardown causes orphaned timers.
 - Query/navigation/startup code should emit lifecycle events and rely on `session.refresh-hooks` + `core_events.fnl` for UI fanout. Reintroducing direct preview/info/context refresh chains defeats the feature-22 architecture.
