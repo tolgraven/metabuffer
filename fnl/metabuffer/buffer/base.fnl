@@ -46,6 +46,75 @@
     (util.set-buffer-name! buf name))
   (M.apply-buffer-opts! buf opts))
 
+(fn line-count
+  [self]
+  (# self.content))
+
+(fn source-line-nr
+  [self index]
+  (let [line (. self.indices index)]
+    (and line (+ line 0))))
+
+(fn closest-index
+  [self line-nr]
+  (var candidate nil)
+  (var dist math.huge)
+  (each [i v (ipairs self.indices)]
+    (let [d (math.abs (- v line-nr))]
+      (when (< d dist)
+        (set dist d)
+        (set candidate i))))
+  (or candidate 1))
+
+(fn reset-filter!
+  [self]
+  (set self.indices (util.deepcopy self.all-indices)))
+
+(fn run-filter!
+  [self matcher query ignorecase run-clean target-win]
+  (when run-clean
+    (reset-filter! self))
+  (set self.indices (matcher.filter matcher query self.indices self.content ignorecase))
+  (if (< (# self.indices) 1000)
+      (matcher.highlight matcher query ignorecase target-win)
+      (matcher.remove-highlight matcher)))
+
+(fn update-buffer-lines!
+  [self]
+  (let [view (vim.fn.winsaveview)
+        out []]
+    (let [bo (. vim.bo self.buffer)]
+      (set (. bo :modifiable) true))
+    (each [_ idx (ipairs self.indices)]
+      (table.insert out (. self.content idx)))
+    (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
+    (let [bo (. vim.bo self.buffer)]
+      (set (. bo :modifiable) false))
+    (vim.fn.winrestview view)))
+
+(fn activate-buffer!
+  [self target-buf]
+  (M.switch-buf (or target-buf self.buffer)))
+
+(fn unique-buffer-name
+  [self base-name]
+  (let [base (or base-name "buffer")]
+    (var n 1)
+    (var candidate base)
+    (while (and (> (vim.fn.bufnr candidate) 0)
+                (~= (vim.fn.bufnr candidate) self.buffer))
+      (set n (+ n 1))
+      (set candidate (.. base " [" n "]")))
+    candidate))
+
+(fn set-buffer-name!
+  [self buf-name]
+  (let [target-name (unique-buffer-name self buf-name)
+        [ok] [(pcall vim.api.nvim_buf_set_name self.buffer target-name)]]
+    (if ok
+        (set self.name target-name)
+        (set self.name (.. (or buf-name "buffer") " [" self.buffer "]")))))
+
 (fn M.new
   [nvim opts]
   "Public API: M.new."
@@ -62,73 +131,41 @@
     (set self.all-indices (util.deepcopy self.indices))
 
   (fn self.line-count
-  [] (# self.content))
+  [] (line-count self))
 
   (fn self.source-line-nr
   [index]
-    (let [line (. self.indices index)]
-      (and line (+ line 0))))
+    (source-line-nr self index))
 
   (fn self.closest-index
   [line-nr]
-    (var candidate nil)
-    (var dist math.huge)
-    (each [i v (ipairs self.indices)]
-      (let [d (math.abs (- v line-nr))]
-        (when (< d dist)
-          (set dist d)
-          (set candidate i))))
-    (or candidate 1))
+    (closest-index self line-nr))
 
   (fn self.reset-filter
   []
-    (set self.indices (util.deepcopy self.all-indices)))
+    (reset-filter! self))
 
   (fn self.run-filter
   [matcher query ignorecase run-clean target-win]
-    (when run-clean (self.reset-filter))
-    (set self.indices (matcher.filter matcher query self.indices self.content ignorecase))
-    (if (< (# self.indices) 1000)
-        (matcher.highlight matcher query ignorecase target-win)
-        (matcher.remove-highlight matcher)))
+    (run-filter! self matcher query ignorecase run-clean target-win))
 
   (fn self.update
   []
-    (let [view (vim.fn.winsaveview)
-          out []]
-      (let [bo (. vim.bo self.buffer)]
-        (set (. bo :modifiable) true))
-      (each [_ idx (ipairs self.indices)]
-        (table.insert out (. self.content idx)))
-      (vim.api.nvim_buf_set_lines self.buffer 0 -1 false out)
-      (let [bo (. vim.bo self.buffer)]
-        (set (. bo :modifiable) false))
-      (vim.fn.winrestview view)))
+    (update-buffer-lines! self))
 
   (fn self.activate
   [target-buf]
-    (M.switch-buf (or target-buf self.buffer)))
+    (activate-buffer! self target-buf))
 
   (fn self.unique-name
   [base-name]
-    (let [base (or base-name "buffer")]
-      (var n 1)
-      (var candidate base)
-      (while (and (> (vim.fn.bufnr candidate) 0)
-                  (~= (vim.fn.bufnr candidate) self.buffer))
-        (set n (+ n 1))
-        (set candidate (.. base " [" n "]")))
-      candidate))
+    (unique-buffer-name self base-name))
 
   (fn self.set-name
   [buf-name]
-    (let [target-name (self.unique-name buf-name)
-          [ok] [(pcall vim.api.nvim_buf_set_name self.buffer target-name)]]
-      (if ok
-          (set self.name target-name)
-          ;; Last-resort fallback keeps plugin functional even if name APIs
-          ;; reject a candidate due to race/collision.
-          (set self.name (.. (or buf-name "buffer") " [" self.buffer "]")))))
+    ;; Last-resort fallback keeps plugin functional even if name APIs
+    ;; reject a candidate due to race/collision.
+    (set-buffer-name! self buf-name))
 
     self))
 
