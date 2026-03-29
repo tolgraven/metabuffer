@@ -189,33 +189,6 @@
              (pcall vim.api.nvim_exec_autocmds "WinEnter" {:modeline false})
              (pcall vim.cmd "redraw!")))))
 
-(fn capture-hidden-prompt-state!
-  [deps session]
-  (let [router-util-mod (. (. deps :mods) :router-util)]
-    (when (and session.prompt-win
-               (vim.api.nvim_win_is_valid session.prompt-win))
-      (when (and session.directive-help-win
-                 (vim.api.nvim_win_is_valid session.directive-help-win))
-        (pcall vim.api.nvim_win_close session.directive-help-win true))
-      (set session.directive-help-win nil)
-      (let [[ok cur] [(pcall vim.api.nvim_win_get_cursor session.prompt-win)]]
-        (when (and ok (= (type cur) "table"))
-          (set session.hidden-prompt-cursor [(or (. cur 1) 1) (or (. cur 2) 0)])))
-      (router-util-mod.persist-prompt-height! session)
-      (router-util-mod.persist-results-wrap! session)
-      (set session.hidden-prompt-height (vim.api.nvim_win_get_height session.prompt-win))
-      (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
-        (let [bo (. vim.bo session.prompt-buf)]
-          (set (. bo :bufhidden) "hide"))))))
-
-(fn close-prompt-window!
-  [session]
-  (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
-    (clear-buffer-modified! session.prompt-buf)
-    (pcall vim.api.nvim_win_close session.prompt-win true))
-  (set session.prompt-win nil)
-  (set session.prompt-window nil))
-
 (fn close-session-windows!
   [deps session]
   (let [info-window (. (. deps :windows) :info)
@@ -252,21 +225,12 @@
     (when curr
       (pcall curr.buf.render))))
 
-(fn restore-prompt-cursor!
-  [deps session preserve-focus?]
-  (let [prompt-window-mod (. (. deps :mods) :prompt-window)
-        prompt-win session.prompt-win]
-    (prompt-window-mod.restore-cursor! prompt-win session.hidden-prompt-cursor)
-    (when-not preserve-focus?
-      (vim.api.nvim_set_current_win prompt-win)
-      (if session.ui-last-insert-mode
-          (vim.cmd "startinsert")
-          (vim.cmd "stopinsert")))))
-
 (fn hide-session-ui!
   [deps session]
   (let [{: router : mods} deps
         animation-mod (. mods :animation)
+        prompt-window-mod (. mods :prompt-window)
+        router-util-mod (. mods :router-util)
         active-by-source (. router :active-by-source)]
     (set session.ui-hidden true)
     (set session._last-prompt-statusline nil)
@@ -274,8 +238,17 @@
       (animation-mod.cancel-session! session))
     (restore-startup-cursor! session)
     (set session.ui-last-insert-mode (vim.startswith (. (vim.api.nvim_get_mode) :mode) "i"))
-    (capture-hidden-prompt-state! deps session)
-    (close-prompt-window! session)
+    (prompt-window-mod.capture-hidden-state!
+      session
+      {:persist-state! (fn []
+                         (router-util-mod.persist-prompt-height! session)
+                         (router-util-mod.persist-results-wrap! session))
+       :close-directive-help! (fn []
+                                (when (and session.directive-help-win
+                                           (vim.api.nvim_win_is_valid session.directive-help-win))
+                                  (pcall vim.api.nvim_win_close session.directive-help-win true))
+                                (set session.directive-help-win nil))})
+    (prompt-window-mod.close! session)
     (clear-managed-buffer-modified! (and session.meta session.meta.buf))
     (suspend-main-window-opts! session)
     (close-session-windows! deps session)
@@ -287,6 +260,7 @@
   (let [{: mods : refresh} deps
         sync-prompt-buffer-name! (. refresh :sync-prompt-buffer-name!)
         session-view-mod (. mods :session-view)
+        prompt-window-mod (. mods :prompt-window)
         preserve-focus? (and opts (. opts :preserve-focus))
         curr session.meta]
     (when (and (not session.restoring-ui?)
@@ -311,7 +285,7 @@
                      {:session session
                       :restore-view? (and session-view-mod session.source-view)
                       :refresh-lines true})
-                   (restore-prompt-cursor! deps session preserve-focus?)))
+                   (prompt-window-mod.restore-focus! session preserve-focus?)))
                debug.traceback)]]
         (set session.restoring-ui? false)
         (when-not ok

@@ -30,4 +30,11 @@ M["sync-name!"] = function(session)
     return nil
   end
 end
+M["clear-modified!"] = function(buf)
+  if (buf and vim.api.nvim_buf_is_valid(buf)) then
+    pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
+  else
+  end
+  return buf
+end
 return M

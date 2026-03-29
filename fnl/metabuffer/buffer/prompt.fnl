@@ -56,4 +56,11 @@
       (pcall vim.api.nvim_buf_set_name session.prompt-buf name)
       name)))
 
+(fn M.clear-modified!
+  [buf]
+  "Clear modified state for BUF when it is still valid. Returns BUF."
+  (when (and buf (vim.api.nvim_buf_is_valid buf))
+    (pcall vim.api.nvim_set_option_value "modified" false {:buf buf}))
+  buf)
+
 M

@@ -184,5 +184,64 @@ M["restore-cursor!"] = function(prompt_win, cursor)
     return nil
   end
 end
+M["capture-hidden-state!"] = function(session, opts)
+  local cfg = (opts or {})
+  local persist_state_21 = cfg["persist-state!"]
+  local close_directive_help_21 = cfg["close-directive-help!"]
+  if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+    if close_directive_help_21 then
+      close_directive_help_21()
+    else
+    end
+    do
+      local ok,cur = pcall(vim.api.nvim_win_get_cursor, session["prompt-win"])
+      if (ok and (type(cur) == "table")) then
+        session["hidden-prompt-cursor"] = {(cur[1] or 1), (cur[2] or 0)}
+      else
+      end
+    end
+    if persist_state_21 then
+      persist_state_21()
+    else
+    end
+    session["hidden-prompt-height"] = vim.api.nvim_win_get_height(session["prompt-win"])
+    prompt_buffer_mod["prepare-buffer!"](session["prompt-buf"])
+    if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
+      return pcall(vim.api.nvim_set_option_value, "bufhidden", "hide", {buf = session["prompt-buf"]})
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+M["close!"] = function(session)
+  if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+    prompt_buffer_mod["clear-modified!"](session["prompt-buf"])
+    pcall(vim.api.nvim_win_close, session["prompt-win"], true)
+  else
+  end
+  if session then
+    session["prompt-win"] = nil
+    session["prompt-window"] = nil
+    return nil
+  else
+    return nil
+  end
+end
+M["restore-focus!"] = function(session, preserve_focus_3f)
+  local prompt_win = (session and session["prompt-win"])
+  M["restore-cursor!"](prompt_win, (session and session["hidden-prompt-cursor"]))
+  if (not preserve_focus_3f and prompt_win and vim.api.nvim_win_is_valid(prompt_win)) then
+    vim.api.nvim_set_current_win(prompt_win)
+    if (session and session["ui-last-insert-mode"]) then
+      return vim.cmd("startinsert")
+    else
+      return vim.cmd("stopinsert")
+    end
+  else
+    return nil
+  end
+end
 M["prepare-buffer!"] = prompt_buffer_mod["prepare-buffer!"]
 return M

@@ -168,6 +168,47 @@
           col* (math.min col (# line))]
       (pcall vim.api.nvim_win_set_cursor prompt-win [row* col*]))))
 
+(fn M.capture-hidden-state!
+  [session opts]
+  (let [cfg (or opts {})
+        persist-state! (. cfg :persist-state!)
+        close-directive-help! (. cfg :close-directive-help!)]
+    (when (and session
+               session.prompt-win
+               (vim.api.nvim_win_is_valid session.prompt-win))
+      (when close-directive-help!
+        (close-directive-help!))
+      (let [[ok cur] [(pcall vim.api.nvim_win_get_cursor session.prompt-win)]]
+        (when (and ok (= (type cur) "table"))
+          (set session.hidden-prompt-cursor [(or (. cur 1) 1) (or (. cur 2) 0)])))
+      (when persist-state!
+        (persist-state!))
+      (set session.hidden-prompt-height (vim.api.nvim_win_get_height session.prompt-win))
+      (prompt-buffer-mod.prepare-buffer! session.prompt-buf)
+      (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
+        (pcall vim.api.nvim_set_option_value "bufhidden" "hide" {:buf session.prompt-buf})))))
+
+(fn M.close!
+  [session]
+  (when (and session session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+    (prompt-buffer-mod.clear-modified! session.prompt-buf)
+    (pcall vim.api.nvim_win_close session.prompt-win true))
+  (when session
+    (set session.prompt-win nil)
+    (set session.prompt-window nil)))
+
+(fn M.restore-focus!
+  [session preserve-focus?]
+  (let [prompt-win (and session session.prompt-win)]
+    (M.restore-cursor! prompt-win (and session session.hidden-prompt-cursor))
+    (when (and (not preserve-focus?)
+               prompt-win
+               (vim.api.nvim_win_is_valid prompt-win))
+      (vim.api.nvim_set_current_win prompt-win)
+      (if (and session session.ui-last-insert-mode)
+          (vim.cmd "startinsert")
+          (vim.cmd "stopinsert")))))
+
 (set M.prepare-buffer! prompt-buffer-mod.prepare-buffer!)
 
 M
