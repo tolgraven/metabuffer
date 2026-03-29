@@ -455,7 +455,7 @@ M.new = function(opts)
         session["loading-idle-pending"] = false
         session["loading-anim-phase"] = (1 + (session["loading-anim-phase"] or 0))
         set_results_loading_pulse_21(session)
-        events.send("on-loading-state!", {session = session})
+        events.post("on-loading-state!", {session = session}, {["supersede?"] = true, ["dedupe-key"] = ("on-loading-state:" .. tostring(session["prompt-buf"]))})
         refresh_prompt_highlights_21(session)
         return schedule_loading_indicator_21(session)
       else
@@ -465,7 +465,7 @@ M.new = function(opts)
               session["loading-idle-pending"] = false
               session["loading-anim-phase"] = nil
               set_results_loading_pulse_21(session)
-              return events.send("on-loading-state!", {session = session})
+              return events.post("on-loading-state!", {session = session}, {["supersede?"] = true, ["dedupe-key"] = ("on-loading-state:" .. tostring(session["prompt-buf"]))})
             else
               return nil
             end
@@ -488,7 +488,7 @@ M.new = function(opts)
         session["loading-idle-pending"] = false
         session["loading-anim-phase"] = 0
         set_results_loading_pulse_21(session)
-        events.send("on-loading-state!", {session = session})
+        events.post("on-loading-state!", {session = session}, {["supersede?"] = true, ["dedupe-key"] = ("on-loading-state:" .. tostring(session["prompt-buf"]))})
       else
       end
       session["loading-anim-pending"] = true

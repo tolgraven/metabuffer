@@ -100,6 +100,9 @@
 (local handlers-by-event {})
 (local profile-stats {})
 (var profile? false)
+(var posted-queue [])
+(local posted-by-key {})
+(var posted-scheduled? false)
 
 (fn cpu-us
   []
@@ -111,6 +114,10 @@
            (* (. (. usage :stime) :sec) 1000000)
            (. (. usage :stime) :usec))
         0)))
+
+(fn hrtime
+  []
+  (vim.uv.hrtime))
 
 (fn M.set-profile!
   [enabled]
@@ -135,6 +142,10 @@
   [spec]
   (.. (or spec.domain "?") "/" (or spec.source "?")))
 
+(fn post-key
+  [event-key opts]
+  (or (. opts :dedupe-key) event-key))
+
 (fn handler-stats-for
   [event-stats key]
   (let [handler-stats (or (. event-stats key) {})]
@@ -143,18 +154,36 @@
     handler-stats))
 
 (fn start-emission!
-  [event-key]
+  [event-key meta]
   (let [event-stats (event-stats-for event-key)
         emissions (. event-stats :emissions)
         emission {:index (+ (# emissions) 1)
                   :event event-key
+                  :mode (or (and meta (. meta :mode)) :sync)
                   :elapsed_us 0
                   :cpu_us 0
                   :handler_count 0
                   :handlers []}]
+    (when meta
+      (when (. meta :queue_delay_us)
+        (set emission.queue_delay_us (. meta :queue_delay_us)))
+      (when (. meta :post-key)
+        (set emission.post_key (. meta :post-key)))
+      (when (. meta :flush_index)
+        (set emission.flush_index (. meta :flush_index))))
     (table.insert emissions emission)
     (set event-stats.count (+ 1 (or event-stats.count 0)))
     [event-stats emission]))
+
+(fn record-post!
+  [event-key opts status]
+  (let [event-stats (event-stats-for event-key)
+        key (tostring (post-key event-key opts))
+        field (if (= status :suppressed) :suppressed_count :posted_count)]
+    (set (. event-stats field) (+ 1 (or (. event-stats field) 0)))
+    (when (= status :suppressed)
+      (set (. event-stats :last_suppressed_key) key))
+    event-stats))
 
 (fn accumulate-profile!
   [event-stats emission spec elapsed-us cpu-elapsed-us ok err]
@@ -257,21 +286,76 @@
                                   (if ok "" (.. "  ERR: " (tostring err))))))
       (pcall spec.handler args)))
 
+(fn send-now!
+  [event-key args meta]
+  (let [list (. handlers-by-event event-key)
+        args* (or args {})
+        [event-stats emission] (if (and profile? list)
+                                   (start-emission! event-key meta)
+                                   [nil nil])]
+    (when list
+      (each [_ spec (ipairs list)]
+        (when (matches-filter? spec args*)
+          (pcall-handler! spec event-key args* event-stats emission))))))
+
+(fn flush-posted-queue!
+  []
+  (when (> (# posted-queue) 0)
+    (let [pending posted-queue]
+      (set posted-queue [])
+      (each [k _ (pairs posted-by-key)]
+        (set (. posted-by-key k) nil))
+      (var flush-index 0)
+      (each [_ item (ipairs pending)]
+        (set flush-index (+ flush-index 1))
+        (let [queue-delay-us (/ (- (hrtime) item.posted_at) 1000)
+              event-stats (record-post! item.event-key item.opts :posted)]
+          (set (. event-stats :flushed_count) (+ 1 (or (. event-stats :flushed_count) 0)))
+          (send-now! item.event-key item.args {:mode :posted
+                                               :queue_delay_us queue-delay-us
+                                               :post-key (tostring item.post-key)
+                                               :flush_index flush-index}))))))
+
+(fn schedule-posted-flush!
+  []
+  (when (not posted-scheduled?)
+    (set posted-scheduled? true)
+    (vim.schedule
+      (fn []
+        (set posted-scheduled? false)
+        (flush-posted-queue!)))))
+
 (fn M.send
   [event-key args]
   "Fire all handlers registered for event-key in priority order.
    args is a plain table; each handler receives it directly.
    Handlers failing their role-filter are skipped silently.
    All invocations are pcall-isolated."
-  (let [list (. handlers-by-event event-key)
-        args* (or args {})
-        [event-stats emission] (if (and profile? list)
-                                   (start-emission! event-key)
-                                   [nil nil])]
-    (when list
-      (each [_ spec (ipairs list)]
-        (when (matches-filter? spec args*)
-          (pcall-handler! spec event-key args* event-stats emission))))))
+  (send-now! event-key args {:mode :sync}))
+
+(fn M.post
+  [event-key args opts]
+  "Queue event-key for next scheduler tick. When :supersede? is true,
+   a pending event with the same :dedupe-key is replaced instead of queued twice."
+  (let [opts* (or opts {})
+        post-key0 (post-key event-key opts*)
+        pending (. posted-by-key post-key0)]
+    (when (and pending (. opts* :supersede?))
+      (record-post! (. pending :event-key) (. pending :opts) :suppressed)
+      (set (. pending :event-key) event-key)
+      (set (. pending :args) (or args {}))
+      (set (. pending :opts) opts*)
+      (set (. pending :post-key) post-key0)
+      (set (. pending :posted_at) (hrtime)))
+    (when (not (and pending (. opts* :supersede?)))
+      (let [item {:event-key event-key
+                  :args (or args {})
+                  :opts opts*
+                  :post-key post-key0
+                  :posted_at (hrtime)}]
+        (table.insert posted-queue item)
+        (set (. posted-by-key post-key0) item)))
+    (schedule-posted-flush!)))
 
 (fn M.register!
   [mod]
@@ -312,5 +396,11 @@
   []
   "Clear accumulated event profile stats."
   (clear-profile-stats!))
+
+(fn M.flush-posted!
+  []
+  "Run and clear the currently queued posted events immediately."
+  (set posted-scheduled? false)
+  (flush-posted-queue!))
 
 M

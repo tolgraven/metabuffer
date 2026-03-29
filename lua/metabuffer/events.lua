@@ -5,6 +5,9 @@ local default_priority = 50
 local handlers_by_event = {}
 local profile_stats = {}
 local profile_3f = false
+local posted_queue = {}
+local posted_by_key = {}
+local posted_scheduled_3f = false
 local function cpu_us()
   local uv = (vim.uv or vim.loop)
   local usage = (uv and uv.getrusage and uv.getrusage())
@@ -13,6 +16,9 @@ local function cpu_us()
   else
     return 0
   end
+end
+local function hrtime()
+  return vim.uv.hrtime()
 end
 M["set-profile!"] = function(enabled)
   profile_3f = not not enabled
@@ -39,6 +45,9 @@ end
 local function handler_key(spec)
   return ((spec.domain or "?") .. "/" .. (spec.source or "?"))
 end
+local function post_key(event_key, opts)
+  return (opts["dedupe-key"] or event_key)
+end
 local function handler_stats_for(event_stats, key)
   local handler_stats = (event_stats[key] or {})
   if (event_stats[key] == nil) then
@@ -47,13 +56,44 @@ local function handler_stats_for(event_stats, key)
   end
   return handler_stats
 end
-local function start_emission_21(event_key)
+local function start_emission_21(event_key, meta)
   local event_stats = event_stats_for(event_key)
   local emissions = event_stats.emissions
-  local emission = {index = (#emissions + 1), event = event_key, elapsed_us = 0, cpu_us = 0, handler_count = 0, handlers = {}}
+  local emission = {index = (#emissions + 1), event = event_key, mode = ((meta and meta.mode) or "sync"), elapsed_us = 0, cpu_us = 0, handler_count = 0, handlers = {}}
+  if meta then
+    if meta.queue_delay_us then
+      emission.queue_delay_us = meta.queue_delay_us
+    else
+    end
+    if meta["post-key"] then
+      emission.post_key = meta["post-key"]
+    else
+    end
+    if meta.flush_index then
+      emission.flush_index = meta.flush_index
+    else
+    end
+  else
+  end
   table.insert(emissions, emission)
   event_stats.count = (1 + (event_stats.count or 0))
   return {event_stats, emission}
+end
+local function record_post_21(event_key, opts, status)
+  local event_stats = event_stats_for(event_key)
+  local key = tostring(post_key(event_key, opts))
+  local field
+  if (status == "suppressed") then
+    field = "suppressed_count"
+  else
+    field = "posted_count"
+  end
+  event_stats[field] = (1 + (event_stats[field] or 0))
+  if (status == "suppressed") then
+    event_stats["last_suppressed_key"] = key
+  else
+  end
+  return event_stats
 end
 local function accumulate_profile_21(event_stats, emission, spec, elapsed_us, cpu_elapsed_us, ok, err)
   event_stats.handler_count = (1 + (event_stats.handler_count or 0))
@@ -135,10 +175,10 @@ local function register_module_21(mod)
 end
 local function sort_handlers_21()
   for _, list in pairs(handlers_by_event) do
-    local function _14_(a, b)
+    local function _20_(a, b)
       return (a.priority < b.priority)
     end
-    table.sort(list, _14_)
+    table.sort(list, _20_)
   end
   return nil
 end
@@ -174,31 +214,31 @@ local function pcall_handler_21(spec, event_key, args, event_stats, emission)
     local elapsed_us = ((vim.uv.hrtime() - t0) / 1000)
     local cpu_elapsed_us = math.max(0, (cpu_us() - cpu0))
     accumulate_profile_21(event_stats, emission, spec, elapsed_us, cpu_elapsed_us, ok, err)
-    local function _18_()
+    local function _24_()
       if ok then
         return ""
       else
         return ("  ERR: " .. tostring(err))
       end
     end
-    return debug.log("event-bus", string.format("%s  %s/%s  p=%d  wall=%.1f\194\181s cpu=%.1f\194\181s%s", event_key, (spec.domain or "?"), (spec.source or "?"), spec.priority, elapsed_us, cpu_elapsed_us, _18_()))
+    return debug.log("event-bus", string.format("%s  %s/%s  p=%d  wall=%.1f\194\181s cpu=%.1f\194\181s%s", event_key, (spec.domain or "?"), (spec.source or "?"), spec.priority, elapsed_us, cpu_elapsed_us, _24_()))
   else
     return pcall(spec.handler, args)
   end
 end
-M.send = function(event_key, args)
+local function send_now_21(event_key, args, meta)
   local list = handlers_by_event[event_key]
   local args_2a = (args or {})
-  local function _20_()
+  local function _26_()
     if (profile_3f and list) then
-      return start_emission_21(event_key)
+      return start_emission_21(event_key, meta)
     else
       return {nil, nil}
     end
   end
-  local _let_21_ = _20_()
-  local event_stats = _let_21_[1]
-  local emission = _let_21_[2]
+  local _let_27_ = _26_()
+  local event_stats = _let_27_[1]
+  local emission = _let_27_[2]
   if list then
     for _, spec in ipairs(list) do
       if matches_filter_3f(spec, args_2a) then
@@ -210,6 +250,62 @@ M.send = function(event_key, args)
   else
     return nil
   end
+end
+local function flush_posted_queue_21()
+  if (#posted_queue > 0) then
+    local pending = posted_queue
+    posted_queue = {}
+    for k, _ in pairs(posted_by_key) do
+      posted_by_key[k] = nil
+    end
+    local flush_index = 0
+    for _, item in ipairs(pending) do
+      flush_index = (flush_index + 1)
+      local queue_delay_us = ((hrtime() - item.posted_at) / 1000)
+      local event_stats = record_post_21(item["event-key"], item.opts, "posted")
+      event_stats["flushed_count"] = (1 + (event_stats.flushed_count or 0))
+      send_now_21(item["event-key"], item.args, {mode = "posted", queue_delay_us = queue_delay_us, ["post-key"] = tostring(item["post-key"]), flush_index = flush_index})
+    end
+    return nil
+  else
+    return nil
+  end
+end
+local function schedule_posted_flush_21()
+  if not posted_scheduled_3f then
+    posted_scheduled_3f = true
+    local function _31_()
+      posted_scheduled_3f = false
+      return flush_posted_queue_21()
+    end
+    return vim.schedule(_31_)
+  else
+    return nil
+  end
+end
+M.send = function(event_key, args)
+  return send_now_21(event_key, args, {mode = "sync"})
+end
+M.post = function(event_key, args, opts)
+  local opts_2a = (opts or {})
+  local post_key0 = post_key(event_key, opts_2a)
+  local pending = posted_by_key[post_key0]
+  if (pending and opts_2a["supersede?"]) then
+    record_post_21(pending["event-key"], pending.opts, "suppressed")
+    pending["event-key"] = event_key
+    pending["args"] = (args or {})
+    pending["opts"] = opts_2a
+    pending["post-key"] = post_key0
+    pending["posted_at"] = hrtime()
+  else
+  end
+  if not (pending and opts_2a["supersede?"]) then
+    local item = {["event-key"] = event_key, args = (args or {}), opts = opts_2a, ["post-key"] = post_key0, posted_at = hrtime()}
+    table.insert(posted_queue, item)
+    posted_by_key[post_key0] = item
+  else
+  end
+  return schedule_posted_flush_21()
 end
 M["register!"] = function(mod)
   register_module_21(mod)
@@ -237,5 +333,9 @@ M["profile-stats"] = function()
 end
 M["reset-profile-stats!"] = function()
   return clear_profile_stats_21()
+end
+M["flush-posted!"] = function()
+  posted_scheduled_3f = false
+  return flush_posted_queue_21()
 end
 return M

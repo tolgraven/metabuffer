@@ -81,6 +81,7 @@ Runner behavior:
 - Event-bus profiling can be enabled inside a test via `require('metabuffer.events')['set-profile!'](true)`.
   Use `profile-stats()` / `reset-profile-stats!()` to compare a semantic event's handler time against the full observed interaction time.
   Per-event stats now include emission counts, aggregate wall/CPU totals, and an `emissions` list with every individual emission plus per-handler wall/CPU timings.
+- For deferred bus behavior, prefer unit tests around `events['post'](...)` + `events['flush-posted!']()` instead of sleeping for scheduler ticks. Posted-event stats expose queued/flushed/suppressed counts so coalescing behavior can be asserted directly.
 - Returns non-zero if any file has failing cases.
 
 ## Screen Tests
