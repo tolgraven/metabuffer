@@ -70,6 +70,18 @@
              :refresh-lines true})))
       50)))
 
+(fn selection-change-payload
+  [session force-refresh? refresh-lines]
+  {:session session
+   :line-nr (+ 1 (or session.meta.selected_index 0))
+   :force-refresh? force-refresh?
+   :refresh-lines refresh-lines})
+
+(fn emit-selection-change!
+  [session force-refresh? refresh-lines]
+  (events.send :on-selection-change!
+    (selection-change-payload session force-refresh? refresh-lines)))
+
 (fn apply-restored-view!
   [meta line topline base-view session]
   (vim.api.nvim_win_call meta.win.window
@@ -135,11 +147,14 @@
         (when force-refresh
           (schedule-source-syntax-refresh! session))
         (when (or force-refresh (~= before session.meta.selected_index))
-          (events.send :on-selection-change!
-            {:session session
-             :line-nr (+ 1 (or session.meta.selected_index 0))
-             :force-refresh? force-refresh
-             :refresh-lines false}))))))
+          (emit-selection-change! session force-refresh false))))))
+
+(fn scroll-sync-eligible?
+  [session]
+  (and session
+       (not session.scroll-sync-pending)
+       (not session.scroll-animating?)
+       (not session.scroll-command-view)))
 
 (fn M.schedule-scroll-sync!
   [session opts]
@@ -147,15 +162,13 @@
   (let [{: maybe-sync-from-main!
          : scroll-sync-debounce-ms}
         (or opts {})]
-    (when (and session
-               (not session.scroll-sync-pending)
-               (not session.scroll-animating?)
-               (not session.scroll-command-view))
+    (when (scroll-sync-eligible? session)
       (set session.scroll-sync-pending true)
       (vim.defer_fn
         (fn []
           (set session.scroll-sync-pending false)
-          (when (and (not session.scroll-animating?)
+          (when (and session
+                     (not session.scroll-animating?)
                      (not session.scroll-command-view))
             (maybe-sync-from-main! session true)))
         scroll-sync-debounce-ms))))

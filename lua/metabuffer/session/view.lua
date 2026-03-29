@@ -78,6 +78,12 @@ local function emit_restored_selection_21(session)
     return nil
   end
 end
+local function selection_change_payload(session, force_refresh_3f, refresh_lines)
+  return {session = session, ["line-nr"] = (1 + (session.meta.selected_index or 0)), ["force-refresh?"] = force_refresh_3f, ["refresh-lines"] = refresh_lines}
+end
+local function emit_selection_change_21(session, force_refresh_3f, refresh_lines)
+  return events.send("on-selection-change!", selection_change_payload(session, force_refresh_3f, refresh_lines))
+end
 local function apply_restored_view_21(meta, line, topline, base_view, session)
   local function _13_()
     local view = vim.fn.winsaveview()
@@ -152,7 +158,7 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
     else
     end
     if (force_refresh or (before ~= session.meta.selected_index)) then
-      return events.send("on-selection-change!", {session = session, ["line-nr"] = (1 + (session.meta.selected_index or 0)), ["force-refresh?"] = force_refresh, ["refresh-lines"] = false})
+      return emit_selection_change_21(session, force_refresh, false)
     else
       return nil
     end
@@ -160,15 +166,18 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
     return nil
   end
 end
+local function scroll_sync_eligible_3f(session)
+  return (session and not session["scroll-sync-pending"] and not session["scroll-animating?"] and not session["scroll-command-view"])
+end
 M["schedule-scroll-sync!"] = function(session, opts)
   local _let_26_ = (opts or {})
   local maybe_sync_from_main_21 = _let_26_["maybe-sync-from-main!"]
   local scroll_sync_debounce_ms = _let_26_["scroll-sync-debounce-ms"]
-  if (session and not session["scroll-sync-pending"] and not session["scroll-animating?"] and not session["scroll-command-view"]) then
+  if scroll_sync_eligible_3f(session) then
     session["scroll-sync-pending"] = true
     local function _27_()
       session["scroll-sync-pending"] = false
-      if (not session["scroll-animating?"] and not session["scroll-command-view"]) then
+      if (session and not session["scroll-animating?"] and not session["scroll-command-view"]) then
         return maybe_sync_from_main_21(session, true)
       else
         return nil
