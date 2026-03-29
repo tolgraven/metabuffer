@@ -46,6 +46,87 @@
         (debug-log (.. "[keymap] raw=" (tostring (vim.fn.keytrans code))))
         code))))
 
+(fn clear-registry!
+  [self]
+  (set self.registry {}))
+
+(fn register-definition!
+  [self definition]
+  (set (. self.registry (tostring definition.lhs)) definition))
+
+(fn register-from-rule!
+  [self nvim rule]
+  (register-definition! self (parse_definition nvim rule)))
+
+(fn register-from-rules!
+  [self nvim rules]
+  (each [_ rule (ipairs rules)]
+    (register-from-rule! self nvim rule)))
+
+(fn matching-definitions
+  [self lhs]
+  (let [out []
+        probe (tostring lhs)]
+    (each [_ def (pairs self.registry)]
+      (when (vim.startswith (tostring def.lhs) probe)
+        (table.insert out def)))
+    (table.sort out (fn [a b] (< (tostring a.lhs) (tostring b.lhs))))
+    out))
+
+(fn resolve-definition
+  [self nvim definition]
+  (let [rhs (if definition.expr
+                (ks_mod.parse nvim (vim.fn.eval definition.rhs))
+                definition.rhs)]
+    (if definition.noremap rhs (self.resolve nvim rhs true))))
+
+(fn resolve-keystroke
+  [self nvim lhs nowait]
+  (let [candidates (matching-definitions self lhs)
+        n (# candidates)]
+    (if (= n 0)
+        lhs
+        (if (= n 1)
+            (let [d (. candidates 1)]
+              (when (= (tostring d.lhs) (tostring lhs))
+                (resolve-definition self nvim d)))
+            (if nowait
+                (let [d (. candidates 1)]
+                  (when (= (tostring d.lhs) (tostring lhs))
+                    (resolve-definition self nvim d)))
+                (let [d (. candidates 1)]
+                  (when (and d.nowait (= (tostring d.lhs) (tostring lhs)))
+                    (resolve-definition self nvim d))))))))
+
+(fn feed-harvest-key!
+  [self nvim previous resolved k]
+  (set previous.value (if previous.value
+                          (ks_mod.concat previous.value [k])
+                          (ks_mod.parse nvim [k])))
+  (let [ks (resolve-keystroke self nvim previous.value false)]
+    (when ks
+      (set resolved.value ks))))
+
+(fn harvest-keystroke
+  [self nvim timeoutlen callback interval]
+  (let [previous {:value nil}
+        resolved {:value nil}]
+    (while (not resolved.value)
+      (let [code (_getcode timeoutlen callback interval)]
+        (if (= code nil)
+            (when previous.value
+              (set resolved.value (or (resolve-keystroke self nvim previous.value true) previous.value)))
+            (let [chunk (if (= (type code) "string")
+                            (if (string.find code "\128" 1 true)
+                                [(key_mod.parse nvim code)]
+                                (ks_mod.parse nvim code))
+                            [(key_mod.parse nvim code)])]
+              (each [_ k (ipairs chunk)]
+                (when-not resolved.value
+                  (feed-harvest-key! self nvim previous resolved k)))))))
+    (debug-log (.. "[keymap] resolved=" (tostring resolved.value)))
+    resolved.value))
+
 (fn M.new
   []
   "Public API: M.new."
@@ -53,84 +134,35 @@
 
   (fn self.clear
   []
-    (set self.registry {}))
+    (clear-registry! self))
 
   (fn self.register
   [definition]
-    (set (. self.registry (tostring definition.lhs)) definition))
+    (register-definition! self definition))
 
   (fn self.register_from_rule
   [nvim rule]
-    (self.register (parse_definition nvim rule)))
+    (register-from-rule! self nvim rule))
 
   (fn self.register_from_rules
   [nvim rules]
-    (each [_ rule (ipairs rules)]
-      (self.register_from_rule nvim rule)))
+    (register-from-rules! self nvim rules))
 
   (fn self.filter
   [lhs]
-    (let [out []
-          probe (tostring lhs)]
-      (each [_ def (pairs self.registry)]
-        (when (vim.startswith (tostring def.lhs) probe)
-          (table.insert out def)))
-      (table.sort out (fn [a b] (< (tostring a.lhs) (tostring b.lhs))))
-      out))
+    (matching-definitions self lhs))
 
   (fn self._resolve
   [nvim definition]
-    (let [rhs (if definition.expr
-                  (ks_mod.parse nvim (vim.fn.eval definition.rhs))
-                  definition.rhs)]
-      (if definition.noremap rhs (self.resolve nvim rhs true))))
+    (resolve-definition self nvim definition))
 
   (fn self.resolve
   [nvim lhs nowait]
-    (let [candidates (self.filter lhs)
-          n (# candidates)]
-      (if (= n 0)
-          lhs
-          (if (= n 1)
-              (let [d (. candidates 1)]
-                (when (= (tostring d.lhs) (tostring lhs))
-                  (self._resolve nvim d)))
-              (if nowait
-                  (let [d (. candidates 1)]
-                    (when (= (tostring d.lhs) (tostring lhs))
-                      (self._resolve nvim d)))
-                  (let [d (. candidates 1)]
-                    (when (and d.nowait (= (tostring d.lhs) (tostring lhs)))
-                      (self._resolve nvim d))))))))
+    (resolve-keystroke self nvim lhs nowait))
 
   (fn self.harvest
   [nvim timeoutlen callback interval]
-    (var previous nil)
-    (var resolved nil)
-    (fn feed-key
-  [k]
-      (set previous (if previous
-                        (ks_mod.concat previous [k])
-                        (ks_mod.parse nvim [k])))
-      (let [ks (self.resolve nvim previous false)]
-        (when ks
-          (set resolved ks))))
-    (while (not resolved)
-      (let [code (_getcode timeoutlen callback interval)]
-        (if (= code nil)
-            (when previous
-              (set resolved (or (self.resolve nvim previous true) previous)))
-            (let [chunk (if (= (type code) "string")
-                            (if (string.find code "\128" 1 true)
-                                ;; Internal keycode bytes (e.g. <80>kP) must be parsed as one key.
-                                [(key_mod.parse nvim code)]
-                                (ks_mod.parse nvim code))
-                            [(key_mod.parse nvim code)])]
-              (each [_ k (ipairs chunk)]
-                (when-not resolved
-                  (feed-key k)))))))
-    (debug-log (.. "[keymap] resolved=" (tostring resolved)))
-    resolved)
+    (harvest-keystroke self nvim timeoutlen callback interval))
 
   self))
 

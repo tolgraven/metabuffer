@@ -53,130 +53,154 @@ local function _getcode(_timeoutlen, callback, _interval)
     return nil
   end
 end
-M.new = function()
-  local self = {registry = {}}
-  self.clear = function()
-    self.registry = {}
-    return nil
+local function clear_registry_21(self)
+  self.registry = {}
+  return nil
+end
+local function register_definition_21(self, definition)
+  self.registry[tostring(definition.lhs)] = definition
+  return nil
+end
+local function register_from_rule_21(self, nvim, rule)
+  return register_definition_21(self, parse_definition(nvim, rule))
+end
+local function register_from_rules_21(self, nvim, rules)
+  for _, rule in ipairs(rules) do
+    register_from_rule_21(self, nvim, rule)
   end
-  self.register = function(definition)
-    self.registry[tostring(definition.lhs)] = definition
-    return nil
-  end
-  self.register_from_rule = function(nvim, rule)
-    return self.register(parse_definition(nvim, rule))
-  end
-  self.register_from_rules = function(nvim, rules)
-    for _, rule in ipairs(rules) do
-      self.register_from_rule(nvim, rule)
+  return nil
+end
+local function matching_definitions(self, lhs)
+  local out = {}
+  local probe = tostring(lhs)
+  for _, def in pairs(self.registry) do
+    if vim.startswith(tostring(def.lhs), probe) then
+      table.insert(out, def)
+    else
     end
-    return nil
   end
-  self.filter = function(lhs)
-    local out = {}
-    local probe = tostring(lhs)
-    for _, def in pairs(self.registry) do
-      if vim.startswith(tostring(def.lhs), probe) then
-        table.insert(out, def)
+  local function _9_(a, b)
+    return (tostring(a.lhs) < tostring(b.lhs))
+  end
+  table.sort(out, _9_)
+  return out
+end
+local function resolve_definition(self, nvim, definition)
+  local rhs
+  if definition.expr then
+    rhs = ks_mod.parse(nvim, vim.fn.eval(definition.rhs))
+  else
+    rhs = definition.rhs
+  end
+  if definition.noremap then
+    return rhs
+  else
+    return self.resolve(nvim, rhs, true)
+  end
+end
+local function resolve_keystroke(self, nvim, lhs, nowait)
+  local candidates = matching_definitions(self, lhs)
+  local n = #candidates
+  if (n == 0) then
+    return lhs
+  else
+    if (n == 1) then
+      local d = candidates[1]
+      if (tostring(d.lhs) == tostring(lhs)) then
+        return resolve_definition(self, nvim, d)
       else
+        return nil
       end
-    end
-    local function _9_(a, b)
-      return (tostring(a.lhs) < tostring(b.lhs))
-    end
-    table.sort(out, _9_)
-    return out
-  end
-  self._resolve = function(nvim, definition)
-    local rhs
-    if definition.expr then
-      rhs = ks_mod.parse(nvim, vim.fn.eval(definition.rhs))
     else
-      rhs = definition.rhs
-    end
-    if definition.noremap then
-      return rhs
-    else
-      return self.resolve(nvim, rhs, true)
-    end
-  end
-  self.resolve = function(nvim, lhs, nowait)
-    local candidates = self.filter(lhs)
-    local n = #candidates
-    if (n == 0) then
-      return lhs
-    else
-      if (n == 1) then
+      if nowait then
         local d = candidates[1]
         if (tostring(d.lhs) == tostring(lhs)) then
-          return self._resolve(nvim, d)
+          return resolve_definition(self, nvim, d)
         else
           return nil
         end
       else
-        if nowait then
-          local d = candidates[1]
-          if (tostring(d.lhs) == tostring(lhs)) then
-            return self._resolve(nvim, d)
-          else
-            return nil
-          end
+        local d = candidates[1]
+        if (d.nowait and (tostring(d.lhs) == tostring(lhs))) then
+          return resolve_definition(self, nvim, d)
         else
-          local d = candidates[1]
-          if (d.nowait and (tostring(d.lhs) == tostring(lhs))) then
-            return self._resolve(nvim, d)
-          else
-            return nil
-          end
+          return nil
         end
       end
     end
   end
-  self.harvest = function(nvim, timeoutlen, callback, interval)
-    local previous = nil
-    local resolved = nil
-    local function feed_key(k)
-      if previous then
-        previous = ks_mod.concat(previous, {k})
+end
+local function feed_harvest_key_21(self, nvim, previous, resolved, k)
+  if previous.value then
+    previous.value = ks_mod.concat(previous.value, {k})
+  else
+    previous.value = ks_mod.parse(nvim, {k})
+  end
+  local ks = resolve_keystroke(self, nvim, previous.value, false)
+  if ks then
+    resolved.value = ks
+    return nil
+  else
+    return nil
+  end
+end
+local function harvest_keystroke(self, nvim, timeoutlen, callback, interval)
+  local previous = {value = nil}
+  local resolved = {value = nil}
+  while not resolved.value do
+    local code = _getcode(timeoutlen, callback, interval)
+    if (code == nil) then
+      if previous.value then
+        resolved.value = (resolve_keystroke(self, nvim, previous.value, true) or previous.value)
       else
-        previous = ks_mod.parse(nvim, {k})
       end
-      local ks = self.resolve(nvim, previous, false)
-      if ks then
-        resolved = ks
-        return nil
-      else
-        return nil
-      end
-    end
-    while not resolved do
-      local code = _getcode(timeoutlen, callback, interval)
-      if (code == nil) then
-        if previous then
-          resolved = (self.resolve(nvim, previous, true) or previous)
-        else
-        end
-      else
-        local chunk
-        if (type(code) == "string") then
-          if string.find(code, "\128", 1, true) then
-            chunk = {key_mod.parse(nvim, code)}
-          else
-            chunk = ks_mod.parse(nvim, code)
-          end
-        else
+    else
+      local chunk
+      if (type(code) == "string") then
+        if string.find(code, "\128", 1, true) then
           chunk = {key_mod.parse(nvim, code)}
+        else
+          chunk = ks_mod.parse(nvim, code)
         end
-        for _, k in ipairs(chunk) do
-          if not resolved then
-            feed_key(k)
-          else
-          end
+      else
+        chunk = {key_mod.parse(nvim, code)}
+      end
+      for _, k in ipairs(chunk) do
+        if not resolved.value then
+          feed_harvest_key_21(self, nvim, previous, resolved, k)
+        else
         end
       end
     end
-    debug_log(("[keymap] resolved=" .. tostring(resolved)))
-    return resolved
+  end
+  debug_log(("[keymap] resolved=" .. tostring(resolved.value)))
+  return resolved.value
+end
+M.new = function()
+  local self = {registry = {}}
+  self.clear = function()
+    return clear_registry_21(self)
+  end
+  self.register = function(definition)
+    return register_definition_21(self, definition)
+  end
+  self.register_from_rule = function(nvim, rule)
+    return register_from_rule_21(self, nvim, rule)
+  end
+  self.register_from_rules = function(nvim, rules)
+    return register_from_rules_21(self, nvim, rules)
+  end
+  self.filter = function(lhs)
+    return matching_definitions(self, lhs)
+  end
+  self._resolve = function(nvim, definition)
+    return resolve_definition(self, nvim, definition)
+  end
+  self.resolve = function(nvim, lhs, nowait)
+    return resolve_keystroke(self, nvim, lhs, nowait)
+  end
+  self.harvest = function(nvim, timeoutlen, callback, interval)
+    return harvest_keystroke(self, nvim, timeoutlen, callback, interval)
   end
   return self
 end
