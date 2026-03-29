@@ -10,7 +10,8 @@ M.new = function(opts)
   local render_info_lines_21 = opts["render-info-lines!"]
   local sync_info_selection_21 = opts["sync-info-selection!"]
   local refs_slice_sig = opts["refs-slice-sig"]
-  local info_range = opts["info-range"]
+  local info_visible_range = opts["info-visible-range"]
+  local fit_info_width_21 = opts["fit-info-width!"]
   local info_max_lines = opts["info-max-lines"]
   local debug_log = opts["debug-log"]
   local valid_info_win_3f = opts["valid-info-win?"]
@@ -22,7 +23,7 @@ M.new = function(opts)
     local pending = (session and session["project-mode"] and (startup or bootstrap_pending or not bootstrapped or not stream_done))
     return pending
   end
-  local function render_project_loading_21(session, fit_info_width_21)
+  local function render_project_loading_21(session, fit_info_width_210)
     local lines = loading_skeleton_lines(info_height(session))
     local ns = vim.api.nvim_create_namespace("MetaInfoWindow")
     session["info-start-index"] = 1
@@ -35,7 +36,7 @@ M.new = function(opts)
     session["info-highlight-fill-pending?"] = false
     session["info-showing-project-loading?"] = true
     session["info-render-sig"] = nil
-    fit_info_width_21(session, lines)
+    fit_info_width_210(session, lines)
     vim.api.nvim_buf_set_lines(session["info-buf"], 0, -1, false, lines)
     vim.api.nvim_buf_clear_namespace(session["info-buf"], ns, 0, -1)
     for row = 0, (#lines - 1) do
@@ -45,7 +46,7 @@ M.new = function(opts)
     bo.modifiable = false
     return nil
   end
-  local function update_project_startup_21(session, fit_info_width_21, info_visible_range)
+  local function update_project_startup_21(session)
     session["info-project-loading-active?"] = true
     ensure_info_window(session)
     if (session["info-render-suspended?"] and not session["prompt-animating?"] and not session["startup-initializing"]) then
@@ -119,7 +120,7 @@ M.new = function(opts)
   local function project_info_range_state(session, meta)
     local idxs = (meta.buf.indices or {})
     local total = #idxs
-    local _let_14_ = info_range(meta.selected_index, total, info_max_lines)
+    local _let_14_ = info_visible_range(session, meta, total, info_max_lines)
     local wanted_start = _let_14_[1]
     local wanted_stop = _let_14_[2]
     local out_of_range = (((session["info-start-index"] or 1) < wanted_start) or ((session["info-stop-index"] or 0) > wanted_stop))
@@ -161,9 +162,9 @@ M.new = function(opts)
       return nil
     end
   end
-  local function update_project_21(session, refresh_lines, fit_info_width_21, info_visible_range)
+  local function update_project_21(session, refresh_lines)
     if project_loading_pending_3f(session) then
-      return update_project_startup_21(session, fit_info_width_21, info_visible_range)
+      return update_project_startup_21(session)
     else
       settle_info_render_state_21(session)
       project_info_debug_21(session, refresh_lines)

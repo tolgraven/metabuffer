@@ -7,7 +7,7 @@
   (let [{: startup-layout-pending? : loading-skeleton-lines : info-height
          : ensure-info-window : settle-info-window! : refresh-info-statusline!
          : render-info-lines! : sync-info-selection! : refs-slice-sig
-         : info-range : info-max-lines : debug-log : valid-info-win?
+         : info-visible-range : fit-info-width! : info-max-lines : debug-log : valid-info-win?
          } opts]
     (fn project-loading-pending?
       [session]
@@ -44,7 +44,7 @@
           (set bo.modifiable false))))
 
     (fn update-project-startup!
-      [session fit-info-width! info-visible-range]
+      [session]
       (set session.info-project-loading-active? true)
       (ensure-info-window session)
       (when (and session.info-render-suspended?
@@ -60,11 +60,7 @@
               idxs (or meta.buf.indices [])
               total (# idxs)]
           (if (> total 0)
-              (let [[wanted-start wanted-stop] (info-visible-range
-                                                 session
-                                                 meta
-                                                 total
-                                                 info-max-lines)]
+                (let [[wanted-start wanted-stop] (info-visible-range session meta total info-max-lines)]
                 (set session.info-showing-project-loading? false)
                 (render-info-lines!
                   session
@@ -109,7 +105,7 @@
       [session meta]
       (let [idxs (or meta.buf.indices [])
             total (# idxs)
-            [wanted-start wanted-stop] (info-range meta.selected_index total info-max-lines)
+            [wanted-start wanted-stop] (info-visible-range session meta total info-max-lines)
             out-of-range (or (< (or session.info-start-index 1) wanted-start)
                              (> (or session.info-stop-index 0) wanted-stop))
             range-changed (or (~= wanted-start (or session.info-start-index 1))
@@ -162,9 +158,9 @@
         (schedule-project-info-finish-refresh! session)))
 
     (fn update-project!
-      [session refresh-lines fit-info-width! info-visible-range]
+      [session refresh-lines]
       (if (project-loading-pending? session)
-          (update-project-startup! session fit-info-width! info-visible-range)
+          (update-project-startup! session)
           (do
             (settle-info-render-state! session)
             (project-info-debug! session refresh-lines)
