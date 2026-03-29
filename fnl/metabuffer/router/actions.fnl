@@ -56,44 +56,51 @@
              wrapper.apply-opts)
     (pcall wrapper.apply-opts opts)))
 
+(fn session-main-wrappers
+  [session]
+  (let [main-win (and session session.meta session.meta.win)
+        status-win (and session session.meta session.meta.status-win)]
+    (if (= status-win main-win)
+        [main-win]
+        [main-win status-win])))
+
+(fn each-session-main-wrapper!
+  [session f]
+  (each [_ wrapper (ipairs (session-main-wrappers session))]
+    (when wrapper
+      (f wrapper))))
+
+(fn each-session-main-window!
+  [session f]
+  (each-session-main-wrapper! session
+    (fn [wrapper]
+      (let [win wrapper.window]
+        (when (and win (vim.api.nvim_win_is_valid win))
+          (f win))))))
+
 (fn restore-main-window-opts!
   [session]
   "Restore the original local options for Meta-managed windows."
-  (let [main-win (and session session.meta session.meta.win)
-        status-win (and session session.meta session.meta.status-win)]
-    (destroy-window-wrapper! main-win)
-    (when (and status-win
-               (~= status-win main-win))
-      (destroy-window-wrapper! status-win))))
+  (each-session-main-wrapper! session destroy-window-wrapper!))
 
 (fn suspend-main-window-opts!
   [session]
   "Temporarily restore origin window-local options while keeping wrappers reusable."
-  (let [main-win (and session session.meta session.meta.win)
-        status-win (and session session.meta session.meta.status-win)]
-    (restore-window-wrapper-opts! main-win)
-    (when (and status-win
-               (~= status-win main-win))
-      (restore-window-wrapper-opts! status-win))
-    (each [_ win (ipairs [(and main-win main-win.window)
-                          (and status-win status-win.window)])]
-      (when (and win (vim.api.nvim_win_is_valid win))
-        (events.send :on-win-teardown! {:win win :role :main})))))
+  (each-session-main-wrapper! session restore-window-wrapper-opts!)
+  (each-session-main-window! session
+    (fn [win]
+      (events.send :on-win-teardown! {:win win :role :main}))))
 
 (fn resume-main-window-opts!
   [deps session]
   "Reapply Meta window-local options after a hidden session becomes visible again."
   (let [meta-window-mod (. (. deps :mods) :meta-window)
-        opts (or (and meta-window-mod (. meta-window-mod :default-opts)) {})
-        main-win (and session session.meta session.meta.win)
-        status-win (and session session.meta session.meta.status-win)]
-    (apply-window-wrapper-opts! main-win opts)
-    (when (and status-win
-               (~= status-win main-win))
-      (apply-window-wrapper-opts! status-win opts))
-    (each [_ win (ipairs [(and main-win main-win.window)
-                          (and status-win status-win.window)])]
-      (when (and win (vim.api.nvim_win_is_valid win))
+        opts (or (and meta-window-mod (. meta-window-mod :default-opts)) {})]
+    (each-session-main-wrapper! session
+      (fn [wrapper]
+        (apply-window-wrapper-opts! wrapper opts)))
+    (each-session-main-window! session
+      (fn [win]
         (events.send :on-win-create! {:win win :role :main})))))
 
 (fn restore-managed-buffer-effects!

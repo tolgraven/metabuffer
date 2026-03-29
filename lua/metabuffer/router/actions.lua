@@ -56,55 +56,62 @@ local function apply_window_wrapper_opts_21(wrapper, opts)
     return nil
   end
 end
-local function restore_main_window_opts_21(session)
+local function session_main_wrappers(session)
   local main_win = (session and session.meta and session.meta.win)
   local status_win = (session and session.meta and session.meta["status-win"])
-  destroy_window_wrapper_21(main_win)
-  if (status_win and (status_win ~= main_win)) then
-    return destroy_window_wrapper_21(status_win)
+  if (status_win == main_win) then
+    return {main_win}
   else
-    return nil
+    return {main_win, status_win}
   end
 end
-local function suspend_main_window_opts_21(session)
-  local main_win = (session and session.meta and session.meta.win)
-  local status_win = (session and session.meta and session.meta["status-win"])
-  restore_window_wrapper_opts_21(main_win)
-  if (status_win and (status_win ~= main_win)) then
-    restore_window_wrapper_opts_21(status_win)
-  else
-  end
-  for _, win in ipairs({(main_win and main_win.window), (status_win and status_win.window)}) do
-    if (win and vim.api.nvim_win_is_valid(win)) then
-      events.send("on-win-teardown!", {win = win, role = "main"})
+local function each_session_main_wrapper_21(session, f)
+  for _, wrapper in ipairs(session_main_wrappers(session)) do
+    if wrapper then
+      f(wrapper)
     else
     end
   end
   return nil
+end
+local function each_session_main_window_21(session, f)
+  local function _9_(wrapper)
+    local win = wrapper.window
+    if (win and vim.api.nvim_win_is_valid(win)) then
+      return f(win)
+    else
+      return nil
+    end
+  end
+  return each_session_main_wrapper_21(session, _9_)
+end
+local function restore_main_window_opts_21(session)
+  return each_session_main_wrapper_21(session, destroy_window_wrapper_21)
+end
+local function suspend_main_window_opts_21(session)
+  each_session_main_wrapper_21(session, restore_window_wrapper_opts_21)
+  local function _11_(win)
+    return events.send("on-win-teardown!", {win = win, role = "main"})
+  end
+  return each_session_main_window_21(session, _11_)
 end
 local function resume_main_window_opts_21(deps, session)
   local meta_window_mod = deps.mods["meta-window"]
   local opts = ((meta_window_mod and meta_window_mod["default-opts"]) or {})
-  local main_win = (session and session.meta and session.meta.win)
-  local status_win = (session and session.meta and session.meta["status-win"])
-  apply_window_wrapper_opts_21(main_win, opts)
-  if (status_win and (status_win ~= main_win)) then
-    apply_window_wrapper_opts_21(status_win, opts)
-  else
+  local function _12_(wrapper)
+    return apply_window_wrapper_opts_21(wrapper, opts)
   end
-  for _, win in ipairs({(main_win and main_win.window), (status_win and status_win.window)}) do
-    if (win and vim.api.nvim_win_is_valid(win)) then
-      events.send("on-win-create!", {win = win, role = "main"})
-    else
-    end
+  each_session_main_wrapper_21(session, _12_)
+  local function _13_(win)
+    return events.send("on-win-create!", {win = win, role = "main"})
   end
-  return nil
+  return each_session_main_window_21(session, _13_)
 end
 local function restore_managed_buffer_effects_21(session)
   if session then
-    for _, _12_ in ipairs({{(session.meta and session.meta.buf and session.meta.buf.buffer), "meta"}, {session["prompt-buf"], "prompt"}, {session["info-buf"], "info"}, {session["preview-buf"], "preview"}, {session["history-browser-buf"], "history-browser"}}) do
-      local buf = _12_[1]
-      local role = _12_[2]
+    for _, _14_ in ipairs({{(session.meta and session.meta.buf and session.meta.buf.buffer), "meta"}, {session["prompt-buf"], "prompt"}, {session["info-buf"], "info"}, {session["preview-buf"], "preview"}, {session["history-browser-buf"], "history-browser"}}) do
+      local buf = _14_[1]
+      local role = _14_[2]
       events.send("on-buf-teardown!", {buf = buf, role = role})
     end
     for _, buf in pairs((session["ts-expand-bufs"] or {})) do
@@ -147,15 +154,15 @@ local function remove_session_21(deps, session)
     restore_startup_cursor_21(session)
     restore_managed_buffer_effects_21(session)
     restore_main_window_opts_21(session)
-    local or_16_ = session["last-prompt-text"]
-    if not or_16_ then
+    local or_18_ = session["last-prompt-text"]
+    if not or_18_ then
       if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
-        or_16_ = router_util_mod["prompt-text"](session)
+        or_18_ = router_util_mod["prompt-text"](session)
       else
-        or_16_ = ""
+        or_18_ = ""
       end
     end
-    history_api["push-history-entry!"](session, or_16_)
+    history_api["push-history-entry!"](session, or_18_)
     router_util_mod["persist-prompt-height!"](session)
     router_util_mod["persist-results-wrap!"](session)
     if session.augroup then
@@ -207,13 +214,13 @@ local function remove_session_21(deps, session)
 end
 local function handoff_host_window_21(win, buf)
   if (win and buf and vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(buf)) then
-    local function _28_()
+    local function _30_()
       pcall(vim.api.nvim_exec_autocmds, "BufWinEnter", {buffer = buf, modeline = false})
       pcall(vim.api.nvim_exec_autocmds, "BufEnter", {buffer = buf, modeline = false})
       pcall(vim.api.nvim_exec_autocmds, "WinEnter", {modeline = false})
       return pcall(vim.cmd, "redraw!")
     end
-    return pcall(vim.api.nvim_win_call, win, _28_)
+    return pcall(vim.api.nvim_win_call, win, _30_)
   else
     return nil
   end
@@ -254,11 +261,11 @@ local function restore_results_buffer_21(session)
   end
 end
 local function capture_hidden_ui_state_21(prompt_window_mod, router_util_mod, session)
-  local function _33_()
+  local function _35_()
     router_util_mod["persist-prompt-height!"](session)
     return router_util_mod["persist-results-wrap!"](session)
   end
-  local function _34_()
+  local function _36_()
     if (session["directive-help-win"] and vim.api.nvim_win_is_valid(session["directive-help-win"])) then
       pcall(vim.api.nvim_win_close, session["directive-help-win"], true)
     else
@@ -266,7 +273,7 @@ local function capture_hidden_ui_state_21(prompt_window_mod, router_util_mod, se
     session["directive-help-win"] = nil
     return nil
   end
-  return prompt_window_mod["capture-hidden-state!"](session, {["persist-state!"] = _33_, ["close-directive-help!"] = _34_})
+  return prompt_window_mod["capture-hidden-state!"](session, {["persist-state!"] = _35_, ["close-directive-help!"] = _36_})
 end
 local function finish_session_ui_restore_21(deps, session, preserve_focus_3f)
   local mods = deps.mods
@@ -313,15 +320,14 @@ local function hide_session_ui_21(deps, session)
   end
 end
 local function restore_session_ui_21(deps, session, opts)
-  local mods = deps.mods
   local preserve_focus_3f = (opts and opts["preserve-focus"])
   local curr = session.meta
   if (not session["restoring-ui?"] and session["ui-hidden"] and session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and curr and curr.win and vim.api.nvim_win_is_valid(curr.win.window)) then
     session["restoring-ui?"] = true
-    local function _38_()
+    local function _40_()
       return finish_session_ui_restore_21(deps, session, preserve_focus_3f)
     end
-    local ok,err = xpcall(_38_, debug.traceback)
+    local ok,err = xpcall(_40_, debug.traceback)
     session["restoring-ui?"] = false
     if not ok then
       return error(err)
@@ -375,7 +381,7 @@ local function finish_accept(deps, session)
     local target_win = session["origin-win"]
     if (target_win and vim.api.nvim_win_is_valid(target_win) and target_buf and vim.api.nvim_buf_is_valid(target_buf)) then
       router_util_mod["silent-win-set-buf!"](target_win, target_buf)
-      local function _44_()
+      local function _46_()
         pcall(vim.api.nvim_win_set_cursor, target_win, {row, 0})
         if (vq ~= "") then
           local pos = vim.fn.searchpos(vq, "cnW", row)
@@ -390,7 +396,7 @@ local function finish_accept(deps, session)
           return pcall(vim.cmd, "normal! ^")
         end
       end
-      vim.api.nvim_win_call(target_win, _44_)
+      vim.api.nvim_win_call(target_win, _46_)
       pcall(vim.api.nvim_set_current_win, target_win)
       base_buffer["switch-buf"](target_buf)
     else
@@ -434,10 +440,10 @@ local function finish_cancel(deps, session)
     pcall(vim.api.nvim_set_current_win, session["origin-win"])
     pcall(vim.api.nvim_win_set_buf, session["origin-win"], session["origin-buf"])
     if session["source-view"] then
-      local function _51_()
+      local function _53_()
         return pcall(vim.fn.winrestview, session["source-view"])
       end
-      vim.api.nvim_win_call(session["origin-win"], _51_)
+      vim.api.nvim_win_call(session["origin-win"], _53_)
     else
     end
   else
@@ -448,17 +454,17 @@ local function finish_cancel(deps, session)
   if session["source-view"] then
     local view = session["source-view"]
     local win = session["origin-win"]
-    local function _54_()
+    local function _56_()
       if vim.api.nvim_win_is_valid(win) then
-        local function _55_()
+        local function _57_()
           return pcall(vim.fn.winrestview, view)
         end
-        return vim.api.nvim_win_call(win, _55_)
+        return vim.api.nvim_win_call(win, _57_)
       else
         return nil
       end
     end
-    vim.schedule(_54_)
+    vim.schedule(_56_)
   else
   end
   return curr
@@ -539,10 +545,10 @@ local function append_current_symbol_21(deps, prompt_buf, f, opts)
   local session = session_by_prompt(active_by_prompt, prompt_buf)
   if session then
     local word
-    local function _65_()
+    local function _67_()
       return vim.fn.expand("<cword>")
     end
-    word = vim.api.nvim_win_call(session.meta.win.window, _65_)
+    word = vim.api.nvim_win_call(session.meta.win.window, _67_)
     local token = f(word)
     if (token ~= "") then
       local current = router_util_mod["prompt-text"](session)
@@ -570,26 +576,16 @@ local function append_current_symbol_21(deps, prompt_buf, f, opts)
   end
 end
 M["exclude-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _71_(word)
+  local function _73_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return ("!" .. word)
     else
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _71_)
-end
-M["insert-symbol-under-cursor!"] = function(deps, prompt_buf)
-  local function _73_(word)
-    if ((type(word) == "string") and (vim.trim(word) ~= "")) then
-      return word
-    else
-      return ""
-    end
-  end
   return append_current_symbol_21(deps, prompt_buf, _73_)
 end
-M["insert-symbol-under-cursor-newline!"] = function(deps, prompt_buf)
+M["insert-symbol-under-cursor!"] = function(deps, prompt_buf)
   local function _75_(word)
     if ((type(word) == "string") and (vim.trim(word) ~= "")) then
       return word
@@ -597,7 +593,17 @@ M["insert-symbol-under-cursor-newline!"] = function(deps, prompt_buf)
       return ""
     end
   end
-  return append_current_symbol_21(deps, prompt_buf, _75_, {newline = true})
+  return append_current_symbol_21(deps, prompt_buf, _75_)
+end
+M["insert-symbol-under-cursor-newline!"] = function(deps, prompt_buf)
+  local function _77_(word)
+    if ((type(word) == "string") and (vim.trim(word) ~= "")) then
+      return word
+    else
+      return ""
+    end
+  end
+  return append_current_symbol_21(deps, prompt_buf, _77_, {newline = true})
 end
 M["toggle-prompt-results-focus!"] = function(deps, prompt_buf)
   local router = deps.router
@@ -740,15 +746,15 @@ M["on-results-buffer-wipe!"] = function(deps, results_buf)
     session._results_wiped = true
     session.closing = true
     restore_main_window_opts_21(session)
-    local or_91_ = session["last-prompt-text"]
-    if not or_91_ then
+    local or_93_ = session["last-prompt-text"]
+    if not or_93_ then
       if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
-        or_91_ = router_util_mod["prompt-text"](session)
+        or_93_ = router_util_mod["prompt-text"](session)
       else
-        or_91_ = ""
+        or_93_ = ""
       end
     end
-    history_api["push-history-entry!"](session, or_91_)
+    history_api["push-history-entry!"](session, or_93_)
     router_util_mod["persist-prompt-height!"](session)
     if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
       pcall(vim.api.nvim_win_close, session["prompt-win"], true)
@@ -867,11 +873,11 @@ local function projected_rows_from_edits(session, baseline_rows, baseline_lines,
   local out = {}
   local idx = {old = 1, new = 1}
   for _, h in ipairs(hunks) do
-    local _let_106_ = hunk_indices(h)
-    local a_start = _let_106_[1]
-    local a_count = _let_106_[2]
-    local b_start = _let_106_[3]
-    local b_count = _let_106_[4]
+    local _let_108_ = hunk_indices(h)
+    local a_start = _let_108_[1]
+    local a_count = _let_108_[2]
+    local b_start = _let_108_[3]
+    local b_count = _let_108_[4]
     local common = math.min(a_count, b_count)
     while (idx.old < a_start) do
       local txt = (current_lines[idx.new] or "")
@@ -1021,11 +1027,11 @@ local function collect_file_ops(session)
   local state = {["processed-special-groups"] = {}, ["unsafe-structural?"] = false}
   session["live-edit-rows"] = current_rows
   for _, h in ipairs(hunks) do
-    local _let_117_ = hunk_indices(h)
-    local a_start = _let_117_[1]
-    local a_count = _let_117_[2]
-    local b_start = _let_117_[3]
-    local b_count = _let_117_[4]
+    local _let_119_ = hunk_indices(h)
+    local a_start = _let_119_[1]
+    local a_count = _let_119_[2]
+    local b_start = _let_119_[3]
+    local b_count = _let_119_[4]
     local common = math.min(a_count, b_count)
     local old_rows = slice_lines(baseline_rows, a_start, a_count)
     local new_lines = slice_lines(current_lines, b_start, b_count)
@@ -1060,13 +1066,13 @@ local function collect_file_ops(session)
       if (b_count > a_count) then
         local insert_op = (structural_op_from_current_rows(current_rows, (b_start + common), (b_count - common)) or pending_structural_op(session, (b_start + common), (b_count - common), current_lines, ((old_rows[common] and old_rows[common].kind) or (old_rows[(common + 1)] and old_rows[(common + 1)].kind) or "")))
         if insert_op then
-          local _123_
+          local _125_
           if (insert_op.side == "before") then
-            _123_ = "insert-before"
+            _125_ = "insert-before"
           else
-            _123_ = "insert-after"
+            _125_ = "insert-after"
           end
-          append_op_21(ops, insert_op.path, {kind = _123_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
+          append_op_21(ops, insert_op.path, {kind = _125_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
         else
           state["unsafe-structural?"] = true
         end
@@ -1076,13 +1082,13 @@ local function collect_file_ops(session)
       if (b_count > 0) then
         local insert_op = (structural_op_from_current_rows(current_rows, b_start, b_count) or pending_structural_op(session, b_start, b_count, current_lines, ""))
         if insert_op then
-          local _127_
+          local _129_
           if (insert_op.side == "before") then
-            _127_ = "insert-before"
+            _129_ = "insert-before"
           else
-            _127_ = "insert-after"
+            _129_ = "insert-after"
           end
-          append_op_21(ops, insert_op.path, {kind = _127_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
+          append_op_21(ops, insert_op.path, {kind = _129_, lnum = insert_op.lnum, lines = insert_op.lines, ["ref-kind"] = (insert_op["ref-kind"] or "")})
         else
           state["unsafe-structural?"] = true
         end
@@ -1228,13 +1234,13 @@ M["write-results!"] = function(deps, prompt_buf)
       pcall(vim.api.nvim_set_option_value, "modified", false, {buf = buf})
       pcall(vim.api.nvim_buf_set_var, buf, "meta_manual_edit_active", false)
       events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = true, ["capture-sign-baseline?"] = not not sign_mod, ["refresh-signs?"] = not not sign_mod})
-      local _143_
+      local _145_
       if (result.changed > 0) then
-        _143_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
+        _145_ = ("metabuffer: wrote " .. tostring(result.changed) .. " change(s)")
       else
-        _143_ = "metabuffer: no changes"
+        _145_ = "metabuffer: no changes"
       end
-      return vim.notify(_143_, vim.log.levels.INFO)
+      return vim.notify(_145_, vim.log.levels.INFO)
     end
   else
     return nil
