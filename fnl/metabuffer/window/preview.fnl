@@ -342,6 +342,51 @@
                          (preview-float-config session width height)))
                 (pcall vim.api.nvim_win_set_width session.preview-win width)))))))
 
+  (fn activate-preview-buffer!
+    [session buf]
+    (when (~= (vim.api.nvim_win_get_buf session.preview-win) buf)
+      (pcall vim.api.nvim_win_set_buf session.preview-win buf)))
+
+  (fn set-scratch-filetype!
+    [buf ft]
+    (let [bo (. vim.bo buf)
+          next-ft (if (and (= (type ft) "string") (~= ft "")) ft "")]
+      (when (~= next-ft "")
+        (apply-ft-buffer-vars! buf next-ft))
+      (pcall vim.api.nvim_set_option_value "syntax" "" {:buf buf})
+      (set (. bo :filetype) next-ft)
+      (when (~= next-ft "")
+        (pcall vim.api.nvim_set_option_value "syntax" next-ft {:buf buf}))))
+
+  (fn render-scratch-lines!
+    [session lines focus-row ft]
+    (let [bo (. vim.bo session.preview-buf)
+          rendered []]
+      (set (. bo :modifiable) true)
+      (each [_ line (ipairs lines)]
+        (table.insert rendered (or line "")))
+      (vim.api.nvim_buf_set_lines session.preview-buf 0 -1 false rendered)
+      (pcall vim.api.nvim_win_set_cursor session.preview-win [focus-row 0])
+      (apply-preview-focus-highlight! session focus-row)
+      (set (. bo :modifiable) false)
+      (set-scratch-filetype! session.preview-buf ft)))
+
+  (fn place-preview-source!
+    [session buf lnum]
+    (activate-preview-buffer! session buf)
+    (let [bo (. vim.bo buf)
+          topline (math.max 1 (- lnum 2))]
+      (set (. bo :bufhidden) "hide")
+      (pcall vim.api.nvim_win_call
+             session.preview-win
+             (fn []
+               (pcall vim.fn.winrestview
+                      {:lnum lnum
+                       :topline topline
+                       :col 0
+                       :leftcol 0})))
+      (apply-preview-focus-highlight! session lnum)))
+
   (fn render-preview-scratch!
     [session ctx]
     (when (and session.preview-real-buffer?
@@ -351,26 +396,8 @@
     (ensure-preview-scratch-buf! session)
     (set session.preview-real-buffer? false)
     (set session.preview-buf session.preview-scratch-buf)
-    (when (~= (vim.api.nvim_win_get_buf session.preview-win) session.preview-buf)
-      (pcall vim.api.nvim_win_set_buf session.preview-win session.preview-buf))
-    (let [bo (. vim.bo session.preview-buf)]
-      (set (. bo :modifiable) true))
-    (let [rendered []]
-      (each [_ line (ipairs (. ctx :lines))]
-        (table.insert rendered (or line "")))
-      (vim.api.nvim_buf_set_lines session.preview-buf 0 -1 false rendered)
-      (pcall vim.api.nvim_win_set_cursor session.preview-win [(. ctx :focus-row) 0])
-      (apply-preview-focus-highlight! session (. ctx :focus-row)))
-    (let [bo (. vim.bo session.preview-buf)
-          ft (. ctx :ft)]
-      (set (. bo :modifiable) false)
-      (let [next-ft (if (and (= (type ft) "string") (~= ft "")) ft "")]
-        (when (~= next-ft "")
-          (apply-ft-buffer-vars! session.preview-buf next-ft))
-        (pcall vim.api.nvim_set_option_value "syntax" "" {:buf session.preview-buf})
-        (set (. bo :filetype) next-ft)
-        (when (~= next-ft "")
-          (pcall vim.api.nvim_set_option_value "syntax" next-ft {:buf session.preview-buf})))))
+    (activate-preview-buffer! session session.preview-buf)
+    (render-scratch-lines! session (. ctx :lines) (. ctx :focus-row) (. ctx :ft)))
 
   (fn render-preview-source!
     [session ctx]
@@ -388,20 +415,11 @@
         (when (~= (vim.api.nvim_win_get_buf session.preview-win) buf)
           (with-file-messages-suppressed
             (fn []
-              (pcall vim.api.nvim_win_set_buf session.preview-win buf))))
-        (let [bo (. vim.bo buf)]
-          (set (. bo :bufhidden) "hide"))
-        (let [lnum (math.max 1 (or (and ref (or ref.preview-lnum ref.lnum)) 1))
-              topline (math.max 1 (- lnum 2))]
-          (pcall vim.api.nvim_win_call
-                 session.preview-win
-                 (fn []
-                   (pcall vim.fn.winrestview
-                          {:lnum lnum
-                           :topline topline
-                           :col 0
-                           :leftcol 0})))
-          (apply-preview-focus-highlight! session lnum)))))
+              (activate-preview-buffer! session buf))))
+        (place-preview-source!
+          session
+          buf
+          (math.max 1 (or (and ref (or ref.preview-lnum ref.lnum)) 1))))))
 
   (fn render-preview-placeholder!
     [session]
@@ -409,16 +427,26 @@
     (set session.preview-real-buffer? false)
     (set session.preview-buf session.preview-scratch-buf)
     (when (and session.preview-buf (vim.api.nvim_buf_is_valid session.preview-buf))
-      (when (~= (vim.api.nvim_win_get_buf session.preview-win) session.preview-buf)
-        (pcall vim.api.nvim_win_set_buf session.preview-win session.preview-buf))
-      (let [bo (. vim.bo session.preview-buf)]
-        (set (. bo :modifiable) true)
-        (vim.api.nvim_buf_set_lines session.preview-buf 0 -1 false [""])
-        (set (. bo :modifiable) false)
-        (pcall vim.api.nvim_set_option_value "syntax" "" {:buf session.preview-buf})
-        (set (. bo :filetype) "")))
+      (activate-preview-buffer! session session.preview-buf)
+      (render-scratch-lines! session [""] 1 ""))
     (clear-preview-focus-highlight! session)
     (set session.preview-last-path nil))
+
+  (fn render-preview-active-context!
+    [session]
+    (ensure-preview-split-window! session)
+    (let [ctx (preview-context session)]
+      (debug-log (.. "preview idx=" (tostring session.meta.selected_index)
+                     " path=" (tostring (and (. ctx :ref) (. (. ctx :ref) :path)))
+                     " lnum=" (tostring (and (. ctx :ref) (. (. ctx :ref) :lnum)))))
+      (ensure-preview-width! session ctx)
+      (if (file-backed-preview-ref? (. ctx :ref))
+          (render-preview-source! session ctx)
+          (render-preview-scratch! session ctx))
+      (ensure-preview-statusline-autocmds! session)
+      (apply-preview-window-opts! session session.preview-win)
+      (refresh-preview-statusline! session)
+      (set session.preview-last-path (and (. ctx :ref) (. (. ctx :ref) :path)))))
 
   (fn update-preview-window!
     [session]
@@ -428,20 +456,7 @@
           (do
             (apply-preview-window-opts! session session.preview-win)
             (render-preview-placeholder! session))
-          (do
-            (ensure-preview-split-window! session)
-            (let [ctx (preview-context session)]
-              (debug-log (.. "preview idx=" (tostring session.meta.selected_index)
-                             " path=" (tostring (and (. ctx :ref) (. (. ctx :ref) :path)))
-                             " lnum=" (tostring (and (. ctx :ref) (. (. ctx :ref) :lnum)))))
-              (ensure-preview-width! session ctx)
-              (if (file-backed-preview-ref? (. ctx :ref))
-                  (render-preview-source! session ctx)
-                  (render-preview-scratch! session ctx))
-              (ensure-preview-statusline-autocmds! session)
-              (apply-preview-window-opts! session session.preview-win)
-              (refresh-preview-statusline! session)
-              (set session.preview-last-path (and (. ctx :ref) (. (. ctx :ref) :path))))))))
+          (render-preview-active-context! session))))
 
   (fn selected-preview-path
     [session]
