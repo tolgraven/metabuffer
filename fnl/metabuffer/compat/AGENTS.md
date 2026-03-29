@@ -272,6 +272,12 @@ Disables `w:airline_disable_statusline` on Meta windows, re-enables on teardown.
 Disables conjure, LSP, gitgutter, gitsigns, diagnostics on all Meta buffers. Disables auto-pairs/endwise/cmp on prompt. Marks preview buffer.
 - `:on-buf-create!` — 3 handlers at priorities 10, 20 (prompt-only), 20 (preview-only)
 
+### `conjure.fnl`
+Stashes and disables Conjure buffer-local startup, mappings, HUD, and omnifunc on Meta-owned buffers, then restores the previous state on detach or session stop. Preview-attached real source buffers are included through preview attach/detach events so scrolling across supported filetypes does not trigger Conjure HUD side effects.
+- `:on-buf-create!` priority 12
+- `:on-buf-teardown!` priority 88
+- `:on-session-stop!` priority 89
+
 ### `cmp.fnl`
 Disables nvim-cmp on prompt buffer via API + buffer-local flag. Also suppresses native Neovim completion (`complete()`) and closes the preview popup to prevent unwanted completion UI. Re-disables on InsertEnter.
 - `:on-buf-create!` priority 30, role-filter `:prompt`

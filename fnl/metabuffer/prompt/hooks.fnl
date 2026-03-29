@@ -442,10 +442,8 @@
                 (set session.loading-idle-pending false)
                 (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
                 (set-results-loading-pulse! session)
-                (events.post :on-loading-state!
-                             {:session session}
-                             {:supersede? true
-                              :dedupe-key (.. "on-loading-state:" (tostring session.prompt-buf))})
+                (events.send :on-loading-state!
+                             {:session session})
                 (refresh-prompt-highlights! session)
                 (schedule-loading-indicator! session))
               (if session.loading-anim-phase
@@ -454,10 +452,8 @@
                           (set session.loading-idle-pending false)
                           (set session.loading-anim-phase nil)
                           (set-results-loading-pulse! session)
-                          (events.post :on-loading-state!
-                                       {:session session}
-                                       {:supersede? true
-                                        :dedupe-key (.. "on-loading-state:" (tostring session.prompt-buf))}))
+                          (events.send :on-loading-state!
+                                       {:session session}))
                       (do
                         (set session.loading-idle-pending true)
                         (schedule-loading-indicator! session)))
@@ -480,10 +476,8 @@
             (set session.loading-idle-pending false)
             (set session.loading-anim-phase 0)
             (set-results-loading-pulse! session)
-            (events.post :on-loading-state!
-                         {:session session}
-                         {:supersede? true
-                          :dedupe-key (.. "on-loading-state:" (tostring session.prompt-buf))}))
+            (events.send :on-loading-state!
+                         {:session session}))
           (set session.loading-anim-pending true)
           (let [delay (if session.loading-idle-pending
                           120

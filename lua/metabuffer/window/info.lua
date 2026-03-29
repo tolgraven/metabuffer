@@ -569,7 +569,7 @@ M.new = function(opts)
     if show_icon_3f then
       icon_info = util["file-icon-info"](icon_path, file_hl)
     else
-      icon_info = {icon = "", ["icon-hl"] = file_hl, ["file-hl"] = file_hl}
+      icon_info = {icon = "", ["icon-hl"] = file_hl, ["file-hl"] = file_hl, ["ext-hl"] = file_hl}
     end
     local icon = (icon_info.icon or "")
     local iconf = icon_field(icon)
@@ -580,7 +580,7 @@ M.new = function(opts)
       icon_prefix = ""
     end
     local ext_hl = (icon_info["ext-hl"] or icon_info["icon-hl"] or file_hl)
-    local icon_hl = ext_hl
+    local icon_hl = (icon_info["icon-hl"] or file_hl)
     local icon_width
     if show_icon_3f then
       icon_width = iconf.width

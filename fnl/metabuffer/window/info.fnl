@@ -486,12 +486,14 @@
           suffix0 (or (. info-view :suffix) "")
           suffix-prefix (if (> (# suffix0) 0) (or (. info-view :suffix-prefix) "  ") "")
           suffix-hls (or (. info-view :suffix-highlights) [])
-          icon-info (if show-icon? (util.file-icon-info icon-path file-hl) {:icon "" :icon-hl file-hl :file-hl file-hl})
+          icon-info (if show-icon?
+                        (util.file-icon-info icon-path file-hl)
+                        {:icon "" :icon-hl file-hl :file-hl file-hl :ext-hl file-hl})
           icon (or (. icon-info :icon) "")
           iconf (icon-field icon)
           icon-prefix (if show-icon? (. iconf :text) "")
           ext-hl (or (. icon-info :ext-hl) (. icon-info :icon-hl) file-hl)
-          icon-hl ext-hl
+          icon-hl (or (. icon-info :icon-hl) file-hl)
           icon-width (if show-icon? (. iconf :width) 0)
           [dir file0 dir-original] (fit-path-into-width path (math.max 1 (- path-width icon-width)))
           this-file-hl (or (. icon-info :file-hl) file-hl)

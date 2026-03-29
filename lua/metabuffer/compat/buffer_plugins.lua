@@ -30,7 +30,16 @@ local function disable_prompt_pairs_21(_3_)
 end
 local function mark_preview_21(_5_)
   local buf = _5_.buf
-  if buf_valid_3f(buf) then
+  local transient_3f = _5_["transient?"]
+  local and_6_ = buf_valid_3f(buf)
+  if and_6_ then
+    if (transient_3f == nil) then
+      and_6_ = true
+    else
+      and_6_ = transient_3f
+    end
+  end
+  if and_6_ then
     return pcall(vim.api.nvim_buf_set_var, buf, "meta_preview", true)
   else
     return nil

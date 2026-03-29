@@ -25,9 +25,10 @@
     (pcall vim.api.nvim_buf_set_var buf "meta_prompt" true)))
 
 (fn mark-preview!
-  [{: buf}]
+  [{:buf buf :transient? transient?}]
   "Set the meta_preview marker on preview buffers."
-  (when (buf-valid? buf)
+  (when (and (buf-valid? buf)
+             (if (= transient? nil) true transient?))
     (pcall vim.api.nvim_buf_set_var buf "meta_preview" true)))
 
 {:name :buffer-plugins
