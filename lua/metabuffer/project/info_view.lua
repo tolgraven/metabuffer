@@ -1,4 +1,4 @@
--- [nfnl] fnl/metabuffer/window/info_project.fnl
+-- [nfnl] fnl/metabuffer/project/info_view.fnl
 local M = {}
 M.new = function(opts)
   local startup_layout_pending_3f = opts["startup-layout-pending?"]

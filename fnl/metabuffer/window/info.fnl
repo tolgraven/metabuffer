@@ -11,7 +11,7 @@
 (local file-info (require :metabuffer.source.file_info))
 (local events (require :metabuffer.events))
 (local info-float-mod (require :metabuffer.window.info_float))
-(local info-project-mod (require :metabuffer.window.info_project))
+(local info-project-mod (require :metabuffer.project.info_view))
 (local apply-metabuffer-window-highlights! (. base-window-mod :apply-metabuffer-window-highlights!))
 
 (local info-content-ns (vim.api.nvim_create_namespace "MetaInfoWindow"))
