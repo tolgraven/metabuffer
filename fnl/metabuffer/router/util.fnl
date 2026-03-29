@@ -424,15 +424,104 @@
                         :lines (if (= (type prev-lines) "table") prev-lines nil)})
                   (clj.boolean bin?)))))))
 
+(fn binary-header-line
+  [size]
+  (let [kb (math.max 1 (math.floor (/ (math.max 0 (or size 0)) 1024)))]
+    (.. "binary " (tostring kb) " KB")))
+
+(fn binary-default-lines
+  [size]
+  [(binary-header-line size)])
+
+(fn binary-view
+  [path cached transform-sig size head transforms]
+  (let [views (or (. cached :views) {})
+        found (. views transform-sig)]
+    (if (= (type found) "table")
+        found
+        (let [raw-lines (or (. cached :raw-lines)
+                            (binary-default-lines size))
+              ctx {:binary true
+                   :size size
+                   :head head
+                   :transforms transforms}
+              view (transform-mod.apply-view path raw-lines ctx)]
+          (set (. views transform-sig) view)
+          (set (. cached :views) views)
+          view))))
+
+(fn cached-text-view
+  [path cached transform-sig size transforms]
+  (let [views (or (. cached :views) {})
+        found (. views transform-sig)]
+    (if (= (type found) "table")
+        found
+        (let [raw-lines (or (. cached :lines)
+                            (let [text (read-file-bytes path)
+                                  ls (bytes->lines text)]
+                              (when (= (type ls) "table")
+                                (set (. cached :lines) ls))
+                              (or ls [])))
+              ctx {:binary false
+                   :size size
+                   :head (or (. cached :head) (read-file-head-bytes path 4096))
+                   :transforms transforms}
+              view (transform-mod.apply-view path raw-lines ctx)]
+          (set (. views transform-sig) view)
+          (set (. cached :views) views)
+          view))))
+
+(fn cached-file-view
+  [path cached include-binary transform-sig size transforms]
+  (if (. cached :binary)
+      (if include-binary
+          (binary-view path cached transform-sig size (. cached :head) transforms)
+          nil)
+      (cached-text-view path cached transform-sig size transforms)))
+
+(fn store-binary-entry!
+  [path cache size mtime head include-binary transform-sig transforms]
+  (let [entry {:size size :mtime mtime :binary true :head head}]
+    (if include-binary
+        (let [raw-lines (binary-default-lines size)
+              ctx {:binary true
+                   :size size
+                   :head head
+                   :transforms transforms}
+              view (transform-mod.apply-view path raw-lines ctx)
+              views {}]
+          (set (. entry :raw-lines) (if (= (type raw-lines) "table") raw-lines []))
+          (set (. views transform-sig) view)
+          (set (. entry :views) views)
+          (set (. cache path) entry)
+          view)
+        (do
+          (set (. cache path) entry)
+          nil))))
+
+(fn store-text-entry!
+  [path cache size mtime head transform-sig transforms]
+  (let [text (read-file-bytes path)
+        lines (bytes->lines text)]
+    (when (= (type lines) "table")
+      (let [entry {:size size
+                   :mtime mtime
+                   :binary false
+                   :head head
+                   :lines lines
+                   :views {}}
+            view (transform-mod.apply-view path lines {:binary false
+                                                       :size size
+                                                       :head head
+                                                       :transforms transforms})
+            views {}]
+        (set (. views transform-sig) view)
+        (set (. entry :views) views)
+        (set (. cache path) entry)
+        view))))
+
 (fn M.read-file-view-cached
   [settings path opts]
-  (fn binary-header-line
-    [size]
-    (let [kb (math.max 1 (math.floor (/ (math.max 0 (or size 0)) 1024)))]
-      (.. "binary " (tostring kb) " KB")))
-  (fn binary-default-lines
-    [size]
-    [(binary-header-line size)])
   (let [include-binary (and opts (. opts :include-binary))
         transforms0 (or (and opts opts.transforms) {})
         transforms (if (and opts
@@ -458,80 +547,11 @@
               (if (and (= (type cached) "table")
                        (= (. cached :size) size)
                        (= (. cached :mtime) mtime))
-                  (if (. cached :binary)
-                      (if include-binary
-                          (let [views (or (. cached :views) {})
-                                found (. views transform-sig)]
-                            (if (= (type found) "table")
-                                found
-                                (let [raw-lines (or (. cached :raw-lines)
-                                                    (binary-default-lines size))
-                                      ctx {:binary true
-                                           :size size
-                                           :head (. cached :head)
-                                           :transforms transforms}
-                                      view (transform-mod.apply-view path raw-lines ctx)]
-                                  (set (. views transform-sig) view)
-                                  (set (. cached :views) views)
-                                  view)))
-                          nil)
-                       (let [views (or (. cached :views) {})
-                             found (. views transform-sig)]
-                         (if (= (type found) "table")
-                             found
-                             ;; binary-file? may have created a cache entry without :lines;
-                             ;; read the file now if :lines is missing.
-                             (let [raw-lines (or (. cached :lines)
-                                                 (let [text (read-file-bytes path)
-                                                       ls (bytes->lines text)]
-                                                   (when (= (type ls) "table")
-                                                     (set (. cached :lines) ls))
-                                                   (or ls [])))
-                                   ctx {:binary false
-                                        :size size
-                                        :head (or (. cached :head) (read-file-head-bytes path 4096))
-                                        :transforms transforms}
-                                   view (transform-mod.apply-view path raw-lines ctx)]
-                               (set (. views transform-sig) view)
-                               (set (. cached :views) views)
-                               view))))
+                  (cached-file-view path cached include-binary transform-sig size transforms)
                   (let [head (read-file-head-bytes path 4096)]
                     (if (binary-head? head)
-                        (let [entry {:size size :mtime mtime :binary true :head head}]
-                          (if include-binary
-                              (let [raw-lines (binary-default-lines size)
-                                    ctx {:binary true
-                                         :size size
-                                         :head head
-                                         :transforms transforms}
-                                    view (transform-mod.apply-view path raw-lines ctx)
-                                    views {}]
-                                (set (. entry :raw-lines) (if (= (type raw-lines) "table") raw-lines []))
-                                (set (. views transform-sig) view)
-                                (set (. entry :views) views)
-                                (set (. cache path) entry)
-                                view)
-                              (do
-                                (set (. cache path) entry)
-                                nil)))
-                        (let [text (read-file-bytes path)
-                              lines (bytes->lines text)]
-                          (when (= (type lines) "table")
-                            (let [entry {:size size
-                                         :mtime mtime
-                                         :binary false
-                                         :head head
-                                         :lines lines
-                                         :views {}}
-                                  view (transform-mod.apply-view path lines {:binary false
-                                                                             :size size
-                                                                             :head head
-                                                                             :transforms transforms})
-                                  views {}]
-                              (set (. views transform-sig) view)
-                              (set (. entry :views) views)
-                              (set (. cache path) entry)
-                              view)))))))))))
+                        (store-binary-entry! path cache size mtime head include-binary transform-sig transforms)
+                        (store-text-entry! path cache size mtime head transform-sig transforms)))))))))
 
 (fn M.read-file-lines-cached
   [settings path opts]

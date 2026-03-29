@@ -505,14 +505,100 @@ M["binary-file?"] = function(settings, path)
     end
   end
 end
+local function binary_header_line(size)
+  local kb = math.max(1, math.floor((math.max(0, (size or 0)) / 1024)))
+  return ("binary " .. tostring(kb) .. " KB")
+end
+local function binary_default_lines(size)
+  return {binary_header_line(size)}
+end
+local function binary_view(path, cached, transform_sig, size, head, transforms)
+  local views = (cached.views or {})
+  local found = views[transform_sig]
+  if (type(found) == "table") then
+    return found
+  else
+    local raw_lines = (cached["raw-lines"] or binary_default_lines(size))
+    local ctx = {binary = true, size = size, head = head, transforms = transforms}
+    local view = transform_mod["apply-view"](path, raw_lines, ctx)
+    views[transform_sig] = view
+    cached["views"] = views
+    return view
+  end
+end
+local function cached_text_view(path, cached, transform_sig, size, transforms)
+  local views = (cached.views or {})
+  local found = views[transform_sig]
+  if (type(found) == "table") then
+    return found
+  else
+    local raw_lines
+    local or_68_ = cached.lines
+    if not or_68_ then
+      local text = read_file_bytes(path)
+      local ls = bytes__3elines(text)
+      if (type(ls) == "table") then
+        cached["lines"] = ls
+      else
+      end
+      or_68_ = (ls or {})
+    end
+    raw_lines = or_68_
+    local ctx = {size = size, head = (cached.head or read_file_head_bytes(path, 4096)), transforms = transforms, binary = false}
+    local view = transform_mod["apply-view"](path, raw_lines, ctx)
+    views[transform_sig] = view
+    cached["views"] = views
+    return view
+  end
+end
+local function cached_file_view(path, cached, include_binary, transform_sig, size, transforms)
+  if cached.binary then
+    if include_binary then
+      return binary_view(path, cached, transform_sig, size, cached.head, transforms)
+    else
+      return nil
+    end
+  else
+    return cached_text_view(path, cached, transform_sig, size, transforms)
+  end
+end
+local function store_binary_entry_21(path, cache, size, mtime, head, include_binary, transform_sig, transforms)
+  local entry = {size = size, mtime = mtime, binary = true, head = head}
+  if include_binary then
+    local raw_lines = binary_default_lines(size)
+    local ctx = {binary = true, size = size, head = head, transforms = transforms}
+    local view = transform_mod["apply-view"](path, raw_lines, ctx)
+    local views = {}
+    if (type(raw_lines) == "table") then
+      entry["raw-lines"] = raw_lines
+    else
+      entry["raw-lines"] = {}
+    end
+    views[transform_sig] = view
+    entry["views"] = views
+    cache[path] = entry
+    return view
+  else
+    cache[path] = entry
+    return nil
+  end
+end
+local function store_text_entry_21(path, cache, size, mtime, head, transform_sig, transforms)
+  local text = read_file_bytes(path)
+  local lines = bytes__3elines(text)
+  if (type(lines) == "table") then
+    local entry = {size = size, mtime = mtime, head = head, lines = lines, views = {}, binary = false}
+    local view = transform_mod["apply-view"](path, lines, {size = size, head = head, transforms = transforms, binary = false})
+    local views = {}
+    views[transform_sig] = view
+    entry["views"] = views
+    cache[path] = entry
+    return view
+  else
+    return nil
+  end
+end
 M["read-file-view-cached"] = function(settings, path, opts)
-  local function binary_header_line(size)
-    local kb = math.max(1, math.floor((math.max(0, (size or 0)) / 1024)))
-    return ("binary " .. tostring(kb) .. " KB")
-  end
-  local function binary_default_lines(size)
-    return {binary_header_line(size)}
-  end
   local include_binary = (opts and opts["include-binary"])
   local transforms0 = ((opts and opts.transforms) or {})
   local transforms
@@ -529,13 +615,13 @@ M["read-file-view-cached"] = function(settings, path, opts)
     linebreak_3f = clj.boolean(opts.linebreak)
   end
   local transform_sig
-  local _69_
+  local _79_
   if linebreak_3f then
-    _69_ = "1"
+    _79_ = "1"
   else
-    _69_ = "0"
+    _79_ = "0"
   end
-  transform_sig = (transform_mod.signature(transforms) .. "|w:" .. tostring((wrap_width or 0)) .. "|lb:" .. _69_)
+  transform_sig = (transform_mod.signature(transforms) .. "|w:" .. tostring((wrap_width or 0)) .. "|lb:" .. _79_)
   if (not path or (0 == vim.fn.filereadable(path))) then
     return nil
   else
@@ -551,84 +637,13 @@ M["read-file-view-cached"] = function(settings, path, opts)
       return nil
     else
       if ((type(cached) == "table") and (cached.size == size) and (cached.mtime == mtime)) then
-        if cached.binary then
-          if include_binary then
-            local views = (cached.views or {})
-            local found = views[transform_sig]
-            if (type(found) == "table") then
-              return found
-            else
-              local raw_lines = (cached["raw-lines"] or binary_default_lines(size))
-              local ctx = {binary = true, size = size, head = cached.head, transforms = transforms}
-              local view = transform_mod["apply-view"](path, raw_lines, ctx)
-              views[transform_sig] = view
-              cached["views"] = views
-              return view
-            end
-          else
-            return nil
-          end
-        else
-          local views = (cached.views or {})
-          local found = views[transform_sig]
-          if (type(found) == "table") then
-            return found
-          else
-            local raw_lines
-            local or_73_ = cached.lines
-            if not or_73_ then
-              local text = read_file_bytes(path)
-              local ls = bytes__3elines(text)
-              if (type(ls) == "table") then
-                cached["lines"] = ls
-              else
-              end
-              or_73_ = (ls or {})
-            end
-            raw_lines = or_73_
-            local ctx = {size = size, head = (cached.head or read_file_head_bytes(path, 4096)), transforms = transforms, binary = false}
-            local view = transform_mod["apply-view"](path, raw_lines, ctx)
-            views[transform_sig] = view
-            cached["views"] = views
-            return view
-          end
-        end
+        return cached_file_view(path, cached, include_binary, transform_sig, size, transforms)
       else
         local head = read_file_head_bytes(path, 4096)
         if binary_head_3f(head) then
-          local entry = {size = size, mtime = mtime, binary = true, head = head}
-          if include_binary then
-            local raw_lines = binary_default_lines(size)
-            local ctx = {binary = true, size = size, head = head, transforms = transforms}
-            local view = transform_mod["apply-view"](path, raw_lines, ctx)
-            local views = {}
-            if (type(raw_lines) == "table") then
-              entry["raw-lines"] = raw_lines
-            else
-              entry["raw-lines"] = {}
-            end
-            views[transform_sig] = view
-            entry["views"] = views
-            cache[path] = entry
-            return view
-          else
-            cache[path] = entry
-            return nil
-          end
+          return store_binary_entry_21(path, cache, size, mtime, head, include_binary, transform_sig, transforms)
         else
-          local text = read_file_bytes(path)
-          local lines = bytes__3elines(text)
-          if (type(lines) == "table") then
-            local entry = {size = size, mtime = mtime, head = head, lines = lines, views = {}, binary = false}
-            local view = transform_mod["apply-view"](path, lines, {size = size, head = head, transforms = transforms, binary = false})
-            local views = {}
-            views[transform_sig] = view
-            entry["views"] = views
-            cache[path] = entry
-            return view
-          else
-            return nil
-          end
+          return store_text_entry_21(path, cache, size, mtime, head, transform_sig, transforms)
         end
       end
     end
