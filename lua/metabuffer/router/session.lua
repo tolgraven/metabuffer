@@ -387,86 +387,43 @@ local function activate_session_ui_21(deps, session, initial_lines)
   maybe_animate_prompt_enter_21(deps, session, prompt_win)
   return schedule_initial_prompt_focus_21(deps, session, initial_lines)
 end
-local function finish_session_startup_21(deps, curr, session, initial_query_active)
-  local project_source = deps["project-source"]
-  local apply_prompt_lines = deps["apply-prompt-lines"]
-  local active_by_prompt = deps.router["active-by-prompt"]
-  local instances = deps.router.instances
-  local startup_layout_unsettled_3f = clj.boolean(session["prompt-animating?"])
-  local function startup_live_3f()
-    return ((active_by_prompt[session["prompt-buf"]] == session) and not session["ui-hidden"] and not session.closing)
-  end
-  local function schedule_single_file_info_phases_21()
-    if not session["project-mode"] then
-      local function _65_()
-        if startup_live_3f() then
-          session["single-file-info-fetch-ready"] = true
-          session["single-file-info-ready"] = true
-          return events.send("on-session-ready!", {session = session, ["refresh-lines"] = true})
-        else
-          return nil
-        end
-      end
-      return vim.defer_fn(_65_, (session["startup-ui-delay-ms"] or 320))
-    else
-      return nil
-    end
-  end
-  local _68_
-  if session["project-mode"] then
-    _68_ = "finish-session-startup!/apply-minimal-source-set"
-  else
-    _68_ = "finish-session-startup!/apply-source-set"
-  end
-  local function _70_()
-    if session["project-mode"] then
-      return project_source["apply-minimal-source-set!"](session)
-    else
-      return project_source["apply-source-set!"](session)
-    end
-  end
-  run_step_21(_68_, _70_)
-  curr["status-win"] = curr.win
-  local function _72_()
-    return events.send("on-win-create!", {win = curr.win.window, role = "main"})
-  end
-  run_step_21("finish-session-startup!/disable-airline", _72_)
-  local function _73_()
-    return curr["on-init"]()
-  end
-  run_step_21("finish-session-startup!/on-init", _73_)
+local function emit_session_ready_21(session, refresh_lines, restore_view_3f, capture_sign_baseline_3f)
+  return events.send("on-session-ready!", {session = session, ["refresh-lines"] = refresh_lines, ["restore-view?"] = restore_view_3f, ["capture-sign-baseline?"] = capture_sign_baseline_3f})
+end
+local function maybe_apply_start_query_21(apply_prompt_lines, session, initial_query_active)
   if not (session["project-mode"] and not initial_query_active) then
-    local function _74_()
+    local function _65_()
       return apply_prompt_lines(session)
     end
-    run_step_21("finish-session-startup!/apply-prompt-lines", _74_)
+    return run_step_21("finish-session-startup!/apply-prompt-lines", _65_)
   else
+    return nil
   end
-  local function _76_()
-    return events.send("on-session-ready!", {session = session, ["refresh-lines"] = true, ["restore-view?"] = not startup_layout_unsettled_3f, ["capture-sign-baseline?"] = true})
-  end
-  run_step_21("finish-session-startup!/emit-session-ready", _76_)
+end
+local function schedule_project_startup_refresh_21(session, startup_live_3f)
   if session["project-mode"] then
-    local function _77_()
+    local function _67_()
       if startup_live_3f() then
-        return events.send("on-session-ready!", {session = session, ["refresh-lines"] = true})
+        return emit_session_ready_21(session, true, nil, nil)
       else
         return nil
       end
     end
-    vim.defer_fn(_77_, (session["startup-ui-delay-ms"] or 350))
+    return vim.defer_fn(_67_, (session["startup-ui-delay-ms"] or 350))
   else
+    return nil
   end
-  schedule_single_file_info_phases_21()
-  local function _80_()
+end
+local function schedule_startup_finalize_21(project_source, active_by_prompt, session, startup_live_3f)
+  local function _70_()
     if startup_live_3f() then
       session["startup-initializing"] = false
       if not session["project-mode"] then
         session["project-mode-starting?"] = false
       else
       end
-      events.send("on-session-ready!", {session = session, ["refresh-lines"] = false})
-      local function _82_()
+      emit_session_ready_21(session, false, nil, nil)
+      local function _72_()
         if startup_live_3f() then
           session["animate-enter?"] = false
           restore_startup_cursor_21(session)
@@ -480,7 +437,7 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
           return nil
         end
       end
-      vim.defer_fn(_82_, (session["startup-ui-delay-ms"] or 320))
+      vim.defer_fn(_72_, (session["startup-ui-delay-ms"] or 320))
       if (session["project-mode"] and not session["project-bootstrapped"]) then
         project_source["schedule-project-bootstrap!"](session, 17)
       else
@@ -493,7 +450,64 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
       return nil
     end
   end
-  vim.schedule(_80_)
+  return vim.schedule(_70_)
+end
+local function finish_session_startup_21(deps, curr, session, initial_query_active)
+  local project_source = deps["project-source"]
+  local apply_prompt_lines = deps["apply-prompt-lines"]
+  local active_by_prompt = deps.router["active-by-prompt"]
+  local instances = deps.router.instances
+  local startup_layout_unsettled_3f = clj.boolean(session["prompt-animating?"])
+  local function startup_live_3f()
+    return ((active_by_prompt[session["prompt-buf"]] == session) and not session["ui-hidden"] and not session.closing)
+  end
+  local function schedule_single_file_info_phases_21()
+    if not session["project-mode"] then
+      local function _78_()
+        if startup_live_3f() then
+          session["single-file-info-fetch-ready"] = true
+          session["single-file-info-ready"] = true
+          return events.send("on-session-ready!", {session = session, ["refresh-lines"] = true})
+        else
+          return nil
+        end
+      end
+      return vim.defer_fn(_78_, (session["startup-ui-delay-ms"] or 320))
+    else
+      return nil
+    end
+  end
+  local _81_
+  if session["project-mode"] then
+    _81_ = "finish-session-startup!/apply-minimal-source-set"
+  else
+    _81_ = "finish-session-startup!/apply-source-set"
+  end
+  local function _83_()
+    if session["project-mode"] then
+      return project_source["apply-minimal-source-set!"](session)
+    else
+      return project_source["apply-source-set!"](session)
+    end
+  end
+  run_step_21(_81_, _83_)
+  curr["status-win"] = curr.win
+  local function _85_()
+    return events.send("on-win-create!", {win = curr.win.window, role = "main"})
+  end
+  run_step_21("finish-session-startup!/disable-airline", _85_)
+  local function _86_()
+    return curr["on-init"]()
+  end
+  run_step_21("finish-session-startup!/on-init", _86_)
+  maybe_apply_start_query_21(apply_prompt_lines, session, initial_query_active)
+  local function _87_()
+    return emit_session_ready_21(session, true, not startup_layout_unsettled_3f, true)
+  end
+  run_step_21("finish-session-startup!/emit-session-ready", _87_)
+  schedule_project_startup_refresh_21(session, startup_live_3f)
+  schedule_single_file_info_phases_21()
+  schedule_startup_finalize_21(project_source, active_by_prompt, session, startup_live_3f)
   instances[session["instance-id"]] = session
   return nil
 end

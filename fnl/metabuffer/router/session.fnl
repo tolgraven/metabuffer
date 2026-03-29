@@ -371,6 +371,57 @@
     (maybe-animate-prompt-enter! deps session prompt-win)
     (schedule-initial-prompt-focus! deps session initial-lines)))
 
+(fn emit-session-ready!
+  [session refresh-lines restore-view? capture-sign-baseline?]
+  (events.send :on-session-ready!
+    {:session session
+     :refresh-lines refresh-lines
+     :restore-view? restore-view?
+     :capture-sign-baseline? capture-sign-baseline?}))
+
+(fn maybe-apply-start-query!
+  [apply-prompt-lines session initial-query-active]
+  (when-not (and session.project-mode (not initial-query-active))
+    (run-step! "finish-session-startup!/apply-prompt-lines"
+      (fn [] (apply-prompt-lines session)))))
+
+(fn schedule-project-startup-refresh!
+  [session startup-live?]
+  (when session.project-mode
+    (vim.defer_fn
+      (fn []
+        (when (startup-live?)
+          (emit-session-ready! session true nil nil)))
+      (or session.startup-ui-delay-ms 350))))
+
+(fn schedule-startup-finalize!
+  [project-source session startup-live?]
+  (vim.schedule
+    (fn []
+      (when (startup-live?)
+        (set session.startup-initializing false)
+        (when-not session.project-mode
+          (set session.project-mode-starting? false))
+        (emit-session-ready! session false nil nil)
+        (vim.defer_fn
+          (fn []
+            (when (startup-live?)
+              (set session.animate-enter? false)
+              (restore-startup-cursor! session)
+              (when (and session.project-mode
+                         session.meta
+                         session.meta.buf
+                         session.lazy-stream-done)
+                (set session.meta.buf.visible-source-syntax-only false)
+                (events.send :on-source-syntax-refresh!
+                  {:session session
+                   :immediate? true}))))
+          (or session.startup-ui-delay-ms 320))
+        (when (and session.project-mode (not session.project-bootstrapped))
+          (project-source.schedule-project-bootstrap! session 17)))
+      (when-not (startup-live?)
+        (restore-startup-cursor! session)))))
+
 (fn finish-session-startup!
   [deps curr session initial-query-active]
   (let [project-source (. deps :project-source)
@@ -406,51 +457,13 @@
       (fn [] (events.send :on-win-create! {:win curr.win.window :role :main})))
     (run-step! "finish-session-startup!/on-init"
       (fn [] (curr.on-init)))
-    (when-not (and session.project-mode (not initial-query-active))
-      (run-step! "finish-session-startup!/apply-prompt-lines"
-        (fn [] (apply-prompt-lines session))))
+    (maybe-apply-start-query! apply-prompt-lines session initial-query-active)
     (run-step! "finish-session-startup!/emit-session-ready"
       (fn []
-        (events.send :on-session-ready!
-          {:session session
-           :refresh-lines true
-           :restore-view? (not startup-layout-unsettled?)
-           :capture-sign-baseline? true})))
-    (when session.project-mode
-      (vim.defer_fn
-        (fn []
-          (when (startup-live?)
-            (events.send :on-session-ready! {:session session :refresh-lines true}))
-          ; (when (= (. active-by-prompt session.prompt-buf) session)
-            ; (pcall update-info-window session true))
-          )
-        (or session.startup-ui-delay-ms 350)))
+        (emit-session-ready! session true (not startup-layout-unsettled?) true)))
+    (schedule-project-startup-refresh! session startup-live?)
     (schedule-single-file-info-phases!)
-    (vim.schedule
-      (fn []
-        (when (startup-live?)
-          (set session.startup-initializing false)
-          (when-not session.project-mode
-            (set session.project-mode-starting? false))
-          (events.send :on-session-ready! {:session session :refresh-lines false})
-          (vim.defer_fn
-            (fn []
-              (when (startup-live?)
-                (set session.animate-enter? false)
-                (restore-startup-cursor! session)
-                (when (and session.project-mode
-                           session.meta
-                           session.meta.buf
-                           session.lazy-stream-done)
-                  (set session.meta.buf.visible-source-syntax-only false)
-                  (events.send :on-source-syntax-refresh!
-                    {:session session
-                     :immediate? true}))))
-            (or session.startup-ui-delay-ms 320))
-          (when (and session.project-mode (not session.project-bootstrapped))
-            (project-source.schedule-project-bootstrap! session 17)))
-        (when-not (startup-live?)
-          (restore-startup-cursor! session))))
+    (schedule-startup-finalize! project-source session startup-live?)
     (set (. instances session.instance-id) session)))
 
 (fn expand-history-query
