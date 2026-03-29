@@ -62,10 +62,12 @@ T['project loading panel shows streaming progress while project settles'] = func
   info['update!'](session, true)
 
   local lines = vim.api.nvim_buf_get_lines(session['info-buf'], 0, -1, false)
-  eq(lines[1], 'Project Mode  streaming project sources')
-  eq(lines[3], 'Progress  3/12 files')
-  eq(lines[4], 'Hits      3')
-  eq(lines[5], 'Lines     3')
+  local winbar = vim.api.nvim_get_option_value('winbar', { win = session['info-win'] })
+  eq(type(lines[1]), 'string')
+  eq(lines[1] ~= 'Project Mode  streaming project sources', true)
+  eq(type(winbar), 'string')
+  eq(winbar ~= '', true)
+  eq(string.find(winbar, '3/12 files', 1, true) ~= nil, true)
 end
 
 return T

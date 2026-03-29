@@ -227,6 +227,10 @@
     (restore-startup-cursor! session)
     (set session.ui-last-insert-mode (vim.startswith (. (vim.api.nvim_get_mode) :mode) "i"))
     (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+      (when (and session.directive-help-win
+                 (vim.api.nvim_win_is_valid session.directive-help-win))
+        (pcall vim.api.nvim_win_close session.directive-help-win true))
+      (set session.directive-help-win nil)
       (let [[ok cur] [(pcall vim.api.nvim_win_get_cursor session.prompt-win)]]
         (when (and ok (= (type cur) "table"))
           (set session.hidden-prompt-cursor [(or (. cur 1) 1) (or (. cur 2) 0)])))
@@ -340,7 +344,7 @@
               ref (router-util-mod.selected-ref curr)]
           (when (and ref ref.path)
             (let [path (or ref.path "")
-                  rel (vim.fn.fnamemodify path ":~:.")
+                  rel (vim.fn.fnamemodify path ":.")
                   target (if (and (= (type rel) "string") (~= rel ""))
                              rel
                              path)]
@@ -380,6 +384,7 @@
      (clear-hit-highlight! curr)
      (set session.results-edit-mode false)
      (hide-session-ui! deps session)
+     (handoff-host-window! (vim.api.nvim_get_current_win) (vim.api.nvim_get_current_buf))
      curr))
 
 (fn finish-cancel

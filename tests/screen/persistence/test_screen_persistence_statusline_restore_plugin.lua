@@ -13,10 +13,11 @@ T['accept hands statusline control back to statusline plugins on origin window']
         return
       end
       _G.__meta_airline_refreshes = _G.__meta_airline_refreshes + 1
-      vim.wo.statusline = 'AIRLINE STATUS'
-      vim.wo.winhighlight = 'StatusLine:DiffDelete,StatusLineNC:DiffChange'
+      local normal = not vim.api.nvim_get_mode().mode:match('^i')
+      vim.wo.statusline = normal and 'AIRLINE N' or 'AIRLINE I'
+      vim.wo.winhighlight = normal and 'StatusLine:DiffDelete,StatusLineNC:DiffChange' or 'StatusLine:DiffAdd,StatusLineNC:DiffText'
     end
-    vim.api.nvim_create_autocmd({ 'BufEnter', 'WinEnter' }, {
+    vim.api.nvim_create_autocmd({ 'BufEnter', 'BufWinEnter', 'WinEnter', 'InsertEnter', 'InsertLeave' }, {
       group = aug,
       callback = refresh,
     })
@@ -40,7 +41,7 @@ T['accept hands statusline control back to statusline plugins on origin window']
   H.wait_for(function()
     return H.child.lua_get([[
       (function()
-        return vim.api.nvim_get_option_value('statusline', { win = vim.api.nvim_get_current_win() }) == 'AIRLINE STATUS'
+        return vim.api.nvim_get_option_value('statusline', { win = vim.api.nvim_get_current_win() }) == 'AIRLINE N'
           and vim.api.nvim_get_option_value('winhighlight', { win = vim.api.nvim_get_current_win() }) == 'StatusLine:DiffDelete,StatusLineNC:DiffChange'
           and (_G.__meta_airline_refreshes or 0) > 1
       end)()
@@ -59,10 +60,11 @@ T['cancel hands statusline control back to statusline plugins on origin window']
         return
       end
       _G.__meta_airline_refreshes = _G.__meta_airline_refreshes + 1
-      vim.wo.statusline = 'AIRLINE STATUS'
-      vim.wo.winhighlight = 'StatusLine:DiffDelete,StatusLineNC:DiffChange'
+      local normal = not vim.api.nvim_get_mode().mode:match('^i')
+      vim.wo.statusline = normal and 'AIRLINE N' or 'AIRLINE I'
+      vim.wo.winhighlight = normal and 'StatusLine:DiffDelete,StatusLineNC:DiffChange' or 'StatusLine:DiffAdd,StatusLineNC:DiffText'
     end
-    vim.api.nvim_create_autocmd({ 'BufEnter', 'BufWinEnter', 'WinEnter' }, {
+    vim.api.nvim_create_autocmd({ 'BufEnter', 'BufWinEnter', 'WinEnter', 'InsertEnter', 'InsertLeave' }, {
       group = aug,
       callback = refresh,
     })
@@ -87,7 +89,7 @@ T['cancel hands statusline control back to statusline plugins on origin window']
   H.wait_for(function()
     return H.child.lua_get([[
       (function()
-        return vim.api.nvim_get_option_value('statusline', { win = vim.api.nvim_get_current_win() }) == 'AIRLINE STATUS'
+        return vim.api.nvim_get_option_value('statusline', { win = vim.api.nvim_get_current_win() }) == 'AIRLINE N'
           and vim.api.nvim_get_option_value('winhighlight', { win = vim.api.nvim_get_current_win() }) == 'StatusLine:DiffDelete,StatusLineNC:DiffChange'
           and (_G.__meta_airline_refreshes or 0) > 1
       end)()

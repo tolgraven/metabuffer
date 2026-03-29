@@ -34,9 +34,9 @@
 - Floating info panel showing metadata for the selected hit.
 - Two render modes:
   1. **Hit info**: file path, line number, git blame, file size, permissions, etc.
-  2. **Project loading**: streaming progress (`N/M files`), shown during bootstrap.
-- Info window winbar mirrors current visible range and loading progress.
-- Buffer shaping must never introduce empty visible rows; use loading placeholders while async detail fill catches up.
+  2. **Project loading**: winbar-only progress (`N/M files`) during bootstrap while the buffer shows skeleton rows or already-available visible hit info.
+- Info window winbar should only be populated while loading is actually pending; clear it once the info slice is settled.
+- Buffer shaping must never introduce empty visible rows; use faded skeleton placeholders while async detail fill catches up, and prioritize rendering the current visible page before background loading continues.
 - `build-info-lines` — Constructs the info line table from hit metadata.
 - `render-info-lines!` — Writes lines to info buffer with highlight namespaces.
 - `schedule-info-highlight-fill!` — Async highlight application to avoid blocking.

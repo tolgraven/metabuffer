@@ -162,9 +162,9 @@ Main/results buffer:
 \t<LocalLeader>r\tClear cached file views and rebuild current source data.
 
 Info window:
-\tThe right-side info window keeps a winbar showing visible-range/loading
-\tprogress and uses loading placeholders instead of blank rows while project
-\tstartup or source refreshes are still settling.
+\tThe right-side info window uses its winbar only while loading. Progress is
+\tshown there while the buffer itself uses faded skeleton rows until the
+\tvisible info slice is ready, then the winbar clears once loading settles.
 
 Directive help:
 \tThe popup help float is anchored above the active prompt token, closes when

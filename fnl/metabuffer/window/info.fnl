@@ -40,6 +40,19 @@
   [session]
   (.. (placeholder-pulse-char session) " loading info"))
 
+(fn loading-skeleton-lines
+  [count]
+  "Return COUNT faded placeholder rows for the info window."
+  (let [patterns [".... ... ......"
+                  "..... .... ....."
+                  "... ..... ......"
+                  ".... ...... ...."]
+        total (math.max 1 (or count 1))
+        lines []]
+    (for [i 1 total]
+      (table.insert lines (. patterns (+ (% (- i 1) (# patterns)) 1))))
+    lines))
+
 (fn indices-slice-sig
   [idxs start-index stop-index]
   "Return a stable signature string for a visible indices slice. Expected output: \"1,4,7\"."
@@ -212,6 +225,12 @@
             (set out v)))
         out)))
 
+(fn info-winbar-active?
+  [session project-loading-pending?]
+  "True when the info winbar should be visible for loading/progress state."
+  (or (project-loading-pending? session)
+      (clj.boolean (and session session.info-highlight-fill-pending?))))
+
 (fn M.new
   [opts]
   "Create right-side info window renderer/synchronizer."
@@ -252,16 +271,19 @@
 
   (set info_window_config
     (fn [session width height]
-      (let [host-win (or (session-host-win session) (vim.api.nvim_get_current_win))]
+      (let [host-win (or (session-host-win session) (vim.api.nvim_get_current_win))
+            own-winbar-row (if (info-winbar-active? session project-loading-pending?) 1 0)]
         (if session.window-local-layout
             (let [[wb-ok wb-val] [(pcall vim.api.nvim_get_option_value "winbar" {:win host-win})]
                   has-winbar? (and wb-ok
                                    (= (type wb-val) "string")
                                    (~= wb-val ""))
-                  row (if has-winbar? 1 0)
+                  base-row (if has-winbar? 1 0)
+                  row (math.max 0 (- base-row own-winbar-row))
                   host-height (vim.api.nvim_win_get_height host-win)
+                  wanted-h (+ (math.max 1 height) own-winbar-row)
                   max-h (math.max 1 (- host-height row 1))
-                  h   (math.min (math.max 1 height) max-h)]
+                  h   (math.min wanted-h max-h)]
               {:relative "win"
                :win host-win
                :anchor "NW"
@@ -272,10 +294,10 @@
                :focusable false})
             {:relative "editor"
              :anchor "NE"
-             :row 1
+             :row (math.max 0 (- 1 own-winbar-row))
              :col vim.o.columns
              :width width
-             :height height
+             :height (+ (math.max 1 height) own-winbar-row)
              :focusable false}))))
   (var ensure_info_window nil)
   (set ensure_info_window
@@ -362,16 +384,18 @@
             start-index (or session.info-start-index 1)
             stop-index (or session.info-stop-index (if (> total 0) total 0))
             range (range-text start-index stop-index total)
-            title (if (project-loading-pending? session)
-                      (let [streamed (math.max 0 (- (or session.lazy-stream-next 1) 1))
-                            total-files (or session.lazy-stream-total 0)]
-                        (if (> total-files 0)
-                            (.. "Info  loading " streamed "/" total-files " files")
-                            "Info  loading project"))
-                      (if session.info-highlight-fill-pending?
-                          (.. "Info  loading " range)
-                          (.. "Info  " range)))
-            winbar (.. "%#Comment#" title)]
+            loading-title (if (project-loading-pending? session)
+                              (let [streamed (math.max 0 (- (or session.lazy-stream-next 1) 1))
+                                    total-files (or session.lazy-stream-total 0)]
+                                (if (> total-files 0)
+                                    (.. "Info  loading " streamed "/" total-files " files")
+                                    "Info  loading project"))
+                              (if session.info-highlight-fill-pending?
+                                  (.. "Info  loading " range)
+                                  nil))
+            winbar (if loading-title
+                       (.. "%#Comment#" loading-title)
+                       "")]
         (pcall vim.api.nvim_set_option_value "statusline" "" {:win session.info-win})
         (pcall vim.api.nvim_set_option_value "winbar" winbar {:win session.info-win}))))
 
@@ -901,27 +925,7 @@
 
   (fn render-project-loading!
     [session]
-    (let [hits (# (or (. session.meta.buf :indices) []))
-          total-lines (# (or (. session.meta.buf :content) []))
-          streamed (math.max 0 (- (or session.lazy-stream-next 1) 1))
-          total-files (or session.lazy-stream-total 0)
-          bootstrapped (or session.project-bootstrapped false)
-          stream-done (or session.lazy-stream-done false)
-          stage (if (or session.project-bootstrap-pending (not bootstrapped))
-                    "bootstrapping project sources"
-                     (if session.prompt-animating?
-                        "opening project mode"
-                        (if stream-done
-                            "finalizing project sources"
-                            "streaming project sources")))
-          progress (if (> total-files 0)
-                       (.. streamed "/" total-files " files")
-                       "scanning files")
-          lines [(.. "Project Mode  " stage)
-                 ""
-                 (.. "Progress  " progress)
-                 (.. "Hits      " hits)
-                 (.. "Lines     " total-lines)]
+    (let [lines (loading-skeleton-lines (info_height session))
           ns info-content-ns]
       (set session.info-start-index 1)
       (set session.info-stop-index (# lines))
@@ -934,10 +938,8 @@
       (fit-info-width! session lines)
       (vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)
       (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
-      (vim.api.nvim_buf_add_highlight session.info-buf ns "Title" 0 0 -1)
-      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 2 0 10)
-      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 3 0 10)
-      (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" 4 0 10)
+      (for [row 0 (- (# lines) 1)]
+        (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" row 0 -1))
       (let [bo (. vim.bo session.info-buf)]
         (set bo.modifiable false))))
 
@@ -954,7 +956,25 @@
     (when (and (not session.info-render-suspended?)
                session.info-buf
                (vim.api.nvim_buf_is_valid session.info-buf))
-      (render-project-loading! session)))
+      (let [meta session.meta
+            idxs (or meta.buf.indices [])
+            total (# idxs)]
+        (if (> total 0)
+            (let [[wanted-start wanted-stop] (info-visible-range
+                                               session
+                                               meta
+                                               total
+                                               info_max_lines)]
+              (set session.info-showing-project-loading? false)
+              (render-info-lines!
+                session
+                meta
+                wanted-start
+                wanted-stop
+                wanted-start
+                wanted-stop)
+              (sync-info-selection! session meta))
+            (render-project-loading! session)))))
 
   (fn update-project!
     [session refresh-lines]

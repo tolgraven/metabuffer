@@ -172,6 +172,25 @@
            :preview-height (vim.api.nvim_win_get_height preview-win)
            :tab-window-count (tab-window-count main-win)})))
 
+    (fn note-editor-size!
+      [session]
+      (when session
+        (set session.last-editor-columns vim.o.columns)
+        (set session.last-editor-lines vim.o.lines)))
+
+    (fn note-global-editor-resize!
+      [session]
+      (when session
+        (set session.preview-user-resized? false)
+        (set session.preview-global-resize-token (+ 1 (or session.preview-global-resize-token 0)))
+        (let [token session.preview-global-resize-token]
+          (vim.defer_fn
+            (fn []
+              (when (and session
+                         (= token session.preview-global-resize-token))
+                (set session.preview-global-resize-token nil)))
+            120))))
+
     (fn capture-expected-layout!
       [session]
       "Persist expected layout after startup/manual prompt resize."
@@ -521,7 +540,9 @@
                   row (or (. row-col 1) 1)
                   col1 (+ (or (. row-col 2) 0) 1)
                   line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf (- row 1) row false) 1) "")]
-              (directive-mod.token-under-cursor line col1))))))
+              (if-let [span (directive-mod.token-under-cursor line col1)]
+                (vim.tbl_extend "force" span {:row row})
+                nil))))))
 
     (fn directive-help-token
       [tok]
@@ -534,6 +555,20 @@
                   stem
                   token))
             token)))
+
+    (fn directive-help-spec-for-token
+      [token]
+      (let [needle (or token "")
+            prefix (option-prefix)
+            matches (directive-mod.matching-catalog prefix needle)]
+        (var exact nil)
+        (each [_ spec (ipairs matches)]
+          (when (and (not exact)
+                     (or (= (or (. spec :display) "") needle)
+                         (= (or (. spec :literal) "") needle)
+                         (= (or (. spec :prefix) "") needle)))
+            (set exact spec)))
+        (or exact (. matches 1))))
 
     (fn highlight-prompt-like-line!
       [buf ns row txt primary-hl]
@@ -675,19 +710,24 @@
               (set session.directive-help-win (vim.api.nvim_open_win buf false cfg))))))
 
     (fn maybe-show-directive-help!
-      [session]
+      [session selected-item]
       (if (or (not session.prompt-win)
               (not (vim.api.nvim_win_is_valid session.prompt-win))
               (~= (vim.api.nvim_get_current_win) session.prompt-win))
           (hide-directive-help! session)
           (if-let [span (current-prompt-token session)]
-            (let [token (directive-help-token (or (. span :token) ""))
+            (let [selected-word (or (and selected-item (. selected-item :word))
+                                    (and selected-item (. selected-item :abbr))
+                                    "")
+                  token (directive-help-token (or (. span :token) ""))
                   prefix (option-prefix)
-                  matches (if (vim.startswith token prefix)
-                            (directive-mod.matching-catalog prefix token)
-                            [])]
-              (if (> (# matches) 0)
-                (show-directive-help! session (. matches 1) span)
+                  spec (if (and (~= selected-word "")
+                                (vim.startswith selected-word prefix))
+                           (directive-help-spec-for-token selected-word)
+                           (and (vim.startswith token prefix)
+                                (directive-help-spec-for-token token)))]
+              (if spec
+                (show-directive-help! session spec span)
                 (hide-directive-help! session)))
             (hide-directive-help! session))))
 
@@ -1056,6 +1096,12 @@
                     session.prompt-buf
                     false
                     (vim.api.nvim_buf_get_changedtick session.prompt-buf))))))
+        (au! "CompleteChanged" session.prompt-buf
+          (fn [ev]
+            (let [item (and ev (= (type ev) "table") (. ev :completed_item))]
+              (maybe-show-directive-help! session item))))
+        (au! "CompleteDone" session.prompt-buf
+          (fn [] (maybe-show-directive-help! session)))
       ;; Re-assert prompt maps when entering insert mode; this wins over late
       ;; plugin mappings (for example completion plugins).
         (au! "InsertEnter" session.prompt-buf
@@ -1097,12 +1143,19 @@
                                               (manual-prompt-resize? session wins))]
                 (when is-vim-resized?
                   (set session.preview-user-resized? false))
-                (when (and (not is-vim-resized?)
-                           session.preview-win
-                           (vim.api.nvim_win_is_valid session.preview-win))
+                (let [editor-size-changed? (or (~= (or session.last-editor-columns vim.o.columns) vim.o.columns)
+                                               (~= (or session.last-editor-lines vim.o.lines) vim.o.lines))]
+                  (note-editor-size! session)
+                  (when (or is-vim-resized? editor-size-changed?)
+                    (note-global-editor-resize! session))
+                  (when (and (not is-vim-resized?)
+                             (not editor-size-changed?)
+                             (not session.preview-global-resize-token)
+                             session.preview-win
+                             (vim.api.nvim_win_is_valid session.preview-win))
                   (each [_ wid (ipairs wins)]
                     (when (= wid session.preview-win)
-                      (set session.preview-user-resized? true))))
+                      (set session.preview-user-resized? true)))))
                 (if manual-prompt-resize
                     (do
                       (set session.prompt-target-height (vim.api.nvim_win_get_height session.prompt-win))
@@ -1320,6 +1373,7 @@
         (apply-emacs-insert-fallbacks router session)))
 
     {:register! register!
-     :refresh! refresh-prompt-highlights!})))
+     :refresh! refresh-prompt-highlights!
+     :loading! schedule-loading-indicator!})))
 
 M

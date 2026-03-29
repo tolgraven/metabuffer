@@ -22,10 +22,18 @@ T['info window updates automatically when typing in prompt during project mode']
 
   local initial_snap = H.session_info_snapshot()
   local initial_winbar = H.session_info_winbar()
+  local initial_info_view = H.session_info_view()
+  local still_loading = H.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      return not not (s and s['info-project-loading-active?'])
+    end)()
+  ]])
   eq(initial_snap.count > 0, true, "Info window should contain rendered lines immediately after :Meta! launch")
   eq(initial_snap.line ~= '', true, "Info window should not stay empty until a later resize")
   eq(type(initial_winbar), 'string', "Info window winbar should be populated during project startup")
-  eq(initial_winbar ~= '', true, "Info window winbar should expose startup/loading state")
+  eq(initial_winbar ~= '' or not still_loading, true, "Info window winbar should expose startup/loading state unless startup already finished")
 
   H.wait_for(function()
     local snap = H.session_info_snapshot()
@@ -33,8 +41,15 @@ T['info window updates automatically when typing in prompt during project mode']
   end, 5000)
 
   local settled_snap = H.session_info_snapshot()
+  local settled_winbar = H.session_info_winbar()
+  local settled_info_view = H.session_info_view()
   eq(settled_snap.count > 0, true, "Info window should still be populated after project loading finishes")
   eq(settled_snap.line ~= '', true, "Info window should not go blank after the loading phase")
+  eq(settled_winbar, '', "Info window winbar should clear after project loading finishes")
+  if initial_winbar ~= '' and initial_info_view and settled_info_view then
+    eq(initial_info_view.topline, settled_info_view.topline)
+    eq(initial_info_view.selected_row, settled_info_view.selected_row)
+  end
 
   -- Now type a query that filters the list. 
   -- We expect info window to update its content.
@@ -56,6 +71,60 @@ T['info window updates automatically when typing in prompt during project mode']
   -- Check if info window correctly shows 'mod.lua' (since it should be the top hit for 'metabuffer')
   local snap = H.session_info_snapshot()
   eq(H.str_contains(snap.line, "mod.lua"), true, "Info window should update to show mod.lua after typing query")
+end)
+
+T['project loading animates the main statusline pulse while bootstrap is pending'] = H.timed_case(function()
+  local root = H.make_temp_project()
+  H.child.lua([[
+    require('metabuffer').setup({
+      project_bootstrap_delay_ms = 300,
+      project_bootstrap_idle_delay_ms = 300,
+      ui = {
+        animation = {
+          enabled = true,
+          loading_indicator = true,
+          backend = 'mini',
+        },
+      },
+    })
+  ]])
+  H.child.cmd("cd " .. root)
+  H.child.cmd("edit " .. root .. "/main.txt")
+  H.set_source_buf_to_current()
+  H.child.type_keys(':', 'Meta!', '<CR>')
+
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        return not not (s
+          and s['project-bootstrap-pending']
+          and s['loading-anim-phase'] ~= nil
+          and s['results-statusline-pulse-active?'])
+      end)()
+    ]])
+  end, 6000)
+
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        return not not (s and s['project-bootstrapped'] and s['lazy-stream-done'])
+      end)()
+    ]])
+  end, 6000)
+
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        return not not (s and s['loading-anim-phase'] == nil and not s['results-statusline-pulse-active?'])
+      end)()
+    ]])
+  end, 6000)
 end)
 
 return T

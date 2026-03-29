@@ -74,6 +74,8 @@
   (let [session (. args :session)
         hooks (refresh-hooks session)]
     (when session
+      (when-let [f (. hooks :loading!)]
+        (pcall f session))
       (when (clj.boolean (. args :restore-view?))
         (when-let [f (. hooks :restore-view!)]
           (pcall f session)))
