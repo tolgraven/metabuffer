@@ -556,29 +556,304 @@
       1
       (router-util-mod.prompt-height)))
 
+(fn restored-hidden-session
+  [router router-util-mod maybe-restore-hidden-ui! source-buf existing project-mode]
+  (when (and existing
+             existing.ui-hidden
+             maybe-restore-hidden-ui!
+             existing.meta
+             existing.meta.buf
+             (= (clj.boolean existing.project-mode) (clj.boolean project-mode))
+             (= source-buf existing.meta.buf.buffer))
+    (router-util-mod.clear-file-caches! router existing)
+    (maybe-restore-hidden-ui! existing true)
+    existing.meta))
+
+(fn build-session-condition
+  [session-view query mode source-view project-mode]
+  (let [condition (session-view.setup-state query mode source-view)]
+    (set condition.selected-index
+         (project-start-selected-index project-mode mode source-view condition))
+    condition))
+
+(fn build-prompt-window
+  [prompt-window-mod router-util-mod settings origin-win prompt-animates?]
+  (prompt-window-mod.new
+    vim
+    {:height (router-util-mod.prompt-height)
+     :start-height (prompt-start-height router-util-mod prompt-animates?)
+     :floating? prompt-animates?
+     :window-local-layout settings.window-local-layout
+     :origin-win origin-win}))
+
+(fn build-last-parsed-query
+  [parsed-query start-hidden start-ignored start-deps start-binary start-files start-prefilter start-lazy start-expansion start-transforms]
+  (vim.tbl_extend
+    "force"
+    {:lines (or (. parsed-query :lines) [""])
+     :lgrep-lines (or (. parsed-query :lgrep-lines) [])
+     :include-hidden start-hidden
+     :include-ignored start-ignored
+     :include-deps start-deps
+     :include-binary start-binary
+     :include-files start-files
+     :file-lines (or (. parsed-query :file-lines) [])
+     :prefilter start-prefilter
+     :lazy start-lazy
+     :expansion start-expansion}
+    (transform-mod.compat-view start-transforms)))
+
+(fn build-prompt-session-state
+  [history-store query-mod router-util-mod settings prompt-win prompt-buf initial-lines parsed-query animation-settings ui-animation ui fast-test-startup?]
+  (let [prompt-text (table.concat initial-lines "\n")]
+    {:prompt-window prompt-win
+     :prompt-win prompt-win.window
+     :prompt-target-height (router-util-mod.prompt-height)
+     :prompt-buf prompt-buf
+     :prompt-floating? prompt-win.floating?
+     :window-local-layout settings.window-local-layout
+     :prompt-keymaps settings.prompt-keymaps
+     :main-keymaps settings.main-keymaps
+     :prompt-fallback-keymaps settings.prompt-fallback-keymaps
+     :info-file-entry-view (or settings.info-file-entry-view "meta")
+     :initial-prompt-text prompt-text
+     :last-prompt-text prompt-text
+     :last-history-text ""
+     :history-index 0
+     :history-cache (vim.deepcopy (history-store.list))
+     :prompt-update-pending false
+     :prompt-update-dirty false
+     :prompt-change-seq 0
+     :prompt-last-apply-ms 0
+     :prompt-last-event-text prompt-text
+     :initial-query-active (query-mod.query-lines-has-active? (. parsed-query :lines))
+     :startup-initializing true
+     :prompt-animating? false
+     :animate-enter? (and (not fast-test-startup?)
+                          (clj.boolean (. ui-animation :enabled)))
+     :startup-ui-delay-ms (startup-ui-delay-ms
+                            (clj.boolean (. ui-animation :enabled))
+                            animation-settings)
+     :loading-indicator? (clj.boolean (. ui :loading-indicator))
+     :animation-settings animation-settings}))
+
+(fn build-project-session-state
+  [query-mod settings parsed-query project-mode start-hidden start-ignored start-deps start-binary start-files start-prefilter start-lazy start-expansion start-transforms]
+  {:project-mode (or project-mode false)
+   :project-mode-starting? (clj.boolean project-mode)
+   :include-hidden start-hidden
+   :include-ignored start-ignored
+   :include-deps start-deps
+   :include-binary start-binary
+   :include-files start-files
+   :default-include-lgrep (query-mod.truthy? settings.default-include-lgrep)
+   :effective-include-hidden start-hidden
+   :effective-include-ignored start-ignored
+   :effective-include-deps start-deps
+   :effective-include-binary start-binary
+   :effective-include-files start-files
+   :transform-flags (vim.deepcopy start-transforms)
+   :effective-transforms (vim.deepcopy start-transforms)
+   :active-source-key (source-mod.query-source-key parsed-query)
+   :project-bootstrap-pending false
+   :project-bootstrap-token 0
+   :project-bootstrap-delay-ms (if (query-mod.query-lines-has-active? (. parsed-query :lines))
+                                   settings.project-bootstrap-delay-ms
+                                   settings.project-bootstrap-idle-delay-ms)
+   :project-bootstrapped (not (or project-mode false))
+   :prefilter-mode start-prefilter
+   :lazy-mode start-lazy
+   :expansion-mode start-expansion
+   :project-source-syntax-chunk-lines settings.project-source-syntax-chunk-lines
+   :project-lazy-refresh-min-ms settings.project-lazy-refresh-min-ms
+   :project-lazy-refresh-debounce-ms settings.project-lazy-refresh-debounce-ms
+   :last-parsed-query (build-last-parsed-query
+                        parsed-query
+                        start-hidden
+                        start-ignored
+                        start-deps
+                        start-binary
+                        start-files
+                        start-prefilter
+                        start-lazy
+                        start-expansion
+                        start-transforms)
+   :file-query-lines (or (. parsed-query :file-lines) [])})
+
+(fn build-session-state
+  [deps curr source-buf origin-win origin-buf source-view condition prompt-win prompt-buf initial-lines parsed-query project-mode
+   start-hidden start-ignored start-deps start-binary start-files start-prefilter start-lazy start-expansion start-transforms fast-test-startup?]
+  (let [router (. deps :router)
+        query-mod (. deps :query-mod)
+        history-store (. deps :history-store)
+        router-util-mod (. (. deps :mods) :router-util)
+        ui (. deps :ui)
+        ui-animation (. ui :animation)
+        next-instance-id! (. deps :next-instance-id!)
+        animation-settings (build-animation-settings
+                             ui-animation
+                             (. ui-animation :prompt)
+                             (. ui-animation :preview)
+                             (. ui-animation :info)
+                             (. ui-animation :loading)
+                             (. ui-animation :scroll)
+                             fast-test-startup?)
+        settings router]
+    (vim.tbl_extend
+      "force"
+      {:source-buf source-buf
+       :origin-win origin-win
+       :origin-buf origin-buf
+       :source-view source-view
+       :initial-source-line (math.max 1 (or (. source-view :lnum) (+ (or condition.selected-index 0) 1)))
+       :read-file-lines-cached (. deps :read-file-lines-cached)
+       :single-content (vim.deepcopy curr.buf.content)
+       :single-refs (vim.deepcopy (or curr.buf.source-refs []))
+       :instance-id (next-instance-id!)
+       :meta curr}
+      (build-prompt-session-state
+        history-store
+        query-mod
+        router-util-mod
+        settings
+        prompt-win
+        prompt-buf
+        initial-lines
+        parsed-query
+        animation-settings
+        ui-animation
+        ui
+        fast-test-startup?)
+      (build-project-session-state
+        query-mod
+        settings
+        parsed-query
+        project-mode
+        start-hidden
+        start-ignored
+        start-deps
+        start-binary
+        start-files
+        start-prefilter
+        start-lazy
+        start-expansion
+        start-transforms))))
+
+(fn prepare-fresh-meta-buffer!
+  [curr]
+  (set curr.buf.keep-modifiable true)
+  (let [bo (. vim.bo curr.buf.buffer)]
+    (set (. bo :buftype) "acwrite")
+    (set (. bo :modifiable) true)
+    (set (. bo :readonly) false)
+    (set (. bo :bufhidden) "hide"))
+  (pcall vim.api.nvim_buf_set_var curr.buf.buffer "meta_manual_edit_active" false)
+  (pcall vim.api.nvim_buf_set_var curr.buf.buffer "meta_internal_render" false)
+  (pcall curr.buf.render))
+
+(fn attach-start-session-ui!
+  [deps curr session source-view project-mode]
+  (let [router-util-mod (. (. deps :mods) :router-util)
+        session-view (. deps :session-view)
+        origin-win session.origin-win
+        start-wrap (let [persisted (router-util-mod.results-wrap-enabled?)]
+                     (if (~= persisted nil)
+                         persisted
+                         (let [[ok wrap?] [(pcall vim.api.nvim_get_option_value "wrap" {:win origin-win})]]
+                           (and ok (clj.boolean wrap?)))))]
+    (when (vim.api.nvim_win_is_valid origin-win)
+      (router-util-mod.silent-win-set-buf! origin-win curr.buf.buffer))
+    (when (and curr.win curr.win.window (vim.api.nvim_win_is_valid curr.win.window))
+      (pcall vim.api.nvim_set_option_value "wrap" (clj.boolean start-wrap) {:win curr.win.window})
+      (pcall vim.api.nvim_set_option_value "linebreak" (clj.boolean start-wrap) {:win curr.win.window}))
+    (when-not project-mode
+      (session-view.restore-meta-view! curr source-view session nil))))
+
+(fn finalize-started-session!
+  [deps curr session initial-lines source-buf]
+  (let [launching-by-source (. (. deps :router) :launching-by-source)
+        initial-query-active session.initial-query-active]
+    (set curr.session session)
+    (set curr.buf.session session)
+    (activate-session-ui! deps session initial-lines)
+    (events.send :on-session-start! {:session session})
+    (finish-session-startup!
+      deps
+      curr
+      session
+      initial-query-active)
+    (set (. launching-by-source source-buf) nil)
+    (show-launch-message! session)
+    curr))
+
+(fn launch-new-session!
+  [deps query mode project-mode prompt-query parsed-query start-hidden start-ignored start-deps start-binary start-files start-prefilter start-lazy start-expansion start-transforms source-buf]
+  (let [router (. deps :router)
+        mods (. deps :mods)
+        meta-mod (. mods :meta)
+        router-util-mod (. mods :router-util)
+        prompt-window-mod (. mods :prompt-window)
+        session-view (. deps :session-view)
+        ui-animation (. (. deps :ui) :animation)
+        ui-animation-prompt (. ui-animation :prompt)
+        origin-win (vim.api.nvim_get_current_win)
+        origin-buf source-buf
+        source-view (vim.fn.winsaveview)
+        _ (set (. source-view :_meta_win_height) (vim.api.nvim_win_get_height origin-win))
+        condition (build-session-condition session-view query mode source-view project-mode)
+        curr (meta-mod.new vim condition)
+        fast-test-startup? (clj.boolean vim.g.meta_test_running)
+        initial-lines (if (and prompt-query (~= prompt-query ""))
+                          (vim.split prompt-query "\n" {:plain true})
+                          [""])
+        prompt-win (build-prompt-window
+                     prompt-window-mod
+                     router-util-mod
+                     router
+                     origin-win
+                     (prompt-animates? ui-animation ui-animation-prompt fast-test-startup?))
+        prompt-buf prompt-win.buffer
+        session (build-session-state
+                  deps
+                  curr
+                  source-buf
+                  origin-win
+                  origin-buf
+                  source-view
+                  condition
+                  prompt-win
+                  prompt-buf
+                  initial-lines
+                  parsed-query
+                  project-mode
+                  start-hidden
+                  start-ignored
+                  start-deps
+                  start-binary
+                  start-files
+                  start-prefilter
+                  start-lazy
+                  start-expansion
+                  start-transforms
+                  fast-test-startup?)]
+    (set curr.project-mode (or project-mode false))
+    (router-util-mod.ensure-source-refs! curr)
+    (prepare-fresh-meta-buffer! curr)
+    (set session.refresh-hooks (build-refresh-hooks deps))
+    (transform-mod.apply-flags! session start-transforms)
+    (transform-mod.apply-flags! curr start-transforms)
+    (attach-start-session-ui! deps curr session source-view project-mode)
+    (finalize-started-session! deps curr session initial-lines source-buf)))
+
 (fn M.start!
   [deps query mode _meta project-mode]
   (let [router (. deps :router)
-        mods (. deps :mods)
-        ui (. deps :ui)
-        ui-animation (. ui :animation)
-        ui-animation-prompt (. ui-animation :prompt)
-        ui-animation-preview (. ui-animation :preview)
-        ui-animation-info (. ui-animation :info)
-        ui-animation-loading (. ui-animation :loading)
-        ui-animation-scroll (. ui-animation :scroll)
         history-api (. deps :history-api)
         query-mod (. deps :query-mod)
         remove-session! (. deps :remove-session!)
         active-by-source router.active-by-source
-        session-view (. deps :session-view)
-        meta-mod (. mods :meta)
-        router-util-mod (. mods :router-util)
-        prompt-window-mod (. mods :prompt-window)
-        history-store (. deps :history-store)
-        read-file-lines-cached (. deps :read-file-lines-cached)
+        router-util-mod (. (. deps :mods) :router-util)
         settings router
-        next-instance-id! (. deps :next-instance-id!)
         launching-by-source (. router :launching-by-source)
         maybe-restore-hidden-ui! (. deps :maybe-restore-hidden-ui!)]
     (let [current-buf (vim.api.nvim_get_current_buf)
@@ -597,184 +872,44 @@
                  : start-prefilter
                  : start-lazy
                  : start-expansion
-                 : start-transforms}
-                (resolve-start-query-state query history-api query-mod settings)]
-      (let [source-buf (vim.api.nvim_get_current_buf)
-            existing (. active-by-source source-buf)]
-        (if (and (. launching-by-source source-buf)
-                 existing
-                 (= (clj.boolean existing.project-mode) (clj.boolean project-mode)))
-            (or existing
-                (existing-visible-meta existing))
-            (if (and existing
-                  existing.ui-hidden
-                  maybe-restore-hidden-ui!
-                 existing.meta
-                 existing.meta.buf
-                 (= (clj.boolean existing.project-mode) (clj.boolean project-mode))
-                 (= source-buf existing.meta.buf.buffer))
-                (do
-                  (router-util-mod.clear-file-caches! router existing)
-                  (maybe-restore-hidden-ui! existing true)
-                  existing.meta)
-                (do
-                  (set (. launching-by-source source-buf) true)
-                   (when (and existing (not existing.ui-hidden))
-                    (remove-session! existing))
-                  (let [origin-win (vim.api.nvim_get_current_win)
-                    origin-buf source-buf
-                    source-view (vim.fn.winsaveview)
-                    _ (set (. source-view :_meta_win_height) (vim.api.nvim_win_get_height origin-win))
-                    condition (session-view.setup-state query mode source-view)
-                    _ (set condition.selected-index
-                           (project-start-selected-index project-mode mode source-view condition))
-                    curr (meta-mod.new vim condition)]
-
-                 (set curr.project-mode (or project-mode false))
-                 (router-util-mod.ensure-source-refs! curr)
-                 (set curr.buf.keep-modifiable true)
-                 (let [fast-test-startup? (clj.boolean vim.g.meta_test_running)]
-                   (let [bo (. vim.bo curr.buf.buffer)]
-                     (set (. bo :buftype) "acwrite")
-                     (set (. bo :modifiable) true)
-                     (set (. bo :readonly) false)
-                     (set (. bo :bufhidden) "hide"))
-                   (pcall vim.api.nvim_buf_set_var curr.buf.buffer "meta_manual_edit_active" false)
-                   (pcall vim.api.nvim_buf_set_var curr.buf.buffer "meta_internal_render" false)
-                   (pcall curr.buf.render)
-                   (let [initial-lines (if (and prompt-query (~= prompt-query ""))
-                                         (vim.split prompt-query "\n" {:plain true})
-                                         [""])
-                      prompt-animates? (prompt-animates? ui-animation ui-animation-prompt fast-test-startup?)
-                      animation-settings (build-animation-settings
-                                           ui-animation
-                                           ui-animation-prompt
-                                           ui-animation-preview
-                                           ui-animation-info
-                                           ui-animation-loading
-                                           ui-animation-scroll
-                                           fast-test-startup?)
-                      prompt-win (prompt-window-mod.new
-                                   vim
-                                   {:height (router-util-mod.prompt-height)
-                                    :start-height (prompt-start-height router-util-mod prompt-animates?)
-                                    :floating? prompt-animates?
-                                    :window-local-layout settings.window-local-layout
-                                    :origin-win origin-win})
-                      prompt-buf prompt-win.buffer
-                      session {:source-buf source-buf
-                               :origin-win origin-win
-                               :origin-buf origin-buf
-                               :source-view source-view
-                               :initial-source-line (math.max 1 (or (. source-view :lnum) (+ (or condition.selected-index 0) 1)))
-                               :prompt-window prompt-win
-                               :prompt-win prompt-win.window
-                               :prompt-target-height (router-util-mod.prompt-height)
-                               :prompt-buf prompt-buf
-                               :prompt-floating? prompt-win.floating?
-                               :window-local-layout settings.window-local-layout
-                               :prompt-keymaps settings.prompt-keymaps
-                               :main-keymaps settings.main-keymaps
-                               :prompt-fallback-keymaps settings.prompt-fallback-keymaps
-                               :info-file-entry-view (or settings.info-file-entry-view "meta")
-                               :initial-prompt-text (table.concat initial-lines "\n")
-                               :last-prompt-text (table.concat initial-lines "\n")
-                               :last-history-text ""
-                               :history-index 0
-                               :history-cache (vim.deepcopy (history-store.list))
-                               :prompt-update-pending false
-                               :prompt-update-dirty false
-                               :prompt-change-seq 0
-                               :prompt-last-apply-ms 0
-                               :prompt-last-event-text (table.concat initial-lines "\n")
-                               :initial-query-active (query-mod.query-lines-has-active? (. parsed-query :lines))
-                               :startup-initializing true
-                               :prompt-animating? false
-                               :animate-enter? (and (not fast-test-startup?)
-                                                    (clj.boolean (. ui-animation :enabled)))
-
-                               :startup-ui-delay-ms (startup-ui-delay-ms
-                                                      (clj.boolean (. ui-animation :enabled))
-                                                      animation-settings)
-                               :loading-indicator? (clj.boolean (. ui :loading-indicator))
-                               :animation-settings animation-settings
-                               :project-mode (or project-mode false)
-                               :project-mode-starting? (clj.boolean project-mode)
-                               :read-file-lines-cached read-file-lines-cached
-                               :include-hidden start-hidden
-                               :include-ignored start-ignored
-                               :include-deps start-deps
-                               :include-binary start-binary
-                               :include-files start-files
-                               :default-include-lgrep (query-mod.truthy? settings.default-include-lgrep)
-                               :effective-include-hidden start-hidden
-                               :effective-include-ignored start-ignored
-                               :effective-include-deps start-deps
-                               :effective-include-binary start-binary
-                               :effective-include-files start-files
-                               :transform-flags (vim.deepcopy start-transforms)
-                               :effective-transforms (vim.deepcopy start-transforms)
-                               :active-source-key (source-mod.query-source-key parsed-query)
-                               :project-bootstrap-pending false
-                               :project-bootstrap-token 0
-                               :project-bootstrap-delay-ms (if (query-mod.query-lines-has-active? (. parsed-query :lines))
-                                                               settings.project-bootstrap-delay-ms
-                                                               settings.project-bootstrap-idle-delay-ms)
-                               :project-bootstrapped (not (or project-mode false))
-                               :prefilter-mode start-prefilter
-                               :lazy-mode start-lazy
-                               :expansion-mode start-expansion
-                               :project-source-syntax-chunk-lines settings.project-source-syntax-chunk-lines
-                               :project-lazy-refresh-min-ms settings.project-lazy-refresh-min-ms
-                               :project-lazy-refresh-debounce-ms settings.project-lazy-refresh-debounce-ms
-                               :last-parsed-query (vim.tbl_extend
-                                                    "force"
-                                                    {:lines (or (. parsed-query :lines) [""])
-                                                     :lgrep-lines (or (. parsed-query :lgrep-lines) [])
-                                                     :include-hidden start-hidden
-                                                     :include-ignored start-ignored
-                                                     :include-deps start-deps
-                                                     :include-binary start-binary
-                                                     :include-files start-files
-                                                     :file-lines (or (. parsed-query :file-lines) [])
-                                                     :prefilter start-prefilter
-                                                     :lazy start-lazy
-                                                     :expansion start-expansion}
-                                                    (transform-mod.compat-view start-transforms))
-                               :file-query-lines (or (. parsed-query :file-lines) [])
-                               :single-content (vim.deepcopy curr.buf.content)
-                               :single-refs (vim.deepcopy (or curr.buf.source-refs []))
-                               :instance-id (next-instance-id!)
-                               :meta curr}]
-                    (set session.refresh-hooks (build-refresh-hooks deps))
-                  (transform-mod.apply-flags! session start-transforms)
-                  (transform-mod.apply-flags! curr start-transforms)
-                  (let [start-wrap (let [persisted (router-util-mod.results-wrap-enabled?)]
-                                     (if (~= persisted nil)
-                                         persisted
-                                         (let [[ok wrap?] [(pcall vim.api.nvim_get_option_value "wrap" {:win origin-win})]]
-                                           (and ok (clj.boolean wrap?)))))]
-                  (when (vim.api.nvim_win_is_valid origin-win)
-                    (router-util-mod.silent-win-set-buf! origin-win curr.buf.buffer))
-                  (when (and curr.win curr.win.window (vim.api.nvim_win_is_valid curr.win.window))
-                    (pcall vim.api.nvim_set_option_value "wrap" (clj.boolean start-wrap) {:win curr.win.window})
-                    (pcall vim.api.nvim_set_option_value "linebreak" (clj.boolean start-wrap) {:win curr.win.window}))
-                  (when-not project-mode
-                    (session-view.restore-meta-view! curr source-view session nil))
-
-                  (let [initial-query-active session.initial-query-active]
-                    (set curr.session session)
-                    (set curr.buf.session session)
-                    (activate-session-ui! deps session initial-lines)
-                    (events.send :on-session-start! {:session session})
-                    (finish-session-startup!
-                      deps
-                      curr
-                      session
-                      initial-query-active)
-                    (set (. launching-by-source source-buf) nil)
-                    (show-launch-message! session)
-                    curr))))))))))))))
+	                 : start-transforms}
+	                (resolve-start-query-state query history-api query-mod settings)]
+		      (let [source-buf (vim.api.nvim_get_current_buf)
+		            existing (. active-by-source source-buf)]
+		        (if (and (. launching-by-source source-buf)
+		                 existing
+		                 (= (clj.boolean existing.project-mode) (clj.boolean project-mode)))
+		            (or existing
+		                (existing-visible-meta existing))
+                (if-some [restored (restored-hidden-session
+                                    router
+                                    router-util-mod
+                                    maybe-restore-hidden-ui!
+                                    source-buf
+                                    existing
+                                    project-mode)]
+                    restored
+                    (do
+                      (set (. launching-by-source source-buf) true)
+                      (when (and existing (not existing.ui-hidden))
+                        (remove-session! existing))
+                      (launch-new-session!
+                        deps
+                        query
+                        mode
+                        project-mode
+                        prompt-query
+                        parsed-query
+                        start-hidden
+                        start-ignored
+                        start-deps
+                        start-binary
+                        start-files
+                        start-prefilter
+                        start-lazy
+                        start-expansion
+                        start-transforms
+                        source-buf))))))))))
 
 (set (. M :project-start-selected-index) project-start-selected-index)
 
