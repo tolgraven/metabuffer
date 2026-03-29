@@ -222,64 +222,7 @@ end
 local function project_display_name()
   return "Metabuffer"
 end
-M.new = function(nvim, condition)
-  local cond = (condition or state["default-condition"](""))
-  local self = prompt_mod.new(nvim)
-  self.condition = cond
-  self.selected_index = (cond["selected-index"] or 0)
-  self._prev_text = ""
-  self.updates = 0
-  self.debug_out = ""
-  self.prefix = "# "
-  self["query-lines"] = {}
-  self["_prev-ignorecase"] = nil
-  self["_prev-matcher"] = nil
-  self["_selection-cache"] = {}
-  self["_lgrep-match-ids"] = {}
-  self.win = meta_window_mod.new(nvim, vim.api.nvim_get_current_win())
-  self["status-win"] = self.win
-  self.buf = meta_buffer_mod.new(nvim, vim.api.nvim_get_current_buf())
-  self["_filter-cache"] = {}
-  self["_filter-cache-line-count"] = #self.buf.content
-  self["_content-version-seen"] = (self.buf["content-version"] or 0)
-  local prompt_on_term = self["on-term"]
-  local function delete_win_match(win, id)
-    if (win and vim.api.nvim_win_is_valid(win)) then
-      local or_29_ = pcall(vim.fn.matchdelete, id, win)
-      if not or_29_ then
-        local function _30_()
-          return vim.fn.matchdelete(id)
-        end
-        or_29_ = pcall(vim.api.nvim_win_call, win, _30_)
-      end
-      return or_29_
-    else
-      return pcall(vim.fn.matchdelete, id)
-    end
-  end
-  local function apply_lgrep_highlights()
-    return helper_mod["apply-lgrep-highlights!"](self, delete_win_match, "_lgrep-match-ids")
-  end
-  local function clear_all_highlights()
-    return helper_mod["clear-all-highlights!"](self, delete_win_match, "_lgrep-match-ids")
-  end
-  local function _32_(idx)
-    local function _33_()
-      if (idx.current() == "meta") then
-        return "meta"
-      else
-        return "buffer"
-      end
-    end
-    return self.buf["apply-syntax"](_33_())
-  end
-  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state_cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state_syntax_types, (cond["syntax-index"] or 1), {["on-active"] = _32_})}
-  self.text = (cond.text or "")
-  if (self.text ~= "") then
-    self["query-lines"] = {self.text}
-  else
-  end
-  self.caret["set-locus"]((cond["caret-locus"] or #self.text))
+local function attach_query_methods_21(self)
   self.matcher = function()
     return self.mode.matcher.current()
   end
@@ -339,6 +282,9 @@ M.new = function(nvim, condition)
       end
     end
   end
+  return self.vim_query
+end
+local function attach_statusline_method_21(self)
   self.refresh_statusline = function()
     if not (nvim_exiting_3f() or (self.session and (self.session["ui-hidden"] or self.session.closing))) then
       local mode_state = helper_mod["statusline-mode-state"]()
@@ -363,25 +309,28 @@ M.new = function(nvim, condition)
       return nil
     end
   end
+  return self.refresh_statusline
+end
+local function attach_lifecycle_methods_21(self, cond, clear_all_highlights, prompt_on_term)
   self["on-init"] = function()
-    local function _43_()
+    local function _37_()
       if self["project-mode"] then
         return project_display_name()
       else
         return metabuffer_display_name(self.buf.model)
       end
     end
-    self.buf["set-name"](_43_())
+    self.buf["set-name"](_37_())
     do
       local init_syntax = (vim.g["meta#syntax_on_init"] or "buffer")
-      local function _44_()
+      local function _38_()
         if (init_syntax == "meta") then
           return "meta"
         else
           return "buffer"
         end
       end
-      self.buf["apply-syntax"](_44_())
+      self.buf["apply-syntax"](_38_())
     end
     self.buf["visible-source-syntax-only"] = clj.boolean(cond["project-mode"])
     clear_all_highlights()
@@ -417,6 +366,73 @@ M.new = function(nvim, condition)
     self["redraw-prompt"]()
     return STATUS_PROGRESS
   end
+  self["on-term"] = function(status)
+    clear_all_highlights()
+    return prompt_on_term(status)
+  end
+  self.store = function()
+    return {text = self.text, ["caret-locus"] = self.caret["get-locus"](), ["selected-index"] = self.selected_index, ["matcher-index"] = self.mode.matcher.index, ["case-index"] = self.mode.case.index, ["syntax-index"] = self.mode.syntax.index, restored = true}
+  end
+  return self.store
+end
+M.new = function(nvim, condition)
+  local cond = (condition or state["default-condition"](""))
+  local self = prompt_mod.new(nvim)
+  self.condition = cond
+  self.selected_index = (cond["selected-index"] or 0)
+  self._prev_text = ""
+  self.updates = 0
+  self.debug_out = ""
+  self.prefix = "# "
+  self["query-lines"] = {}
+  self["_prev-ignorecase"] = nil
+  self["_prev-matcher"] = nil
+  self["_selection-cache"] = {}
+  self["_lgrep-match-ids"] = {}
+  self.win = meta_window_mod.new(nvim, vim.api.nvim_get_current_win())
+  self["status-win"] = self.win
+  self.buf = meta_buffer_mod.new(nvim, vim.api.nvim_get_current_buf())
+  self["_filter-cache"] = {}
+  self["_filter-cache-line-count"] = #self.buf.content
+  self["_content-version-seen"] = (self.buf["content-version"] or 0)
+  local prompt_on_term = self["on-term"]
+  local function delete_win_match(win, id)
+    if (win and vim.api.nvim_win_is_valid(win)) then
+      local or_42_ = pcall(vim.fn.matchdelete, id, win)
+      if not or_42_ then
+        local function _43_()
+          return vim.fn.matchdelete(id)
+        end
+        or_42_ = pcall(vim.api.nvim_win_call, win, _43_)
+      end
+      return or_42_
+    else
+      return pcall(vim.fn.matchdelete, id)
+    end
+  end
+  local function apply_lgrep_highlights()
+    return helper_mod["apply-lgrep-highlights!"](self, delete_win_match, "_lgrep-match-ids")
+  end
+  local function clear_all_highlights()
+    return helper_mod["clear-all-highlights!"](self, delete_win_match, "_lgrep-match-ids")
+  end
+  local function _45_(idx)
+    local function _46_()
+      if (idx.current() == "meta") then
+        return "meta"
+      else
+        return "buffer"
+      end
+    end
+    return self.buf["apply-syntax"](_46_())
+  end
+  self.mode = {matcher = modeindexer.new({all_matcher.new(), fuzzy_matcher.new(), regex_matcher.new()}, (cond["matcher-index"] or 1), {["on-leave"] = "remove-highlight"}), case = modeindexer.new(state_cases, (cond["case-index"] or 1), nil), syntax = modeindexer.new(state_syntax_types, (cond["syntax-index"] or 1), {["on-active"] = _45_})}
+  self.text = (cond.text or "")
+  if (self.text ~= "") then
+    self["query-lines"] = {self.text}
+  else
+  end
+  self.caret["set-locus"]((cond["caret-locus"] or #self.text))
   self["on-update"] = function(status)
     do
       local queries = self["active-queries"]()
@@ -634,16 +650,12 @@ M.new = function(nvim, condition)
     end
     return status
   end
-  self["on-term"] = function(status)
-    clear_all_highlights()
-    return prompt_on_term(status)
-  end
+  attach_query_methods_21(self)
+  attach_statusline_method_21(self)
+  attach_lifecycle_methods_21(self, cond, clear_all_highlights, prompt_on_term)
   self.on_init = self["on-init"]
   self.on_redraw = self["on-redraw"]
   self.on_update = self["on-update"]
-  self.store = function()
-    return {text = self.text, ["caret-locus"] = self.caret["get-locus"](), ["selected-index"] = self.selected_index, ["matcher-index"] = self.mode.matcher.index, ["case-index"] = self.mode.case.index, ["syntax-index"] = self.mode.syntax.index, restored = true}
-  end
   return self
 end
 return M
