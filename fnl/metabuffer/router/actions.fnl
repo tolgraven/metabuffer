@@ -120,6 +120,47 @@
   [session]
   (util.restore-global-cursor! session :startup-cursor-hidden? :startup-saved-guicursor))
 
+(fn session-prompt-text
+  [router-util-mod session]
+  (or session.last-prompt-text
+      (if (and session.prompt-buf
+               (vim.api.nvim_buf_is_valid session.prompt-buf))
+          (router-util-mod.prompt-text session)
+          "")))
+
+(fn persist-session-ui-state!
+  [history-api router-util-mod session]
+  (history-api.push-history-entry!
+    session
+    (session-prompt-text router-util-mod session))
+  (router-util-mod.persist-prompt-height! session)
+  (router-util-mod.persist-results-wrap! session))
+
+(fn close-session-prompt!
+  [session]
+  (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+    (pcall vim.api.nvim_win_close session.prompt-win true))
+  (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
+    (clear-buffer-modified! session.prompt-buf)
+    (pcall vim.api.nvim_buf_delete session.prompt-buf {:force true})))
+
+(fn close-session-side-windows!
+  [history-api info-window preview-window context-window session]
+  (info-window.close-window! session)
+  (preview-window.close-window! session)
+  (when (and context-window context-window.close-window!)
+    (context-window.close-window! session))
+  (history-api.close-history-browser! session))
+
+(fn clear-session-registry-entries!
+  [active-by-source active-by-prompt instances session]
+  (clear-map-entry! active-by-source session.source-buf session)
+  (when (and session.meta session.meta.buf session.meta.buf.buffer)
+    (clear-map-entry! active-by-source session.meta.buf.buffer session))
+  (clear-map-entry! active-by-prompt session.prompt-buf session)
+  (when session.instance-id
+    (clear-map-entry! instances session.instance-id session)))
+
 (fn remove-session!
   [deps session]
   (let [{: router
@@ -147,36 +188,16 @@
       (restore-startup-cursor! session)
       (restore-managed-buffer-effects! session)
       (restore-main-window-opts! session)
-      (history-api.push-history-entry!
-        session
-        (or session.last-prompt-text
-            (if (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
-                (router-util-mod.prompt-text session)
-                "")))
-      (router-util-mod.persist-prompt-height! session)
-      (router-util-mod.persist-results-wrap! session)
+      (persist-session-ui-state! history-api router-util-mod session)
       (when session.augroup
         (pcall vim.api.nvim_del_augroup_by_id session.augroup))
-      (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
-        (pcall vim.api.nvim_win_close session.prompt-win true))
-      (when (and session.prompt-buf (vim.api.nvim_buf_is_valid session.prompt-buf))
-        (clear-buffer-modified! session.prompt-buf)
-        (pcall vim.api.nvim_buf_delete session.prompt-buf {:force true}))
+      (close-session-prompt! session)
       (when (and session.meta session.meta.buf session.meta.buf.buffer)
         (clear-buffer-modified! session.meta.buf.buffer))
-      (info-window.close-window! session)
-      (preview-window.close-window! session)
-      (when (and context-window context-window.close-window!)
-        (context-window.close-window! session))
-      (history-api.close-history-browser! session)
+      (close-session-side-windows! history-api info-window preview-window context-window session)
       (when (and sign-mod session.meta session.meta.buf session.meta.buf.buffer)
         (sign-mod.clear-change-signs! session.meta.buf.buffer))
-      (clear-map-entry! active-by-source session.source-buf session)
-      (when (and session.meta session.meta.buf session.meta.buf.buffer)
-        (clear-map-entry! active-by-source session.meta.buf.buffer session))
-      (clear-map-entry! active-by-prompt session.prompt-buf session)
-      (when session.instance-id
-        (clear-map-entry! instances session.instance-id session))
+      (clear-session-registry-entries! active-by-source active-by-prompt instances session)
       (when (and session.origin-win (vim.api.nvim_win_is_valid session.origin-win))
         (events.send :on-win-teardown! {:win session.origin-win :role :origin})))))
 

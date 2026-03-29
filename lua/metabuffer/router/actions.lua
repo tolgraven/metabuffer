@@ -150,6 +150,56 @@ end
 local function restore_startup_cursor_21(session)
   return util["restore-global-cursor!"](session, "startup-cursor-hidden?", "startup-saved-guicursor")
 end
+local function session_prompt_text(router_util_mod, session)
+  local or_20_ = session["last-prompt-text"]
+  if not or_20_ then
+    if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
+      or_20_ = router_util_mod["prompt-text"](session)
+    else
+      or_20_ = ""
+    end
+  end
+  return or_20_
+end
+local function persist_session_ui_state_21(history_api, router_util_mod, session)
+  history_api["push-history-entry!"](session, session_prompt_text(router_util_mod, session))
+  router_util_mod["persist-prompt-height!"](session)
+  return router_util_mod["persist-results-wrap!"](session)
+end
+local function close_session_prompt_21(session)
+  if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+    pcall(vim.api.nvim_win_close, session["prompt-win"], true)
+  else
+  end
+  if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
+    clear_buffer_modified_21(session["prompt-buf"])
+    return pcall(vim.api.nvim_buf_delete, session["prompt-buf"], {force = true})
+  else
+    return nil
+  end
+end
+local function close_session_side_windows_21(history_api, info_window, preview_window, context_window, session)
+  info_window["close-window!"](session)
+  preview_window["close-window!"](session)
+  if (context_window and context_window["close-window!"]) then
+    context_window["close-window!"](session)
+  else
+  end
+  return history_api["close-history-browser!"](session)
+end
+local function clear_session_registry_entries_21(active_by_source, active_by_prompt, instances, session)
+  clear_map_entry_21(active_by_source, session["source-buf"], session)
+  if (session.meta and session.meta.buf and session.meta.buf.buffer) then
+    clear_map_entry_21(active_by_source, session.meta.buf.buffer, session)
+  else
+  end
+  clear_map_entry_21(active_by_prompt, session["prompt-buf"], session)
+  if session["instance-id"] then
+    return clear_map_entry_21(instances, session["instance-id"], session)
+  else
+    return nil
+  end
+end
 local function remove_session_21(deps, session)
   local router = deps.router
   local mods = deps.mods
@@ -179,55 +229,22 @@ local function remove_session_21(deps, session)
     restore_startup_cursor_21(session)
     restore_managed_buffer_effects_21(session)
     restore_main_window_opts_21(session)
-    local or_22_ = session["last-prompt-text"]
-    if not or_22_ then
-      if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
-        or_22_ = router_util_mod["prompt-text"](session)
-      else
-        or_22_ = ""
-      end
-    end
-    history_api["push-history-entry!"](session, or_22_)
-    router_util_mod["persist-prompt-height!"](session)
-    router_util_mod["persist-results-wrap!"](session)
+    persist_session_ui_state_21(history_api, router_util_mod, session)
     if session.augroup then
       pcall(vim.api.nvim_del_augroup_by_id, session.augroup)
     else
     end
-    if (session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-      pcall(vim.api.nvim_win_close, session["prompt-win"], true)
-    else
-    end
-    if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
-      clear_buffer_modified_21(session["prompt-buf"])
-      pcall(vim.api.nvim_buf_delete, session["prompt-buf"], {force = true})
-    else
-    end
+    close_session_prompt_21(session)
     if (session.meta and session.meta.buf and session.meta.buf.buffer) then
       clear_buffer_modified_21(session.meta.buf.buffer)
     else
     end
-    info_window["close-window!"](session)
-    preview_window["close-window!"](session)
-    if (context_window and context_window["close-window!"]) then
-      context_window["close-window!"](session)
-    else
-    end
-    history_api["close-history-browser!"](session)
+    close_session_side_windows_21(history_api, info_window, preview_window, context_window, session)
     if (sign_mod and session.meta and session.meta.buf and session.meta.buf.buffer) then
       sign_mod["clear-change-signs!"](session.meta.buf.buffer)
     else
     end
-    clear_map_entry_21(active_by_source, session["source-buf"], session)
-    if (session.meta and session.meta.buf and session.meta.buf.buffer) then
-      clear_map_entry_21(active_by_source, session.meta.buf.buffer, session)
-    else
-    end
-    clear_map_entry_21(active_by_prompt, session["prompt-buf"], session)
-    if session["instance-id"] then
-      clear_map_entry_21(instances, session["instance-id"], session)
-    else
-    end
+    clear_session_registry_entries_21(active_by_source, active_by_prompt, instances, session)
     if (session["origin-win"] and vim.api.nvim_win_is_valid(session["origin-win"])) then
       return events.send("on-win-teardown!", {win = session["origin-win"], role = "origin"})
     else
