@@ -11,6 +11,7 @@ local base_window_mod = require("metabuffer.window.base")
 local file_info = require("metabuffer.source.file_info")
 local events = require("metabuffer.events")
 local info_float_mod = require("metabuffer.window.info_float")
+local info_project_mod = require("metabuffer.window.info_project")
 local apply_metabuffer_window_highlights_21 = base_window_mod["apply-metabuffer-window-highlights!"]
 local info_content_ns = vim.api.nvim_create_namespace("MetaInfoWindow")
 local info_selection_ns = vim.api.nvim_create_namespace("MetaInfoSelection")
@@ -45,6 +46,7 @@ M.new = function(opts)
   local info_fade_ms = deps["info-fade-ms"]
   local update_21 = nil
   local project_loading_pending_3f = nil
+  local update_project_21 = nil
   local ensure_info_window = nil
   local settle_info_window_21 = nil
   local resize_info_window_21 = nil
@@ -668,160 +670,30 @@ M.new = function(opts)
     local pending = (session and session["project-mode"] and (initializing or animating))
     return pending
   end
-  local function _75_(session)
-    local startup = startup_layout_pending_3f(session)
-    local bootstrap_pending = (session["project-bootstrap-pending"] or false)
-    local bootstrapped = (session["project-bootstrapped"] or false)
-    local stream_done = (session["lazy-stream-done"] or false)
-    local pending = (session and session["project-mode"] and (startup or bootstrap_pending or not bootstrapped or not stream_done))
-    return pending
-  end
-  project_loading_pending_3f = _75_
   do
     local info_float
-    local function _76_(session)
+    local function _75_(session)
       return project_loading_pending_3f(session)
     end
-    info_float = info_float_mod.new({["floating-window-mod"] = floating_window_mod, ["info-min-width"] = info_min_width, ["info-height"] = info_height, ["animation-mod"] = animation_mod, ["animate-enter?"] = animate_enter_3f, ["info-fade-ms"] = info_fade_ms, ["valid-info-win?"] = valid_info_win_3f, ["session-host-win"] = session_host_win, ["effective-info-height"] = effective_info_height, ["info-winbar-active?"] = info_winbar_active_3f, ["project-loading-pending?"] = _76_, events = events, ["apply-metabuffer-window-highlights!"] = apply_metabuffer_window_highlights_21, ["info-buffer-mod"] = info_buffer_mod})
-    local function _77_(session)
+    info_float = info_float_mod.new({["floating-window-mod"] = floating_window_mod, ["info-min-width"] = info_min_width, ["info-height"] = info_height, ["animation-mod"] = animation_mod, ["animate-enter?"] = animate_enter_3f, ["info-fade-ms"] = info_fade_ms, ["valid-info-win?"] = valid_info_win_3f, ["session-host-win"] = session_host_win, ["effective-info-height"] = effective_info_height, ["info-winbar-active?"] = info_winbar_active_3f, ["project-loading-pending?"] = _75_, events = events, ["apply-metabuffer-window-highlights!"] = apply_metabuffer_window_highlights_21, ["info-buffer-mod"] = info_buffer_mod})
+    local function _76_(session)
       return info_float["ensure-window!"](session, update_21)
     end
-    ensure_info_window = _77_
+    ensure_info_window = _76_
     settle_info_window_21 = info_float["settle-window!"]
     resize_info_window_21 = info_float["resize-window!"]
     refresh_info_statusline_21 = info_float["refresh-statusline!"]
     close_info_window_21 = info_float["close-window!"]
   end
-  local function render_project_loading_21(session)
-    local lines = loading_skeleton_lines(info_height(session))
-    local ns = info_content_ns
-    session["info-start-index"] = 1
-    session["info-stop-index"] = #lines
-    do
-      local bo = vim.bo[session["info-buf"]]
-      bo.modifiable = true
+  do
+    local project_info = info_project_mod.new({["startup-layout-pending?"] = startup_layout_pending_3f, ["loading-skeleton-lines"] = loading_skeleton_lines, ["info-height"] = info_height, ["ensure-info-window"] = ensure_info_window, ["settle-info-window!"] = settle_info_window_21, ["refresh-info-statusline!"] = refresh_info_statusline_21, ["render-info-lines!"] = render_info_lines_21, ["sync-info-selection!"] = sync_info_selection_21, ["refs-slice-sig"] = refs_slice_sig, ["info-range"] = info_range, ["info-max-lines"] = info_max_lines, ["debug-log"] = debug_log, ["valid-info-win?"] = valid_info_win_3f})
+    project_loading_pending_3f = project_info["project-loading-pending?"]
+    local function _77_(session, refresh_lines)
+      return project_info["update-project!"](session, refresh_lines, fit_info_width_21, info_visible_range)
     end
-    session["info-highlight-fill-token"] = (1 + (session["info-highlight-fill-token"] or 0))
-    session["info-highlight-fill-pending?"] = false
-    session["info-showing-project-loading?"] = true
-    session["info-render-sig"] = nil
-    fit_info_width_21(session, lines)
-    vim.api.nvim_buf_set_lines(session["info-buf"], 0, -1, false, lines)
-    vim.api.nvim_buf_clear_namespace(session["info-buf"], ns, 0, -1)
-    for row = 0, (#lines - 1) do
-      vim.api.nvim_buf_add_highlight(session["info-buf"], ns, "Comment", row, 0, -1)
-    end
-    local bo = vim.bo[session["info-buf"]]
-    bo.modifiable = false
-    return nil
+    update_project_21 = _77_
   end
-  local function update_project_startup_21(session)
-    session["info-project-loading-active?"] = true
-    ensure_info_window(session)
-    if (session["info-render-suspended?"] and not session["prompt-animating?"] and not session["startup-initializing"]) then
-      session["info-post-fade-refresh?"] = nil
-      session["info-render-suspended?"] = false
-    else
-    end
-    settle_info_window_21(session)
-    if (not session["info-render-suspended?"] and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
-      local meta = session.meta
-      local idxs = (meta.buf.indices or {})
-      local total = #idxs
-      if (total > 0) then
-        local _let_79_ = info_visible_range(session, meta, total, info_max_lines)
-        local wanted_start = _let_79_[1]
-        local wanted_stop = _let_79_[2]
-        session["info-showing-project-loading?"] = false
-        render_info_lines_21(session, meta, wanted_start, wanted_stop, wanted_start, wanted_stop)
-        return sync_info_selection_21(session, meta)
-      else
-        return render_project_loading_21(session)
-      end
-    else
-      return nil
-    end
-  end
-  local function settle_info_render_state_21(session)
-    ensure_info_window(session)
-    if (session["info-render-suspended?"] and not session["prompt-animating?"] and not session["startup-initializing"]) then
-      session["info-post-fade-refresh?"] = nil
-      session["info-render-suspended?"] = false
-    else
-    end
-    return settle_info_window_21(session)
-  end
-  local function project_info_debug_21(session, refresh_lines)
-    return debug_log(join_str(" ", {"info enter", ("refresh=" .. str(refresh_lines)), ("selected=" .. session.meta.selected_index), ("info-win=" .. session["info-win"]), ("info-buf=" .. session["info-buf"])}))
-  end
-  local function project_info_force_refresh_3f(session, refresh_lines)
-    return (clj.boolean(session["info-project-loading-active?"]) or clj.boolean(session["info-showing-project-loading?"]) or refresh_lines or (session["info-render-sig"] == nil) or (session["info-start-index"] == nil) or (session["info-stop-index"] == nil))
-  end
-  local function project_info_range_state(session, meta)
-    local selected1 = (meta.selected_index + 1)
-    local _let_83_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-    local wanted_start = _let_83_[1]
-    local wanted_stop = _let_83_[2]
-    local start_index = (session["info-start-index"] or 1)
-    local stop_index = (session["info-stop-index"] or 0)
-    return {["wanted-start"] = wanted_start, ["wanted-stop"] = wanted_stop, ["out-of-range"] = ((selected1 < start_index) or (selected1 > stop_index)), ["range-changed"] = ((wanted_start ~= start_index) or (wanted_stop ~= stop_index))}
-  end
-  local function project_info_render_sig(session, meta, wanted_start, wanted_stop)
-    local idxs = (meta.buf.indices or {})
-    return join_str("|", {#idxs, indices_slice_sig(idxs, wanted_start, wanted_stop), refs_slice_sig(session, meta.buf["source-refs"], idxs, wanted_start, wanted_stop), wanted_start, wanted_stop, (session["active-source-key"] or ""), (session["info-file-entry-view"] or ""), info_max_width_now(session), info_height(session), vim.o.columns})
-  end
-  local function schedule_project_info_finish_refresh_21(session)
-    local function _84_()
-      if (session and valid_info_win_3f(session) and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"]) and not project_loading_pending_3f(session)) then
-        return update_21(session, true)
-      else
-        return nil
-      end
-    end
-    return vim.defer_fn(_84_, 17)
-  end
-  local function rerender_project_info_21(session, meta, wanted_start, wanted_stop, loading_finished_3f)
-    session["info-render-sig"] = project_info_render_sig(session, meta, wanted_start, wanted_stop)
-    session["info-project-loading-active?"] = false
-    session["info-showing-project-loading?"] = false
-    render_info_lines_21(session, meta, wanted_start, wanted_stop, wanted_start, wanted_stop)
-    if loading_finished_3f then
-      return schedule_project_info_finish_refresh_21(session)
-    else
-      return nil
-    end
-  end
-  local function update_project_21(session, refresh_lines)
-    if project_loading_pending_3f(session) then
-      return update_project_startup_21(session)
-    else
-      settle_info_render_state_21(session)
-      project_info_debug_21(session, refresh_lines)
-      refresh_info_statusline_21(session)
-      if (not session["info-render-suspended?"] and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
-        local meta = session.meta
-        local loading_finished_3f = clj.boolean(session["info-project-loading-active?"])
-        local force_refresh_3f = project_info_force_refresh_3f(session, refresh_lines)
-        local _let_87_ = project_info_range_state(session, meta)
-        local wanted_start = _let_87_["wanted-start"]
-        local wanted_stop = _let_87_["wanted-stop"]
-        local out_of_range = _let_87_["out-of-range"]
-        local range_changed = _let_87_["range-changed"]
-        if (force_refresh_3f or out_of_range or range_changed) then
-          local sig = project_info_render_sig(session, meta, wanted_start, wanted_stop)
-          if (force_refresh_3f or out_of_range or range_changed or (session["info-render-sig"] ~= sig)) then
-            rerender_project_info_21(session, meta, wanted_start, wanted_stop, loading_finished_3f)
-          else
-          end
-        else
-        end
-        return sync_info_selection_21(session, meta)
-      else
-        return nil
-      end
-    end
-  end
-  local function _92_(session, refresh_lines)
+  local function _78_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -834,7 +706,7 @@ M.new = function(opts)
       return update_regular_21(session, refresh_lines0)
     end
   end
-  update_21 = _92_
+  update_21 = _78_
   return {["close-window!"] = close_info_window_21, ["update!"] = update_21, ["refresh-statusline!"] = refresh_info_statusline_21}
 end
 return M

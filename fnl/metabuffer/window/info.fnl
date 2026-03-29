@@ -11,6 +11,7 @@
 (local file-info (require :metabuffer.source.file_info))
 (local events (require :metabuffer.events))
 (local info-float-mod (require :metabuffer.window.info_float))
+(local info-project-mod (require :metabuffer.window.info_project))
 (local apply-metabuffer-window-highlights! (. base-window-mod :apply-metabuffer-window-highlights!))
 
 (local info-content-ns (vim.api.nvim_create_namespace "MetaInfoWindow"))
@@ -49,6 +50,7 @@
         info_fade_ms (. deps :info-fade-ms)]
   (var update! nil)
   (var project-loading-pending? nil)
+  (var update-project! nil)
   (var ensure_info_window nil)
   (var settle-info-window! nil)
   (var resize-info-window! nil)
@@ -557,21 +559,6 @@
           pending (and session session.project-mode (or initializing animating))]
       pending))
 
-  ;; True only during genuine project bootstrap/stream — not during lazy
-  ;; re-filter refreshes triggered by scroll or query changes.
-  (set project-loading-pending?
-       (fn [session]
-         (let [startup (startup-layout-pending? session)
-               bootstrap-pending (or session.project-bootstrap-pending false)
-               bootstrapped (or session.project-bootstrapped false)
-               stream-done (or session.lazy-stream-done false)
-               pending (and session
-                            session.project-mode
-                            (or startup
-                                bootstrap-pending
-                                (not bootstrapped)
-                                (not stream-done)))]
-           pending)))
   (let [info-float (info-float-mod.new
                       {:floating-window-mod floating_window_mod
                        :info-min-width info_min_width
@@ -595,178 +582,28 @@
     (set resize-info-window! (. info-float :resize-window!))
     (set refresh-info-statusline! (. info-float :refresh-statusline!))
     (set close-info-window! (. info-float :close-window!)))
-
-  (fn render-project-loading!
-    [session]
-    (let [lines (loading-skeleton-lines (info_height session))
-          ns info-content-ns]
-      (set session.info-start-index 1)
-      (set session.info-stop-index (# lines))
-      (let [bo (. vim.bo session.info-buf)]
-        (set bo.modifiable true))
-      (set session.info-highlight-fill-token (+ 1 (or session.info-highlight-fill-token 0)))
-      (set session.info-highlight-fill-pending? false)
-      (set session.info-showing-project-loading? true)
-      (set session.info-render-sig nil)
-      (fit-info-width! session lines)
-      (vim.api.nvim_buf_set_lines session.info-buf 0 -1 false lines)
-      (vim.api.nvim_buf_clear_namespace session.info-buf ns 0 -1)
-      (for [row 0 (- (# lines) 1)]
-        (vim.api.nvim_buf_add_highlight session.info-buf ns "Comment" row 0 -1))
-      (let [bo (. vim.bo session.info-buf)]
-        (set bo.modifiable false))))
-
-  (fn update-project-startup!
-    [session]
-    (set session.info-project-loading-active? true)
-    (ensure_info_window session)
-    (when (and session.info-render-suspended?
-               (not session.prompt-animating?)
-               (not session.startup-initializing))
-      (set session.info-post-fade-refresh? nil)
-      (set session.info-render-suspended? false))
-    (settle-info-window! session)
-    (when (and (not session.info-render-suspended?)
-               session.info-buf
-               (vim.api.nvim_buf_is_valid session.info-buf))
-      (let [meta session.meta
-            idxs (or meta.buf.indices [])
-            total (# idxs)]
-        (if (> total 0)
-            (let [[wanted-start wanted-stop] (info-visible-range
-                                               session
-                                               meta
-                                               total
-                                               info_max_lines)]
-              (set session.info-showing-project-loading? false)
-              (render-info-lines!
-                session
-                meta
-                wanted-start
-                wanted-stop
-                wanted-start
-                wanted-stop)
-              (sync-info-selection! session meta))
-            (render-project-loading! session)))))
-
-  (fn settle-info-render-state!
-    [session]
-    (ensure_info_window session)
-    (when (and session.info-render-suspended?
-               (not session.prompt-animating?)
-               (not session.startup-initializing))
-      (set session.info-post-fade-refresh? nil)
-      (set session.info-render-suspended? false))
-    (settle-info-window! session))
-
-  (fn project-info-debug!
-    [session refresh-lines]
-    (debug_log
-      (join-str
-        " "
-        ["info enter"
-         (.. "refresh=" (str refresh-lines))
-         (.. "selected=" session.meta.selected_index)
-         (.. "info-win=" session.info-win)
-         (.. "info-buf=" session.info-buf)])))
-
-  (fn project-info-force-refresh?
-    [session refresh-lines]
-    (or (clj.boolean session.info-project-loading-active?)
-        (clj.boolean session.info-showing-project-loading?)
-        refresh-lines
-        (= session.info-render-sig nil)
-        (= session.info-start-index nil)
-        (= session.info-stop-index nil)))
-
-  (fn project-info-range-state
-    [session meta]
-    (let [selected1 (+ meta.selected_index 1)
-          [wanted-start wanted-stop] (info-visible-range
-                                       session
-                                       meta
-                                       (# (or meta.buf.indices []))
-                                       info_max_lines)
-          start-index (or session.info-start-index 1)
-          stop-index (or session.info-stop-index 0)]
-      {:wanted-start wanted-start
-       :wanted-stop wanted-stop
-       :out-of-range (or (< selected1 start-index) (> selected1 stop-index))
-       :range-changed (or (~= wanted-start start-index)
-                          (~= wanted-stop stop-index))}))
-
-  (fn project-info-render-sig
-    [session meta wanted-start wanted-stop]
-    (let [idxs (or meta.buf.indices [])]
-      (join-str
-        "|"
-        [(# idxs)
-         (indices-slice-sig idxs wanted-start wanted-stop)
-         (refs-slice-sig session meta.buf.source-refs idxs wanted-start wanted-stop)
-         wanted-start
-         wanted-stop
-         (or session.active-source-key "")
-         (or session.info-file-entry-view "")
-         (info-max-width-now session)
-         (info_height session)
-         vim.o.columns])))
-
-  (fn schedule-project-info-finish-refresh!
-    [session]
-    (vim.defer_fn
-      (fn []
-        (when (and session
-                   (valid-info-win? session)
-                   session.info-buf
-                   (vim.api.nvim_buf_is_valid session.info-buf)
-                   (not (project-loading-pending? session)))
-          (update! session true)))
-      17))
-
-  (fn rerender-project-info!
-    [session meta wanted-start wanted-stop loading-finished?]
-    (set session.info-render-sig (project-info-render-sig session meta wanted-start wanted-stop))
-    (set session.info-project-loading-active? false)
-    (set session.info-showing-project-loading? false)
-    (render-info-lines!
-      session
-      meta
-      wanted-start
-      wanted-stop
-      wanted-start
-      wanted-stop)
-    (when loading-finished?
-      (schedule-project-info-finish-refresh! session)))
-
-  (fn update-project!
-    [session refresh-lines]
-    (if (project-loading-pending? session)
-        (update-project-startup! session)
-        (do
-          (settle-info-render-state! session)
-          (project-info-debug! session refresh-lines)
-          (refresh-info-statusline! session)
-          (when (and (not session.info-render-suspended?)
-                     session.info-buf
-                     (vim.api.nvim_buf_is_valid session.info-buf))
-            (let [meta session.meta
-                  loading-finished? (clj.boolean session.info-project-loading-active?)
-                  force-refresh? (project-info-force-refresh? session refresh-lines)
-                  {: wanted-start : wanted-stop : out-of-range : range-changed}
-                  (project-info-range-state session meta)]
-              (when (or force-refresh? out-of-range range-changed)
-                (let [sig (project-info-render-sig session meta wanted-start wanted-stop)]
-                  (when (or force-refresh?
-                            out-of-range
-                            range-changed
-                            (~= session.info-render-sig sig))
-                    (rerender-project-info!
-                      session
-                      meta
-                      wanted-start
-                      wanted-stop
-                      loading-finished?))))
-              (sync-info-selection! session meta))))))
+  (let [project-info (info-project-mod.new
+                       {:startup-layout-pending? startup-layout-pending?
+                        :loading-skeleton-lines loading-skeleton-lines
+                        :info-height info_height
+                        :ensure-info-window ensure_info_window
+                        :settle-info-window! settle-info-window!
+                        :refresh-info-statusline! refresh-info-statusline!
+                        :render-info-lines! render-info-lines!
+                        :sync-info-selection! sync-info-selection!
+                        :refs-slice-sig refs-slice-sig
+                        :info-range info-range
+                        :info-max-lines info_max_lines
+                        :debug-log debug_log
+                        :valid-info-win? valid-info-win?})]
+    (set project-loading-pending? (. project-info :project-loading-pending?))
+    (set update-project!
+         (fn [session refresh-lines]
+           ((. project-info :update-project!)
+            session
+            refresh-lines
+            fit-info-width!
+            info-visible-range))))
 
   (set update!
        (fn [session refresh-lines]
