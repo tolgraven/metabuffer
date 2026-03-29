@@ -15,20 +15,25 @@
   (.. (metabuffer-winhighlight)
       ",StatusLine:MetaStatuslineMiddle,StatusLineNC:MetaStatuslineMiddle"))
 
+(fn apply-prompt-buffer-opts!
+  [buf]
+  (when (and buf (vim.api.nvim_buf_is_valid buf))
+    (let [bo (. vim.bo buf)]
+      (set (. bo :buftype) "nofile")
+      (set (. bo :bufhidden) "hide")
+      (set (. bo :swapfile) false)
+      (set (. bo :modifiable) true)
+      (set _G.__meta_directive_completefunc (. directive-mod :completefunc))
+      (set (. bo :completefunc) "v:lua.__meta_directive_completefunc")
+      (set (. bo :filetype) "metabufferprompt")))
+  buf)
+
 (fn prompt-buffer!
   [win]
   (let [buf (vim.api.nvim_win_get_buf win)]
     (events.send :on-buf-create! {:buf buf :role :prompt})
     (util.set-buffer-name! buf "[Metabuffer Prompt]")
-    (let [bo (. vim.bo buf)]
-      (set (. bo :buftype) "nofile")
-      (set (. bo :bufhidden) "wipe")
-      (set (. bo :swapfile) false)
-      (set (. bo :modifiable) true)
-      (set _G.__meta_directive_completefunc (. directive-mod :completefunc))
-      (set (. bo :completefunc) "v:lua.__meta_directive_completefunc")
-      (set (. bo :filetype) "metabufferprompt"))
-    buf))
+    (apply-prompt-buffer-opts! buf)))
 
 (fn prompt-window-opts!
   [win]
@@ -73,6 +78,13 @@
   "Delete the temporary [No Name] split buffer once a real prompt buffer is attached."
   (when (and old-buf (vim.api.nvim_buf_is_valid old-buf))
     (util.delete-transient-unnamed-buffer! old-buf)))
+
+(fn new-prompt-wrapper
+  [nvim win buf]
+  (let [self (base.new nvim win [] {})]
+    (set self.buffer buf)
+    (set self.floating? false)
+    self))
 
 (fn float-config
   [origin-win start-height]
@@ -140,9 +152,37 @@
           (pcall vim.fn.winrestview saved-view))))
     (when (and old-win (vim.api.nvim_win_is_valid old-win))
       (pcall vim.api.nvim_win_close old-win true))
-    (let [self (base.new nvim split-win [] {})]
-      (set self.buffer buf)
-      (set self.floating? false)
-      self)))
+    (new-prompt-wrapper nvim split-win buf)))
+
+(fn M.restore-hidden!
+  [nvim prompt-buf opts]
+  (let [cfg (or opts {})
+        origin-win cfg.origin-win
+        local-layout? (if (= cfg.window-local-layout nil) true cfg.window-local-layout)
+        height (math.max 1 (or cfg.height 1))
+        split-win (open-split-win! origin-win local-layout? height)
+        old-buf (and split-win
+                     (vim.api.nvim_win_is_valid split-win)
+                     (vim.api.nvim_win_get_buf split-win))]
+    (pcall vim.api.nvim_win_set_buf split-win prompt-buf)
+    (wipe-replaced-split-buffer! old-buf)
+    (pcall vim.api.nvim_win_set_height split-win height)
+    (apply-prompt-buffer-opts! prompt-buf)
+    (prompt-window-opts! split-win)
+    (new-prompt-wrapper nvim split-win prompt-buf)))
+
+(fn M.restore-cursor!
+  [prompt-win cursor]
+  (when (and prompt-win (vim.api.nvim_win_is_valid prompt-win))
+    (let [cursor (or cursor [1 0])
+          row (math.max 1 (or (. cursor 1) 1))
+          col (math.max 0 (or (. cursor 2) 0))
+          line-count (math.max 1 (vim.api.nvim_buf_line_count (vim.api.nvim_win_get_buf prompt-win)))
+          row* (math.min row line-count)
+          line (or (. (vim.api.nvim_buf_get_lines (vim.api.nvim_win_get_buf prompt-win) (- row* 1) row* false) 1) "")
+          col* (math.min col (# line))]
+      (pcall vim.api.nvim_win_set_cursor prompt-win [row* col*]))))
+
+(set M.prepare-buffer! apply-prompt-buffer-opts!)
 
 M

@@ -335,6 +335,19 @@
     (set self.keep-modifiable false)
     (set self.last-rendered-lines [])
     (set self.pending-render-frame nil)
+      (fn self.prepare-visible-edit!
+  []
+    (let [bo (. vim.bo self.buffer)]
+      (set self.keep-modifiable true)
+      (set (. bo :buftype) "acwrite")
+      (set (. bo :bufhidden) "hide")
+      (set (. bo :modifiable) true)
+      (set (. bo :readonly) false))
+    (pcall vim.api.nvim_set_option_value "modified" false {:buf self.buffer}))
+
+      (fn self.clear-modified!
+  []
+    (pcall vim.api.nvim_set_option_value "modified" false {:buf self.buffer}))
       (fn self.model-valid?
   []
     (and self.model (vim.api.nvim_buf_is_valid self.model)))
