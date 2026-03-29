@@ -3,6 +3,7 @@
 (local source-mod (require :metabuffer.source))
 (local transform-mod (require :metabuffer.transform))
 (local events (require :metabuffer.events))
+(local util (require :metabuffer.util))
 
 (local M {})
 
@@ -69,19 +70,11 @@
 
 (fn hide-startup-cursor!
   [session]
-  (when (and session (not session.startup-cursor-hidden?))
-    (let [[ok current] [(pcall vim.api.nvim_get_option_value "guicursor" {:scope "global"})]]
-      (set session.startup-saved-guicursor (if ok current vim.o.guicursor))
-      (set session.startup-cursor-hidden? true)
-      (pcall vim.api.nvim_set_option_value "guicursor" "a:ver0" {:scope "global"}))))
+  (util.hide-global-cursor! session :startup-cursor-hidden? :startup-saved-guicursor))
 
 (fn restore-startup-cursor!
   [session]
-  (when (and session session.startup-cursor-hidden?)
-    (let [value (or session.startup-saved-guicursor vim.o.guicursor)]
-      (set session.startup-cursor-hidden? false)
-      (set session.startup-saved-guicursor nil)
-      (pcall vim.api.nvim_set_option_value "guicursor" value {:scope "global"}))))
+  (util.restore-global-cursor! session :startup-cursor-hidden? :startup-saved-guicursor))
 
 (fn current-session-for-buffer
   [router buf]

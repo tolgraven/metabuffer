@@ -111,6 +111,30 @@ end
 M["win-valid?"] = function(win)
   return (win and vim.api.nvim_win_is_valid(win))
 end
+M["hide-global-cursor!"] = function(owner, hidden_key, saved_key)
+  if (owner and not owner[hidden_key]) then
+    local ok,current = pcall(vim.api.nvim_get_option_value, "guicursor", {scope = "global"})
+    if ok then
+      owner[saved_key] = current
+    else
+      owner[saved_key] = vim.o.guicursor
+    end
+    owner[hidden_key] = true
+    return pcall(vim.api.nvim_set_option_value, "guicursor", "a:ver0", {scope = "global"})
+  else
+    return nil
+  end
+end
+M["restore-global-cursor!"] = function(owner, hidden_key, saved_key)
+  if (owner and owner[hidden_key]) then
+    local value = (owner[saved_key] or vim.o.guicursor)
+    owner[hidden_key] = false
+    owner[saved_key] = nil
+    return pcall(vim.api.nvim_set_option_value, "guicursor", value, {scope = "global"})
+  else
+    return nil
+  end
+end
 M.deepcopy = function(x)
   return vim.deepcopy(x)
 end
@@ -139,22 +163,22 @@ M["file-icon-info"] = function(path, fallback_hl)
   local ext = M["ext-from-path"](full_path)
   local mini = ensure_mini_icons()
   if (mini and (type(mini.get) == "function")) then
-    local function _12_()
+    local function _15_()
       if (full_path ~= "") then
         return full_path
       else
         return file
       end
     end
-    local ok_i,icon,icon_hl = pcall(mini.get, "file", _12_())
-    local function _13_()
+    local ok_i,icon,icon_hl = pcall(mini.get, "file", _15_())
+    local function _16_()
       if (ext ~= "") then
         return pcall(mini.get, "extension", ext)
       else
         return {false, nil, nil}
       end
     end
-    local ok_ext,_,ext_hl0 = _13_()
+    local ok_ext,_,ext_hl0 = _16_()
     local next_hl
     if (ok_i and (type(icon_hl) == "string") and (icon_hl ~= "")) then
       next_hl = icon_hl
@@ -167,13 +191,13 @@ M["file-icon-info"] = function(path, fallback_hl)
     else
       ext_hl = next_hl
     end
-    local _16_
+    local _19_
     if (ok_i and (type(icon) == "string") and (icon ~= "")) then
-      _16_ = icon
+      _19_ = icon
     else
-      _16_ = ""
+      _19_ = ""
     end
-    return {icon = _16_, ["icon-hl"] = next_hl, ["ext-hl"] = ext_hl, ["file-hl"] = fallback_hl}
+    return {icon = _19_, ["icon-hl"] = next_hl, ["ext-hl"] = ext_hl, ["file-hl"] = fallback_hl}
   else
     return {icon = "", ["icon-hl"] = fallback_hl, ["ext-hl"] = fallback_hl, ["file-hl"] = fallback_hl}
   end
@@ -249,13 +273,13 @@ M["combine-signs"] = function(primary, secondary)
     table.insert(highs, {start = #left, ["end"] = (#left + #right), hl = right_hl})
   else
   end
-  local _29_
+  local _32_
   if (left ~= "") then
-    _29_ = left_hl
+    _32_ = left_hl
   else
-    _29_ = right_hl
+    _32_ = right_hl
   end
-  return {text = text, hl = _29_, highlights = highs}
+  return {text = text, hl = _32_, highlights = highs}
 end
 M["buf-lines"] = function(buf)
   return vim.api.nvim_buf_get_lines(buf, 0, -1, false)

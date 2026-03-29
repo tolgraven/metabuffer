@@ -1,6 +1,7 @@
 (import-macros {: when-not} :io.gitlab.andreyorst.cljlib.core)
 (local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local events (require :metabuffer.events))
+(local util (require :metabuffer.util))
 
 (local M {})
 
@@ -40,19 +41,11 @@
 
 (fn hide-scroll-cursor!
   [session]
-  (when (and session (not session.scroll-cursor-hidden?))
-    (let [[ok current] [(pcall vim.api.nvim_get_option_value "guicursor" {:scope "global"})]]
-      (set session.scroll-saved-guicursor (if ok current vim.o.guicursor))
-      (set session.scroll-cursor-hidden? true)
-      (pcall vim.api.nvim_set_option_value "guicursor" "a:ver0" {:scope "global"}))))
+  (util.hide-global-cursor! session :scroll-cursor-hidden? :scroll-saved-guicursor))
 
 (fn restore-scroll-cursor!
   [session]
-  (when (and session session.scroll-cursor-hidden?)
-    (let [value (or session.scroll-saved-guicursor vim.o.guicursor)]
-      (set session.scroll-cursor-hidden? false)
-      (set session.scroll-saved-guicursor nil)
-      (pcall vim.api.nvim_set_option_value "guicursor" value {:scope "global"}))))
+  (util.restore-global-cursor! session :scroll-cursor-hidden? :scroll-saved-guicursor))
 
 (fn apply-source-syntax-refresh!
   [session include-full?]

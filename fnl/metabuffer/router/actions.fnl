@@ -5,6 +5,7 @@
 (local transform-mod (require :metabuffer.transform))
 (local events (require :metabuffer.events))
 (local debug-mod (require :metabuffer.debug))
+(local util (require :metabuffer.util))
 
 (fn session-by-prompt
   [active-by-prompt prompt-buf]
@@ -109,11 +110,7 @@
 
 (fn restore-startup-cursor!
   [session]
-  (when (and session session.startup-cursor-hidden?)
-    (let [value (or session.startup-saved-guicursor vim.o.guicursor)]
-      (set session.startup-cursor-hidden? false)
-      (set session.startup-saved-guicursor nil)
-      (pcall vim.api.nvim_set_option_value "guicursor" value {:scope "global"}))))
+  (util.restore-global-cursor! session :startup-cursor-hidden? :startup-saved-guicursor))
 
 (fn remove-session!
   [deps session]
