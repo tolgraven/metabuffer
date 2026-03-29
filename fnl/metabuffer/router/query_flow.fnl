@@ -48,6 +48,17 @@
     (set session.meta._filter-cache {})
     (set session.meta._filter-cache-line-count (# session.meta.buf.content))))
 
+(fn invalidate-info-refresh-state!
+  [session]
+  "Clear stale info-window render/loading state before a real query refresh."
+  (when session
+    (set session.info-render-sig nil)
+    (set session.info-line-meta-range-key nil)
+    (set session.info-project-finish-refresh-pending? false)
+    (set session.info-highlight-fill-pending? false)
+    (set session.info-showing-project-loading? nil)
+    (set session.info-project-loading-active? nil)))
+
 (fn resolve-parsed-query
   [query-mod session parsed]
   (query-mod.apply-default-source
@@ -86,7 +97,7 @@
   [session parsed]
   "Return true when the file-filter tokens differ from the previous update."
   (let [prev (or session.file-query-lines [])
-        next (or (. parsed :file-lines) [])
+        next (or (and parsed (. parsed :file-lines)) [])
         n (# next)]
     (if (~= n (# prev))
         true
@@ -395,6 +406,8 @@
           (maybe-rewrite-visible-controls! session query-mod raw-lines)
           (when (or changed text-changed? (file-lines-changed? session parsed))
             (invalidate-filter-cache! session))
+          (when (or text-changed? (file-lines-changed? session))
+            (invalidate-info-refresh-state! session))
           (when (and session.meta session.meta.buf (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
             (pcall vim.api.nvim_buf_set_var session.meta.buf.buffer "meta_manual_edit_active" false))
           (maybe-rebuild-source! session parsed project-source state)

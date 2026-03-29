@@ -44,6 +44,19 @@ local function invalidate_filter_cache_21(session)
     return nil
   end
 end
+local function invalidate_info_refresh_state_21(session)
+  if session then
+    session["info-render-sig"] = nil
+    session["info-line-meta-range-key"] = nil
+    session["info-project-finish-refresh-pending?"] = false
+    session["info-highlight-fill-pending?"] = false
+    session["info-showing-project-loading?"] = nil
+    session["info-project-loading-active?"] = nil
+    return nil
+  else
+    return nil
+  end
+end
 local function resolve_parsed_query(query_mod, session, parsed)
   return query_mod["apply-default-source"](parsed, (session and query_mod["truthy?"](session["default-include-lgrep"])))
 end
@@ -66,7 +79,7 @@ local function render_flags_changed_3f(session, parsed)
 end
 local function file_lines_changed_3f(session, parsed)
   local prev = (session["file-query-lines"] or {})
-  local next = (parsed["file-lines"] or {})
+  local next = ((parsed and parsed["file-lines"]) or {})
   local n = #next
   if (n ~= #prev) then
     return true
@@ -101,7 +114,7 @@ local function dispatch_directive_changes_21(session, parsed)
   return nil
 end
 local function retry_textlock_update_21(session)
-  local function _9_()
+  local function _10_()
     if (session.meta and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
       pcall(session.meta["on-update"], 0)
       return events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = true, ["refresh-signs?"] = true, ["capture-sign-baseline?"] = true})
@@ -109,7 +122,7 @@ local function retry_textlock_update_21(session)
       return nil
     end
   end
-  return vim.defer_fn(_9_, 1)
+  return vim.defer_fn(_10_, 1)
 end
 local function run_meta_update_21(session)
   local ok,err = pcall(session.meta["on-update"], 0)
@@ -345,6 +358,10 @@ M["apply-prompt-lines!"] = function(deps, session)
     maybe_rewrite_visible_controls_21(session, query_mod, raw_lines)
     if (changed or text_changed_3f or file_lines_changed_3f(session, parsed)) then
       invalidate_filter_cache_21(session)
+    else
+    end
+    if (text_changed_3f or file_lines_changed_3f(session)) then
+      invalidate_info_refresh_state_21(session)
     else
     end
     if (session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then

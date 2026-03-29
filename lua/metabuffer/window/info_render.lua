@@ -294,7 +294,7 @@ M.new = function(opts)
       local function _34_()
         local line_count = math.max(1, vim.api.nvim_buf_line_count(session["info-buf"]))
         local top_2a = math.max(1, math.min(top, line_count))
-        local selected1 = math.max(1, math.min((session.meta.selected_index + 1), line_count))
+        local selected1 = math.max(top_2a, math.min((session.meta.selected_index + 1), line_count))
         local view = vim.fn.winsaveview()
         view["topline"] = top_2a
         view["lnum"] = selected1
@@ -307,9 +307,9 @@ M.new = function(opts)
       return nil
     end
   end
-  local function ensure_regular_info_buffer_shape_21(session, total)
+  local function ensure_regular_info_buffer_shape_21(session, render_stop)
     if (session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
-      local needed = math.max(1, total)
+      local needed = math.max(1, (render_stop or 0))
       local current = vim.api.nvim_buf_line_count(session["info-buf"])
       if (current ~= needed) then
         do
@@ -476,7 +476,7 @@ M.new = function(opts)
     session["info-highlight-fill-token"] = (1 + (session["info-highlight-fill-token"] or 0))
     session["info-highlight-fill-pending?"] = false
     fit_info_width_21(session, lines)
-    ensure_regular_info_buffer_shape_21(session, #idxs)
+    ensure_regular_info_buffer_shape_21(session, render_stop)
     do
       local bo = vim.bo[session["info-buf"]]
       bo["modifiable"] = true

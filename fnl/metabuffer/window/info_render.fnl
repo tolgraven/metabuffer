@@ -221,7 +221,7 @@
           (fn []
             (let [line-count (math.max 1 (vim.api.nvim_buf_line_count session.info-buf))
                   top* (math.max 1 (math.min top line-count))
-                  selected1 (math.max 1 (math.min (+ session.meta.selected_index 1) line-count))
+                  selected1 (math.max top* (math.min (+ session.meta.selected_index 1) line-count))
                   view (vim.fn.winsaveview)]
               (set (. view :topline) top*)
               (set (. view :lnum) selected1)
@@ -230,10 +230,10 @@
               (pcall vim.fn.winrestview view))))))
 
     (fn ensure-regular-info-buffer-shape!
-      [session total]
+      [session render-stop]
       (when (and session.info-buf
                  (vim.api.nvim_buf_is_valid session.info-buf))
-        (let [needed (math.max 1 total)
+        (let [needed (math.max 1 (or render-stop 0))
               current (vim.api.nvim_buf_line_count session.info-buf)]
           (when (~= current needed)
             (let [bo (. vim.bo session.info-buf)]
@@ -355,7 +355,7 @@
         (set session.info-highlight-fill-token (+ 1 (or session.info-highlight-fill-token 0)))
         (set session.info-highlight-fill-pending? false)
         (fit-info-width! session lines)
-        (ensure-regular-info-buffer-shape! session (# idxs))
+        (ensure-regular-info-buffer-shape! session render-stop)
         (let [bo (. vim.bo session.info-buf)]
           (set (. bo :modifiable) true))
         (let [[ok-set err-set] [(pcall vim.api.nvim_buf_set_lines session.info-buf (- render-start 1) render-stop false lines)]]
