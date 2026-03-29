@@ -4,6 +4,7 @@
 (local debug (require :metabuffer.debug))
 (local source-mod (require :metabuffer.source))
 (local source-helper-mod (require :metabuffer.project.source_helpers))
+(local source-stream-mod (require :metabuffer.project.source_stream))
 
 (fn M.new
   [opts]
@@ -38,6 +39,11 @@
         enable-full-source-syntax! (. helpers :enable-full-source-syntax!)
         emit-source-pool-change! (. helpers :emit-source-pool-change!)
         maybe-finish-project-stream! (. helpers :maybe-finish-project-stream!)]
+  (var lazy-preferred? nil)
+  (var start-project-stream! nil)
+  (var schedule-source-set-rebuild! nil)
+  (var apply-minimal-source-set! nil)
+  (var schedule-project-bootstrap! nil)
 
   (fn stream-next-path!
     [session path prefilter]
@@ -180,70 +186,6 @@
             (table.insert deferred p))))
       {:deferred-paths deferred :estimated-lines (estimate-lines-from-files deferred)}))))
 
-  (fn lazy-preferred?
-    [session estimated-lines]
-    (and (lazy-streaming-allowed? session)
-         (truthy? session.lazy-mode)
-         (or (and session.project-mode
-                  (not session.project-bootstrapped)
-                  (not (prompt-has-active-query? session)))
-             (<= settings.project-lazy-min-estimated-lines 0)
-             (>= estimated-lines settings.project-lazy-min-estimated-lines))))
-
-  (fn start-project-stream!
-    [session prefilter init]
-    (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
-    (set session.lazy-last-render-ms (now-ms))
-    (debug.log :project-source
-               (.. "start-stream"
-                    " stream-id=" (tostring (+ 1 (or session.lazy-stream-id 0)))
-                    " bootstrapped=" (tostring (clj.boolean session.project-bootstrapped))
-                    " token=" (tostring (or session.project-bootstrap-token 0))
-                    " hits=" (tostring (# (or (and session.meta session.meta.buf session.meta.buf.indices) [])))))
-    (set session.lazy-stream-done false)
-    (set session.lazy-stream-next 1)
-    (set session.lazy-stream-paths (or (. init :deferred-paths) []))
-    (set session.lazy-stream-total (# session.lazy-stream-paths))
-    (set session.lazy-prefilter prefilter)
-    (let [stream-id session.lazy-stream-id
-          run-batch0 nil]
-      (var run-batch run-batch0)
-      (set run-batch
-        (fn []
-          (when (and (session-active? session)
-                     (= stream-id session.lazy-stream-id)
-                     (not session.lazy-stream-done))
-            (let [paths session.lazy-stream-paths
-                  total (# paths)
-                  chunk (math.max 1 settings.project-lazy-chunk-size)
-                  frame-budget (math.max 1 (or settings.project-lazy-frame-budget-ms 6))
-                  batch-start (now-ms)]
-              (var consumed 0)
-              (var touched false)
-              (while (and (< consumed chunk)
-                          (< (- (now-ms) batch-start) frame-budget)
-                          (<= session.lazy-stream-next total)
-                          (< (# session.meta.buf.content) settings.project-max-total-lines))
-                (let [path (. paths session.lazy-stream-next)]
-                  (when (stream-next-path! session path prefilter)
-                    (set touched true))
-                  (set consumed (+ consumed 1))
-                  (set session.lazy-stream-next (+ session.lazy-stream-next 1))))
-              (when (or (> session.lazy-stream-next total)
-                        (>= (# session.meta.buf.content) settings.project-max-total-lines))
-                (set session.lazy-stream-done true))
-              (maybe-finish-project-stream! session)
-              (when touched
-                (emit-source-pool-change!
-                  session
-                  {:phase (if (prompt-has-active-query? session) nil :bootstrap)
-                   :refresh-lines false}))
-              (when (and (not session.lazy-stream-done)
-                         (= stream-id session.lazy-stream-id)
-                         (session-active? session))
-                (vim.defer_fn run-batch 17))))))
-      (vim.defer_fn run-batch 0)))
-
   (fn apply-source-set!
     [session]
     "Apply full single/project source set based on current session flags."
@@ -306,106 +248,27 @@
       (set meta._filter-cache {})
       (set meta._filter-cache-line-count (# meta.buf.content))))
 
-  (fn schedule-source-set-rebuild!
-    [session wait-ms]
-    "Cancel previous pending source-set rebuild and run latest one asynchronously."
-    (when (and session (not session.closing))
-      (set session.source-set-rebuild-token (+ 1 (or session.source-set-rebuild-token 0)))
-      (let [token session.source-set-rebuild-token]
-        (set session.source-set-rebuild-pending true)
-        (vim.defer_fn
-          (fn []
-            (when (and session (= token session.source-set-rebuild-token))
-              (set session.source-set-rebuild-pending false))
-            (when (and session
-                       (= token session.source-set-rebuild-token)
-                       session.prompt-buf
-                       (session-active? session)
-                       (not session.closing))
-              (apply-source-set! session)
-              (if apply-prompt-lines-now!
-                  (apply-prompt-lines-now! session)
-                  (on-prompt-changed session.prompt-buf true))))
-          (math.max 0 (or wait-ms 0))))))
-
-  (fn apply-minimal-source-set!
-    [session]
-    "Apply minimal startup source set for empty project prompt."
-    (let [meta session.meta
-          old-line (if (and meta.selected_index
-                             (>= meta.selected_index 0)
-                             (<= (+ meta.selected_index 1) (# meta.buf.indices)))
-                        (math.max 1 (meta.selected_line))
-                        (math.max 1 (or session.initial-source-line 1)))]
-      (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
-      (set session.lazy-stream-done true)
-    ;; Keep startup lightweight for empty project mode; separators/syntax blocks
-    ;; become useful only after expanding to multi-file sources.
-    (set-single-source-content! session false)
-      (set meta.selected_index
-           (math.max 0
-                     (- (meta.buf.closest-index old-line) 1)))
-      (set meta._prev_text "")
-      (set meta._filter-cache {})
-      (set meta._filter-cache-line-count (# meta.buf.content))))
-
-  (fn schedule-project-bootstrap!
-    [session wait-ms]
-    "Defer full project source expansion until startup/input conditions allow."
-    (when (and session session.project-mode (not session.project-bootstrapped))
-      (set session.project-bootstrap-token (+ 1 (or session.project-bootstrap-token 0)))
-      (let [token session.project-bootstrap-token
-            delay (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms 0))]
-        (debug.log :project-source
-                   (.. "schedule-bootstrap"
-                        " token=" (tostring token)
-                        " delay=" (tostring delay)
-                        " hidden=" (tostring (clj.boolean session.ui-hidden))
-                        " restoring=" (tostring (clj.boolean session.restoring-ui?))
-                        " prompt=" (tostring (or session.prompt-last-event-text ""))))
-        (set session.project-bootstrap-pending true)
-        (let [run-bootstrap!
-              (fn []
-                (when (and session (= token session.project-bootstrap-token))
-                  (set session.project-bootstrap-pending false))
-                (when (and session
-                           (= token session.project-bootstrap-token)
-                           session.project-mode
-                           session.prompt-buf
-                           (session-active? session)
-                           (not session.project-bootstrapped))
-                  (let [has-query (prompt-has-active-query? session)]
-                    (apply-source-set! session)
-                    (emit-source-pool-change!
-                      session
-                      {:phase :bootstrap
-                       :force? true
-                       :refresh-lines true})
-                    (set session.project-bootstrapped true)
-                    ;; Avoid a bootstrap-triggered filter/view update for plain `:Meta!`
-                    ;; with empty prompt; defer filtering until the user types.
-                    (when has-query
-                      ;; If user typed while bootstrap was pending, force-path guards can
-                      ;; suppress the immediate refresh and leave results stale.
-                      ;; Drive the pending prompt apply directly through the trailing-edge
-                      ;; timer path so early keystrokes are always honored.
-                      (set session.prompt-update-dirty true)
-                      (let [now (now-ms)
-                            quiet-for (- now (or session.prompt-last-change-ms 0))
-                            need-quiet (math.max 0 (prompt-update-delay-ms session))]
-                        (if (< quiet-for need-quiet)
-                            (schedule-prompt-update! session (math.max 1 (- need-quiet quiet-for)))
-                            (schedule-prompt-update! session 0))))
-                    ;; Keep selection/view stable even when no prompt filter is applied.
-                    (when-not has-query
-                      (emit-source-pool-change!
-                        session
-                        {:phase :complete
-                         :force? true
-                         :restore-view? true
-                         :refresh-lines true}))
-                    (set session.project-mode-starting? false))))]
-          (vim.defer_fn run-bootstrap! delay)))))
+  (let [stream-helpers (source-stream-mod.new
+                         {:settings settings
+                          :truthy? truthy?
+                          :session-active? session-active?
+                          :lazy-streaming-allowed? lazy-streaming-allowed?
+                          :prompt-has-active-query? prompt-has-active-query?
+                          :now-ms now-ms
+                          :prompt-update-delay-ms prompt-update-delay-ms
+                          :schedule-prompt-update! schedule-prompt-update!
+                          :on-prompt-changed on-prompt-changed
+                          :apply-prompt-lines-now! apply-prompt-lines-now!
+                          :stream-next-path! stream-next-path!
+                          :emit-source-pool-change! emit-source-pool-change!
+                          :maybe-finish-project-stream! maybe-finish-project-stream!
+                          :apply-source-set! apply-source-set!
+                          :set-single-source-content! set-single-source-content!})]
+    (set lazy-preferred? (. stream-helpers :lazy-preferred?))
+    (set start-project-stream! (. stream-helpers :start-project-stream!))
+    (set schedule-source-set-rebuild! (. stream-helpers :schedule-source-set-rebuild!))
+    (set apply-minimal-source-set! (. stream-helpers :apply-minimal-source-set!))
+    (set schedule-project-bootstrap! (. stream-helpers :schedule-project-bootstrap!)))
 
   (let [api {:apply-source-set! apply-source-set!
              :schedule-source-set-rebuild! schedule-source-set-rebuild!
