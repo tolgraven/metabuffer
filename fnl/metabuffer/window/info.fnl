@@ -192,10 +192,13 @@
     (let [pending (or deferred-rows [])
           batch-size (math.max 4 (math.min 24 (math.max 1 (info_height session))))]
       (if (= (# pending) 0)
-          (set session.info-highlight-fill-pending? false)
+          (do
+            (set session.info-highlight-fill-pending? false)
+            (refresh-info-statusline! session))
           (let [token (+ 1 (or session.info-highlight-fill-token 0))]
             (set session.info-highlight-fill-token token)
             (set session.info-highlight-fill-pending? true)
+            (refresh-info-statusline! session)
             (var next-index 1)
             (fn run-batch
               []
@@ -223,7 +226,9 @@
                       (do
                         (set next-index (+ stop 1))
                         (vim.defer_fn run-batch 17))
-                      (set session.info-highlight-fill-pending? false)))
+                      (do
+                        (set session.info-highlight-fill-pending? false)
+                        (refresh-info-statusline! session))))
                 (let [bo (. vim.bo session.info-buf)]
                   (set (. bo :modifiable) false))))
             (vim.defer_fn run-batch 17)))))

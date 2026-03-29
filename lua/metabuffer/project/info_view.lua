@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/project/info_view.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 M.new = function(opts)
   local startup_layout_pending_3f = opts["startup-layout-pending?"]
@@ -170,7 +171,7 @@ M.new = function(opts)
       refresh_info_statusline_21(session)
       if (not session["info-render-suspended?"] and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
         local meta = session.meta
-        local loading_finished_3f = not not session["info-project-loading-active?"]
+        local loading_finished_3f = not clj.boolean(session["info-project-loading-active?"])
         local force_refresh_3f = project_info_force_refresh_3f(session, refresh_lines)
         local _let_19_ = project_info_range_state(session, meta)
         local wanted_start = _let_19_["wanted-start"]

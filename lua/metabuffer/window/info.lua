@@ -260,11 +260,12 @@ M.new = function(opts)
     local batch_size = math.max(4, math.min(24, math.max(1, info_height(session))))
     if (#pending == 0) then
       session["info-highlight-fill-pending?"] = false
-      return nil
+      return refresh_info_statusline_21(session)
     else
       local token = (1 + (session["info-highlight-fill-token"] or 0))
       session["info-highlight-fill-token"] = token
       session["info-highlight-fill-pending?"] = true
+      refresh_info_statusline_21(session)
       local next_index = 1
       local function run_batch()
         if (session and session["info-highlight-fill-pending?"] and (token == session["info-highlight-fill-token"]) and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
@@ -293,6 +294,7 @@ M.new = function(opts)
               vim.defer_fn(run_batch, 17)
             else
               session["info-highlight-fill-pending?"] = false
+              refresh_info_statusline_21(session)
             end
           end
           local bo = vim.bo[session["info-buf"]]
