@@ -330,7 +330,7 @@ M.new = function(opts)
     end
   end
   local function session_busy_3f(session)
-    return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["project-bootstrapped"])))
+    return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["lazy-stream-done"]) or (session["project-mode"] and not session["project-bootstrapped"])))
   end
   local function session_actually_idle_3f(session)
     return (session and not session_busy_3f(session) and not session["prompt-update-dirty"])
@@ -1390,7 +1390,7 @@ M.new = function(opts)
           if session_prompt_valid_3f(session) then
             do
               local results_wrap_3f = (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_get_option_value("wrap", {win = session.meta.win.window}))
-              if (results_wrap_3f and rebuild_source_set_21) then
+              if (results_wrap_3f and rebuild_source_set_21 and not session["project-mode"]) then
                 pcall(rebuild_source_set_21, session)
                 pcall(session.meta["on-update"], 0)
               else
@@ -1424,7 +1424,7 @@ M.new = function(opts)
             if (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window) and (vim.api.nvim_get_current_win() == session.meta.win.window)) then
               local wrap_3f = clj.boolean(vim.api.nvim_get_option_value("wrap", {win = session.meta.win.window}))
               pcall(vim.api.nvim_set_option_value, "linebreak", wrap_3f, {win = session.meta.win.window})
-              if rebuild_source_set_21 then
+              if (rebuild_source_set_21 and not session["project-mode"]) then
                 pcall(rebuild_source_set_21, session)
                 pcall(session.meta["on-update"], 0)
                 events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = true})

@@ -2,6 +2,7 @@
 local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local events = require("metabuffer.events")
+local debug = require("metabuffer.debug")
 local source_mod = require("metabuffer.source")
 local transform_mod = require("metabuffer.transform")
 M.new = function(opts)
@@ -618,6 +619,7 @@ M.new = function(opts)
   local function start_project_stream_21(session, prefilter, init)
     session["lazy-stream-id"] = (1 + (session["lazy-stream-id"] or 0))
     session["lazy-last-render-ms"] = now_ms()
+    debug.log("project-source", ("start-stream" .. " stream-id=" .. tostring((1 + (session["lazy-stream-id"] or 0))) .. " bootstrapped=" .. tostring(clj.boolean(session["project-bootstrapped"])) .. " token=" .. tostring((session["project-bootstrap-token"] or 0)) .. " hits=" .. tostring(#((session.meta and session.meta.buf and session.meta.buf.indices) or {}))))
     session["lazy-stream-done"] = false
     session["lazy-stream-next"] = 1
     session["lazy-stream-paths"] = (init["deferred-paths"] or {})
@@ -704,6 +706,7 @@ M.new = function(opts)
     else
       old_line = math.max(1, (session["initial-source-line"] or 1))
     end
+    debug.log("project-source", ("apply-source-set" .. " project=" .. tostring(clj.boolean(session["project-mode"])) .. " source=" .. tostring(query_source_key) .. " bootstrapped=" .. tostring(clj.boolean(session["project-bootstrapped"])) .. " pending=" .. tostring(clj.boolean(session["project-bootstrap-pending"])) .. " stream-done=" .. tostring(clj.boolean(session["lazy-stream-done"])) .. " prompt=" .. tostring((session["prompt-last-applied-text"] or ""))))
     if query_source_3f then
       session["lazy-stream-id"] = (1 + (session["lazy-stream-id"] or 0))
       session["lazy-stream-done"] = true
@@ -801,6 +804,7 @@ M.new = function(opts)
       session["project-bootstrap-token"] = (1 + (session["project-bootstrap-token"] or 0))
       local token = session["project-bootstrap-token"]
       local delay = math.max(0, (wait_ms or session["project-bootstrap-delay-ms"] or settings["project-bootstrap-delay-ms"] or 0))
+      debug.log("project-source", ("schedule-bootstrap" .. " token=" .. tostring(token) .. " delay=" .. tostring(delay) .. " hidden=" .. tostring(clj.boolean(session["ui-hidden"])) .. " restoring=" .. tostring(clj.boolean(session["restoring-ui?"])) .. " prompt=" .. tostring((session["prompt-last-event-text"] or ""))))
       session["project-bootstrap-pending"] = true
       local run_bootstrap_21
       local function _95_()

@@ -2,6 +2,7 @@
 (local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
 (local events (require :metabuffer.events))
+(local debug (require :metabuffer.debug))
 (local source-mod (require :metabuffer.source))
 (local transform-mod (require :metabuffer.transform))
 
@@ -595,6 +596,12 @@
     [session prefilter init]
     (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
     (set session.lazy-last-render-ms (now-ms))
+    (debug.log :project-source
+               (.. "start-stream"
+                    " stream-id=" (tostring (+ 1 (or session.lazy-stream-id 0)))
+                    " bootstrapped=" (tostring (clj.boolean session.project-bootstrapped))
+                    " token=" (tostring (or session.project-bootstrap-token 0))
+                    " hits=" (tostring (# (or (and session.meta session.meta.buf session.meta.buf.indices) [])))))
     (set session.lazy-stream-done false)
     (set session.lazy-stream-next 1)
     (set session.lazy-stream-paths (or (. init :deferred-paths) []))
@@ -690,6 +697,14 @@
                             (<= (+ meta.selected_index 1) (# meta.buf.indices)))
                        (math.max 1 (meta.selected_line))
                        (math.max 1 (or session.initial-source-line 1)))]
+    (debug.log :project-source
+               (.. "apply-source-set"
+                    " project=" (tostring (clj.boolean session.project-mode))
+                    " source=" (tostring query-source-key)
+                    " bootstrapped=" (tostring (clj.boolean session.project-bootstrapped))
+                    " pending=" (tostring (clj.boolean session.project-bootstrap-pending))
+                    " stream-done=" (tostring (clj.boolean session.lazy-stream-done))
+                    " prompt=" (tostring (or session.prompt-last-applied-text ""))))
     (if query-source?
         (do
           (set session.lazy-stream-id (+ 1 (or session.lazy-stream-id 0)))
@@ -790,6 +805,13 @@
       (set session.project-bootstrap-token (+ 1 (or session.project-bootstrap-token 0)))
       (let [token session.project-bootstrap-token
             delay (math.max 0 (or wait-ms session.project-bootstrap-delay-ms settings.project-bootstrap-delay-ms 0))]
+        (debug.log :project-source
+                   (.. "schedule-bootstrap"
+                        " token=" (tostring token)
+                        " delay=" (tostring delay)
+                        " hidden=" (tostring (clj.boolean session.ui-hidden))
+                        " restoring=" (tostring (clj.boolean session.restoring-ui?))
+                        " prompt=" (tostring (or session.prompt-last-event-text ""))))
         (set session.project-bootstrap-pending true)
         (let [run-bootstrap!
               (fn []

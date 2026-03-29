@@ -212,6 +212,7 @@ M["apply-prompt-lines!"] = function(deps, session)
     session["file-query-lines"] = (parsed["file-lines"] or {})
     session["last-prompt-text"] = effective_text
     session["prompt-last-applied-text"] = effective_text
+    session["prompt-last-event-text"] = effective_text
     session.meta["file-query-lines"] = (parsed["file-lines"] or {})
     session.meta["include-binary"] = next_binary
     session.meta["include-files"] = next_files
@@ -283,6 +284,7 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
     local now = router_prompt_mod["now-ms"]()
     local delay = prompt_delay_ms(settings, query_mod, session)
     if not noop_3f then
+      session["prompt-last-event-text"] = effective_text
       if (not force and event_tick) then
         session["prompt-last-event-tick"] = event_tick
       else
@@ -302,7 +304,6 @@ M["on-prompt-changed!"] = function(deps, prompt_buf, force, event_tick)
       else
       end
       if pure_flag_edit_3f then
-        session["prompt-last-event-text"] = effective_text
         session["last-prompt-text"] = effective_text
         session["prompt-last-change-ms"] = now
         session["prompt-update-dirty"] = false

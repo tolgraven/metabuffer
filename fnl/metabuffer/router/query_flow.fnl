@@ -253,6 +253,7 @@
           (set session.file-query-lines (or (. parsed :file-lines) []))
           (set session.last-prompt-text effective-text)
           (set session.prompt-last-applied-text effective-text)
+          (set session.prompt-last-event-text effective-text)
           (set session.meta.file-query-lines (or (. parsed :file-lines) []))
           (set session.meta.include-binary next-binary)
           (set session.meta.include-files next-files)
@@ -324,6 +325,7 @@
             now (router_prompt_mod.now-ms)
             delay (prompt-delay-ms settings query-mod session)]
         (when-not noop?
+          (set session.prompt-last-event-text effective-text)
           (when (and (not force) event-tick)
             (set session.prompt-last-event-tick event-tick))
           (set session.prompt-update-dirty true)
@@ -337,7 +339,6 @@
             (project-source.schedule-project-bootstrap! session settings.project-bootstrap-delay-ms))
           (if pure-flag-edit?
               (do
-                (set session.prompt-last-event-text effective-text)
                 (set session.last-prompt-text effective-text)
                 (set session.prompt-last-change-ms now)
                 (set session.prompt-update-dirty false)

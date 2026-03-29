@@ -146,6 +146,34 @@
   [event-key opts]
   (or (. opts :dedupe-key) event-key))
 
+(fn loggable-summary
+  [event-key args meta]
+  (let [summary {:event event-key
+                 :mode (or (and meta (. meta :mode)) :sync)}]
+    (when (and meta (. meta :post-key))
+      (set (. summary :post-key) (. meta :post-key)))
+    (when (~= (. args :phase) nil)
+      (set (. summary :phase) (. args :phase)))
+    (when (~= (. args :force?) nil)
+      (set (. summary :force?) (. args :force?)))
+    (when (~= (. args :restore-view?) nil)
+      (set (. summary :restore-view?) (. args :restore-view?)))
+    (when (~= (. args :refresh-lines) nil)
+      (set (. summary :refresh-lines) (. args :refresh-lines)))
+    (when (~= (. args :line-nr) nil)
+      (set (. summary :line-nr) (. args :line-nr)))
+    (when (~= (. args :query) nil)
+      (let [q (tostring (. args :query))]
+        (set (. summary :query)
+             (if (> (# q) 48)
+                 (.. (string.sub q 1 48) "…")
+                 q))))
+    summary))
+
+(fn log-event!
+  [scope event-key args meta]
+  (debug.log scope (vim.inspect (loggable-summary event-key (or args {}) meta))))
+
 (fn handler-stats-for
   [event-stats key]
   (let [handler-stats (or (. event-stats key) {})]
@@ -331,6 +359,7 @@
    args is a plain table; each handler receives it directly.
    Handlers failing their role-filter are skipped silently.
    All invocations are pcall-isolated."
+  (log-event! "events.send" event-key (or args {}) {:mode :sync})
   (send-now! event-key args {:mode :sync}))
 
 (fn M.post
@@ -355,6 +384,8 @@
                   :posted_at (hrtime)}]
         (table.insert posted-queue item)
         (set (. posted-by-key post-key0) item)))
+    (log-event! "events.post" event-key (or args {}) {:mode :posted
+                                                      :post-key post-key0})
     (schedule-posted-flush!)))
 
 (fn M.register!
@@ -401,6 +432,12 @@
   []
   "Run and clear the currently queued posted events immediately."
   (set posted-scheduled? false)
+  (each [_ item (ipairs (or posted-queue []))]
+    (log-event! "events.flush"
+                (. item :event-key)
+                (or (. item :args) {})
+                {:mode :posted
+                 :post-key (. item :post-key)}))
   (flush-posted-queue!))
 
 M

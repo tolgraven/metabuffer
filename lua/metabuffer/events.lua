@@ -48,6 +48,46 @@ end
 local function post_key(event_key, opts)
   return (opts["dedupe-key"] or event_key)
 end
+local function loggable_summary(event_key, args, meta)
+  local summary = {event = event_key, mode = ((meta and meta.mode) or "sync")}
+  if (meta and meta["post-key"]) then
+    summary["post-key"] = meta["post-key"]
+  else
+  end
+  if (args.phase ~= nil) then
+    summary["phase"] = args.phase
+  else
+  end
+  if (args["force?"] ~= nil) then
+    summary["force?"] = args["force?"]
+  else
+  end
+  if (args["restore-view?"] ~= nil) then
+    summary["restore-view?"] = args["restore-view?"]
+  else
+  end
+  if (args["refresh-lines"] ~= nil) then
+    summary["refresh-lines"] = args["refresh-lines"]
+  else
+  end
+  if (args["line-nr"] ~= nil) then
+    summary["line-nr"] = args["line-nr"]
+  else
+  end
+  if (args.query ~= nil) then
+    local q = tostring(args.query)
+    if (#q > 48) then
+      summary["query"] = (string.sub(q, 1, 48) .. "\226\128\166")
+    else
+      summary["query"] = q
+    end
+  else
+  end
+  return summary
+end
+local function log_event_21(scope, event_key, args, meta)
+  return debug.log(scope, vim.inspect(loggable_summary(event_key, (args or {}), meta)))
+end
 local function handler_stats_for(event_stats, key)
   local handler_stats = (event_stats[key] or {})
   if (event_stats[key] == nil) then
@@ -175,10 +215,10 @@ local function register_module_21(mod)
 end
 local function sort_handlers_21()
   for _, list in pairs(handlers_by_event) do
-    local function _20_(a, b)
+    local function _28_(a, b)
       return (a.priority < b.priority)
     end
-    table.sort(list, _20_)
+    table.sort(list, _28_)
   end
   return nil
 end
@@ -214,14 +254,14 @@ local function pcall_handler_21(spec, event_key, args, event_stats, emission)
     local elapsed_us = ((vim.uv.hrtime() - t0) / 1000)
     local cpu_elapsed_us = math.max(0, (cpu_us() - cpu0))
     accumulate_profile_21(event_stats, emission, spec, elapsed_us, cpu_elapsed_us, ok, err)
-    local function _24_()
+    local function _32_()
       if ok then
         return ""
       else
         return ("  ERR: " .. tostring(err))
       end
     end
-    return debug.log("event-bus", string.format("%s  %s/%s  p=%d  wall=%.1f\194\181s cpu=%.1f\194\181s%s", event_key, (spec.domain or "?"), (spec.source or "?"), spec.priority, elapsed_us, cpu_elapsed_us, _24_()))
+    return debug.log("event-bus", string.format("%s  %s/%s  p=%d  wall=%.1f\194\181s cpu=%.1f\194\181s%s", event_key, (spec.domain or "?"), (spec.source or "?"), spec.priority, elapsed_us, cpu_elapsed_us, _32_()))
   else
     return pcall(spec.handler, args)
   end
@@ -229,16 +269,16 @@ end
 local function send_now_21(event_key, args, meta)
   local list = handlers_by_event[event_key]
   local args_2a = (args or {})
-  local function _26_()
+  local function _34_()
     if (profile_3f and list) then
       return start_emission_21(event_key, meta)
     else
       return {nil, nil}
     end
   end
-  local _let_27_ = _26_()
-  local event_stats = _let_27_[1]
-  local emission = _let_27_[2]
+  local _let_35_ = _34_()
+  local event_stats = _let_35_[1]
+  local emission = _let_35_[2]
   if list then
     for _, spec in ipairs(list) do
       if matches_filter_3f(spec, args_2a) then
@@ -274,16 +314,17 @@ end
 local function schedule_posted_flush_21()
   if not posted_scheduled_3f then
     posted_scheduled_3f = true
-    local function _31_()
+    local function _39_()
       posted_scheduled_3f = false
       return flush_posted_queue_21()
     end
-    return vim.schedule(_31_)
+    return vim.schedule(_39_)
   else
     return nil
   end
 end
 M.send = function(event_key, args)
+  log_event_21("events.send", event_key, (args or {}), {mode = "sync"})
   return send_now_21(event_key, args, {mode = "sync"})
 end
 M.post = function(event_key, args, opts)
@@ -305,6 +346,7 @@ M.post = function(event_key, args, opts)
     posted_by_key[post_key0] = item
   else
   end
+  log_event_21("events.post", event_key, (args or {}), {mode = "posted", ["post-key"] = post_key0})
   return schedule_posted_flush_21()
 end
 M["register!"] = function(mod)
@@ -336,6 +378,9 @@ M["reset-profile-stats!"] = function()
 end
 M["flush-posted!"] = function()
   posted_scheduled_3f = false
+  for _, item in ipairs((posted_queue or {})) do
+    log_event_21("events.flush", item["event-key"], (item.args or {}), {mode = "posted", ["post-key"] = item["post-key"]})
+  end
   return flush_posted_queue_21()
 end
 return M

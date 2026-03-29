@@ -322,6 +322,8 @@
                session.prompt-update-dirty
                session.project-bootstrap-pending
                (and session.project-mode
+                    (not session.lazy-stream-done))
+               (and session.project-mode
                     (not session.project-bootstrapped)))))
 
     (fn session-actually-idle?
@@ -1181,7 +1183,9 @@
                                              session.meta.win
                                              (vim.api.nvim_win_is_valid session.meta.win.window)
                                              (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
-                      (when (and results-wrap? rebuild-source-set!)
+                      (when (and results-wrap?
+                                 rebuild-source-set!
+                                 (not session.project-mode))
                         (pcall rebuild-source-set! session)
                         (pcall session.meta.on-update 0)))
                     (when-not session.prompt-animating?
@@ -1206,7 +1210,8 @@
                                (= (vim.api.nvim_get_current_win) session.meta.win.window))
                       (let [wrap? (clj.boolean (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
                         (pcall vim.api.nvim_set_option_value "linebreak" wrap? {:win session.meta.win.window})
-                        (when rebuild-source-set!
+                        (when (and rebuild-source-set!
+                                   (not session.project-mode))
                           (pcall rebuild-source-set! session)
                           (pcall session.meta.on-update 0)
                           (events.send :on-query-update!

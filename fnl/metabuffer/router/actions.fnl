@@ -5,6 +5,7 @@
 (local source-mod (require :metabuffer.source))
 (local transform-mod (require :metabuffer.transform))
 (local events (require :metabuffer.events))
+(local debug-mod (require :metabuffer.debug))
 
 (fn session-by-prompt
   [active-by-prompt prompt-buf]
@@ -262,70 +263,77 @@
         session-view-mod (. mods :session-view)
         preserve-focus? (and opts (. opts :preserve-focus))
         curr session.meta]
-    (when (and session.ui-hidden
+    (when (and (not session.restoring-ui?)
+               session.ui-hidden
                session.prompt-buf
                (vim.api.nvim_buf_is_valid session.prompt-buf)
                curr
                curr.win
                (vim.api.nvim_win_is_valid curr.win.window))
-      (let [height (or session.hidden-prompt-height (router-util-mod.prompt-height))
-            local-layout? (if (= session.window-local-layout nil) true session.window-local-layout)
-            prompt-win (if (and local-layout? (vim.api.nvim_win_is_valid curr.win.window))
-                           (vim.api.nvim_win_call
-                             curr.win.window
-                             (fn []
-                               (vim.cmd (.. "belowright " (tostring height) "new"))
-                               (vim.api.nvim_get_current_win)))
-                           (do
-                             (vim.cmd (.. "botright " (tostring height) "new"))
-                             (vim.api.nvim_get_current_win)))
-            old-buf (and prompt-win
-                         (vim.api.nvim_win_is_valid prompt-win)
-                         (vim.api.nvim_win_get_buf prompt-win))]
-        (set session.prompt-win prompt-win)
-        (util.mark-transient-unnamed-buffer! old-buf)
-        (pcall vim.api.nvim_win_set_height prompt-win height)
-        (pcall vim.api.nvim_win_set_buf prompt-win session.prompt-buf)
-        (wipe-replaced-split-buffer! old-buf)
-        (let [bo (. vim.bo session.prompt-buf)]
-          (set (. bo :buftype) "nofile")
-          (set (. bo :bufhidden) "hide")
-          (set (. bo :swapfile) false)
-          (set (. bo :modifiable) true)
-          (set (. bo :filetype) "metabufferprompt"))
-        (apply-prompt-window-opts! prompt-win)
-        (sync-prompt-buffer-name! session)
-        (set session._last-prompt-statusline nil)
-        (set curr.status-win curr.win)
-        (set session.ui-hidden false)
-        (resume-main-window-opts! deps session)
-        (when (and curr curr.buf curr.buf.buffer (vim.api.nvim_buf_is_valid curr.buf.buffer))
-          (let [bo (. vim.bo curr.buf.buffer)]
-            (set curr.buf.keep-modifiable true)
-            (set (. bo :buftype) "acwrite")
-            (set (. bo :modifiable) true)
-            (set (. bo :readonly) false)
-            (set (. bo :bufhidden) "hide"))
-          (pcall curr.buf.render))
-        (events.send :on-restore-ui!
-          {:session session
-           :restore-view? (and session-view-mod session.source-view)})
-        (let [cursor (or session.hidden-prompt-cursor [1 0])
-              row (math.max 1 (or (. cursor 1) 1))
-              col (math.max 0 (or (. cursor 2) 0))
-              line-count (math.max 1 (vim.api.nvim_buf_line_count session.prompt-buf))
-              row* (math.min row line-count)
-              line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf (- row* 1) row* false) 1) "")
-              col* (math.min col (# line))]
-          (pcall vim.api.nvim_win_set_cursor prompt-win [row* col*]))
-        (events.send :on-restore-ui!
-          {:session session
-           :refresh-lines true})
-        (when-not preserve-focus?
-          (vim.api.nvim_set_current_win prompt-win)
-          (if session.ui-last-insert-mode
-              (vim.cmd "startinsert")
-              (vim.cmd "stopinsert")))))))
+      (set session.restoring-ui? true)
+      (let [[ok err]
+            [(xpcall
+               (fn []
+                 (let [height (or session.hidden-prompt-height (router-util-mod.prompt-height))
+                       local-layout? (if (= session.window-local-layout nil) true session.window-local-layout)
+                       prompt-win (if (and local-layout? (vim.api.nvim_win_is_valid curr.win.window))
+                                      (vim.api.nvim_win_call
+                                        curr.win.window
+                                        (fn []
+                                          (vim.cmd (.. "belowright " (tostring height) "new"))
+                                          (vim.api.nvim_get_current_win)))
+                                      (do
+                                        (vim.cmd (.. "botright " (tostring height) "new"))
+                                        (vim.api.nvim_get_current_win)))
+                       old-buf (and prompt-win
+                                    (vim.api.nvim_win_is_valid prompt-win)
+                                    (vim.api.nvim_win_get_buf prompt-win))]
+                   (set session.prompt-win prompt-win)
+                   (util.mark-transient-unnamed-buffer! old-buf)
+                   (pcall vim.api.nvim_win_set_height prompt-win height)
+                   (pcall vim.api.nvim_win_set_buf prompt-win session.prompt-buf)
+                   (wipe-replaced-split-buffer! old-buf)
+                   (let [bo (. vim.bo session.prompt-buf)]
+                     (set (. bo :buftype) "nofile")
+                     (set (. bo :bufhidden) "hide")
+                     (set (. bo :swapfile) false)
+                     (set (. bo :modifiable) true)
+                     (set (. bo :filetype) "metabufferprompt"))
+                   (apply-prompt-window-opts! prompt-win)
+                   (sync-prompt-buffer-name! session)
+                   (set session._last-prompt-statusline nil)
+                   (set curr.status-win curr.win)
+                   (set session.ui-hidden false)
+                   (resume-main-window-opts! deps session)
+                   (when (and curr curr.buf curr.buf.buffer (vim.api.nvim_buf_is_valid curr.buf.buffer))
+                     (let [bo (. vim.bo curr.buf.buffer)]
+                       (set curr.buf.keep-modifiable true)
+                       (set (. bo :buftype) "acwrite")
+                       (set (. bo :modifiable) true)
+                       (set (. bo :readonly) false)
+                       (set (. bo :bufhidden) "hide"))
+                     (pcall curr.buf.render))
+                   (let [cursor (or session.hidden-prompt-cursor [1 0])
+                         row (math.max 1 (or (. cursor 1) 1))
+                         col (math.max 0 (or (. cursor 2) 0))
+                         line-count (math.max 1 (vim.api.nvim_buf_line_count session.prompt-buf))
+                         row* (math.min row line-count)
+                         line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf (- row* 1) row* false) 1) "")
+                         col* (math.min col (# line))]
+                     (pcall vim.api.nvim_win_set_cursor prompt-win [row* col*]))
+                   (events.send :on-restore-ui!
+                     {:session session
+                      :restore-view? (and session-view-mod session.source-view)
+                      :refresh-lines true})
+                   (when-not preserve-focus?
+                     (vim.api.nvim_set_current_win prompt-win)
+                     (if session.ui-last-insert-mode
+                         (vim.cmd "startinsert")
+                         (vim.cmd "stopinsert")))))
+               debug.traceback)]]
+        (set session.restoring-ui? false)
+        (when-not ok
+          (error err))))))
 
 (fn finish-accept
   [deps session]
@@ -1205,12 +1213,22 @@
         session (session-by-prompt (. router :active-by-prompt) prompt-buf)]
     (when (and session
                session.ui-hidden
+               (not session.restoring-ui?)
                session.meta
                session.meta.buf)
       (let [current-buf (vim.api.nvim_get_current_buf)
             results-buf session.meta.buf.buffer]
         (when (or force
                   (= current-buf results-buf))
+          (debug-mod.log :router-actions
+                     (.. "maybe-restore-ui"
+                          " force=" (tostring (not (not force)))
+                          " current=" (tostring current-buf)
+                          " results=" (tostring results-buf)
+                          " hidden=" (tostring (not (not session.ui-hidden)))
+                          " restoring=" (tostring (not (not session.restoring-ui?)))
+                          " bootstrapped=" (tostring (not (not session.project-bootstrapped)))
+                          " stream-done=" (tostring (not (not session.lazy-stream-done)))))
           (set session.meta.win.window (vim.api.nvim_get_current_win))
           (restore-session-ui!
             deps

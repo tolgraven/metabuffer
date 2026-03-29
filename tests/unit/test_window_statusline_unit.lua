@@ -25,9 +25,11 @@ T['render-path uses separate icon and extension highlight groups'] = function()
 
   _G.MiniIcons = prev
 
-  eq(rendered:find('%%#MiniIconsBlue#F ', 1) ~= nil, true)
+  eq(rendered:find('%%#MetaPreviewStatuslinePathSeg%d+#F ', 1) ~= nil, true)
+  eq(rendered:find('%%#MetaPreviewStatuslinePathSeg%d+#F %%#MetaPreviewStatuslinePathFile#/', 1) ~= nil, true)
+  eq(rendered:find('%%#MetaPreviewStatuslinePathSeg%d+#tmp', 1) ~= nil, true)
   eq(rendered:find('%%#MetaPreviewStatuslinePathFile#demo', 1) ~= nil, true)
-  eq(rendered:find('%%#MiniIconsGreen#.lua', 1) ~= nil, true)
+  eq(rendered:find('%%#MetaPreviewStatuslinePathSeg%d+#%.lua', 1) ~= nil, true)
 end
 
 return T
