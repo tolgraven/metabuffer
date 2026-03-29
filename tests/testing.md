@@ -357,7 +357,7 @@ Key helper coverage:
 - Confirms query and hit state settle after mode churn.
 
 ### `tests/screen/project/test_screen_project_launch_info_update.lua`
-- Project startup keeps the info window populated immediately and exposes loading/range state via the info winbar.
+- Project startup keeps the info window populated immediately, uses the winbar only while loading is active, and clears it once the visible info slice is settled.
 
 ### `tests/screen/project/test_screen_project_info_file_mode_refresh.lua`
 - Switching into `#file:{filter}` refreshes info content immediately instead of leaving stale non-file hit metadata behind.

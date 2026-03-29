@@ -384,6 +384,7 @@
      (clear-hit-highlight! curr)
      (set session.results-edit-mode false)
      (hide-session-ui! deps session)
+     (handoff-host-window! (vim.api.nvim_get_current_win) (vim.api.nvim_get_current_buf))
      curr))
 
 (fn finish-cancel

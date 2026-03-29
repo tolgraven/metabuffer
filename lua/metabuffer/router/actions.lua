@@ -466,6 +466,7 @@ local function finish_accept(deps, session)
   clear_hit_highlight_21(curr)
   session["results-edit-mode"] = false
   hide_session_ui_21(deps, session)
+  handoff_host_window_21(vim.api.nvim_get_current_win(), vim.api.nvim_get_current_buf())
   return curr
 end
 local function finish_cancel(deps, session)

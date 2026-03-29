@@ -172,6 +172,25 @@
            :preview-height (vim.api.nvim_win_get_height preview-win)
            :tab-window-count (tab-window-count main-win)})))
 
+    (fn note-editor-size!
+      [session]
+      (when session
+        (set session.last-editor-columns vim.o.columns)
+        (set session.last-editor-lines vim.o.lines)))
+
+    (fn note-global-editor-resize!
+      [session]
+      (when session
+        (set session.preview-user-resized? false)
+        (set session.preview-global-resize-token (+ 1 (or session.preview-global-resize-token 0)))
+        (let [token session.preview-global-resize-token]
+          (vim.defer_fn
+            (fn []
+              (when (and session
+                         (= token session.preview-global-resize-token))
+                (set session.preview-global-resize-token nil)))
+            120))))
+
     (fn capture-expected-layout!
       [session]
       "Persist expected layout after startup/manual prompt resize."
@@ -1124,12 +1143,19 @@
                                               (manual-prompt-resize? session wins))]
                 (when is-vim-resized?
                   (set session.preview-user-resized? false))
-                (when (and (not is-vim-resized?)
-                           session.preview-win
-                           (vim.api.nvim_win_is_valid session.preview-win))
+                (let [editor-size-changed? (or (~= (or session.last-editor-columns vim.o.columns) vim.o.columns)
+                                               (~= (or session.last-editor-lines vim.o.lines) vim.o.lines))]
+                  (note-editor-size! session)
+                  (when (or is-vim-resized? editor-size-changed?)
+                    (note-global-editor-resize! session))
+                  (when (and (not is-vim-resized?)
+                             (not editor-size-changed?)
+                             (not session.preview-global-resize-token)
+                             session.preview-win
+                             (vim.api.nvim_win_is_valid session.preview-win))
                   (each [_ wid (ipairs wins)]
                     (when (= wid session.preview-win)
-                      (set session.preview-user-resized? true))))
+                      (set session.preview-user-resized? true)))))
                 (if manual-prompt-resize
                     (do
                       (set session.prompt-target-height (vim.api.nvim_win_get_height session.prompt-win))

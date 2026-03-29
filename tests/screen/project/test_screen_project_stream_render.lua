@@ -62,4 +62,53 @@ T['project lazy streaming renders incremental content before stream completion']
   end, 6000)
 end)
 
+T['project loading keeps visible info rows real while winbar shows progress'] = H.timed_case(function()
+  H.child.lua([[
+    require('metabuffer').setup({
+      options = {
+        project_lazy_enabled = true,
+        project_lazy_min_estimated_lines = 0,
+        project_lazy_chunk_size = 1,
+        project_lazy_frame_budget_ms = 1,
+      },
+    })
+  ]])
+
+  H.open_project_meta_from_file('README.md')
+
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        return s
+          and s['lazy-stream-done'] ~= true
+          and #(s.meta.buf.indices or {}) > 0
+          and true or false
+      end)()
+    ]])
+  end, 6000)
+
+  H.scroll_main_and_wait('page-down', 4000)
+
+  H.wait_for(function()
+    local snap = H.session_info_snapshot()
+    local winbar = H.session_info_winbar()
+    local info_view = H.session_info_view()
+    local main_view = H.session_main_view()
+    local line = snap and snap.line or ''
+    local skeleton = line == '.... ... ......'
+      or line == '..... .... .....'
+      or line == '... ..... ......'
+      or line == '.... ...... ....'
+    return type(snap) == 'table'
+      and type(winbar) == 'string'
+      and winbar ~= ''
+      and skeleton == false
+      and type(info_view) == 'table'
+      and type(main_view) == 'table'
+      and info_view.topline == main_view.topline
+  end, 6000)
+end)
+
 return T

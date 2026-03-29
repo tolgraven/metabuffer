@@ -24,6 +24,29 @@ T['preview stays right-anchored and widens when editor widens'] = H.timed_case(f
   end, 3000)
 
   eq(H.session_preview_screen_right(), H.editor_columns())
+  eq(H.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      return not not (s and s['preview-user-resized?'])
+    end)()
+  ]]), false)
+
+  local widened_width = H.session_preview_width()
+  H.resize_editor_columns(before_cols - 12)
+
+  H.wait_for(function()
+    return H.session_preview_width() < widened_width
+  end, 3000)
+
+  eq(H.session_preview_screen_right(), H.editor_columns())
+  eq(H.child.lua_get([[
+    (function()
+      local router = require('metabuffer.router')
+      local s = router['active-by-source'][_G.__meta_source_buf]
+      return not not (s and s['preview-user-resized?'])
+    end)()
+  ]]), false)
 end)
 
 return T
