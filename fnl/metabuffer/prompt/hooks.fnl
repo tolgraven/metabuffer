@@ -37,11 +37,13 @@
               (tostring value)))
         (let [old (mode-label ((. (. meta.mode which) :current)))]
         (meta.switch_mode which)
-        (events.send :on-mode-switch!
+        (events.post :on-mode-switch!
           {:session session
            :kind which
            :old old
-           :new (mode-label ((. (. meta.mode which) :current)))}))))
+           :new (mode-label ((. (. meta.mode which) :current)))}
+          {:supersede? true
+           :dedupe-key (.. "on-mode-switch:" (tostring session.prompt-buf) ":" which)}))))
 
     (fn nvim-exiting?
       []
@@ -1116,11 +1118,18 @@
       ;; switches) can overwrite local statusline state. Re-apply ours when the
       ;; prompt window regains focus.
         (au! ["BufEnter" "WinEnter" "FocusGained"] session.prompt-buf
-          (fn [] (events.send :on-prompt-focus! {:session session})))
+          (fn []
+            (events.post :on-prompt-focus!
+                         {:session session}
+                         {:supersede? true
+                          :dedupe-key (.. "on-prompt-focus:" (tostring session.prompt-buf))})))
       ;; Refresh mode segment when switching Insert/Normal/Replace in the prompt.
         (au! ["ModeChanged" "InsertEnter" "InsertLeave"] session.prompt-buf
           (fn []
-            (events.send :on-prompt-focus! {:session session})
+            (events.post :on-prompt-focus!
+                         {:session session}
+                         {:supersede? true
+                          :dedupe-key (.. "on-prompt-focus:" (tostring session.prompt-buf))})
             (maybe-show-directive-help! session)))
         (au! ["CursorMoved" "CursorMovedI"] session.prompt-buf
           (fn [] (maybe-show-directive-help! session)))

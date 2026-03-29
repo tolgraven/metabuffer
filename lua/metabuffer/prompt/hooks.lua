@@ -36,7 +36,7 @@ M.new = function(opts)
     end
     local old = mode_label(meta.mode[which].current())
     meta.switch_mode(which)
-    return events.send("on-mode-switch!", {session = session, kind = which, old = old, new = mode_label(meta.mode[which].current())})
+    return events.post("on-mode-switch!", {session = session, kind = which, old = old, new = mode_label(meta.mode[which].current())}, {["supersede?"] = true, ["dedupe-key"] = ("on-mode-switch:" .. tostring(session["prompt-buf"]) .. ":" .. which)})
   end
   local function nvim_exiting_3f()
     local v = (vim.v and vim.v.exiting)
@@ -1321,11 +1321,11 @@ M.new = function(opts)
     end
     au_21("InsertEnter", session["prompt-buf"], _185_)
     local function _186_()
-      return events.send("on-prompt-focus!", {session = session})
+      return events.post("on-prompt-focus!", {session = session}, {["supersede?"] = true, ["dedupe-key"] = ("on-prompt-focus:" .. tostring(session["prompt-buf"]))})
     end
     au_21({"BufEnter", "WinEnter", "FocusGained"}, session["prompt-buf"], _186_)
     local function _187_()
-      events.send("on-prompt-focus!", {session = session})
+      events.post("on-prompt-focus!", {session = session}, {["supersede?"] = true, ["dedupe-key"] = ("on-prompt-focus:" .. tostring(session["prompt-buf"]))})
       return maybe_show_directive_help_21(session)
     end
     au_21({"ModeChanged", "InsertEnter", "InsertLeave"}, session["prompt-buf"], _187_)
