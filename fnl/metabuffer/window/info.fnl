@@ -304,73 +304,94 @@
              :height (math.max 1 height)
              :focusable false}))))
   (var ensure_info_window nil)
+  (fn info-target-config
+    [session]
+    (let [width info_min_width
+          height (effective-info-height session info_height project-loading-pending?)]
+      {:width width
+       :height height
+       :target (info_window_config session width height)}))
+  (fn animate-info-enter?
+    [session prompt-target]
+    (and animation_mod
+         animate_enter?
+         (animate_enter? session)
+         (animation_mod.enabled? session :info)
+         (not session.info-animated?)
+         prompt-target))
+  (fn initial-info-config
+    [target animate-info?]
+    (if animate-info?
+        (let [start (vim.deepcopy target)]
+          (set (. start :col) (+ (. target :col) 8))
+          (set (. start :winblend) 100)
+          start)
+        target))
+  (fn configure-info-buffer!
+    [session buf]
+    (events.send :on-buf-create! {:buf buf :role :info})
+    (util.set-buffer-name! buf "[Metabuffer Info]")
+    (set session.info-buf buf)
+    (let [bo (. vim.bo buf)]
+      (set (. bo :buftype) "nofile")
+      (set (. bo :bufhidden) "wipe")
+      (set (. bo :swapfile) false)
+      (set (. bo :modifiable) false)
+      (set (. bo :filetype) "")))
+  (fn configure-info-window!
+    [session target win]
+    (set session.info-win win.window)
+    (set session.info-config-sig (info-config-signature target))
+    (events.send :on-win-create! {:win session.info-win :role :info})
+    (apply-metabuffer-window-highlights! session.info-win)
+    (let [wo (. vim.wo win.window)]
+      (set (. wo :statusline) "")
+      (set (. wo :winbar) "")
+      (set (. wo :number) false)
+      (set (. wo :relativenumber) false)
+      (set (. wo :wrap) false)
+      (set (. wo :linebreak) false)
+      (set (. wo :signcolumn) "no")
+      (set (. wo :foldcolumn) "0")
+      (set (. wo :spell) false)
+      (set (. wo :cursorline) false)))
+  (fn start-info-enter-animation!
+    [session cfg target]
+    (set session.info-animated? true)
+    (set session.info-render-suspended? true)
+    (set session.info-post-fade-refresh? true)
+    (pcall vim.api.nvim_set_option_value "winblend" 100 {:win session.info-win})
+    (vim.defer_fn
+      (fn []
+        (when (valid-info-win? session)
+          (animation_mod.animate-float!
+            session
+            "info-enter"
+            session.info-win
+            cfg
+            target
+            100
+            (or vim.g.meta_float_winblend 13)
+            (animation_mod.duration-ms session :info (or info_fade_ms 220))
+            {:kind :info
+             :done! (fn [_]
+                      (when (valid-info-win? session)
+                        (set session.info-post-fade-refresh? nil)
+                        (set session.info-render-suspended? false)
+                        (update! session true)))})))
+      17))
   (set ensure_info_window
     (fn [session]
       (when-not (valid-info-win? session)
         (let [buf (vim.api.nvim_create_buf false true)
-              width info_min_width
-              height (effective-info-height session info_height project-loading-pending?)
-              target (info_window_config session width height)
-              animate-info? (and animation_mod
-                                 animate_enter?
-                                 (animate_enter? session)
-                                 (animation_mod.enabled? session :info)
-                                 (not session.info-animated?))
-              cfg (if animate-info?
-                      (let [start (vim.deepcopy target)]
-                        (set (. start :col) (+ (. target :col) 8))
-                        (set (. start :winblend) 100)
-                        start)
-                      target)
+              {: target} (info-target-config session)
+              animate-info? (animate-info-enter? session target)
+              cfg (initial-info-config target animate-info?)
               win (floating_window_mod.new vim buf cfg)]
-          (events.send :on-buf-create! {:buf buf :role :info})
-          (util.set-buffer-name! buf "[Metabuffer Info]")
-          (set session.info-buf buf)
-          (set session.info-win win.window)
-          (set session.info-config-sig (info-config-signature target))
-          (events.send :on-win-create! {:win session.info-win :role :info})
-          (apply-metabuffer-window-highlights! session.info-win)
-          (let [bo (. vim.bo buf)]
-            (set (. bo :buftype) "nofile")
-            (set (. bo :bufhidden) "wipe")
-            (set (. bo :swapfile) false)
-            (set (. bo :modifiable) false)
-            (set (. bo :filetype) ""))
-          (let [wo (. vim.wo win.window)]
-            (set (. wo :statusline) "")
-            (set (. wo :winbar) "")
-            (set (. wo :number) false)
-            (set (. wo :relativenumber) false)
-            (set (. wo :wrap) false)
-            (set (. wo :linebreak) false)
-            (set (. wo :signcolumn) "no")
-            (set (. wo :foldcolumn) "0")
-            (set (. wo :spell) false)
-            (set (. wo :cursorline) false))
+          (configure-info-buffer! session buf)
+          (configure-info-window! session target win)
           (when animate-info?
-            (set session.info-animated? true)
-            (set session.info-render-suspended? true)
-            (set session.info-post-fade-refresh? true)
-            (pcall vim.api.nvim_set_option_value "winblend" 100 {:win session.info-win})
-            (vim.defer_fn
-              (fn []
-                (when (valid-info-win? session)
-                  (animation_mod.animate-float!
-                    session
-                    "info-enter"
-                    session.info-win
-                    cfg
-                    target
-                    100
-                    (or vim.g.meta_float_winblend 13)
-                    (animation_mod.duration-ms session :info (or info_fade_ms 220))
-                    {:kind :info
-                     :done! (fn [_]
-                              (when (valid-info-win? session)
-                                (set session.info-post-fade-refresh? nil)
-                                (set session.info-render-suspended? false)
-                                (update! session true)))})))
-              17))))))
+            (start-info-enter-animation! session cfg target))))))
 
   (fn settle-info-window!
     [session]
