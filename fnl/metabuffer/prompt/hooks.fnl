@@ -6,6 +6,7 @@
 (local hooks-directive-mod (require :metabuffer.prompt.hooks_directive))
 (local hooks-keymaps-mod (require :metabuffer.prompt.hooks_keymaps))
 (local hooks-layout-mod (require :metabuffer.prompt.hooks_layout))
+(local hooks-results-mod (require :metabuffer.prompt.hooks_results))
 (local loading-state-mod (require :metabuffer.widgets.loading_state))
 (local hooks-window-mod (require :metabuffer.prompt.hooks_window))
 
@@ -134,7 +135,33 @@
                                                         (refresh-prompt-highlights! session))
                           :rebuild-source-set! rebuild-source-set!})
           handle-global-resize! (. layout-hooks :handle-global-resize!)
-          handle-wrap-option-set! (. layout-hooks :handle-wrap-option-set!)]
+          handle-wrap-option-set! (. layout-hooks :handle-wrap-option-set!)
+          results-hooks (hooks-results-mod.new
+                          {:active-by-prompt active-by-prompt
+                           :sign-mod sign-mod
+                           :maybe-sync-from-main! maybe-sync-from-main!
+                           :schedule-scroll-sync! schedule-scroll-sync!
+                           :maybe-restore-hidden-ui! maybe-restore-hidden-ui!
+                           :hide-visible-ui! hide-visible-ui!
+                           :rebuild-source-set! rebuild-source-set!
+                           :covered-by-new-window? covered-by-new-window?
+                           :transient-overlay-buffer? transient-overlay-buffer?
+                           :first-window-for-buffer first-window-for-buffer
+                           :hidden-session-reachable? hidden-session-reachable?
+                           :begin-direct-results-edit! begin-direct-results-edit!})
+          handle-results-cursor! (. results-hooks :handle-results-cursor!)
+          handle-results-edit-enter! (. results-hooks :handle-results-edit-enter!)
+          handle-results-text-changed! (. results-hooks :handle-results-text-changed!)
+          handle-results-focus! (. results-hooks :handle-results-focus!)
+          handle-overlay-winnew! (. results-hooks :handle-overlay-winnew!)
+          handle-overlay-bufwinenter! (. results-hooks :handle-overlay-bufwinenter!)
+          handle-selection-focus! (. results-hooks :handle-selection-focus!)
+          handle-hidden-session-gc! (. results-hooks :handle-hidden-session-gc!)
+          handle-results-leave! (. results-hooks :handle-results-leave!)
+          handle-external-write! (. results-hooks :handle-external-write!)
+          handle-scroll-sync! (. results-hooks :handle-scroll-sync!)
+          handle-results-writecmd! (. results-hooks :handle-results-writecmd!)
+          handle-results-wipeout! (. results-hooks :handle-results-wipeout!)]
       (set refresh-prompt-highlights! (. prompt-view :refresh-highlights!))
       (set schedule-loading-indicator! loading-scheduler)
 
@@ -310,158 +337,47 @@
       ;; Keep selection/status/info synced when user scrolls or moves in the
       ;; main meta window with regular motions/mouse while prompt is open.
         (au! ["CursorMoved" "CursorMovedI"] session.meta.buf.buffer
-          (fn [] (maybe-sync-from-main! session)))
+          (fn [] (handle-results-cursor! session)))
         (au-buf! ["BufEnter" "WinEnter" "FocusGained"] session.meta.buf.buffer
           (fn [_]
-            (begin-direct-results-edit! session)))
+            (handle-results-edit-enter! session)))
         (au-buf! ["TextChanged" "TextChangedI"] session.meta.buf.buffer
           (fn [_]
-            (when (and sign-mod session.meta session.meta.buf)
-              (let [buf session.meta.buf.buffer
-                    internal? (let [[ok v] [(pcall vim.api.nvim_buf_get_var buf "meta_internal_render")]]
-                                (and ok v))]
-                (when-not internal?
-                  (begin-direct-results-edit! session))
-                (vim.schedule
-                  (fn []
-                    (when (and session.prompt-buf
-                               (= (. active-by-prompt session.prompt-buf) session))
-                      (pcall router.sync-live-edits session.prompt-buf)
-                      (pcall maybe-sync-from-main! session true)
-                      (events.send :on-query-update!
-                        {:session session
-                         :query (or session.prompt-last-applied-text "")
-                         :refresh-lines true
-                         :refresh-signs? true}))))))))
+            (handle-results-text-changed! router session)))
         (au-buf! ["BufEnter" "WinEnter" "FocusGained"] session.meta.buf.buffer
           (fn [_]
-            (when (and (not session.closing)
-                       session.meta
-                       session.meta.buf
-                       (vim.api.nvim_buf_is_valid session.meta.buf.buffer))
-              (let [bo (. vim.bo session.meta.buf.buffer)]
-                (set (. bo :buftype) "acwrite")
-                (set (. bo :modifiable) true)
-                (set (. bo :readonly) false)
-                (set (. bo :bufhidden) "hide")))
-            (when maybe-restore-hidden-ui!
-              ;; Defer UI restoration until after the jump/BufEnter
-              ;; command stack settles; restoring windows directly
-              ;; inside BufEnter can surface invalid mark jumps.
-              (vim.schedule
-                (fn []
-                  (when (and (not session.closing)
-                             session.prompt-buf
-                             (= (. active-by-prompt session.prompt-buf) session))
-                    (pcall maybe-restore-hidden-ui! session)))))))
+            (handle-results-focus! session)))
         (au-global! "WinNew"
           (fn [_]
-            (vim.defer_fn
-              (fn []
-                (when (and hide-visible-ui!
-                           (not session.ui-hidden)
-                           session.prompt-buf
-                           (= (. active-by-prompt session.prompt-buf) session))
-                  (let [win (vim.api.nvim_get_current_win)]
-                    (when (covered-by-new-window? session win)
-                      (pcall hide-visible-ui! session)))))
-              20)))
+            (handle-overlay-winnew! session)))
         (au-global! "BufWinEnter"
           (fn [ev]
-            (vim.defer_fn
-              (fn []
-                (when (and hide-visible-ui!
-                           (not session.ui-hidden)
-                           session.prompt-buf
-                           (= (. active-by-prompt session.prompt-buf) session))
-                  (let [buf (or ev.buf (vim.api.nvim_get_current_buf))
-                        win (or (first-window-for-buffer buf)
-                                (vim.api.nvim_get_current_win))]
-                    (when (or (transient-overlay-buffer? buf)
-                              (covered-by-new-window? session win))
-                      (pcall hide-visible-ui! session)))))
-              20)))
+            (handle-overlay-bufwinenter! session ev)))
         (au! ["BufEnter" "WinEnter" "FocusGained"] session.meta.buf.buffer
           (fn []
-            (events.send :on-selection-change!
-              {:session session
-               :line-nr (+ 1 (or session.meta.selected_index 0))
-               :refresh-lines false})))
+            (handle-selection-focus! session)))
         (au-global! ["BufEnter" "WinEnter" "FocusGained"]
           (fn [_]
-            (vim.schedule
-              (fn []
-                (when (and session.ui-hidden
-                           session.prompt-buf
-                           (= (. active-by-prompt session.prompt-buf) session)
-                           (not (hidden-session-reachable? session)))
-                  (pcall router.remove-session session))))))
+            (handle-hidden-session-gc! router session)))
         (au-buf! "BufLeave" session.meta.buf.buffer
           (fn [_]
-            ;; When leaving the results buffer, check if the window it
-            ;; was in is now showing something else. Project-mode
-            ;; sessions should hide auxiliary UI and remain resumable;
-            ;; regular sessions can close entirely.
-            (vim.schedule
-              (fn []
-                (when (and (not session.ui-hidden)
-                           session.prompt-buf
-                           (vim.api.nvim_buf_is_valid session.prompt-buf)
-                           (= (. active-by-prompt session.prompt-buf) session))
-                  (let [win session.meta.win.window]
-                    (if (not (vim.api.nvim_win_is_valid win))
-                        (router.cancel session.prompt-buf)
-                        (let [buf (vim.api.nvim_win_get_buf win)]
-                          (when (not= buf session.meta.buf.buffer)
-                            (if (and session.project-mode hide-visible-ui!)
-                                (hide-visible-ui! session.prompt-buf)
-                                (router.cancel session.prompt-buf)))))))))))
+            (handle-results-leave! router session)))
         (apply-main-keymaps router session)
         (apply-results-edit-keymaps session)
       ;; External file writes: invalidate cached file data and rebuild sources
       ;; so the info sidebar reflects the latest on-disk state.
         (au-global! "BufWritePost"
           (fn [ev]
-            (vim.schedule
-              (fn []
-                (when (and session.prompt-buf
-                           (= (. active-by-prompt session.prompt-buf) session)
-                           (not session.closing))
-                  (let [buf (or ev.buf (vim.api.nvim_get_current_buf))]
-                    (when (and (vim.api.nvim_buf_is_valid buf)
-                               (not= buf session.meta.buf.buffer))
-                      (let [raw (vim.api.nvim_buf_get_name buf)
-                            path (when (and raw (~= raw ""))
-                                   (vim.fn.fnamemodify raw ":p"))]
-                        (when path
-                          ;; Clear per-session caches for this path.
-                          (when session.preview-file-cache
-                            (set (. session.preview-file-cache path) nil))
-                          (when session.info-file-head-cache
-                            (set (. session.info-file-head-cache path) nil))
-                          (when session.info-file-meta-cache
-                            (set (. session.info-file-meta-cache path) nil))
-                          ;; Clear router-level project file cache entry.
-                          (when router.project-file-cache
-                            (set (. router.project-file-cache path) nil))
-                          ;; Rebuild project source set and refresh info window.
-                          (when rebuild-source-set!
-                            (pcall rebuild-source-set! session))
-                          (events.send :on-query-update!
-                            {:session session
-                             :query (or session.prompt-last-applied-text "")
-                             :refresh-lines true}))))))))))
+            (handle-external-write! router session ev)))
         (au-global! "WinScrolled"
           (fn [_]
-            (schedule-scroll-sync! session)))
+            (handle-scroll-sync! session)))
         (au-buf! "BufWriteCmd" session.meta.buf.buffer
           (fn [_]
-            (router.write-results session.prompt-buf)))
+            (handle-results-writecmd! router session)))
         (au-buf! "BufWipeout" session.meta.buf.buffer
           (fn [_]
-            (vim.schedule
-              (fn []
-                (router.results-buffer-wiped session.meta.buf.buffer)))))
+            (handle-results-wipeout! router session)))
         (refresh-prompt-highlights! session)
         (maybe-show-directive-help! session)
         ;; Prompt/footer layout can change one tick later after split/floating
