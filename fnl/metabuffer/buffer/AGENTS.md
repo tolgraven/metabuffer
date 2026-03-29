@@ -18,12 +18,8 @@ Buffer modules own Meta-managed buffer state and buffer-local policy. They shoul
 ### `prompt.fnl`
 - Prompt buffer wrapper.
 - Buffer-local prompt options, naming, and lifecycle for the prompt buffer itself.
-- Prompt-specific rendering/highlight policy should prefer this layer over `prompt/hooks` when it is actually about buffer content, not autocmd registration.
-
-### `prompt_view.fnl`
-- Prompt display/render helpers.
-- Owns prompt-line highlighting and display shaping.
-- `prompt/hooks.fnl` should call into this module instead of directly doing highlight work.
+- Prompt-specific rendering/highlight policy belongs here when it is actually about prompt buffer content, not autocmd registration.
+- Prompt token highlighting and footer refresh should stay here instead of drifting back into `prompt/hooks`.
 
 ### `info.fnl`
 - Info buffer wrapper.

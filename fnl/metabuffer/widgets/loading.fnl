@@ -4,7 +4,7 @@
 
 (fn M.new
   [opts]
-  "Build prompt loading indicator helpers."
+  "Build shared loading-state helpers."
   (let [{: session-prompt-valid? : animation-enabled? : animation-duration-ms
          : refresh-prompt-highlights!} opts
         hl-rendered-bg (. highlight-util :hl-rendered-bg)

@@ -1,14 +1,14 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local M {})
 (local animation-mod (require :metabuffer.window.animation))
-(local prompt-view-mod (require :metabuffer.buffer.prompt_view))
+(local prompt-buffer-mod (require :metabuffer.buffer.prompt))
 (local events (require :metabuffer.events))
 (local hooks-directive-mod (require :metabuffer.prompt.hooks_directive))
 (local hooks-keymaps-mod (require :metabuffer.prompt.hooks_keymaps))
 (local hooks-layout-mod (require :metabuffer.prompt.hooks_layout))
 (local hooks-registry-mod (require :metabuffer.prompt.hooks_registry))
 (local hooks-results-mod (require :metabuffer.prompt.hooks_results))
-(local loading-state-mod (require :metabuffer.widgets.loading_state))
+(local loading-mod (require :metabuffer.widgets.loading))
 (local hooks-window-mod (require :metabuffer.prompt.hooks_window))
 
 (fn M.new
@@ -95,15 +95,16 @@
           hidden-session-reachable? (. window-hooks :hidden-session-reachable?)]
       (var refresh-prompt-highlights! nil)
       (var schedule-loading-indicator! nil)
-      (let [prompt-view (prompt-view-mod.new
-                          {:option-prefix option-prefix
-                           :session-prompt-valid? session-prompt-valid?
-                           :schedule-loading-indicator! (fn [session]
-                                                          (when schedule-loading-indicator!
-                                                            (schedule-loading-indicator! session)))})
-            directive-hooks (hooks-directive-mod.new
+      (let [directive-hooks (hooks-directive-mod.new
                               {:option-prefix option-prefix
-                               :highlight-prompt-like-line! (. prompt-view :highlight-like-line!)})
+                               :highlight-prompt-like-line! (fn [buf ns row txt primary-hl]
+                                                              (prompt-buffer-mod.highlight-like-line!
+                                                                buf
+                                                                ns
+                                                                row
+                                                                txt
+                                                                primary-hl
+                                                                option-prefix))})
             keymap-hooks (hooks-keymaps-mod.new
                            {:default-prompt-keymaps default-prompt-keymaps
                             :default-main-keymaps default-main-keymaps
@@ -118,7 +119,7 @@
             apply-main-keymaps (. keymap-hooks :apply-main-keymaps)
             apply-results-edit-keymaps (. keymap-hooks :apply-results-edit-keymaps)
             begin-direct-results-edit! (. keymap-hooks :begin-direct-results-edit!)
-            loading-hooks (loading-state-mod.new
+            loading-hooks (loading-mod.new
                             {:session-prompt-valid? session-prompt-valid?
                              :animation-enabled? animation-enabled?
                              :animation-duration-ms animation-duration-ms
@@ -163,7 +164,15 @@
             handle-scroll-sync! (. results-hooks :handle-scroll-sync!)
             handle-results-writecmd! (. results-hooks :handle-results-writecmd!)
             handle-results-wipeout! (. results-hooks :handle-results-wipeout!)]
-        (set refresh-prompt-highlights! (. prompt-view :refresh-highlights!))
+        (set refresh-prompt-highlights!
+             (fn [session]
+               (prompt-buffer-mod.refresh-highlights!
+                 session
+                 {:option-prefix option-prefix
+                  :session-prompt-valid? session-prompt-valid?
+                  :schedule-loading-indicator! (fn [session]
+                                                 (when schedule-loading-indicator!
+                                                   (schedule-loading-indicator! session)))})))
         (set schedule-loading-indicator! loading-scheduler)
 
         (let [registry-hooks (hooks-registry-mod.new
