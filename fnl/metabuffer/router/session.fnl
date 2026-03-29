@@ -872,22 +872,25 @@
                  : start-prefilter
                  : start-lazy
                  : start-expansion
-	                 : start-transforms}
-	                (resolve-start-query-state query history-api query-mod settings)]
-		      (let [source-buf (vim.api.nvim_get_current_buf)
-		            existing (. active-by-source source-buf)]
-		        (if (and (. launching-by-source source-buf)
-		                 existing
-		                 (= (clj.boolean existing.project-mode) (clj.boolean project-mode)))
-		            (or existing
-		                (existing-visible-meta existing))
-                (if-some [restored (restored-hidden-session
-                                    router
-                                    router-util-mod
-                                    maybe-restore-hidden-ui!
-                                    source-buf
-                                    existing
-                                    project-mode)]
+		                 : start-transforms}
+                (resolve-start-query-state query history-api query-mod settings)
+                source-buf (vim.api.nvim_get_current_buf)
+                existing (. active-by-source source-buf)
+                already-launching? (and (. launching-by-source source-buf)
+                                        existing
+                                        (= (clj.boolean existing.project-mode) (clj.boolean project-mode)))
+                restored (and (not already-launching?)
+                              (restored-hidden-session
+                                router
+                                router-util-mod
+                                maybe-restore-hidden-ui!
+                                source-buf
+                                existing
+                                project-mode))]
+            (if already-launching?
+                (or existing
+                    (existing-visible-meta existing))
+                (if restored
                     restored
                     (do
                       (set (. launching-by-source source-buf) true)
@@ -909,7 +912,7 @@
                         start-lazy
                         start-expansion
                         start-transforms
-                        source-buf))))))))))
+                        source-buf)))))))))
 
 (set (. M :project-start-selected-index) project-start-selected-index)
 

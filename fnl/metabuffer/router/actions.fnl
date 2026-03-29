@@ -933,6 +933,80 @@
        :lines (slice-lines current-lines start count)
        :ref-kind ref-kind})))
 
+(fn append-replace-ops!
+  [ops old-rows new-lines common current-rows state]
+  (for [i 1 common]
+    (let [row (. old-rows i)
+          text (or (. new-lines i) "")]
+      (when (and (valid-row? row) (~= (or (. row :text) "") text))
+        (if (special-projected-row? row)
+            (let [err (append-group-op! ops row current-rows (. state :processed-special-groups))]
+              (when err
+                (set (. state :unsafe-structural?) true)))
+            (append-op! ops (. row :path) {:kind :replace
+                                           :lnum (. row :lnum)
+                                           :text text
+                                           :old-text (or (. row :text) "")
+                                           :ref-kind (or (. row :kind) "")}))))))
+
+(fn append-delete-ops!
+  [ops old-rows common a-count state]
+  (when (> a-count common)
+    (for [i (+ common 1) a-count]
+      (let [row (. old-rows i)]
+        (if (and (valid-row? row) (not (special-projected-row? row)))
+            (append-op! ops (. row :path) {:kind :delete :lnum (. row :lnum) :ref-kind (or (. row :kind) "")})
+            (set (. state :unsafe-structural?) true))))))
+
+(fn insertion-op
+  [session current-rows current-lines b-start common b-count old-rows]
+  (or (structural-op-from-current-rows current-rows (+ b-start common) (- b-count common))
+      (pending-structural-op session (+ b-start common) (- b-count common) current-lines
+        (or (and (. old-rows common) (. (. old-rows common) :kind))
+            (and (. old-rows (+ common 1)) (. (. old-rows (+ common 1)) :kind))
+            ""))))
+
+(fn append-insert-ops!
+  [ops insert-op state]
+  (if insert-op
+      (append-op! ops (. insert-op :path)
+        {:kind (if (= (. insert-op :side) "before") :insert-before :insert-after)
+         :lnum (. insert-op :lnum)
+         :lines (. insert-op :lines)
+         :ref-kind (or (. insert-op :ref-kind) "")})
+      (set (. state :unsafe-structural?) true)))
+
+(fn handle-modified-hunk!
+  [session ops current-rows current-lines state h baseline-rows]
+  (let [[a-start a-count b-start b-count] (hunk-indices h)
+        common (math.min a-count b-count)
+        old-rows (slice-lines baseline-rows a-start a-count)
+        new-lines (slice-lines current-lines b-start b-count)]
+    (append-replace-ops! ops old-rows new-lines common current-rows state)
+    (append-delete-ops! ops old-rows common a-count state)
+    (when (> b-count a-count)
+      (append-insert-ops!
+        ops
+        (insertion-op session current-rows current-lines b-start common b-count old-rows)
+        state))))
+
+(fn handle-insert-only-hunk!
+  [session ops current-rows current-lines state h]
+  (let [[_ _ b-start b-count] (hunk-indices h)]
+    (when (> b-count 0)
+      (append-insert-ops!
+        ops
+        (or (structural-op-from-current-rows current-rows b-start b-count)
+            (pending-structural-op session b-start b-count current-lines ""))
+        state))))
+
+(fn apply-hunk-file-ops!
+  [session ops current-rows current-lines state h baseline-rows]
+  (let [[_ a-count _ _] (hunk-indices h)]
+    (if (> a-count 0)
+        (handle-modified-hunk! session ops current-rows current-lines state h baseline-rows)
+        (handle-insert-only-hunk! session ops current-rows current-lines state h))))
+
 (fn collect-file-ops
   [session]
   (let [meta session.meta
@@ -947,54 +1021,7 @@
                :processed-special-groups {}}]
     (set session.live-edit-rows current-rows)
     (each [_ h (ipairs hunks)]
-      (let [[a-start a-count b-start b-count] (hunk-indices h)
-            common (math.min a-count b-count)
-            old-rows (slice-lines baseline-rows a-start a-count)
-            new-lines (slice-lines current-lines b-start b-count)]
-        (if (> a-count 0)
-            (do
-              (for [i 1 common]
-                (let [row (. old-rows i)
-                      text (or (. new-lines i) "")]
-                  (when (and (valid-row? row) (~= (or (. row :text) "") text))
-                    (if (special-projected-row? row)
-                        (let [err (append-group-op! ops row current-rows (. state :processed-special-groups))]
-                          (when err
-                            (set (. state :unsafe-structural?) true)))
-                        (append-op! ops (. row :path) {:kind :replace
-                                                       :lnum (. row :lnum)
-                                                       :text text
-                                                       :old-text (or (. row :text) "")
-                                                       :ref-kind (or (. row :kind) "")})))))
-              (when (> a-count b-count)
-                (for [i (+ common 1) a-count]
-                  (let [row (. old-rows i)]
-                    (if (and (valid-row? row) (not (special-projected-row? row)))
-                        (append-op! ops (. row :path) {:kind :delete :lnum (. row :lnum) :ref-kind (or (. row :kind) "")})
-                        (set (. state :unsafe-structural?) true)))))
-              (when (> b-count a-count)
-                (let [insert-op (or (structural-op-from-current-rows current-rows (+ b-start common) (- b-count common))
-                                    (pending-structural-op session (+ b-start common) (- b-count common) current-lines
-                                      (or (and (. old-rows common) (. (. old-rows common) :kind))
-                                          (and (. old-rows (+ common 1)) (. (. old-rows (+ common 1)) :kind))
-                                          "")))]
-                  (if insert-op
-                      (append-op! ops (. insert-op :path)
-                        {:kind (if (= (. insert-op :side) "before") :insert-before :insert-after)
-                         :lnum (. insert-op :lnum)
-                         :lines (. insert-op :lines)
-                         :ref-kind (or (. insert-op :ref-kind) "")})
-                      (set (. state :unsafe-structural?) true)))))
-            (when (> b-count 0)
-              (let [insert-op (or (structural-op-from-current-rows current-rows b-start b-count)
-                                  (pending-structural-op session b-start b-count current-lines ""))]
-                (if insert-op
-                    (append-op! ops (. insert-op :path)
-                      {:kind (if (= (. insert-op :side) "before") :insert-before :insert-after)
-                       :lnum (. insert-op :lnum)
-                       :lines (. insert-op :lines)
-                       :ref-kind (or (. insert-op :ref-kind) "")})
-                    (set (. state :unsafe-structural?) true)))))))
+      (apply-hunk-file-ops! session ops current-rows current-lines state h baseline-rows))
     {:ops ops
      :current-lines current-lines
      :current-rows current-rows
