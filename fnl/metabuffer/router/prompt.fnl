@@ -362,34 +362,33 @@
     (and (~= needle "")
          (not (string.find hay needle 1 true)))))
 
+(fn insert-history-fragment!
+  [active-by-prompt prompt-buf fragment entry]
+  (let [session (session-by-prompt active-by-prompt prompt-buf)]
+    (when (should-insert-history-fragment? session fragment)
+      (M.prompt-insert-at-cursor! active-by-prompt prompt-buf fragment))
+    (when (and session (~= fragment ""))
+      (set session.last-history-text entry))))
+
 (fn M.insert-last-prompt!
   [active-by-prompt history-api prompt-buf]
   (let [session (session-by-prompt active-by-prompt prompt-buf)
         entry (history-api.history-latest session)]
-    (when (should-insert-history-fragment? session entry)
-      (M.prompt-insert-at-cursor! active-by-prompt prompt-buf entry))
-    (when (and session (~= entry ""))
-      (set session.last-history-text entry))))
+    (insert-history-fragment! active-by-prompt prompt-buf entry entry)))
 
 (fn M.insert-last-token!
   [active-by-prompt history-api prompt-buf]
   (let [session (session-by-prompt active-by-prompt prompt-buf)
         token (history-api.history-latest-token session)
         entry (history-api.history-latest session)]
-    (when (should-insert-history-fragment? session token)
-      (M.prompt-insert-at-cursor! active-by-prompt prompt-buf token))
-    (when (and session (~= token ""))
-      (set session.last-history-text entry))))
+    (insert-history-fragment! active-by-prompt prompt-buf token entry)))
 
 (fn M.insert-last-tail!
   [active-by-prompt history-api prompt-buf]
   (let [session (session-by-prompt active-by-prompt prompt-buf)
         tail (history-api.history-latest-tail session)
         entry (history-api.history-latest session)]
-    (when (should-insert-history-fragment? session tail)
-      (M.prompt-insert-at-cursor! active-by-prompt prompt-buf tail))
-    (when (and session (~= tail ""))
-      (set session.last-history-text entry))))
+    (insert-history-fragment! active-by-prompt prompt-buf tail entry)))
 
 (fn find-token-span
   [line col]
