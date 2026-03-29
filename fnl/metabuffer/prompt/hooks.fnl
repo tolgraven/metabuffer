@@ -1,11 +1,11 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
-(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
 (local animation-mod (require :metabuffer.window.animation))
 (local prompt-view-mod (require :metabuffer.buffer.prompt_view))
 (local events (require :metabuffer.events))
 (local hooks-directive-mod (require :metabuffer.prompt.hooks_directive))
 (local hooks-keymaps-mod (require :metabuffer.prompt.hooks_keymaps))
+(local hooks-layout-mod (require :metabuffer.prompt.hooks_layout))
 (local loading-state-mod (require :metabuffer.widgets.loading_state))
 (local hooks-window-mod (require :metabuffer.prompt.hooks_window))
 
@@ -122,7 +122,19 @@
                            :animation-duration-ms animation-duration-ms
                            :refresh-prompt-highlights! (fn [session]
                                                          (refresh-prompt-highlights! session))})
-          loading-scheduler (. loading-hooks :schedule-loading-indicator!)]
+          loading-scheduler (. loading-hooks :schedule-loading-indicator!)
+          layout-hooks (hooks-layout-mod.new
+                         {:session-prompt-valid? session-prompt-valid?
+                          :capture-expected-layout! capture-expected-layout!
+                          :note-editor-size! note-editor-size!
+                          :note-global-editor-resize! note-global-editor-resize!
+                          :manual-prompt-resize? manual-prompt-resize?
+                          :schedule-restore-expected-layout! schedule-restore-expected-layout!
+                          :refresh-prompt-highlights! (fn [session]
+                                                        (refresh-prompt-highlights! session))
+                          :rebuild-source-set! rebuild-source-set!})
+          handle-global-resize! (. layout-hooks :handle-global-resize!)
+          handle-wrap-option-set! (. layout-hooks :handle-wrap-option-set!)]
       (set refresh-prompt-highlights! (. prompt-view :refresh-highlights!))
       (set schedule-loading-indicator! loading-scheduler)
 
@@ -290,76 +302,10 @@
       ;; width.  VimResized (terminal resize) clears the latch.
         (au-global! ["VimResized" "WinResized"]
           (fn [ev]
-            (when-not session.handling-layout-change?
-              ;; Synchronous: capture resize info before schedule.
-              (let [is-vim-resized? (= ev.event "VimResized")
-                    wins (or (?. vim.v :event :windows) [])
-                    manual-prompt-resize (and (not is-vim-resized?)
-                                              (manual-prompt-resize? session wins))]
-                (when is-vim-resized?
-                  (set session.preview-user-resized? false))
-                (let [editor-size-changed? (or (~= (or session.last-editor-columns vim.o.columns) vim.o.columns)
-                                               (~= (or session.last-editor-lines vim.o.lines) vim.o.lines))]
-                  (note-editor-size! session)
-                  (when (or is-vim-resized? editor-size-changed?)
-                    (note-global-editor-resize! session))
-                  (when (and (not is-vim-resized?)
-                             (not editor-size-changed?)
-                             (not session.preview-global-resize-token)
-                             session.preview-win
-                             (vim.api.nvim_win_is_valid session.preview-win))
-                  (each [_ wid (ipairs wins)]
-                    (when (= wid session.preview-win)
-                      (set session.preview-user-resized? true)))))
-                (if manual-prompt-resize
-                    (do
-                      (set session.prompt-target-height (vim.api.nvim_win_get_height session.prompt-win))
-                      (capture-expected-layout! session))
-                    (schedule-restore-expected-layout! session)))
-              (set session.handling-layout-change? true)
-              (vim.schedule
-                (fn []
-                  (when (session-prompt-valid? session)
-                    (let [results-wrap? (and session.meta
-                                             session.meta.win
-                                             (vim.api.nvim_win_is_valid session.meta.win.window)
-                                             (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
-                      (when (and results-wrap?
-                                 rebuild-source-set!
-                                 (not session.project-mode))
-                        (pcall rebuild-source-set! session)
-                        (pcall session.meta.on-update 0)))
-                    (when-not session.prompt-animating?
-                      (pcall refresh-prompt-highlights! session)
-                      (events.send :on-query-update!
-                        {:session session
-                         :query (or session.prompt-last-applied-text "")
-                         :refresh-lines true}))
-                    (when (= ev.event "VimResized")
-                      (capture-expected-layout! session)))
-                  (set session.handling-layout-change? false))))))
+            (handle-global-resize! session ev)))
         (au-global! "OptionSet"
           (fn [_]
-            (when-not session.handling-layout-change?
-              (set session.handling-layout-change? true)
-              (vim.schedule
-                (fn []
-                  (when (session-prompt-valid? session)
-                    (when (and session.meta
-                               session.meta.win
-                               (vim.api.nvim_win_is_valid session.meta.win.window)
-                               (= (vim.api.nvim_get_current_win) session.meta.win.window))
-                      (let [wrap? (clj.boolean (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
-                        (pcall vim.api.nvim_set_option_value "linebreak" wrap? {:win session.meta.win.window})
-                        (when (and rebuild-source-set!
-                                   (not session.project-mode))
-                          (pcall rebuild-source-set! session)
-                          (pcall session.meta.on-update 0)
-                          (events.send :on-query-update!
-                            {:session session
-                             :query (or session.prompt-last-applied-text "")
-                             :refresh-lines true})))))
-                  (set session.handling-layout-change? false)))))
+            (handle-wrap-option-set! session))
           {:pattern "wrap"})
       ;; Keep selection/status/info synced when user scrolls or moves in the
       ;; main meta window with regular motions/mouse while prompt is open.

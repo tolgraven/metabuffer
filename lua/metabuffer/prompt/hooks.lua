@@ -1,11 +1,11 @@
 -- [nfnl] fnl/metabuffer/prompt/hooks.fnl
-local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 local animation_mod = require("metabuffer.window.animation")
 local prompt_view_mod = require("metabuffer.buffer.prompt_view")
 local events = require("metabuffer.events")
 local hooks_directive_mod = require("metabuffer.prompt.hooks_directive")
 local hooks_keymaps_mod = require("metabuffer.prompt.hooks_keymaps")
+local hooks_layout_mod = require("metabuffer.prompt.hooks_layout")
 local loading_state_mod = require("metabuffer.widgets.loading_state")
 local hooks_window_mod = require("metabuffer.prompt.hooks_window")
 M.new = function(opts)
@@ -103,6 +103,13 @@ M.new = function(opts)
   end
   loading_hooks = loading_state_mod.new({["session-prompt-valid?"] = session_prompt_valid_3f, ["animation-enabled?"] = animation_enabled_3f, ["animation-duration-ms"] = animation_duration_ms, ["refresh-prompt-highlights!"] = _8_})
   local loading_scheduler = loading_hooks["schedule-loading-indicator!"]
+  local layout_hooks
+  local function _9_(session)
+    return refresh_prompt_highlights_21(session)
+  end
+  layout_hooks = hooks_layout_mod.new({["session-prompt-valid?"] = session_prompt_valid_3f, ["capture-expected-layout!"] = capture_expected_layout_21, ["note-editor-size!"] = note_editor_size_21, ["note-global-editor-resize!"] = note_global_editor_resize_21, ["manual-prompt-resize?"] = manual_prompt_resize_3f, ["schedule-restore-expected-layout!"] = schedule_restore_expected_layout_21, ["refresh-prompt-highlights!"] = _9_, ["rebuild-source-set!"] = rebuild_source_set_21})
+  local handle_global_resize_21 = layout_hooks["handle-global-resize!"]
+  local handle_wrap_option_set_21 = layout_hooks["handle-wrap-option-set!"]
   refresh_prompt_highlights_21 = prompt_view["refresh-highlights!"]
   schedule_loading_indicator_21 = loading_scheduler
   local function maybe_expand_history_shorthand_21(router, session)
@@ -110,9 +117,9 @@ M.new = function(opts)
       return false
     else
       if (session and session["prompt-buf"] and session["prompt-win"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and vim.api.nvim_win_is_valid(session["prompt-win"])) then
-        local _let_9_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
-        local row = _let_9_[1]
-        local col = _let_9_[2]
+        local _let_10_ = vim.api.nvim_win_get_cursor(session["prompt-win"])
+        local row = _let_10_[1]
+        local col = _let_10_[2]
         local row0 = math.max(0, (row - 1))
         local line = (vim.api.nvim_buf_get_lines(session["prompt-buf"], row0, (row0 + 1), false)[1] or "")
         local left
@@ -152,13 +159,13 @@ M.new = function(opts)
           session["_expanding-history-shorthand"] = true
           do
             local start_col
-            local _14_
+            local _15_
             if (trigger == "!^!") then
-              _14_ = 3
+              _15_ = 3
             else
-              _14_ = 2
+              _15_ = 2
             end
-            start_col = (col - _14_)
+            start_col = (col - _15_)
             vim.api.nvim_buf_set_text(session["prompt-buf"], row0, start_col, row0, col, {""})
             pcall(vim.api.nvim_win_set_cursor, session["prompt-win"], {row, start_col})
           end
@@ -197,10 +204,10 @@ M.new = function(opts)
     session.augroup = aug
     capture_expected_layout_21(session)
     local function au_21(events0, buf, body)
-      local function _21_(_)
+      local function _22_(_)
         return schedule_when_valid(session, body)
       end
-      return vim.api.nvim_create_autocmd(events0, {group = aug, buffer = buf, callback = _21_})
+      return vim.api.nvim_create_autocmd(events0, {group = aug, buffer = buf, callback = _22_})
     end
     local function au_buf_21(events0, buf, callback)
       return vim.api.nvim_create_autocmd(events0, {group = aug, buffer = buf, callback = callback})
@@ -212,8 +219,8 @@ M.new = function(opts)
       end
       return vim.api.nvim_create_autocmd(events0, base)
     end
-    local function _22_(_, _0, changedtick, _1, _2, _3, _4, _5)
-      local function _23_()
+    local function _23_(_, _0, changedtick, _1, _2, _3, _4, _5)
+      local function _24_()
         if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
           if maybe_expand_history_shorthand_21(router, session) then
             return nil
@@ -225,9 +232,9 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.schedule(_23_)
+      return vim.schedule(_24_)
     end
-    local function _26_()
+    local function _27_()
       if session["prompt-buf"] then
         active_by_prompt[session["prompt-buf"]] = nil
         return nil
@@ -235,8 +242,8 @@ M.new = function(opts)
         return nil
       end
     end
-    vim.api.nvim_buf_attach(session["prompt-buf"], false, {on_lines = _22_, on_detach = _26_})
-    local function _28_(_)
+    vim.api.nvim_buf_attach(session["prompt-buf"], false, {on_lines = _23_, on_detach = _27_})
+    local function _29_(_)
       if maybe_expand_history_shorthand_21(router, session) then
         return nil
       else
@@ -246,154 +253,56 @@ M.new = function(opts)
         return on_prompt_changed(session["prompt-buf"], false, vim.api.nvim_buf_get_changedtick(session["prompt-buf"]))
       end
     end
-    au_buf_21({"TextChanged", "TextChangedI"}, session["prompt-buf"], _28_)
-    local function _30_(ev)
+    au_buf_21({"TextChanged", "TextChangedI"}, session["prompt-buf"], _29_)
+    local function _31_(ev)
       local item = (ev and (type(ev) == "table") and ev.completed_item)
       return maybe_show_directive_help_21(session, item)
     end
-    au_21("CompleteChanged", session["prompt-buf"], _30_)
-    local function _31_()
+    au_21("CompleteChanged", session["prompt-buf"], _31_)
+    local function _32_()
       return maybe_show_directive_help_21(session)
     end
-    au_21("CompleteDone", session["prompt-buf"], _31_)
-    local function _32_()
+    au_21("CompleteDone", session["prompt-buf"], _32_)
+    local function _33_()
       events.send("on-insert-enter!", {session = session})
       apply_keymaps(router, session)
       return apply_emacs_insert_fallbacks(router, session)
     end
-    au_21("InsertEnter", session["prompt-buf"], _32_)
-    local function _33_()
+    au_21("InsertEnter", session["prompt-buf"], _33_)
+    local function _34_()
       return events.post("on-prompt-focus!", {session = session}, {["supersede?"] = true, ["dedupe-key"] = ("on-prompt-focus:" .. tostring(session["prompt-buf"]))})
     end
-    au_21({"BufEnter", "WinEnter", "FocusGained"}, session["prompt-buf"], _33_)
-    local function _34_()
+    au_21({"BufEnter", "WinEnter", "FocusGained"}, session["prompt-buf"], _34_)
+    local function _35_()
       events.post("on-prompt-focus!", {session = session}, {["supersede?"] = true, ["dedupe-key"] = ("on-prompt-focus:" .. tostring(session["prompt-buf"]))})
       return maybe_show_directive_help_21(session)
     end
-    au_21({"ModeChanged", "InsertEnter", "InsertLeave"}, session["prompt-buf"], _34_)
-    local function _35_()
+    au_21({"ModeChanged", "InsertEnter", "InsertLeave"}, session["prompt-buf"], _35_)
+    local function _36_()
       return maybe_show_directive_help_21(session)
     end
-    au_21({"CursorMoved", "CursorMovedI"}, session["prompt-buf"], _35_)
-    local function _36_()
+    au_21({"CursorMoved", "CursorMovedI"}, session["prompt-buf"], _36_)
+    local function _37_()
       return hide_directive_help_21(session)
     end
-    au_21({"BufLeave", "WinLeave"}, session["prompt-buf"], _36_)
-    local function _37_(ev)
-      if not session["handling-layout-change?"] then
-        do
-          local is_vim_resized_3f = (ev.event == "VimResized")
-          local wins
-          local _39_
-          do
-            local t_38_ = vim.v
-            if (nil ~= t_38_) then
-              t_38_ = t_38_.event
-            else
-            end
-            if (nil ~= t_38_) then
-              t_38_ = t_38_.windows
-            else
-            end
-            _39_ = t_38_
-          end
-          wins = (_39_ or {})
-          local manual_prompt_resize = (not is_vim_resized_3f and manual_prompt_resize_3f(session, wins))
-          if is_vim_resized_3f then
-            session["preview-user-resized?"] = false
-          else
-          end
-          do
-            local editor_size_changed_3f = (((session["last-editor-columns"] or vim.o.columns) ~= vim.o.columns) or ((session["last-editor-lines"] or vim.o.lines) ~= vim.o.lines))
-            note_editor_size_21(session)
-            if (is_vim_resized_3f or editor_size_changed_3f) then
-              note_global_editor_resize_21(session)
-            else
-            end
-            if (not is_vim_resized_3f and not editor_size_changed_3f and not session["preview-global-resize-token"] and session["preview-win"] and vim.api.nvim_win_is_valid(session["preview-win"])) then
-              for _, wid in ipairs(wins) do
-                if (wid == session["preview-win"]) then
-                  session["preview-user-resized?"] = true
-                else
-                end
-              end
-            else
-            end
-          end
-          if manual_prompt_resize then
-            session["prompt-target-height"] = vim.api.nvim_win_get_height(session["prompt-win"])
-            capture_expected_layout_21(session)
-          else
-            schedule_restore_expected_layout_21(session)
-          end
-        end
-        session["handling-layout-change?"] = true
-        local function _47_()
-          if session_prompt_valid_3f(session) then
-            do
-              local results_wrap_3f = (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window) and vim.api.nvim_get_option_value("wrap", {win = session.meta.win.window}))
-              if (results_wrap_3f and rebuild_source_set_21 and not session["project-mode"]) then
-                pcall(rebuild_source_set_21, session)
-                pcall(session.meta["on-update"], 0)
-              else
-              end
-            end
-            if not session["prompt-animating?"] then
-              pcall(refresh_prompt_highlights_21, session)
-              events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = true})
-            else
-            end
-            if (ev.event == "VimResized") then
-              capture_expected_layout_21(session)
-            else
-            end
-          else
-          end
-          session["handling-layout-change?"] = false
-          return nil
-        end
-        return vim.schedule(_47_)
-      else
-        return nil
-      end
+    au_21({"BufLeave", "WinLeave"}, session["prompt-buf"], _37_)
+    local function _38_(ev)
+      return handle_global_resize_21(session, ev)
     end
-    au_global_21({"VimResized", "WinResized"}, _37_)
-    local function _53_(_)
-      if not session["handling-layout-change?"] then
-        session["handling-layout-change?"] = true
-        local function _54_()
-          if session_prompt_valid_3f(session) then
-            if (session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window) and (vim.api.nvim_get_current_win() == session.meta.win.window)) then
-              local wrap_3f = clj.boolean(vim.api.nvim_get_option_value("wrap", {win = session.meta.win.window}))
-              pcall(vim.api.nvim_set_option_value, "linebreak", wrap_3f, {win = session.meta.win.window})
-              if (rebuild_source_set_21 and not session["project-mode"]) then
-                pcall(rebuild_source_set_21, session)
-                pcall(session.meta["on-update"], 0)
-                events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = true})
-              else
-              end
-            else
-            end
-          else
-          end
-          session["handling-layout-change?"] = false
-          return nil
-        end
-        return vim.schedule(_54_)
-      else
-        return nil
-      end
+    au_global_21({"VimResized", "WinResized"}, _38_)
+    local function _39_(_)
+      return handle_wrap_option_set_21(session)
     end
-    au_global_21("OptionSet", _53_, {pattern = "wrap"})
-    local function _59_()
+    au_global_21("OptionSet", _39_, {pattern = "wrap"})
+    local function _40_()
       return maybe_sync_from_main_21(session)
     end
-    au_21({"CursorMoved", "CursorMovedI"}, session.meta.buf.buffer, _59_)
-    local function _60_(_)
+    au_21({"CursorMoved", "CursorMovedI"}, session.meta.buf.buffer, _40_)
+    local function _41_(_)
       return begin_direct_results_edit_21(session)
     end
-    au_buf_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _60_)
-    local function _61_(_)
+    au_buf_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _41_)
+    local function _42_(_)
       if (sign_mod and session.meta and session.meta.buf) then
         local buf = session.meta.buf.buffer
         local internal_3f
@@ -405,7 +314,7 @@ M.new = function(opts)
           begin_direct_results_edit_21(session)
         else
         end
-        local function _63_()
+        local function _44_()
           if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
             pcall(router["sync-live-edits"], session["prompt-buf"])
             pcall(maybe_sync_from_main_21, session, true)
@@ -414,13 +323,13 @@ M.new = function(opts)
             return nil
           end
         end
-        return vim.schedule(_63_)
+        return vim.schedule(_44_)
       else
         return nil
       end
     end
-    au_buf_21({"TextChanged", "TextChangedI"}, session.meta.buf.buffer, _61_)
-    local function _66_(_)
+    au_buf_21({"TextChanged", "TextChangedI"}, session.meta.buf.buffer, _42_)
+    local function _47_(_)
       if (not session.closing and session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer)) then
         local bo = vim.bo[session.meta.buf.buffer]
         bo["buftype"] = "acwrite"
@@ -430,21 +339,21 @@ M.new = function(opts)
       else
       end
       if maybe_restore_hidden_ui_21 then
-        local function _68_()
+        local function _49_()
           if (not session.closing and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
             return pcall(maybe_restore_hidden_ui_21, session)
           else
             return nil
           end
         end
-        return vim.schedule(_68_)
+        return vim.schedule(_49_)
       else
         return nil
       end
     end
-    au_buf_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _66_)
-    local function _71_(_)
-      local function _72_()
+    au_buf_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _47_)
+    local function _52_(_)
+      local function _53_()
         if (hide_visible_ui_21 and not session["ui-hidden"] and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
           local win = vim.api.nvim_get_current_win()
           if covered_by_new_window_3f(session, win) then
@@ -456,11 +365,11 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_72_, 20)
+      return vim.defer_fn(_53_, 20)
     end
-    au_global_21("WinNew", _71_)
-    local function _75_(ev)
-      local function _76_()
+    au_global_21("WinNew", _52_)
+    local function _56_(ev)
+      local function _57_()
         if (hide_visible_ui_21 and not session["ui-hidden"] and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
           local buf = (ev.buf or vim.api.nvim_get_current_buf())
           local win = (first_window_for_buffer(buf) or vim.api.nvim_get_current_win())
@@ -473,26 +382,26 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.defer_fn(_76_, 20)
+      return vim.defer_fn(_57_, 20)
     end
-    au_global_21("BufWinEnter", _75_)
-    local function _79_()
+    au_global_21("BufWinEnter", _56_)
+    local function _60_()
       return events.send("on-selection-change!", {session = session, ["line-nr"] = (1 + (session.meta.selected_index or 0)), ["refresh-lines"] = false})
     end
-    au_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _79_)
-    local function _80_(_)
-      local function _81_()
+    au_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _60_)
+    local function _61_(_)
+      local function _62_()
         if (session["ui-hidden"] and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session) and not hidden_session_reachable_3f(session)) then
           return pcall(router["remove-session"], session)
         else
           return nil
         end
       end
-      return vim.schedule(_81_)
+      return vim.schedule(_62_)
     end
-    au_global_21({"BufEnter", "WinEnter", "FocusGained"}, _80_)
-    local function _83_(_)
-      local function _84_()
+    au_global_21({"BufEnter", "WinEnter", "FocusGained"}, _61_)
+    local function _64_(_)
+      local function _65_()
         if (not session["ui-hidden"] and session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and (active_by_prompt[session["prompt-buf"]] == session)) then
           local win = session.meta.win.window
           if not vim.api.nvim_win_is_valid(win) then
@@ -513,13 +422,13 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.schedule(_84_)
+      return vim.schedule(_65_)
     end
-    au_buf_21("BufLeave", session.meta.buf.buffer, _83_)
+    au_buf_21("BufLeave", session.meta.buf.buffer, _64_)
     apply_main_keymaps(router, session)
     apply_results_edit_keymaps(session)
-    local function _89_(ev)
-      local function _90_()
+    local function _70_(ev)
+      local function _71_()
         if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session) and not session.closing) then
           local buf = (ev.buf or vim.api.nvim_get_current_buf())
           if (vim.api.nvim_buf_is_valid(buf) and (buf ~= session.meta.buf.buffer)) then
@@ -562,27 +471,27 @@ M.new = function(opts)
           return nil
         end
       end
-      return vim.schedule(_90_)
+      return vim.schedule(_71_)
     end
-    au_global_21("BufWritePost", _89_)
-    local function _100_(_)
+    au_global_21("BufWritePost", _70_)
+    local function _81_(_)
       return schedule_scroll_sync_21(session)
     end
-    au_global_21("WinScrolled", _100_)
-    local function _101_(_)
+    au_global_21("WinScrolled", _81_)
+    local function _82_(_)
       return router["write-results"](session["prompt-buf"])
     end
-    au_buf_21("BufWriteCmd", session.meta.buf.buffer, _101_)
-    local function _102_(_)
-      local function _103_()
+    au_buf_21("BufWriteCmd", session.meta.buf.buffer, _82_)
+    local function _83_(_)
+      local function _84_()
         return router["results-buffer-wiped"](session.meta.buf.buffer)
       end
-      return vim.schedule(_103_)
+      return vim.schedule(_84_)
     end
-    au_buf_21("BufWipeout", session.meta.buf.buffer, _102_)
+    au_buf_21("BufWipeout", session.meta.buf.buffer, _83_)
     refresh_prompt_highlights_21(session)
     maybe_show_directive_help_21(session)
-    local function _104_()
+    local function _85_()
       if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
         pcall(refresh_prompt_highlights_21, session)
         return capture_expected_layout_21(session)
@@ -590,7 +499,7 @@ M.new = function(opts)
         return nil
       end
     end
-    vim.defer_fn(_104_, prompt_animation_delay_ms(session))
+    vim.defer_fn(_85_, prompt_animation_delay_ms(session))
     apply_keymaps(router, session)
     return apply_emacs_insert_fallbacks(router, session)
   end

@@ -1,26 +1,6 @@
 (import-macros {: when-let : if-let : when-some : if-some : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local window-util (require :metabuffer.window.util))
 (local M {})
-
-(fn window-rect
-  [win]
-  (when (and win (= (type win) "number") (vim.api.nvim_win_is_valid win))
-    (let [pos (vim.api.nvim_win_get_position win)
-          row (or (. pos 1) 0)
-          col (or (. pos 2) 0)
-          height (vim.api.nvim_win_get_height win)
-          width (vim.api.nvim_win_get_width win)]
-      {:top row
-       :left col
-       :bottom (+ row height -1)
-       :right (+ col width -1)})))
-
-(fn rect-overlap?
-  [a b]
-  (and a b
-       (<= (. a :top) (. b :bottom))
-       (<= (. b :top) (. a :bottom))
-       (<= (. a :left) (. b :right))
-       (<= (. b :left) (. a :right))))
 
 (fn transient-overlay-buffer?
   [buf]
@@ -32,28 +12,13 @@
           (= ft "man")
           (= bt "help")))))
 
-(fn first-window-for-buffer
-  [buf]
-  (when (and buf (= (type buf) "number") (vim.api.nvim_buf_is_valid buf))
-    (let [wins (vim.fn.win_findbuf buf)]
-      (var found nil)
-      (each [_ win (ipairs (or wins []))]
-        (when (and (not found) (vim.api.nvim_win_is_valid win))
-          (set found win)))
-      found)))
-
-(fn tab-window-count
-  [win]
-  "Return count of windows in WIN tab, or nil."
-  (when (and win (= (type win) "number") (vim.api.nvim_win_is_valid win))
-    (let [[ok tab] [(pcall vim.api.nvim_win_get_tabpage win)]]
-      (when (and ok tab)
-        (let [[ok2 wins] [(pcall vim.api.nvim_tabpage_list_wins tab)]]
-          (when (and ok2 (= (type wins) "table"))
-            (# wins)))))))
 
 (fn M.new
   [session-prompt-valid?]
+  (let [window-rect (. window-util :window-rect)
+        rect-overlap? (. window-util :rect-overlap?)
+        first-window-for-buffer (. window-util :first-window-for-buffer)
+        tab-window-count (. window-util :tab-window-count)]
   (fn meta-owned-window?
     [session win]
     (let [meta-win (and session.meta session.meta.win session.meta.win.window)
@@ -226,6 +191,6 @@
    :note-global-editor-resize! note-global-editor-resize!
    :manual-prompt-resize? manual-prompt-resize?
    :schedule-restore-expected-layout! schedule-restore-expected-layout!
-   :hidden-session-reachable? hidden-session-reachable?})
+   :hidden-session-reachable? hidden-session-reachable?}))
 
 M

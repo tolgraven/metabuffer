@@ -1,20 +1,6 @@
 -- [nfnl] fnl/metabuffer/prompt/hooks_window.fnl
+local window_util = require("metabuffer.window.util")
 local M = {}
-local function window_rect(win)
-  if (win and (type(win) == "number") and vim.api.nvim_win_is_valid(win)) then
-    local pos = vim.api.nvim_win_get_position(win)
-    local row = (pos[1] or 0)
-    local col = (pos[2] or 0)
-    local height = vim.api.nvim_win_get_height(win)
-    local width = vim.api.nvim_win_get_width(win)
-    return {top = row, left = col, bottom = (row + height + -1), right = (col + width + -1)}
-  else
-    return nil
-  end
-end
-local function rect_overlap_3f(a, b)
-  return (a and b and (a.top <= b.bottom) and (b.top <= a.bottom) and (a.left <= b.right) and (b.left <= a.right))
-end
 local function transient_overlay_buffer_3f(buf)
   if (buf and (type(buf) == "number") and vim.api.nvim_buf_is_valid(buf)) then
     local bo = vim.bo[buf]
@@ -25,39 +11,11 @@ local function transient_overlay_buffer_3f(buf)
     return nil
   end
 end
-local function first_window_for_buffer(buf)
-  if (buf and (type(buf) == "number") and vim.api.nvim_buf_is_valid(buf)) then
-    local wins = vim.fn.win_findbuf(buf)
-    local found = nil
-    for _, win in ipairs((wins or {})) do
-      if (not found and vim.api.nvim_win_is_valid(win)) then
-        found = win
-      else
-      end
-    end
-    return found
-  else
-    return nil
-  end
-end
-local function tab_window_count(win)
-  if (win and (type(win) == "number") and vim.api.nvim_win_is_valid(win)) then
-    local ok,tab = pcall(vim.api.nvim_win_get_tabpage, win)
-    if (ok and tab) then
-      local ok2,wins = pcall(vim.api.nvim_tabpage_list_wins, tab)
-      if (ok2 and (type(wins) == "table")) then
-        return #wins
-      else
-        return nil
-      end
-    else
-      return nil
-    end
-  else
-    return nil
-  end
-end
 M.new = function(session_prompt_valid_3f)
+  local window_rect = window_util["window-rect"]
+  local rect_overlap_3f = window_util["rect-overlap?"]
+  local first_window_for_buffer = window_util["first-window-for-buffer"]
+  local tab_window_count = window_util["tab-window-count"]
   local function meta_owned_window_3f(session, win)
     local meta_win = (session.meta and session.meta.win and session.meta.win.window)
     local prompt_win = session["prompt-win"]
@@ -98,7 +56,7 @@ M.new = function(session_prompt_valid_3f)
       session["preview-user-resized?"] = false
       session["preview-global-resize-token"] = (1 + (session["preview-global-resize-token"] or 0))
       local token = session["preview-global-resize-token"]
-      local function _10_()
+      local function _4_()
         if (session and (token == session["preview-global-resize-token"])) then
           session["preview-global-resize-token"] = nil
           return nil
@@ -106,7 +64,7 @@ M.new = function(session_prompt_valid_3f)
           return nil
         end
       end
-      return vim.defer_fn(_10_, 120)
+      return vim.defer_fn(_4_, 120)
     else
       return nil
     end
@@ -186,7 +144,7 @@ M.new = function(session_prompt_valid_3f)
     if session["expected-layout"] then
       session["layout-restore-token"] = (1 + (session["layout-restore-token"] or 0))
       local token = session["layout-restore-token"]
-      local function _21_()
+      local function _15_()
         if (session_prompt_valid_3f(session) and (token == session["layout-restore-token"]) and session["expected-layout"]) then
           local main_win = (session.meta and session.meta.win and session.meta.win.window)
           local current_count = (main_win and tab_window_count(main_win))
@@ -200,7 +158,7 @@ M.new = function(session_prompt_valid_3f)
           return nil
         end
       end
-      return vim.defer_fn(_21_, 80)
+      return vim.defer_fn(_15_, 80)
     else
       return nil
     end
