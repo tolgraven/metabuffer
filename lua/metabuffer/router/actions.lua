@@ -1,6 +1,5 @@
 -- [nfnl] fnl/metabuffer/router/actions.fnl
 local M = {}
-local util = require("metabuffer.util")
 local source_mod = require("metabuffer.source")
 local transform_mod = require("metabuffer.transform")
 local events = require("metabuffer.events")
@@ -346,7 +345,6 @@ local function restore_session_ui_21(deps, session, opts)
   local mods = deps.mods
   local refresh = deps.refresh
   local sync_prompt_buffer_name_21 = refresh["sync-prompt-buffer-name!"]
-  local router_util_mod = mods["router-util"]
   local session_view_mod = mods["session-view"]
   local preserve_focus_3f = (opts and opts["preserve-focus"])
   local curr = session.meta
