@@ -3,7 +3,7 @@ local clj = require("io.gitlab.andreyorst.cljlib.core")
 local base = require("metabuffer.window.base")
 local animation_mod = require("metabuffer.window.animation")
 local prompt_buffer_mod = require("metabuffer.buffer.prompt")
-local events_mod = require("metabuffer.events")
+local events = require("metabuffer.events")
 local util = require("metabuffer.util")
 local M = {}
 local apply_metabuffer_window_highlights_21 = base["apply-metabuffer-window-highlights!"]
@@ -17,7 +17,7 @@ local function prompt_buffer_21(win)
   return prompt_buffer_mod.new(buf)
 end
 local function prompt_window_opts_21(win)
-  events_mod.send("on-win-create!", {win = win, role = "prompt"})
+  events.send("on-win-create!", {win = win, role = "prompt"})
   apply_metabuffer_window_highlights_21(win)
   local wo = vim.wo[win]
   wo["winfixheight"] = true

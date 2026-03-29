@@ -3,7 +3,7 @@
 (local base (require :metabuffer.window.base))
 (local animation-mod (require :metabuffer.window.animation))
 (local prompt-buffer-mod (require :metabuffer.buffer.prompt))
-(local events-mod (require :metabuffer.events))
+(local events (require :metabuffer.events))
 (local util (require :metabuffer.util))
 (local M {})
 (local apply-metabuffer-window-highlights! (. base :apply-metabuffer-window-highlights!))
@@ -22,7 +22,7 @@
 
 (fn prompt-window-opts!
   [win]
-  (events-mod.send :on-win-create! {:win win :role :prompt})
+  (events.send :on-win-create! {:win win :role :prompt})
   (apply-metabuffer-window-highlights! win)
   (let [wo (. vim.wo win)]
     (set (. wo :winfixheight) true)
