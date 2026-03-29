@@ -11,8 +11,29 @@ local function valid_session_buffer_3f(session)
   return (session and session.meta and session.meta.buf and vim.api.nvim_buf_is_valid(session.meta.buf.buffer))
 end
 local function prompt_query_active_3f(session)
-  local query0 = (session["prompt-last-applied-text"] or "")
-  return (vim.trim(query0) ~= "")
+  local lines = ((session["last-parsed-query"] and session["last-parsed-query"].lines) or {})
+  local active_3f = false
+  for _, line in ipairs(lines) do
+    if (not active_3f and (vim.trim((line or "")) ~= "")) then
+      active_3f = true
+    else
+    end
+  end
+  return active_3f
+end
+local function rebuild_visible_indices_21(session)
+  local meta = (session and session.meta)
+  if meta then
+    local all_indices = {}
+    for i = 1, #meta.buf.content do
+      table.insert(all_indices, i)
+    end
+    meta.buf["all-indices"] = all_indices
+    meta.buf.indices = vim.deepcopy(all_indices)
+    return nil
+  else
+    return nil
+  end
 end
 local function refresh_ui_21(args)
   local session = args.session
@@ -220,6 +241,7 @@ local function update_source_pool_now_21(session, args)
       if should_render_3f then
         session["lazy-last-render-ms"] = now
         session.meta.buf["visible-source-syntax-only"] = false
+        rebuild_visible_indices_21(session)
         if restore_view_3f then
           restore_view_only_21({session = session})
         else
@@ -235,7 +257,7 @@ local function update_source_pool_now_21(session, args)
           events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = refresh_lines})
         else
           if (err and string.find(tostring(err), "E565")) then
-            local function _31_()
+            local function _33_()
               if valid_session_buffer_3f(session) then
                 pcall(session.meta["on-update"], 0)
                 return events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = refresh_lines})
@@ -243,7 +265,7 @@ local function update_source_pool_now_21(session, args)
                 return nil
               end
             end
-            vim.defer_fn(_31_, 1)
+            vim.defer_fn(_33_, 1)
           else
           end
         end
@@ -283,7 +305,7 @@ local function schedule_source_pool_refresh_21(args)
       state["dirty?"] = true
       if not state["scheduled?"] then
         state["scheduled?"] = true
-        local function _41_()
+        local function _43_()
           if session then
             state["scheduled?"] = false
             if state["dirty?"] then
@@ -305,7 +327,7 @@ local function schedule_source_pool_refresh_21(args)
             return nil
           end
         end
-        return vim.defer_fn(_41_, math.max((session["project-lazy-refresh-min-ms"] or 0), (session["project-lazy-refresh-debounce-ms"] or 17)))
+        return vim.defer_fn(_43_, math.max((session["project-lazy-refresh-min-ms"] or 0), (session["project-lazy-refresh-debounce-ms"] or 17)))
       else
         return nil
       end

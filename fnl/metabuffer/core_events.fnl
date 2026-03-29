@@ -19,8 +19,22 @@
 
 (fn prompt-query-active?
   [session]
-  (let [query0 (or session.prompt-last-applied-text "")]
-    (~= (vim.trim query0) "")))
+  (let [lines (or (and session.last-parsed-query session.last-parsed-query.lines) [])]
+    (var active? false)
+    (each [_ line (ipairs lines)]
+      (when (and (not active?) (~= (vim.trim (or line "")) ""))
+        (set active? true)))
+    active?))
+
+(fn rebuild-visible-indices!
+  [session]
+  (let [meta (and session session.meta)]
+    (when meta
+      (let [all-indices []]
+        (for [i 1 (# meta.buf.content)]
+          (table.insert all-indices i))
+        (set meta.buf.all-indices all-indices)
+        (set meta.buf.indices (vim.deepcopy all-indices))))))
 
 (fn refresh-ui!
   [args]
@@ -119,6 +133,7 @@
             (when should-render?
               (set session.lazy-last-render-ms now)
               (set session.meta.buf.visible-source-syntax-only false)
+              (rebuild-visible-indices! session)
               (when restore-view?
                 (restore-view-only! {:session session}))
               (pcall session.meta.buf.render))

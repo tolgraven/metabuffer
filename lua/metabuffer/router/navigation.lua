@@ -2,9 +2,9 @@
 local clj = require("io.gitlab.andreyorst.cljlib.core")
 local events = require("metabuffer.events")
 local M = {}
-local function can_refresh_source_syntax_3f(session)
+local function can_refresh_source_syntax_3f(session, include_full_3f)
   local buf = (session and session.meta and session.meta.buf)
-  return (session and session["project-mode"] and buf and buf["show-source-separators"] and buf["visible-source-syntax-only"] and (buf["syntax-type"] == "buffer"))
+  return (session and session["project-mode"] and buf and buf["show-source-separators"] and (include_full_3f or buf["visible-source-syntax-only"]) and (buf["syntax-type"] == "buffer"))
 end
 local function hide_scroll_cursor_21(session)
   if (session and not session["scroll-cursor-hidden?"]) then
@@ -30,8 +30,8 @@ local function restore_scroll_cursor_21(session)
     return nil
   end
 end
-local function apply_source_syntax_refresh_21(session)
-  if can_refresh_source_syntax_3f(session) then
+local function apply_source_syntax_refresh_21(session, include_full_3f)
+  if can_refresh_source_syntax_3f(session, include_full_3f) then
     return pcall(session.meta.buf["apply-source-syntax-regions"])
   else
     return nil
@@ -42,7 +42,7 @@ local function schedule_source_syntax_refresh_21(deps, session)
   local timing = deps.timing
   local active_by_prompt = router["active-by-prompt"]
   local source_syntax_refresh_debounce_ms = timing["source-syntax-refresh-debounce-ms"]
-  if can_refresh_source_syntax_3f(session) then
+  if can_refresh_source_syntax_3f(session, false) then
     session["syntax-refresh-dirty"] = true
     if not session["syntax-refresh-pending"] then
       session["syntax-refresh-pending"] = true
@@ -51,7 +51,7 @@ local function schedule_source_syntax_refresh_21(deps, session)
         if (session and session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
           if session["syntax-refresh-dirty"] then
             session["syntax-refresh-dirty"] = false
-            apply_source_syntax_refresh_21(session)
+            apply_source_syntax_refresh_21(session, false)
           else
           end
           if session["syntax-refresh-dirty"] then
@@ -73,7 +73,7 @@ local function schedule_source_syntax_refresh_21(deps, session)
 end
 M["refresh-source-syntax!"] = function(deps, session, immediate_3f)
   if immediate_3f then
-    return apply_source_syntax_refresh_21(session)
+    return apply_source_syntax_refresh_21(session, true)
   else
     return schedule_source_syntax_refresh_21(deps, session)
   end
