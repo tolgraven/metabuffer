@@ -521,7 +521,9 @@
                   row (or (. row-col 1) 1)
                   col1 (+ (or (. row-col 2) 0) 1)
                   line (or (. (vim.api.nvim_buf_get_lines session.prompt-buf (- row 1) row false) 1) "")]
-              (directive-mod.token-under-cursor line col1))))))
+              (if-let [span (directive-mod.token-under-cursor line col1)]
+                (vim.tbl_extend "force" span {:row row})
+                nil))))))
 
     (fn directive-help-token
       [tok]
@@ -534,6 +536,20 @@
                   stem
                   token))
             token)))
+
+    (fn directive-help-spec-for-token
+      [token]
+      (let [needle (or token "")
+            prefix (option-prefix)
+            matches (directive-mod.matching-catalog prefix needle)]
+        (var exact nil)
+        (each [_ spec (ipairs matches)]
+          (when (and (not exact)
+                     (or (= (or (. spec :display) "") needle)
+                         (= (or (. spec :literal) "") needle)
+                         (= (or (. spec :prefix) "") needle)))
+            (set exact spec)))
+        (or exact (. matches 1))))
 
     (fn highlight-prompt-like-line!
       [buf ns row txt primary-hl]
@@ -675,19 +691,24 @@
               (set session.directive-help-win (vim.api.nvim_open_win buf false cfg))))))
 
     (fn maybe-show-directive-help!
-      [session]
+      [session selected-item]
       (if (or (not session.prompt-win)
               (not (vim.api.nvim_win_is_valid session.prompt-win))
               (~= (vim.api.nvim_get_current_win) session.prompt-win))
           (hide-directive-help! session)
           (if-let [span (current-prompt-token session)]
-            (let [token (directive-help-token (or (. span :token) ""))
+            (let [selected-word (or (and selected-item (. selected-item :word))
+                                    (and selected-item (. selected-item :abbr))
+                                    "")
+                  token (directive-help-token (or (. span :token) ""))
                   prefix (option-prefix)
-                  matches (if (vim.startswith token prefix)
-                            (directive-mod.matching-catalog prefix token)
-                            [])]
-              (if (> (# matches) 0)
-                (show-directive-help! session (. matches 1) span)
+                  spec (if (and (~= selected-word "")
+                                (vim.startswith selected-word prefix))
+                           (directive-help-spec-for-token selected-word)
+                           (and (vim.startswith token prefix)
+                                (directive-help-spec-for-token token)))]
+              (if spec
+                (show-directive-help! session spec span)
                 (hide-directive-help! session)))
             (hide-directive-help! session))))
 
@@ -1056,6 +1077,12 @@
                     session.prompt-buf
                     false
                     (vim.api.nvim_buf_get_changedtick session.prompt-buf))))))
+        (au! "CompleteChanged" session.prompt-buf
+          (fn [ev]
+            (let [item (and ev (= (type ev) "table") (. ev :completed_item))]
+              (maybe-show-directive-help! session item))))
+        (au! "CompleteDone" session.prompt-buf
+          (fn [] (maybe-show-directive-help! session)))
       ;; Re-assert prompt maps when entering insert mode; this wins over late
       ;; plugin mappings (for example completion plugins).
         (au! "InsertEnter" session.prompt-buf

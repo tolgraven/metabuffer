@@ -121,4 +121,83 @@ T['directive help popup stays above the prompt, mirrors prompt highlighting, and
   end, 6000)
 end)
 
+T['directive help follows completion selection changes'] = H.timed_case(function()
+  H.open_project_meta_from_file('README.md')
+  H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
+
+  H.type_prompt_text('#b')
+  local before = nil
+  H.wait_for(function()
+    before = H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not (s and s['directive-help-buf'] and vim.api.nvim_buf_is_valid(s['directive-help-buf'])) then
+          return nil
+        end
+        local info = vim.fn.complete_info({ 'selected', 'items' })
+        return {
+          selected = info.selected,
+          help = vim.api.nvim_buf_get_lines(s['directive-help-buf'], 0, 1, false)[1] or '',
+        }
+      end)()
+    ]])
+    return before ~= nil and before.help ~= ''
+  end, 6000)
+
+  H.type_prompt_tokens({ '<C-n>', '<C-n>' }, 20)
+
+  H.wait_for(function()
+    local after = H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        if not (s and s['directive-help-buf'] and vim.api.nvim_buf_is_valid(s['directive-help-buf'])) then
+          return nil
+        end
+        local info = vim.fn.complete_info({ 'selected', 'items' })
+        local item = (info.items or {})[(info.selected or -1) + 1]
+        return {
+          selected = info.selected,
+          item = item and item.word or '',
+          help = vim.api.nvim_buf_get_lines(s['directive-help-buf'], 0, 1, false)[1] or '',
+        }
+      end)()
+    ]])
+    return after
+      and after.selected >= 1
+      and after.item ~= ''
+      and after.help == after.item
+      and after.help ~= before.help
+  end, 6000)
+end)
+
+T['directive help closes when prompt accepts a hit'] = H.timed_case(function()
+  H.open_project_meta_from_file('README.md')
+  H.wait_for(function() return H.session_hit_count() > 0 end, 6000)
+
+  H.type_prompt_text('#file:README')
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        return not not (s and s['directive-help-win'] and vim.api.nvim_win_is_valid(s['directive-help-win']))
+      end)()
+    ]])
+  end, 6000)
+
+  H.type_prompt('<CR>')
+
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        return not not (s and (s['ui-hidden'] or not s['prompt-win'])) and not (s and s['directive-help-win'] and vim.api.nvim_win_is_valid(s['directive-help-win']))
+      end)()
+    ]])
+  end, 6000)
+end)
+
 return T

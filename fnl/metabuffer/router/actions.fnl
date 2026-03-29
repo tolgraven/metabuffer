@@ -227,6 +227,10 @@
     (restore-startup-cursor! session)
     (set session.ui-last-insert-mode (vim.startswith (. (vim.api.nvim_get_mode) :mode) "i"))
     (when (and session.prompt-win (vim.api.nvim_win_is_valid session.prompt-win))
+      (when (and session.directive-help-win
+                 (vim.api.nvim_win_is_valid session.directive-help-win))
+        (pcall vim.api.nvim_win_close session.directive-help-win true))
+      (set session.directive-help-win nil)
       (let [[ok cur] [(pcall vim.api.nvim_win_get_cursor session.prompt-win)]]
         (when (and ok (= (type cur) "table"))
           (set session.hidden-prompt-cursor [(or (. cur 1) 1) (or (. cur 2) 0)])))
