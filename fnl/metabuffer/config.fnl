@@ -249,117 +249,223 @@
                  (. vim.g "meta#prefix")
                  (. (. M.defaults :ui) :prefix))}))
 
+(local direct-option-specs
+  [[:history_max nil]
+   [:project_max_file_bytes :meta_project_max_file_bytes]
+   [:project_max_total_lines :meta_project_max_total_lines]
+   [:default_include_hidden :meta_project_include_hidden]
+   [:default_include_ignored :meta_project_include_ignored]
+   [:default_include_deps :meta_project_include_deps]
+   [:default_include_binary :meta_project_include_binary]
+   [:default_include_hex :meta_project_include_hex]
+   [:default_include_files :meta_project_include_files]
+   [:default_include_lgrep :meta_default_include_lgrep]
+   [:project_rg_bin :meta_project_rg_bin]
+   [:project_rg_base_args :meta_project_rg_base_args]
+   [:project_rg_include_ignored_args :meta_project_rg_include_ignored_args]
+   [:project_rg_deps_exclude_globs :meta_project_rg_deps_exclude_globs]
+   [:project_fallback_glob_pattern :meta_project_fallback_glob_pattern]
+   [:info_max_lines :meta_info_max_lines]
+   [:info_min_width :meta_info_width]
+   [:info_max_width :meta_info_max_width]
+   [:context_height :meta_context_height]
+   [:context_around_lines :meta_context_around_lines]
+   [:context_max_blocks :meta_context_max_blocks]
+   [:info_file_entry_view :meta_info_file_entry_view]
+   [:prompt_update_debounce_ms :meta_prompt_update_debounce_ms]
+   [:prompt_update_idle_ms :meta_prompt_update_idle_ms]
+   [:prompt_short_query_extra_ms :meta_prompt_short_query_extra_ms]
+   [:prompt_size_scale_thresholds :meta_prompt_size_scale_thresholds]
+   [:prompt_size_scale_extra :meta_prompt_size_scale_extra]
+   [:project_lazy_enabled :meta_project_lazy_enabled]
+   [:project_lazy_disable_headless :meta_project_lazy_disable_headless]
+   [:project_lazy_min_estimated_lines :meta_project_lazy_min_estimated_lines]
+   [:project_lazy_chunk_size :meta_project_lazy_chunk_size]
+   [:project_lazy_frame_budget_ms :meta_project_lazy_frame_budget_ms]
+   [:project_lazy_refresh_debounce_ms :meta_project_lazy_refresh_debounce_ms]
+   [:project_lazy_refresh_min_ms :meta_project_lazy_refresh_min_ms]
+   [:project_lazy_prefilter_enabled :meta_project_lazy_prefilter_enabled]
+   [:project_source_syntax_chunk_lines :meta_project_source_syntax_chunk_lines]
+   [:project_bootstrap_delay_ms :meta_project_bootstrap_delay_ms]
+   [:project_bootstrap_idle_delay_ms :meta_project_bootstrap_idle_delay_ms]
+   [:lgrep_bin :meta_lgrep_bin]
+   [:lgrep_limit :meta_lgrep_limit]
+   [:lgrep_debounce_ms :meta_lgrep_debounce_ms]
+   [:prompt_forced_coalesce_ms :meta_prompt_forced_coalesce_ms]
+   [:preview_source_switch_debounce_ms :meta_preview_source_switch_debounce_ms]
+   [:source_syntax_refresh_debounce_ms :meta_source_syntax_refresh_debounce_ms]
+   [:scroll_sync_debounce_ms :meta_scroll_sync_debounce_ms]
+   [:dep_dir_names nil]])
+
+(local router-option-assignments
+  [[:history-max :history_max]
+   [:project-max-file-bytes :project_max_file_bytes]
+   [:project-max-total-lines :project_max_total_lines]
+   [:default-include-hidden :default_include_hidden]
+   [:default-include-ignored :default_include_ignored]
+   [:default-include-deps :default_include_deps]
+   [:default-include-binary :default_include_binary]
+   [:default-include-hex :default_include_hex]
+   [:default-include-files :default_include_files]
+   [:default-include-lgrep :default_include_lgrep]
+   [:project-rg-bin :project_rg_bin]
+   [:project-rg-base-args :project_rg_base_args]
+   [:project-rg-include-ignored-args :project_rg_include_ignored_args]
+   [:project-rg-deps-exclude-globs :project_rg_deps_exclude_globs]
+   [:project-fallback-glob-pattern :project_fallback_glob_pattern]
+   [:info-max-lines :info_max_lines]
+   [:info-min-width :info_min_width]
+   [:info-max-width :info_max_width]
+   [:context-height :context_height]
+   [:context-around-lines :context_around_lines]
+   [:context-max-blocks :context_max_blocks]
+   [:info-file-entry-view :info_file_entry_view]
+   [:prompt-update-debounce-ms :prompt_update_debounce_ms]
+   [:prompt-update-idle-ms :prompt_update_idle_ms]
+   [:prompt-short-query-extra-ms :prompt_short_query_extra_ms]
+   [:prompt-size-scale-thresholds :prompt_size_scale_thresholds]
+   [:prompt-size-scale-extra :prompt_size_scale_extra]
+   [:project-lazy-enabled :project_lazy_enabled]
+   [:project-lazy-disable-headless :project_lazy_disable_headless]
+   [:project-lazy-min-estimated-lines :project_lazy_min_estimated_lines]
+   [:project-lazy-chunk-size :project_lazy_chunk_size]
+   [:project-lazy-frame-budget-ms :project_lazy_frame_budget_ms]
+   [:project-lazy-refresh-debounce-ms :project_lazy_refresh_debounce_ms]
+   [:project-lazy-refresh-min-ms :project_lazy_refresh_min_ms]
+   [:project-lazy-prefilter-enabled :project_lazy_prefilter_enabled]
+   [:project-bootstrap-delay-ms :project_bootstrap_delay_ms]
+   [:project-bootstrap-idle-delay-ms :project_bootstrap_idle_delay_ms]
+   [:lgrep-bin :lgrep_bin]
+   [:lgrep-limit :lgrep_limit]
+   [:lgrep-debounce-ms :lgrep_debounce_ms]
+   [:prompt-forced-coalesce-ms :prompt_forced_coalesce_ms]
+   [:preview-source-switch-debounce-ms :preview_source_switch_debounce_ms]
+   [:source-syntax-refresh-debounce-ms :source_syntax_refresh_debounce_ms]
+   [:scroll-sync-debounce-ms :scroll_sync_debounce_ms]
+   [:ui-animations-enabled :ui_animations_enabled]
+   [:ui-animations-time-scale :ui_animations_time_scale]
+   [:ui-animation-backend :ui_animation_backend]
+   [:ui-animation-prompt-enabled :ui_animation_prompt_enabled]
+   [:ui-animation-prompt-ms :ui_animation_prompt_ms]
+   [:ui-animation-prompt-time-scale :ui_animation_prompt_time_scale]
+   [:ui-animation-prompt-backend :ui_animation_prompt_backend]
+   [:ui-animation-preview-enabled :ui_animation_preview_enabled]
+   [:ui-animation-preview-ms :ui_animation_preview_ms]
+   [:ui-animation-preview-time-scale :ui_animation_preview_time_scale]
+   [:ui-animation-info-enabled :ui_animation_info_enabled]
+   [:ui-animation-info-ms :ui_animation_info_ms]
+   [:ui-animation-info-time-scale :ui_animation_info_time_scale]
+   [:ui-animation-info-backend :ui_animation_info_backend]
+   [:ui-animation-loading-enabled :ui_animation_loading_enabled]
+   [:ui-animation-loading-ms :ui_animation_loading_ms]
+   [:ui-animation-loading-time-scale :ui_animation_loading_time_scale]
+   [:ui-loading-indicator :ui_loading_indicator]
+   [:ui-animation-scroll-enabled :ui_animation_scroll_enabled]
+   [:ui-animation-scroll-ms :ui_animation_scroll_ms]
+   [:ui-animation-scroll-time-scale :ui_animation_scroll_time_scale]
+   [:ui-animation-scroll-backend :ui_animation_scroll_backend]
+   [:window-local-layout :window_local_layout]
+   [:dep-dir-names :dep_dir_names]])
+
+(fn resolve-direct-options
+  [opts defaults]
+  (let [resolved {}]
+    (each [_ spec (ipairs direct-option-specs)]
+      (let [[key legacy-g] [(. spec 1) (. spec 2)]]
+        (set (. resolved key) (opt-value opts key legacy-g (. defaults key)))))
+    resolved))
+
+(fn resolve-animation-options
+  [opts defaults]
+  {:ui_animations_enabled (nested-value opts [:ui :animation :enabled]
+                                       (opt-value opts :ui_animations_enabled :meta_ui_animations_enabled
+                                                  (opt-value opts :ui_animate_enter :meta_ui_animate_enter (. defaults :ui_animations_enabled))))
+   :ui_animations_time_scale (nested-value opts [:ui :animation :time_scale]
+                                          (opt-value opts :ui_animations_time_scale :meta_ui_animations_time_scale (. defaults :ui_animations_time_scale)))
+   :ui_animation_backend (nested-value opts [:ui :animation :backend]
+                                         (opt-value opts :ui_animation_backend :meta_ui_animation_backend (. defaults :ui_animation_backend)))
+   :ui_animation_prompt_enabled (nested-value opts [:ui :animation :prompt :enabled]
+                                                (opt-value opts :ui_animation_prompt_enabled :meta_ui_animation_prompt_enabled (. defaults :ui_animation_prompt_enabled)))
+   :ui_animation_prompt_ms (. defaults :ui_animation_prompt_ms)
+   :ui_animation_prompt_time_scale (nested-value opts [:ui :animation :prompt :time_scale]
+                                                   (opt-value opts :ui_animation_prompt_time_scale :meta_ui_animation_prompt_time_scale
+                                                              (. defaults :ui_animation_prompt_time_scale)))
+   :ui_animation_prompt_backend (nested-value opts [:ui :animation :prompt :backend]
+                                                (opt-value opts :ui_animation_prompt_backend :meta_ui_animation_prompt_backend
+                                                           (nested-value opts [:ui :animation :backend]
+                                                                         (opt-value opts :ui_animation_backend :meta_ui_animation_backend
+                                                                                    (. defaults :ui_animation_backend)))))
+   :ui_animation_preview_enabled (nested-value opts [:ui :animation :preview :enabled]
+                                                 (opt-value opts :ui_animation_preview_enabled :meta_ui_animation_preview_enabled (. defaults :ui_animation_preview_enabled)))
+   :ui_animation_preview_ms (. defaults :ui_animation_preview_ms)
+   :ui_animation_preview_time_scale (nested-value opts [:ui :animation :preview :time_scale]
+                                                    (opt-value opts :ui_animation_preview_time_scale :meta_ui_animation_preview_time_scale
+                                                               (. defaults :ui_animation_preview_time_scale)))
+   :ui_animation_info_enabled (nested-value opts [:ui :animation :info :enabled]
+                                              (opt-value opts :ui_animation_info_enabled :meta_ui_animation_info_enabled (. defaults :ui_animation_info_enabled)))
+   :ui_animation_info_ms (. defaults :ui_animation_info_ms)
+   :ui_animation_info_time_scale (nested-value opts [:ui :animation :info :time_scale]
+                                                 (opt-value opts :ui_animation_info_time_scale :meta_ui_animation_info_time_scale
+                                                            (. defaults :ui_animation_info_time_scale)))
+   :ui_animation_info_backend (nested-value opts [:ui :animation :info :backend]
+                                              (opt-value opts :ui_animation_info_backend :meta_ui_animation_info_backend
+                                                         (nested-value opts [:ui :animation :backend]
+                                                                       (opt-value opts :ui_animation_backend :meta_ui_animation_backend
+                                                                                  (. defaults :ui_animation_backend)))))
+   :ui_animation_loading_enabled (nested-value opts [:ui :animation :loading :enabled]
+                                                 (opt-value opts :ui_animation_loading_enabled :meta_ui_animation_loading_enabled (. defaults :ui_animation_loading_enabled)))
+   :ui_animation_loading_ms (. defaults :ui_animation_loading_ms)
+   :ui_animation_loading_time_scale (nested-value opts [:ui :animation :loading :time_scale]
+                                                    (opt-value opts :ui_animation_loading_time_scale :meta_ui_animation_loading_time_scale
+                                                               (. defaults :ui_animation_loading_time_scale)))
+   :ui_loading_indicator (nested-value opts [:ui :animation :loading_indicator]
+                                       (opt-value opts :ui_loading_indicator :meta_ui_loading_indicator (. defaults :ui_loading_indicator)))
+   :ui_animation_scroll_enabled (nested-value opts [:ui :animation :scroll :enabled]
+                                                (opt-value opts :ui_animation_scroll_enabled :meta_ui_animation_scroll_enabled (. defaults :ui_animation_scroll_enabled)))
+   :ui_animation_scroll_ms (. defaults :ui_animation_scroll_ms)
+   :ui_animation_scroll_time_scale (nested-value opts [:ui :animation :scroll :time_scale]
+                                                   (opt-value opts :ui_animation_scroll_time_scale :meta_ui_animation_scroll_time_scale
+                                                              (. defaults :ui_animation_scroll_time_scale)))
+   :ui_animation_scroll_backend (nested-value opts [:ui :animation :scroll :backend]
+                                                (opt-value opts :ui_animation_scroll_backend :meta_ui_animation_scroll_backend
+                                                           (nested-value opts [:ui :animation :backend]
+                                                                         (opt-value opts :ui_animation_backend :meta_ui_animation_backend
+                                                                                    (. defaults :ui_animation_backend)))))})
+
+(fn resolve-custom-options
+  [opts defaults]
+  {:custom (vim.deepcopy (or (nested-value opts [:options :custom] nil)
+                             (nested-value opts [:custom] nil)
+                             (. defaults :custom)))
+   :window_local_layout (if (= (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)) nil)
+                            true
+                            (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)))})
+
+(fn set-router-options!
+  [router options]
+  (each [_ spec (ipairs router-option-assignments)]
+    (let [[router-key option-key] [(. spec 1) (. spec 2)]]
+      (set (. router router-key) (. options option-key))))
+  (set router.project-file-cache {}))
+
+(fn set-router-keymaps!
+  [router keymaps]
+  (set router.default-prompt-keymaps (. (. M.defaults :keymaps) :prompt))
+  (set router.default-main-keymaps (. (. M.defaults :keymaps) :main))
+  (set router.default-prompt-fallback-keymaps (. (. M.defaults :keymaps) :prompt_fallback))
+  (set router.prompt-keymaps (. keymaps :prompt))
+  (set router.main-keymaps (. keymaps :main))
+  (set router.prompt-fallback-keymaps (. keymaps :prompt_fallback)))
+
 (fn M.resolve
   [opts]
   "Public API: M.resolve."
   (let [defaults (. M.defaults :options)]
     {:options
-     {:history_max (opt-value opts :history_max nil (. defaults :history_max))
-      :project_max_file_bytes (opt-value opts :project_max_file_bytes :meta_project_max_file_bytes (. defaults :project_max_file_bytes))
-      :project_max_total_lines (opt-value opts :project_max_total_lines :meta_project_max_total_lines (. defaults :project_max_total_lines))
-      :default_include_hidden (opt-value opts :default_include_hidden :meta_project_include_hidden (. defaults :default_include_hidden))
-      :default_include_ignored (opt-value opts :default_include_ignored :meta_project_include_ignored (. defaults :default_include_ignored))
-      :default_include_deps (opt-value opts :default_include_deps :meta_project_include_deps (. defaults :default_include_deps))
-      :default_include_binary (opt-value opts :default_include_binary :meta_project_include_binary (. defaults :default_include_binary))
-      :default_include_hex (opt-value opts :default_include_hex :meta_project_include_hex (. defaults :default_include_hex))
-      :default_include_files (opt-value opts :default_include_files :meta_project_include_files (. defaults :default_include_files))
-      :default_include_lgrep (opt-value opts :default_include_lgrep :meta_default_include_lgrep (. defaults :default_include_lgrep))
-      :project_rg_bin (opt-value opts :project_rg_bin :meta_project_rg_bin (. defaults :project_rg_bin))
-      :project_rg_base_args (opt-value opts :project_rg_base_args :meta_project_rg_base_args (. defaults :project_rg_base_args))
-      :project_rg_include_ignored_args (opt-value opts :project_rg_include_ignored_args :meta_project_rg_include_ignored_args (. defaults :project_rg_include_ignored_args))
-      :project_rg_deps_exclude_globs (opt-value opts :project_rg_deps_exclude_globs :meta_project_rg_deps_exclude_globs (. defaults :project_rg_deps_exclude_globs))
-      :project_fallback_glob_pattern (opt-value opts :project_fallback_glob_pattern :meta_project_fallback_glob_pattern (. defaults :project_fallback_glob_pattern))
-      :info_max_lines (opt-value opts :info_max_lines :meta_info_max_lines (. defaults :info_max_lines))
-      :info_min_width (opt-value opts :info_min_width :meta_info_width (. defaults :info_min_width))
-      :info_max_width (opt-value opts :info_max_width :meta_info_max_width (. defaults :info_max_width))
-      :context_height (opt-value opts :context_height :meta_context_height (. defaults :context_height))
-      :context_around_lines (opt-value opts :context_around_lines :meta_context_around_lines (. defaults :context_around_lines))
-      :context_max_blocks (opt-value opts :context_max_blocks :meta_context_max_blocks (. defaults :context_max_blocks))
-      :info_file_entry_view (opt-value opts :info_file_entry_view :meta_info_file_entry_view (. defaults :info_file_entry_view))
-      :prompt_update_debounce_ms (opt-value opts :prompt_update_debounce_ms :meta_prompt_update_debounce_ms (. defaults :prompt_update_debounce_ms))
-      :prompt_update_idle_ms (opt-value opts :prompt_update_idle_ms :meta_prompt_update_idle_ms (. defaults :prompt_update_idle_ms))
-      :prompt_short_query_extra_ms (opt-value opts :prompt_short_query_extra_ms :meta_prompt_short_query_extra_ms (. defaults :prompt_short_query_extra_ms))
-      :prompt_size_scale_thresholds (opt-value opts :prompt_size_scale_thresholds :meta_prompt_size_scale_thresholds (. defaults :prompt_size_scale_thresholds))
-      :prompt_size_scale_extra (opt-value opts :prompt_size_scale_extra :meta_prompt_size_scale_extra (. defaults :prompt_size_scale_extra))
-      :project_lazy_enabled (opt-value opts :project_lazy_enabled :meta_project_lazy_enabled (. defaults :project_lazy_enabled))
-      :project_lazy_disable_headless (opt-value opts :project_lazy_disable_headless :meta_project_lazy_disable_headless (. defaults :project_lazy_disable_headless))
-      :project_lazy_min_estimated_lines (opt-value opts :project_lazy_min_estimated_lines :meta_project_lazy_min_estimated_lines (. defaults :project_lazy_min_estimated_lines))
-      :project_lazy_chunk_size (opt-value opts :project_lazy_chunk_size :meta_project_lazy_chunk_size (. defaults :project_lazy_chunk_size))
-      :project_lazy_frame_budget_ms (opt-value opts :project_lazy_frame_budget_ms :meta_project_lazy_frame_budget_ms (. defaults :project_lazy_frame_budget_ms))
-      :project_lazy_refresh_debounce_ms (opt-value opts :project_lazy_refresh_debounce_ms :meta_project_lazy_refresh_debounce_ms (. defaults :project_lazy_refresh_debounce_ms))
-      :project_lazy_refresh_min_ms (opt-value opts :project_lazy_refresh_min_ms :meta_project_lazy_refresh_min_ms (. defaults :project_lazy_refresh_min_ms))
-      :project_lazy_prefilter_enabled (opt-value opts :project_lazy_prefilter_enabled :meta_project_lazy_prefilter_enabled (. defaults :project_lazy_prefilter_enabled))
-      :project_source_syntax_chunk_lines (opt-value opts :project_source_syntax_chunk_lines :meta_project_source_syntax_chunk_lines (. defaults :project_source_syntax_chunk_lines))
-      :project_bootstrap_delay_ms (opt-value opts :project_bootstrap_delay_ms :meta_project_bootstrap_delay_ms (. defaults :project_bootstrap_delay_ms))
-      :project_bootstrap_idle_delay_ms (opt-value opts :project_bootstrap_idle_delay_ms :meta_project_bootstrap_idle_delay_ms (. defaults :project_bootstrap_idle_delay_ms))
-      :lgrep_bin (opt-value opts :lgrep_bin :meta_lgrep_bin (. defaults :lgrep_bin))
-      :lgrep_limit (opt-value opts :lgrep_limit :meta_lgrep_limit (. defaults :lgrep_limit))
-      :lgrep_debounce_ms (opt-value opts :lgrep_debounce_ms :meta_lgrep_debounce_ms (. defaults :lgrep_debounce_ms))
-      :prompt_forced_coalesce_ms (opt-value opts :prompt_forced_coalesce_ms :meta_prompt_forced_coalesce_ms (. defaults :prompt_forced_coalesce_ms))
-      :preview_source_switch_debounce_ms (opt-value opts :preview_source_switch_debounce_ms :meta_preview_source_switch_debounce_ms (. defaults :preview_source_switch_debounce_ms))
-      :source_syntax_refresh_debounce_ms (opt-value opts :source_syntax_refresh_debounce_ms :meta_source_syntax_refresh_debounce_ms (. defaults :source_syntax_refresh_debounce_ms))
-      :scroll_sync_debounce_ms (opt-value opts :scroll_sync_debounce_ms :meta_scroll_sync_debounce_ms (. defaults :scroll_sync_debounce_ms))
-      :ui_animations_enabled (nested-value opts [:ui :animation :enabled]
-                                           (opt-value opts :ui_animations_enabled :meta_ui_animations_enabled
-                                                      (opt-value opts :ui_animate_enter :meta_ui_animate_enter (. defaults :ui_animations_enabled))))
-      :ui_animations_time_scale (nested-value opts [:ui :animation :time_scale]
-                                              (opt-value opts :ui_animations_time_scale :meta_ui_animations_time_scale (. defaults :ui_animations_time_scale)))
-      :ui_animation_backend (nested-value opts [:ui :animation :backend]
-                                            (opt-value opts :ui_animation_backend :meta_ui_animation_backend (. defaults :ui_animation_backend)))
-      :ui_animation_prompt_enabled (nested-value opts [:ui :animation :prompt :enabled]
-                                                   (opt-value opts :ui_animation_prompt_enabled :meta_ui_animation_prompt_enabled (. defaults :ui_animation_prompt_enabled)))
-      :ui_animation_prompt_ms (. defaults :ui_animation_prompt_ms)
-      :ui_animation_prompt_time_scale (nested-value opts [:ui :animation :prompt :time_scale]
-                                                      (opt-value opts :ui_animation_prompt_time_scale :meta_ui_animation_prompt_time_scale
-                                                                 (. defaults :ui_animation_prompt_time_scale)))
-      :ui_animation_prompt_backend (nested-value opts [:ui :animation :prompt :backend]
-                                                   (opt-value opts :ui_animation_prompt_backend :meta_ui_animation_prompt_backend
-                                                              (nested-value opts [:ui :animation :backend]
-                                                                            (opt-value opts :ui_animation_backend :meta_ui_animation_backend
-                                                                                       (. defaults :ui_animation_backend)))))
-      :ui_animation_preview_enabled (nested-value opts [:ui :animation :preview :enabled]
-                                                    (opt-value opts :ui_animation_preview_enabled :meta_ui_animation_preview_enabled (. defaults :ui_animation_preview_enabled)))
-      :ui_animation_preview_ms (. defaults :ui_animation_preview_ms)
-      :ui_animation_preview_time_scale (nested-value opts [:ui :animation :preview :time_scale]
-                                                       (opt-value opts :ui_animation_preview_time_scale :meta_ui_animation_preview_time_scale
-                                                                  (. defaults :ui_animation_preview_time_scale)))
-      :ui_animation_info_enabled (nested-value opts [:ui :animation :info :enabled]
-                                                 (opt-value opts :ui_animation_info_enabled :meta_ui_animation_info_enabled (. defaults :ui_animation_info_enabled)))
-      :ui_animation_info_ms (. defaults :ui_animation_info_ms)
-      :ui_animation_info_time_scale (nested-value opts [:ui :animation :info :time_scale]
-                                                    (opt-value opts :ui_animation_info_time_scale :meta_ui_animation_info_time_scale
-                                                               (. defaults :ui_animation_info_time_scale)))
-      :ui_animation_info_backend (nested-value opts [:ui :animation :info :backend]
-                                                 (opt-value opts :ui_animation_info_backend :meta_ui_animation_info_backend
-                                                            (nested-value opts [:ui :animation :backend]
-                                                                          (opt-value opts :ui_animation_backend :meta_ui_animation_backend
-                                                                                     (. defaults :ui_animation_backend)))))
-      :ui_animation_loading_enabled (nested-value opts [:ui :animation :loading :enabled]
-                                                    (opt-value opts :ui_animation_loading_enabled :meta_ui_animation_loading_enabled (. defaults :ui_animation_loading_enabled)))
-      :ui_animation_loading_ms (. defaults :ui_animation_loading_ms)
-      :ui_animation_loading_time_scale (nested-value opts [:ui :animation :loading :time_scale]
-                                                       (opt-value opts :ui_animation_loading_time_scale :meta_ui_animation_loading_time_scale
-                                                                  (. defaults :ui_animation_loading_time_scale)))
-      :ui_loading_indicator (nested-value opts [:ui :animation :loading_indicator]
-                                          (opt-value opts :ui_loading_indicator :meta_ui_loading_indicator (. defaults :ui_loading_indicator)))
-      :ui_animation_scroll_enabled (nested-value opts [:ui :animation :scroll :enabled]
-                                                   (opt-value opts :ui_animation_scroll_enabled :meta_ui_animation_scroll_enabled (. defaults :ui_animation_scroll_enabled)))
-      :ui_animation_scroll_ms (. defaults :ui_animation_scroll_ms)
-      :ui_animation_scroll_time_scale (nested-value opts [:ui :animation :scroll :time_scale]
-                                                      (opt-value opts :ui_animation_scroll_time_scale :meta_ui_animation_scroll_time_scale
-                                                                 (. defaults :ui_animation_scroll_time_scale)))
-      :ui_animation_scroll_backend (nested-value opts [:ui :animation :scroll :backend]
-                                                   (opt-value opts :ui_animation_scroll_backend :meta_ui_animation_scroll_backend
-                                                              (nested-value opts [:ui :animation :backend]
-                                                                            (opt-value opts :ui_animation_backend :meta_ui_animation_backend
-                                                                                       (. defaults :ui_animation_backend)))))
-      :custom (vim.deepcopy (or (nested-value opts [:options :custom] nil)
-                                (nested-value opts [:custom] nil)
-                                (. defaults :custom)))
-      :window_local_layout (if (= (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)) nil)
-                               true
-                               (opt-value opts :window_local_layout :meta_window_local_layout (. defaults :window_local_layout)))
-      :dep_dir_names (opt-value opts :dep_dir_names nil (. defaults :dep_dir_names))}
+     (vim.tbl_extend "force"
+                     (resolve-direct-options opts defaults)
+                     (resolve-animation-options opts defaults)
+                     (resolve-custom-options opts defaults))
      :keymaps (resolve-keymaps opts)
      :ui (resolve-ui opts)}))
 
@@ -371,82 +477,9 @@
         keymaps (. resolved :keymaps)]
     (set router.option-state options)
     (set router.keymap-state keymaps)
-    (set router.history-max (. options :history_max))
-    (set router.project-max-file-bytes (. options :project_max_file_bytes))
-    (set router.project-max-total-lines (. options :project_max_total_lines))
-    (set router.default-include-hidden (. options :default_include_hidden))
-    (set router.default-include-ignored (. options :default_include_ignored))
-    (set router.default-include-deps (. options :default_include_deps))
-    (set router.default-include-binary (. options :default_include_binary))
-    (set router.default-include-hex (. options :default_include_hex))
-    (set router.default-include-files (. options :default_include_files))
-    (set router.default-include-lgrep (. options :default_include_lgrep))
-    (set router.project-rg-bin (. options :project_rg_bin))
-    (set router.project-rg-base-args (. options :project_rg_base_args))
-    (set router.project-rg-include-ignored-args (. options :project_rg_include_ignored_args))
-    (set router.project-rg-deps-exclude-globs (. options :project_rg_deps_exclude_globs))
-    (set router.project-fallback-glob-pattern (. options :project_fallback_glob_pattern))
-    (set router.info-max-lines (. options :info_max_lines))
-    (set router.info-min-width (. options :info_min_width))
-    (set router.info-max-width (. options :info_max_width))
-    (set router.context-height (. options :context_height))
-    (set router.context-around-lines (. options :context_around_lines))
-    (set router.context-max-blocks (. options :context_max_blocks))
-    (set router.info-file-entry-view (. options :info_file_entry_view))
-    (set router.prompt-update-debounce-ms (. options :prompt_update_debounce_ms))
-    (set router.prompt-update-idle-ms (. options :prompt_update_idle_ms))
-    (set router.prompt-short-query-extra-ms (. options :prompt_short_query_extra_ms))
-    (set router.prompt-size-scale-thresholds (. options :prompt_size_scale_thresholds))
-    (set router.prompt-size-scale-extra (. options :prompt_size_scale_extra))
-    (set router.project-file-cache {})
-    (set router.project-lazy-enabled (. options :project_lazy_enabled))
-    (set router.project-lazy-disable-headless (. options :project_lazy_disable_headless))
-    (set router.project-lazy-min-estimated-lines (. options :project_lazy_min_estimated_lines))
-    (set router.project-lazy-chunk-size (. options :project_lazy_chunk_size))
-    (set router.project-lazy-frame-budget-ms (. options :project_lazy_frame_budget_ms))
-    (set router.project-lazy-refresh-debounce-ms (. options :project_lazy_refresh_debounce_ms))
-    (set router.project-lazy-refresh-min-ms (. options :project_lazy_refresh_min_ms))
-    (set router.project-lazy-prefilter-enabled (. options :project_lazy_prefilter_enabled))
-    (set router.project-bootstrap-delay-ms (. options :project_bootstrap_delay_ms))
-    (set router.project-bootstrap-idle-delay-ms (. options :project_bootstrap_idle_delay_ms))
-    (set router.lgrep-bin (. options :lgrep_bin))
-    (set router.lgrep-limit (. options :lgrep_limit))
-    (set router.lgrep-debounce-ms (. options :lgrep_debounce_ms))
-    (set router.prompt-forced-coalesce-ms (. options :prompt_forced_coalesce_ms))
-    (set router.preview-source-switch-debounce-ms (. options :preview_source_switch_debounce_ms))
-    (set router.source-syntax-refresh-debounce-ms (. options :source_syntax_refresh_debounce_ms))
-    (set router.scroll-sync-debounce-ms (. options :scroll_sync_debounce_ms))
-    (set router.ui-animations-enabled (. options :ui_animations_enabled))
-    (set router.ui-animations-time-scale (. options :ui_animations_time_scale))
-    (set router.ui-animation-backend (. options :ui_animation_backend))
-    (set router.ui-animation-prompt-enabled (. options :ui_animation_prompt_enabled))
-    (set router.ui-animation-prompt-ms (. options :ui_animation_prompt_ms))
-    (set router.ui-animation-prompt-time-scale (. options :ui_animation_prompt_time_scale))
-    (set router.ui-animation-prompt-backend (. options :ui_animation_prompt_backend))
-    (set router.ui-animation-preview-enabled (. options :ui_animation_preview_enabled))
-    (set router.ui-animation-preview-ms (. options :ui_animation_preview_ms))
-    (set router.ui-animation-preview-time-scale (. options :ui_animation_preview_time_scale))
-    (set router.ui-animation-info-enabled (. options :ui_animation_info_enabled))
-    (set router.ui-animation-info-ms (. options :ui_animation_info_ms))
-    (set router.ui-animation-info-time-scale (. options :ui_animation_info_time_scale))
-    (set router.ui-animation-info-backend (. options :ui_animation_info_backend))
-    (set router.ui-animation-loading-enabled (. options :ui_animation_loading_enabled))
-    (set router.ui-animation-loading-ms (. options :ui_animation_loading_ms))
-    (set router.ui-animation-loading-time-scale (. options :ui_animation_loading_time_scale))
-    (set router.ui-loading-indicator (. options :ui_loading_indicator))
-    (set router.ui-animation-scroll-enabled (. options :ui_animation_scroll_enabled))
-    (set router.ui-animation-scroll-ms (. options :ui_animation_scroll_ms))
-    (set router.ui-animation-scroll-time-scale (. options :ui_animation_scroll_time_scale))
-    (set router.ui-animation-scroll-backend (. options :ui_animation_scroll_backend))
-    (set router.window-local-layout (. options :window_local_layout))
+    (set-router-options! router options)
     (set router.custom-config (. options :custom))
-    (set router.default-prompt-keymaps (. (. M.defaults :keymaps) :prompt))
-    (set router.default-main-keymaps (. (. M.defaults :keymaps) :main))
-    (set router.default-prompt-fallback-keymaps (. (. M.defaults :keymaps) :prompt_fallback))
-    (set router.prompt-keymaps (. keymaps :prompt))
-    (set router.main-keymaps (. keymaps :main))
-    (set router.prompt-fallback-keymaps (. keymaps :prompt_fallback))
-    (set router.dep-dir-names (. options :dep_dir_names))
+    (set-router-keymaps! router keymaps)
     (custom-mod.configure! (. options :custom))
     resolved))
 
