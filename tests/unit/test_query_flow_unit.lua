@@ -217,6 +217,52 @@ T['apply-prompt-lines does not rebuild project source on text-only changes'] = f
   eq(deps._state.apply_calls, first_calls)
 end
 
+T['on-prompt-changed ignores separator-only whitespace edits after applied text is current'] = function()
+  local prompt_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(prompt_buf, 0, -1, false, { 'meta' })
+
+  local session = mk_session(prompt_buf)
+  local deps = mk_deps()
+  deps['query-mod']['parse-query-lines'] = function(lines)
+    local out = {}
+    for i, line in ipairs(lines) do
+      out[i] = vim.trim(line)
+    end
+    return {
+      lines = out,
+      ['include-hidden'] = nil,
+      ['include-ignored'] = nil,
+      ['include-deps'] = nil,
+      ['include-binary'] = nil,
+      ['include-hex'] = nil,
+      ['include-files'] = nil,
+      prefilter = nil,
+      lazy = nil,
+      expansion = nil,
+      ['file-lines'] = {},
+      ['lgrep-lines'] = {},
+    }
+  end
+  deps.project.source['schedule-project-bootstrap!'] = function() end
+  deps.router = {
+    ['active-by-prompt'] = { [prompt_buf] = session },
+    ['project-bootstrap-delay-ms'] = 0,
+    ['prompt-update-debounce-ms'] = 0,
+  }
+  deps.state = { ['prompt-scheduler-ctx'] = {} }
+
+  query_flow['apply-prompt-lines!'](deps, session)
+  eq(session['prompt-last-applied-text'], 'meta')
+  eq(session['prompt-last-event-text'], 'meta')
+
+  session['prompt-update-dirty'] = false
+  vim.api.nvim_buf_set_lines(prompt_buf, 0, -1, false, { 'meta ' })
+  query_flow['on-prompt-changed!'](deps, prompt_buf, false, 1)
+
+  eq(session['prompt-update-dirty'], false)
+  eq(session['prompt-last-event-tick'], nil)
+end
+
 T['core source-switch handler clears stale info state'] = function()
   ensure_core_events()
   local prompt_buf = vim.api.nvim_create_buf(false, true)

@@ -7,8 +7,9 @@
 
 (local airline        (require :metabuffer.compat.airline))
 (local buffer-plugins (require :metabuffer.compat.buffer_plugins))
+(local conjure        (require :metabuffer.compat.conjure))
 (local cmp            (require :metabuffer.compat.cmp))
 (local hlsearch       (require :metabuffer.compat.hlsearch))
 (local rainbow        (require :metabuffer.compat.rainbow))
 
-[airline buffer-plugins cmp hlsearch rainbow]
+[airline buffer-plugins conjure cmp hlsearch rainbow]

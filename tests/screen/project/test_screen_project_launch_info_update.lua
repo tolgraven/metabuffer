@@ -3,6 +3,10 @@ local eq = H.eq
 
 local T = MiniTest.new_set({ hooks = H.case_hooks() })
 
+local function strip_statusline(s)
+  return (s or ''):gsub('%%#[^#]+#', ''):gsub('%%=', '')
+end
+
 T['info window updates automatically when typing in prompt during project mode'] = H.timed_case(function()
   -- Use a project where scanning completes quickly
   local root = H.make_temp_project()
@@ -105,6 +109,8 @@ T['project loading animates the main statusline pulse while bootstrap is pending
       end)()
     ]])
   end, 6000)
+
+  eq(H.str_contains(strip_statusline(H.session_main_statusline()), 'Working'), true)
 
   H.wait_for(function()
     return H.child.lua_get([[

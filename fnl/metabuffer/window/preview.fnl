@@ -150,9 +150,19 @@
                                (refresh-preview-statusline! session)))))})))))
 
   (local mark-preview-buffer!
-    (fn [buf]
+    (fn [buf transient?]
       (when (and buf (vim.api.nvim_buf_is_valid buf))
-        (events.send :on-buf-create! {:buf buf :role :preview}))))
+        (events.send :on-buf-create!
+                     {:buf buf
+                      :role :preview
+                      :transient? (if (= transient? nil) true (clj.boolean transient?))}))))
+
+  (local unmark-preview-buffer!
+    (fn [buf]
+      (when (and buf
+                 (vim.api.nvim_buf_is_valid buf)
+                 (not (= true (pcall vim.api.nvim_buf_get_var buf "meta_preview"))))
+        (events.send :on-buf-teardown! {:buf buf :role :preview}))))
 
   (local file-backed-preview-ref?
     (fn [ref]
@@ -265,7 +275,7 @@
            :swapfile false
            :modifiable false
            :filetype ""})
-        (mark-preview-buffer! buf)
+        (mark-preview-buffer! buf true)
         (ensure-preview-statusline-autocmds! session)
         (apply-preview-window-opts! session session.preview-win)
         (set session.preview-animated? true))))
@@ -282,6 +292,10 @@
     (fn [session]
       (let [buf session.preview-buf
             scratch-buf session.preview-scratch-buf]
+        (when (and session.preview-real-buffer?
+                   buf
+                   (vim.api.nvim_buf_is_valid buf))
+          (unmark-preview-buffer! buf))
 	      (when (and session.preview-win (vim.api.nvim_win_is_valid session.preview-win))
 	        (pcall vim.api.nvim_win_close session.preview-win true))
       (when session.preview-statusline-aug
@@ -316,7 +330,7 @@
          :swapfile false
          :modifiable false
          :filetype ""})
-      (mark-preview-buffer! session.preview-scratch-buf)))
+      (mark-preview-buffer! session.preview-scratch-buf true)))
 
   (fn preview-context
     [session]
@@ -359,6 +373,10 @@
 
   (fn render-preview-scratch!
     [session ctx]
+    (when (and session.preview-real-buffer?
+               session.preview-buf
+               (vim.api.nvim_buf_is_valid session.preview-buf))
+      (unmark-preview-buffer! session.preview-buf))
     (ensure-preview-scratch-buf! session)
     (set session.preview-real-buffer? false)
     (set session.preview-buf session.preview-scratch-buf)
@@ -388,8 +406,14 @@
     (let [ref (. ctx :ref)
           buf (real-preview-buffer ref)]
       (when (and buf (vim.api.nvim_buf_is_valid buf))
+        (when (and session.preview-real-buffer?
+                   session.preview-buf
+                   (vim.api.nvim_buf_is_valid session.preview-buf)
+                   (~= session.preview-buf buf))
+          (unmark-preview-buffer! session.preview-buf))
         (set session.preview-real-buffer? true)
         (set session.preview-buf buf)
+        (mark-preview-buffer! buf false)
         (when (~= (vim.api.nvim_win_get_buf session.preview-win) buf)
           (with-file-messages-suppressed
             (fn []

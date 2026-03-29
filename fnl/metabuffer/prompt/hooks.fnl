@@ -37,11 +37,13 @@
               (tostring value)))
         (let [old (mode-label ((. (. meta.mode which) :current)))]
         (meta.switch_mode which)
-        (events.send :on-mode-switch!
+        (events.post :on-mode-switch!
           {:session session
            :kind which
            :old old
-           :new (mode-label ((. (. meta.mode which) :current)))}))))
+           :new (mode-label ((. (. meta.mode which) :current)))}
+          {:supersede? true
+           :dedupe-key (.. "on-mode-switch:" (tostring session.prompt-buf) ":" which)}))))
 
     (fn nvim-exiting?
       []
@@ -320,6 +322,8 @@
                session.prompt-update-dirty
                session.project-bootstrap-pending
                (and session.project-mode
+                    (not session.lazy-stream-done))
+               (and session.project-mode
                     (not session.project-bootstrapped)))))
 
     (fn session-actually-idle?
@@ -442,7 +446,8 @@
                 (set session.loading-idle-pending false)
                 (set session.loading-anim-phase (+ 1 (or session.loading-anim-phase 0)))
                 (set-results-loading-pulse! session)
-                (events.send :on-loading-state! {:session session})
+                (events.send :on-loading-state!
+                             {:session session})
                 (refresh-prompt-highlights! session)
                 (schedule-loading-indicator! session))
               (if session.loading-anim-phase
@@ -451,7 +456,8 @@
                           (set session.loading-idle-pending false)
                           (set session.loading-anim-phase nil)
                           (set-results-loading-pulse! session)
-                          (events.send :on-loading-state! {:session session}))
+                          (events.send :on-loading-state!
+                                       {:session session}))
                       (do
                         (set session.loading-idle-pending true)
                         (schedule-loading-indicator! session)))
@@ -474,7 +480,8 @@
             (set session.loading-idle-pending false)
             (set session.loading-anim-phase 0)
             (set-results-loading-pulse! session)
-            (events.send :on-loading-state! {:session session}))
+            (events.send :on-loading-state!
+                         {:session session}))
           (set session.loading-anim-pending true)
           (let [delay (if session.loading-idle-pending
                           120
@@ -1113,11 +1120,18 @@
       ;; switches) can overwrite local statusline state. Re-apply ours when the
       ;; prompt window regains focus.
         (au! ["BufEnter" "WinEnter" "FocusGained"] session.prompt-buf
-          (fn [] (events.send :on-prompt-focus! {:session session})))
+          (fn []
+            (events.post :on-prompt-focus!
+                         {:session session}
+                         {:supersede? true
+                          :dedupe-key (.. "on-prompt-focus:" (tostring session.prompt-buf))})))
       ;; Refresh mode segment when switching Insert/Normal/Replace in the prompt.
         (au! ["ModeChanged" "InsertEnter" "InsertLeave"] session.prompt-buf
           (fn []
-            (events.send :on-prompt-focus! {:session session})
+            (events.post :on-prompt-focus!
+                         {:session session}
+                         {:supersede? true
+                          :dedupe-key (.. "on-prompt-focus:" (tostring session.prompt-buf))})
             (maybe-show-directive-help! session)))
         (au! ["CursorMoved" "CursorMovedI"] session.prompt-buf
           (fn [] (maybe-show-directive-help! session)))
@@ -1169,7 +1183,9 @@
                                              session.meta.win
                                              (vim.api.nvim_win_is_valid session.meta.win.window)
                                              (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
-                      (when (and results-wrap? rebuild-source-set!)
+                      (when (and results-wrap?
+                                 rebuild-source-set!
+                                 (not session.project-mode))
                         (pcall rebuild-source-set! session)
                         (pcall session.meta.on-update 0)))
                     (when-not session.prompt-animating?
@@ -1194,7 +1210,8 @@
                                (= (vim.api.nvim_get_current_win) session.meta.win.window))
                       (let [wrap? (clj.boolean (vim.api.nvim_get_option_value "wrap" {:win session.meta.win.window}))]
                         (pcall vim.api.nvim_set_option_value "linebreak" wrap? {:win session.meta.win.window})
-                        (when rebuild-source-set!
+                        (when (and rebuild-source-set!
+                                   (not session.project-mode))
                           (pcall rebuild-source-set! session)
                           (pcall session.meta.on-update 0)
                           (events.send :on-query-update!

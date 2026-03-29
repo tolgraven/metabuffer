@@ -206,6 +206,20 @@ These project events may fire more than once during a session:
 
 Run all handlers for `event-name` in priority order. Checks `:role-filter` against `args`. Each handler is pcall-wrapped.
 
+### `(events.post event-name args opts)` — Deferred dispatch
+
+Queue `event-name` onto the next scheduler tick instead of running handlers immediately. This is the first step toward a true queued bus for noisy UI lifecycle events.
+
+Supported `opts`:
+- `:supersede? true` — if another pending post with the same dedupe key exists, replace it instead of queueing both.
+- `:dedupe-key value` — override the coalescing key; defaults to `event-name`.
+
+Use this for high-frequency cosmetic or state-sync events where only the latest same-tick state matters. Keep query application, accept/cancel, and selection semantics on synchronous `send` unless there is a deliberate reason to defer them.
+
+### `(events.flush-posted!)` — Test/support helper
+
+Flush the currently queued posted events immediately. Intended mainly for unit tests and profiling.
+
 ### `(events.register! mod)` — Runtime registration
 
 Register an external module's `:events` at runtime. Re-sorts handler lists after insertion. For user compat plugins or dynamic extensions.
@@ -241,6 +255,12 @@ require("metabuffer.events").set_profile(true)
 
 When profiling is enabled, the bus also accumulates per-event timing totals in memory. `profile-stats` returns a deep copy keyed by event name with total `elapsed_us`, `count`, and per-handler subtables keyed as `domain/source`. `reset-profile-stats!` clears those accumulators so screen tests or ad hoc profiling sessions can compare one interaction's end-to-end time against just the bus-handler portion.
 
+Posted-event stats also track:
+- `:posted_count` — number of queued posts accepted
+- `:flushed_count` — number of queued posts actually emitted
+- `:suppressed_count` — number of queued posts superseded before flush
+- per-emission `:mode` (`"sync"` or `"posted"`) and queue delay
+
 ## Builtin Modules
 
 ### `airline.fnl`
@@ -251,6 +271,12 @@ Disables `w:airline_disable_statusline` on Meta windows, re-enables on teardown.
 ### `buffer_plugins.fnl`
 Disables conjure, LSP, gitgutter, gitsigns, diagnostics on all Meta buffers. Disables auto-pairs/endwise/cmp on prompt. Marks preview buffer.
 - `:on-buf-create!` — 3 handlers at priorities 10, 20 (prompt-only), 20 (preview-only)
+
+### `conjure.fnl`
+Stashes and disables Conjure buffer-local startup, mappings, HUD, and omnifunc on Meta-owned buffers, then restores the previous state on detach or session stop. Preview-attached real source buffers are included through preview attach/detach events so scrolling across supported filetypes does not trigger Conjure HUD side effects.
+- `:on-buf-create!` priority 12
+- `:on-buf-teardown!` priority 88
+- `:on-session-stop!` priority 89
 
 ### `cmp.fnl`
 Disables nvim-cmp on prompt buffer via API + buffer-local flag. Also suppresses native Neovim completion (`complete()`) and closes the preview popup to prevent unwanted completion UI. Re-disables on InsertEnter.

@@ -231,6 +231,10 @@
   (or (project-loading-pending? session)
       (clj.boolean (and session session.info-highlight-fill-pending?))))
 
+(fn effective-info-height
+  [session info-height _project-loading-pending?]
+  (math.max 1 (info-height session)))
+
 (fn M.new
   [opts]
   "Create right-side info window renderer/synchronizer."
@@ -272,17 +276,17 @@
   (set info_window_config
     (fn [session width height]
       (let [host-win (or (session-host-win session) (vim.api.nvim_get_current_win))
-            own-winbar-row (if (info-winbar-active? session project-loading-pending?) 1 0)]
+            _own-winbar-row (if (info-winbar-active? session project-loading-pending?) 1 0)]
         (if session.window-local-layout
             (let [[wb-ok wb-val] [(pcall vim.api.nvim_get_option_value "winbar" {:win host-win})]
                   has-winbar? (and wb-ok
                                    (= (type wb-val) "string")
                                    (~= wb-val ""))
                   base-row (if has-winbar? 1 0)
-                  row (math.max 0 (- base-row own-winbar-row))
+                  row base-row
                   host-height (vim.api.nvim_win_get_height host-win)
-                  wanted-h (+ (math.max 1 height) own-winbar-row)
-                  max-h (math.max 1 (- host-height row 1))
+                  wanted-h (math.max 1 height)
+                  max-h (math.max 1 (- host-height (math.max row 0)))
                   h   (math.min wanted-h max-h)]
               {:relative "win"
                :win host-win
@@ -294,10 +298,10 @@
                :focusable false})
             {:relative "editor"
              :anchor "NE"
-             :row (math.max 0 (- 1 own-winbar-row))
+             :row 1
              :col vim.o.columns
              :width width
-             :height (+ (math.max 1 height) own-winbar-row)
+             :height (math.max 1 height)
              :focusable false}))))
   (var ensure_info_window nil)
   (set ensure_info_window
@@ -305,7 +309,7 @@
       (when-not (valid-info-win? session)
         (let [buf (vim.api.nvim_create_buf false true)
               width info_min_width
-              height (info_height session)
+              height (effective-info-height session info_height project-loading-pending?)
               target (info_window_config session width height)
               animate-info? (and animation_mod
                                  animate_enter?
@@ -372,7 +376,7 @@
     [session]
     (when (valid-info-win? session)
       (let [width (vim.api.nvim_win_get_width session.info-win)
-            height (info_height session)
+            height (effective-info-height session info_height project-loading-pending?)
             cfg (info_window_config session width height)]
         (apply-info-config-if-changed! session cfg))))
 
@@ -486,12 +490,18 @@
           suffix0 (or (. info-view :suffix) "")
           suffix-prefix (if (> (# suffix0) 0) (or (. info-view :suffix-prefix) "  ") "")
           suffix-hls (or (. info-view :suffix-highlights) [])
-          icon-info (if show-icon? (util.file-icon-info icon-path file-hl) {:icon "" :icon-hl file-hl :file-hl file-hl})
+          icon-info (if show-icon?
+                        (util.file-icon-info icon-path file-hl)
+                        {:icon "" :icon-hl file-hl :file-hl file-hl :ext-hl file-hl})
           icon (or (. icon-info :icon) "")
           iconf (icon-field icon)
           icon-prefix (if show-icon? (. iconf :text) "")
-          ext-hl (or (. icon-info :ext-hl) (. icon-info :icon-hl) file-hl)
-          icon-hl ext-hl
+          ext0 (util.ext-from-path icon-path)
+          ext-bucket-hl (if (= ext0 "")
+                            nil
+                            (path-hl.group-for-segment ext0))
+          ext-hl (or ext-bucket-hl (. icon-info :ext-hl) (. icon-info :icon-hl) file-hl)
+          icon-hl (or ext-bucket-hl (. icon-info :icon-hl) file-hl)
           icon-width (if show-icon? (. iconf :width) 0)
           [dir file0 dir-original] (fit-path-into-width path (math.max 1 (- path-width icon-width)))
           this-file-hl (or (. icon-info :file-hl) file-hl)
@@ -664,8 +674,11 @@
                  meta.win
                  (vim.api.nvim_win_is_valid meta.win.window))
             (let [view (vim.api.nvim_win_call meta.win.window (fn [] (vim.fn.winsaveview)))
-                  top (math.max 1 (math.min total (or (. view :topline) 1)))
-                  height (math.max 1 (vim.api.nvim_win_get_height meta.win.window))
+                  top0 (math.max 1 (math.min total (or (. view :topline) 1)))
+                  overlay-offset (if (info-winbar-active? session project-loading-pending?) 1 0)
+                  top (math.max 1 (math.min total (+ top0 overlay-offset)))
+                  height0 (math.max 1 (vim.api.nvim_win_get_height meta.win.window))
+                  height (math.max 1 (- height0 overlay-offset))
                   stop0 (math.min total (+ top height -1))
                   shown (math.max 1 (+ (- stop0 top) 1))]
               (if (<= shown cap)
@@ -734,10 +747,10 @@
                                 (.. "lines=" (# lines))]))
       (set session.info-highlight-fill-token (+ 1 (or session.info-highlight-fill-token 0)))
       (set session.info-highlight-fill-pending? false)
-      (let [bo (. vim.bo session.info-buf)]
-        (set (. bo :modifiable) true))
       (fit-info-width! session lines)
       (ensure-regular-info-buffer-shape! session (# idxs))
+      (let [bo (. vim.bo session.info-buf)]
+        (set (. bo :modifiable) true))
       (let [[ok-set err-set] [(pcall vim.api.nvim_buf_set_lines session.info-buf (- render-start 1) render-stop false lines)]]
         (when-not ok-set
           (debug_log (.. "info set_lines failed: " (tostring err-set)))))

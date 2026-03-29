@@ -25,6 +25,8 @@
            session.prompt-update-dirty
            session.project-bootstrap-pending
            (and session.project-mode
+                (not session.lazy-stream-done))
+           (and session.project-mode
                 (not session.project-bootstrapped)))))
 
 (fn loading-visible?

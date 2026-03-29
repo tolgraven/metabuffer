@@ -17,7 +17,7 @@ local STATUS_PROGRESS = prompt_mod.STATUS_PROGRESS
 local state_cases = state.cases
 local state_syntax_types = state["syntax-types"]
 local function session_busy_3f(session)
-  return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["project-bootstrapped"])))
+  return (session and (session["prompt-update-pending"] or session["prompt-update-dirty"] or session["project-bootstrap-pending"] or (session["project-mode"] and not session["lazy-stream-done"]) or (session["project-mode"] and not session["project-bootstrapped"])))
 end
 local function loading_visible_3f(session)
   return (session and session["loading-indicator?"] and (session_busy_3f(session) or (session["loading-anim-phase"] ~= nil) or session["loading-idle-pending"]))
