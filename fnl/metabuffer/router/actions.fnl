@@ -344,7 +344,7 @@
               ref (router-util-mod.selected-ref curr)]
           (when (and ref ref.path)
             (let [path (or ref.path "")
-                  rel (vim.fn.fnamemodify path ":~:.")
+                  rel (vim.fn.fnamemodify path ":.")
                   target (if (and (= (type rel) "string") (~= rel ""))
                              rel
                              path)]

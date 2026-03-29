@@ -147,7 +147,12 @@
                                 (pcall sign-mod.refresh-change-signs! session)))
      :capture-sign-baseline! (fn [session]
                                (when (and sign-mod sign-mod.capture-baseline!)
-                                 (pcall sign-mod.capture-baseline! session)))}))
+                                 (pcall sign-mod.capture-baseline! session)))
+     :loading! (fn [session]
+                (when (and session
+                           session.prompt-hooks
+                           session.prompt-hooks.loading!)
+                  (pcall session.prompt-hooks.loading! session)))}))
 
 (fn register-prompt-hooks!
   [deps session]

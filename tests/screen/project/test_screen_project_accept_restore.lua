@@ -113,4 +113,28 @@ T['project <CR> hides Meta UI but restores full state when returning to results 
   end, 4000)
 end)
 
+T['project <CR> edits the selected file through a cwd-relative path'] = H.timed_case(function()
+  local root = H.make_temp_project()
+  H.open_project_meta_in_dir(root, 'main.txt')
+
+  H.type_prompt_text('#file:lua/mod.lua')
+  H.wait_for(function()
+    local ref = H.session_selected_ref()
+    return type(ref) == 'table' and ref.path and H.str_contains(ref.path, 'lua/mod.lua')
+  end, 6000)
+
+  local hist_before = H.child.fn.histnr(':')
+  H.type_prompt('<CR>')
+
+  H.wait_for(function()
+    return H.child.fn.histnr(':') > hist_before
+  end, 4000)
+
+  local cmd = H.child.fn.histget(':', -1)
+  eq(type(cmd), 'string')
+  eq(H.str_contains(cmd, 'edit '), true)
+  eq(H.str_contains(cmd, 'lua/mod.lua'), true)
+  eq(H.str_contains(cmd, root), false)
+end)
+
 return T

@@ -73,4 +73,58 @@ T['info window updates automatically when typing in prompt during project mode']
   eq(H.str_contains(snap.line, "mod.lua"), true, "Info window should update to show mod.lua after typing query")
 end)
 
+T['project loading animates the main statusline pulse while bootstrap is pending'] = H.timed_case(function()
+  local root = H.make_temp_project()
+  H.child.lua([[
+    require('metabuffer').setup({
+      project_bootstrap_delay_ms = 300,
+      project_bootstrap_idle_delay_ms = 300,
+      ui = {
+        animation = {
+          enabled = true,
+          loading_indicator = true,
+          backend = 'mini',
+        },
+      },
+    })
+  ]])
+  H.child.cmd("cd " .. root)
+  H.child.cmd("edit " .. root .. "/main.txt")
+  H.set_source_buf_to_current()
+  H.child.type_keys(':', 'Meta!', '<CR>')
+
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        return not not (s
+          and s['project-bootstrap-pending']
+          and s['loading-anim-phase'] ~= nil
+          and s['results-statusline-pulse-active?'])
+      end)()
+    ]])
+  end, 6000)
+
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        return not not (s and s['project-bootstrapped'] and s['lazy-stream-done'])
+      end)()
+    ]])
+  end, 6000)
+
+  H.wait_for(function()
+    return H.child.lua_get([[
+      (function()
+        local router = require('metabuffer.router')
+        local s = router['active-by-source'][_G.__meta_source_buf]
+        return not not (s and s['loading-anim-phase'] == nil and not s['results-statusline-pulse-active?'])
+      end)()
+    ]])
+  end, 6000)
+end)
+
 return T

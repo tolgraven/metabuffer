@@ -412,7 +412,7 @@ local function finish_accept(deps, session)
     if (ref and ref.path) then
       do
         local path = (ref.path or "")
-        local rel = vim.fn.fnamemodify(path, ":~:.")
+        local rel = vim.fn.fnamemodify(path, ":.")
         local target
         if ((type(rel) == "string") and (rel ~= "")) then
           target = rel

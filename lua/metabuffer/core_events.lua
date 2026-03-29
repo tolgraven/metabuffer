@@ -128,6 +128,14 @@ local function refresh_project_info_21(args)
   local session = args.session
   local hooks = refresh_hooks(session)
   if session then
+    do
+      local val_110_auto = hooks["loading!"]
+      if val_110_auto then
+        local f = val_110_auto
+        pcall(f, session)
+      else
+      end
+    end
     if clj.boolean(args["restore-view?"]) then
       local val_110_auto = hooks["restore-view!"]
       if val_110_auto then
@@ -257,7 +265,7 @@ local function update_source_pool_now_21(session, args)
           events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = refresh_lines})
         else
           if (err and string.find(tostring(err), "E565")) then
-            local function _33_()
+            local function _34_()
               if valid_session_buffer_3f(session) then
                 pcall(session.meta["on-update"], 0)
                 return events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = refresh_lines})
@@ -265,7 +273,7 @@ local function update_source_pool_now_21(session, args)
                 return nil
               end
             end
-            vim.defer_fn(_33_, 1)
+            vim.defer_fn(_34_, 1)
           else
           end
         end
@@ -305,7 +313,7 @@ local function schedule_source_pool_refresh_21(args)
       state["dirty?"] = true
       if not state["scheduled?"] then
         state["scheduled?"] = true
-        local function _43_()
+        local function _44_()
           if session then
             state["scheduled?"] = false
             if state["dirty?"] then
@@ -327,7 +335,7 @@ local function schedule_source_pool_refresh_21(args)
             return nil
           end
         end
-        return vim.defer_fn(_43_, math.max((session["project-lazy-refresh-min-ms"] or 0), (session["project-lazy-refresh-debounce-ms"] or 17)))
+        return vim.defer_fn(_44_, math.max((session["project-lazy-refresh-min-ms"] or 0), (session["project-lazy-refresh-debounce-ms"] or 17)))
       else
         return nil
       end

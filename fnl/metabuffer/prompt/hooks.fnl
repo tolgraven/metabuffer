@@ -1373,6 +1373,7 @@
         (apply-emacs-insert-fallbacks router session)))
 
     {:register! register!
-     :refresh! refresh-prompt-highlights!})))
+     :refresh! refresh-prompt-highlights!
+     :loading! schedule-loading-indicator!})))
 
 M
