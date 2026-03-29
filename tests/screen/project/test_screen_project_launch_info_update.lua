@@ -22,6 +22,7 @@ T['info window updates automatically when typing in prompt during project mode']
 
   local initial_snap = H.session_info_snapshot()
   local initial_winbar = H.session_info_winbar()
+  local initial_info_view = H.session_info_view()
   local still_loading = H.child.lua_get([[
     (function()
       local router = require('metabuffer.router')
@@ -41,9 +42,14 @@ T['info window updates automatically when typing in prompt during project mode']
 
   local settled_snap = H.session_info_snapshot()
   local settled_winbar = H.session_info_winbar()
+  local settled_info_view = H.session_info_view()
   eq(settled_snap.count > 0, true, "Info window should still be populated after project loading finishes")
   eq(settled_snap.line ~= '', true, "Info window should not go blank after the loading phase")
   eq(settled_winbar, '', "Info window winbar should clear after project loading finishes")
+  if initial_winbar ~= '' and initial_info_view and settled_info_view then
+    eq(initial_info_view.topline, settled_info_view.topline)
+    eq(initial_info_view.selected_row, settled_info_view.selected_row)
+  end
 
   -- Now type a query that filters the list. 
   -- We expect info window to update its content.

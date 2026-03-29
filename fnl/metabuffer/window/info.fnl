@@ -225,6 +225,12 @@
             (set out v)))
         out)))
 
+(fn info-winbar-active?
+  [session project-loading-pending?]
+  "True when the info winbar should be visible for loading/progress state."
+  (or (project-loading-pending? session)
+      (clj.boolean (and session session.info-highlight-fill-pending?))))
+
 (fn M.new
   [opts]
   "Create right-side info window renderer/synchronizer."
@@ -265,16 +271,19 @@
 
   (set info_window_config
     (fn [session width height]
-      (let [host-win (or (session-host-win session) (vim.api.nvim_get_current_win))]
+      (let [host-win (or (session-host-win session) (vim.api.nvim_get_current_win))
+            own-winbar-row (if (info-winbar-active? session project-loading-pending?) 1 0)]
         (if session.window-local-layout
             (let [[wb-ok wb-val] [(pcall vim.api.nvim_get_option_value "winbar" {:win host-win})]
                   has-winbar? (and wb-ok
                                    (= (type wb-val) "string")
                                    (~= wb-val ""))
-                  row (if has-winbar? 1 0)
+                  base-row (if has-winbar? 1 0)
+                  row (math.max 0 (- base-row own-winbar-row))
                   host-height (vim.api.nvim_win_get_height host-win)
+                  wanted-h (+ (math.max 1 height) own-winbar-row)
                   max-h (math.max 1 (- host-height row 1))
-                  h   (math.min (math.max 1 height) max-h)]
+                  h   (math.min wanted-h max-h)]
               {:relative "win"
                :win host-win
                :anchor "NW"
@@ -285,10 +294,10 @@
                :focusable false})
             {:relative "editor"
              :anchor "NE"
-             :row 1
+             :row (math.max 0 (- 1 own-winbar-row))
              :col vim.o.columns
              :width width
-             :height height
+             :height (+ (math.max 1 height) own-winbar-row)
              :focusable false}))))
   (var ensure_info_window nil)
   (set ensure_info_window
