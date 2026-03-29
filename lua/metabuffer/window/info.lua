@@ -5,263 +5,31 @@ local lineno_mod = require("metabuffer.window.lineno")
 local source_mod = require("metabuffer.source")
 local path_hl = require("metabuffer.path_highlight")
 local info_buffer_mod = require("metabuffer.buffer.info")
+local helper_mod = require("metabuffer.window.info_helpers")
 local util = require("metabuffer.util")
 local base_window_mod = require("metabuffer.window.base")
 local file_info = require("metabuffer.source.file_info")
 local events = require("metabuffer.events")
 local apply_metabuffer_window_highlights_21 = base_window_mod["apply-metabuffer-window-highlights!"]
-local function str(x)
-  return tostring(x)
-end
 local info_content_ns = vim.api.nvim_create_namespace("MetaInfoWindow")
 local info_selection_ns = vim.api.nvim_create_namespace("MetaInfoSelection")
-local function join_str(sep, xs)
-  local out = {}
-  for _, x in ipairs((xs or {})) do
-    table.insert(out, str(x))
-  end
-  return table.concat(out, (sep or ""))
-end
-local function range_text(start_index, stop_index, total)
-  if (total <= 0) then
-    return "0/0"
-  else
-    return (start_index .. "-" .. stop_index .. "/" .. total)
-  end
-end
-local function placeholder_pulse_char(session)
-  local phase = ((session and session["loading-anim-phase"]) or 0)
-  local frames = {"\194\183", "\226\128\162", "\226\151\143", "\226\128\162"}
-  return frames[((phase % #frames) + 1)]
-end
-local function info_placeholder_line(session)
-  return (placeholder_pulse_char(session) .. " loading info")
-end
-local function loading_skeleton_lines(count)
-  local patterns = {".... ... ......", "..... .... .....", "... ..... ......", ".... ...... ...."}
-  local total = math.max(1, (count or 1))
-  local lines = {}
-  for i = 1, total do
-    table.insert(lines, patterns[(((i - 1) % #patterns) + 1)])
-  end
-  return lines
-end
-local function indices_slice_sig(idxs, start_index, stop_index)
-  local out = {}
-  local idxs0 = (idxs or {})
-  local start_index0 = math.max(1, (start_index or 1))
-  local stop_index0 = math.max(0, (stop_index or 0))
-  for i = start_index0, stop_index0 do
-    local v = idxs0[i]
-    if not (v == nil) then
-      table.insert(out, tostring(v))
-    else
-    end
-  end
-  return table.concat(out, ",")
-end
-local function valid_info_win_3f(session)
-  return (session and (type(session["info-win"]) == "number") and vim.api.nvim_win_is_valid(session["info-win"]))
-end
-local function numeric_win_id(x)
-  if (type(x) == "number") then
-    return x
-  else
-    return ((type(x) == "table") and (type(x.window) == "number") and x.window)
-  end
-end
-local function session_host_win(session)
-  local meta_win = (session and session.meta and session.meta.win and numeric_win_id(session.meta.win))
-  local prompt_win = (session and numeric_win_id(session["prompt-win"]))
-  local prompt_window_win = (session and session["prompt-window"] and numeric_win_id(session["prompt-window"]))
-  local origin_win = (session and numeric_win_id(session["origin-win"]))
-  return ((meta_win and vim.api.nvim_win_is_valid(meta_win) and meta_win) or (prompt_win and vim.api.nvim_win_is_valid(prompt_win) and prompt_win) or (prompt_window_win and vim.api.nvim_win_is_valid(prompt_window_win) and prompt_window_win) or (origin_win and vim.api.nvim_win_is_valid(origin_win) and origin_win))
-end
-local function ext_start_in_file(file)
-  local txt = (file or "")
-  local n = #txt
-  local dot = 0
-  for i = n, 1, -1 do
-    if ((dot == 0) and (string.sub(txt, i, i) == ".")) then
-      dot = i
-    else
-    end
-  end
-  if ((dot > 1) and (dot < n)) then
-    return dot
-  else
-    return 0
-  end
-end
-local function icon_field(icon)
-  if ((type(icon) == "string") and (icon ~= "")) then
-    local text = (icon .. " ")
-    return {text = text, width = vim.fn.strdisplaywidth(text)}
-  else
-    return {text = "", width = 0}
-  end
-end
-local function ref_path(session, ref)
-  local or_7_ = (ref and ref.path)
-  if not or_7_ then
-    local and_8_ = session and session["source-buf"] and vim.api.nvim_buf_is_valid(session["source-buf"])
-    if and_8_ then
-      local name = vim.api.nvim_buf_get_name(session["source-buf"])
-      if ((type(name) == "string") and (name ~= "")) then
-        and_8_ = name
-      else
-        and_8_ = nil
-      end
-    end
-    or_7_ = and_8_
-  end
-  return (or_7_ or "")
-end
-local function refs_slice_sig(session, refs, idxs, start_index, stop_index)
-  local out = {}
-  local refs0 = (refs or {})
-  local idxs0 = (idxs or {})
-  for i = start_index, stop_index do
-    local src_idx = idxs0[i]
-    local ref = refs0[src_idx]
-    table.insert(out, join_str(":", {src_idx, (ref_path(session, ref) or ""), ((ref and ref.lnum) or 0), ((ref and ref.kind) or "")}))
-  end
-  return table.concat(out, "|")
-end
-local function compact_dir(dir)
-  if ((dir == "") or (dir == ".")) then
-    return ""
-  else
-    local parts = vim.split(dir, "/", {plain = true})
-    local out = {}
-    for _, p in ipairs((parts or {})) do
-      if (p ~= "") then
-        table.insert(out, string.sub(p, 1, 1))
-      else
-      end
-    end
-    if (#out == 0) then
-      return ""
-    else
-      return (table.concat(out, "/") .. "/")
-    end
-  end
-end
-local function compact_dir_keep_last(dir)
-  if ((dir == "") or (dir == ".")) then
-    return ""
-  else
-    local parts0 = vim.split(dir, "/", {plain = true})
-    local parts = {}
-    for _, p in ipairs((parts0 or {})) do
-      if (p ~= "") then
-        table.insert(parts, p)
-      else
-      end
-    end
-    local n = #parts
-    if (n == 0) then
-      return ""
-    else
-      if (n == 1) then
-        return (parts[1] .. "/")
-      else
-        local out = {}
-        for i = 1, (n - 1) do
-          table.insert(out, string.sub(parts[i], 1, 1))
-        end
-        table.insert(out, parts[n])
-        return (table.concat(out, "/") .. "/")
-      end
-    end
-  end
-end
-local function fit_path_into_width(path, path_width)
-  local dir0 = vim.fn.fnamemodify(path, ":h")
-  local dir
-  if ((dir0 == ".") or (dir0 == "")) then
-    dir = ""
-  else
-    dir = (dir0 .. "/")
-  end
-  local file = vim.fn.fnamemodify(path, ":t")
-  local budget = math.max(1, path_width)
-  local full = (dir .. file)
-  if (#full <= budget) then
-    return {dir, file, dir0}
-  else
-    local kdir = compact_dir_keep_last(dir0)
-    local keep_last = (kdir .. file)
-    if (#keep_last <= budget) then
-      return {kdir, file, dir0}
-    else
-      local cdir = compact_dir(dir0)
-      local compact = (cdir .. file)
-      if (#compact <= budget) then
-        return {cdir, file, dir0}
-      else
-        if (#file > budget) then
-          local _19_
-          if (budget > 1) then
-            _19_ = ("\226\128\166" .. string.sub(file, ((#file - budget) + 2)))
-          else
-            _19_ = string.sub(file, ((#file - budget) + 1))
-          end
-          return {"", _19_, dir0}
-        else
-          local dir_budget = math.max(0, (budget - #file))
-          local short_dir
-          if (#cdir <= dir_budget) then
-            short_dir = cdir
-          else
-            if (dir_budget > 1) then
-              short_dir = ("\226\128\166" .. string.sub(cdir, ((#cdir - dir_budget) + 2)))
-            else
-              short_dir = string.sub(cdir, ((#cdir - dir_budget) + 1))
-            end
-          end
-          return {short_dir, file, dir0}
-        end
-      end
-    end
-  end
-end
-local function info_range(selected_index, total, cap)
-  if ((total <= 0) or (cap <= 0)) then
-    return {1, 0}
-  else
-    if (total <= cap) then
-      return {1, total}
-    else
-      local sel = math.max(1, math.min(total, (selected_index + 1)))
-      local half = math.floor((cap / 2))
-      local start = math.max(1, math.min((sel - half), ((total - cap) + 1)))
-      local stop = math.min(total, (start + cap + -1))
-      return {start, stop}
-    end
-  end
-end
-local function numeric_max(vals, default)
-  if (not vals or (#vals == 0)) then
-    return default
-  else
-    local m = (vals[1] or default)
-    local out = m
-    for _, v in ipairs(vals) do
-      if (v > out) then
-        out = v
-      else
-      end
-    end
-    return out
-  end
-end
-local function info_winbar_active_3f(session, project_loading_pending_3f)
-  return (project_loading_pending_3f(session) or clj.boolean((session and session["info-highlight-fill-pending?"])))
-end
-local function effective_info_height(session, info_height, _project_loading_pending_3f)
-  return math.max(1, info_height(session))
-end
+local str = helper_mod.str
+local join_str = helper_mod["join-str"]
+local range_text = helper_mod["range-text"]
+local info_placeholder_line = helper_mod["info-placeholder-line"]
+local loading_skeleton_lines = helper_mod["loading-skeleton-lines"]
+local indices_slice_sig = helper_mod["indices-slice-sig"]
+local valid_info_win_3f = helper_mod["valid-info-win?"]
+local session_host_win = helper_mod["session-host-win"]
+local ext_start_in_file = helper_mod["ext-start-in-file"]
+local icon_field = helper_mod["icon-field"]
+local ref_path = helper_mod["ref-path"]
+local refs_slice_sig = helper_mod["refs-slice-sig"]
+local fit_path_into_width = helper_mod["fit-path-into-width"]
+local info_range = helper_mod["info-range"]
+local numeric_max = helper_mod["numeric-max"]
+local info_winbar_active_3f = helper_mod["info-winbar-active?"]
+local effective_info_height = helper_mod["effective-info-height"]
 M.new = function(opts)
   local deps = (opts or {})
   local floating_window_mod = deps["floating-window-mod"]
@@ -294,7 +62,7 @@ M.new = function(opts)
       return nil
     end
   end
-  local function _33_(session, width, height)
+  local function _3_(session, width, height)
     local host_win = (session_host_win(session) or vim.api.nvim_get_current_win())
     local _own_winbar_row
     if info_winbar_active_3f(session, project_loading_pending_3f) then
@@ -321,7 +89,7 @@ M.new = function(opts)
       return {relative = "editor", anchor = "NE", row = 1, col = vim.o.columns, width = width, height = math.max(1, height), focusable = false}
     end
   end
-  info_window_config = _33_
+  info_window_config = _3_
   local ensure_info_window = nil
   local function info_target_config(session)
     local width = info_min_width
@@ -369,9 +137,9 @@ M.new = function(opts)
     session["info-render-suspended?"] = true
     session["info-post-fade-refresh?"] = true
     pcall(vim.api.nvim_set_option_value, "winblend", 100, {win = session["info-win"]})
-    local function _38_()
+    local function _8_()
       if valid_info_win_3f(session) then
-        local function _39_(_)
+        local function _9_(_)
           if valid_info_win_3f(session) then
             session["info-post-fade-refresh?"] = nil
             session["info-render-suspended?"] = false
@@ -380,18 +148,18 @@ M.new = function(opts)
             return nil
           end
         end
-        return animation_mod["animate-float!"](session, "info-enter", session["info-win"], cfg, target, 100, (vim.g.meta_float_winblend or 13), animation_mod["duration-ms"](session, "info", (info_fade_ms or 220)), {kind = "info", ["done!"] = _39_})
+        return animation_mod["animate-float!"](session, "info-enter", session["info-win"], cfg, target, 100, (vim.g.meta_float_winblend or 13), animation_mod["duration-ms"](session, "info", (info_fade_ms or 220)), {kind = "info", ["done!"] = _9_})
       else
         return nil
       end
     end
-    return vim.defer_fn(_38_, 17)
+    return vim.defer_fn(_8_, 17)
   end
-  local function _42_(session)
+  local function _12_(session)
     if not valid_info_win_3f(session) then
       local buf = vim.api.nvim_create_buf(false, true)
-      local _let_43_ = info_target_config(session)
-      local target = _let_43_.target
+      local _let_13_ = info_target_config(session)
+      local target = _let_13_.target
       local animate_info_3f = animate_info_enter_3f(session, target)
       local cfg = initial_info_config(target, animate_info_3f)
       local win = floating_window_mod.new(vim, buf, cfg)
@@ -406,7 +174,7 @@ M.new = function(opts)
       return nil
     end
   end
-  ensure_info_window = _42_
+  ensure_info_window = _12_
   local function settle_info_window_21(session)
     if valid_info_win_3f(session) then
       local width = vim.api.nvim_win_get_width(session["info-win"])
@@ -422,15 +190,15 @@ M.new = function(opts)
       local total = #((session and session.meta and session.meta.buf and session.meta.buf.indices) or {})
       local start_index = (session["info-start-index"] or 1)
       local stop_index
-      local or_47_ = session["info-stop-index"]
-      if not or_47_ then
+      local or_17_ = session["info-stop-index"]
+      if not or_17_ then
         if (total > 0) then
-          or_47_ = total
+          or_17_ = total
         else
-          or_47_ = 0
+          or_17_ = 0
         end
       end
-      stop_index = or_47_
+      stop_index = or_17_
       local range = range_text(start_index, stop_index, total)
       local loading_title
       if project_loading_pending_3f(session) then
@@ -607,10 +375,10 @@ M.new = function(opts)
     else
       icon_width = 0
     end
-    local _let_72_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
-    local dir = _let_72_[1]
-    local file0 = _let_72_[2]
-    local dir_original = _let_72_[3]
+    local _let_42_ = fit_path_into_width(path, math.max(1, (path_width - icon_width)))
+    local dir = _let_42_[1]
+    local file0 = _let_42_[2]
+    local dir_original = _let_42_[3]
     local this_file_hl = (icon_info["file-hl"] or file_hl)
     local line = (sign_prefix .. lnum_cell0 .. icon_prefix .. dir .. file0 .. suffix_prefix .. suffix0)
     local sign_start = 0
@@ -731,7 +499,7 @@ M.new = function(opts)
   end
   local function set_info_topline_21(session, top)
     if valid_info_win_3f(session) then
-      local function _87_()
+      local function _57_()
         local line_count = math.max(1, vim.api.nvim_buf_line_count(session["info-buf"]))
         local top_2a = math.max(1, math.min(top, line_count))
         local selected1 = math.max(1, math.min((session.meta.selected_index + 1), line_count))
@@ -742,7 +510,7 @@ M.new = function(opts)
         view["leftcol"] = 0
         return pcall(vim.fn.winrestview, view)
       end
-      return vim.api.nvim_win_call(session["info-win"], _87_)
+      return vim.api.nvim_win_call(session["info-win"], _57_)
     else
       return nil
     end
@@ -757,10 +525,10 @@ M.new = function(opts)
           bo["modifiable"] = true
         end
         if (current < needed) then
-          local function _89_(_)
+          local function _59_(_)
             return info_placeholder_line(session)
           end
-          vim.api.nvim_buf_set_lines(session["info-buf"], current, current, false, vim.tbl_map(_89_, vim.fn.range((current + 1), needed)))
+          vim.api.nvim_buf_set_lines(session["info-buf"], current, current, false, vim.tbl_map(_59_, vim.fn.range((current + 1), needed)))
         else
           vim.api.nvim_buf_set_lines(session["info-buf"], needed, -1, false, {})
         end
@@ -777,10 +545,10 @@ M.new = function(opts)
   local function fit_info_width_21(session, lines)
     if valid_info_win_3f(session) then
       local widths
-      local function _93_(line)
+      local function _63_(line)
         return vim.fn.strdisplaywidth((line or ""))
       end
-      widths = vim.tbl_map(_93_, (lines or {}))
+      widths = vim.tbl_map(_63_, (lines or {}))
       local max_len = numeric_max(widths, 0)
       local needed = max_len
       local host_win = session_host_win(session)
@@ -823,10 +591,10 @@ M.new = function(opts)
     else
       if (session and meta and meta.win and vim.api.nvim_win_is_valid(meta.win.window)) then
         local view
-        local function _98_()
+        local function _68_()
           return vim.fn.winsaveview()
         end
-        view = vim.api.nvim_win_call(meta.win.window, _98_)
+        view = vim.api.nvim_win_call(meta.win.window, _68_)
         local top0 = math.max(1, math.min(total, (view.topline or 1)))
         local overlay_offset
         if info_winbar_active_3f(session, project_loading_pending_3f) then
@@ -946,9 +714,9 @@ M.new = function(opts)
   end
   local function render_current_range_21(session, meta)
     local total = #(meta.buf.indices or {})
-    local _let_107_ = info_visible_range(session, meta, total, info_max_lines)
-    local start_index = _let_107_[1]
-    local stop_index = _let_107_[2]
+    local _let_77_ = info_visible_range(session, meta, total, info_max_lines)
+    local start_index = _let_77_[1]
+    local stop_index = _let_77_[2]
     local overscan = math.max(1, info_height(session))
     local render_start = math.max(1, (start_index - overscan))
     local render_stop = math.min(total, (stop_index + overscan))
@@ -963,23 +731,23 @@ M.new = function(opts)
     local first_ref = (first_row and refs[first_row])
     local path = ref_path(session, first_ref)
     local rerender_21 = nil
-    local function _108_()
+    local function _78_()
       if (session and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"]) and not session["project-mode"] and session["single-file-info-ready"]) then
         if (session["scroll-animating?"] or session["scroll-command-view"] or session["scroll-sync-pending"] or session["selection-refresh-pending"]) then
           if not session["info-line-meta-refresh-pending"] then
             session["info-line-meta-refresh-pending"] = true
-            local function _109_()
+            local function _79_()
               session["info-line-meta-refresh-pending"] = false
               return rerender_21()
             end
-            return vim.defer_fn(_109_, 90)
+            return vim.defer_fn(_79_, 90)
           else
             return nil
           end
         else
-          local _let_111_ = render_current_range_21(session, meta)
-          local start1 = _let_111_[1]
-          local stop1 = _let_111_[2]
+          local _let_81_ = render_current_range_21(session, meta)
+          local start1 = _let_81_[1]
+          local stop1 = _let_81_[2]
           session["info-start-index"] = start1
           session["info-stop-index"] = stop1
           return nil
@@ -988,7 +756,7 @@ M.new = function(opts)
         return nil
       end
     end
-    rerender_21 = _108_
+    rerender_21 = _78_
     if (session["single-file-info-fetch-ready"] and (path ~= "") and (1 == vim.fn.filereadable(path))) then
       local lnums = {}
       for i = start_index, stop_index do
@@ -1006,22 +774,22 @@ M.new = function(opts)
         local range_key = (path .. ":" .. start_index .. ":" .. stop_index .. ":" .. first_lnum .. ":" .. last_lnum)
         if (range_key ~= session["info-line-meta-range-key"]) then
           session["info-line-meta-range-key"] = range_key
-          local function _115_()
+          local function _85_()
             if (range_key == session["info-line-meta-range-key"]) then
               return rerender_21()
             else
               return nil
             end
           end
-          file_info["ensure-file-status-async!"](session, path, _115_)
-          local function _117_()
+          file_info["ensure-file-status-async!"](session, path, _85_)
+          local function _87_()
             if (range_key == session["info-line-meta-range-key"]) then
               return rerender_21()
             else
               return nil
             end
           end
-          return file_info["ensure-line-meta-range-async!"](session, path, lnums, _117_)
+          return file_info["ensure-line-meta-range-async!"](session, path, lnums, _87_)
         else
           return nil
         end
@@ -1047,9 +815,9 @@ M.new = function(opts)
       local selected1 = (meta.selected_index + 1)
       local idxs = (meta.buf.indices or {})
       local overscan = math.max(1, info_height(session))
-      local _let_123_ = info_visible_range(session, meta, #idxs, info_max_lines)
-      local wanted_start = _let_123_[1]
-      local wanted_stop = _let_123_[2]
+      local _let_93_ = info_visible_range(session, meta, #idxs, info_max_lines)
+      local wanted_start = _let_93_[1]
+      local wanted_stop = _let_93_[2]
       local render_start
       if (#idxs > 0) then
         render_start = math.max(1, (wanted_start - overscan))
@@ -1095,7 +863,7 @@ M.new = function(opts)
     local pending = (session and session["project-mode"] and (initializing or animating))
     return pending
   end
-  local function _129_(session)
+  local function _99_(session)
     local startup = startup_layout_pending_3f(session)
     local bootstrap_pending = (session["project-bootstrap-pending"] or false)
     local bootstrapped = (session["project-bootstrapped"] or false)
@@ -1103,7 +871,7 @@ M.new = function(opts)
     local pending = (session and session["project-mode"] and (startup or bootstrap_pending or not bootstrapped or not stream_done))
     return pending
   end
-  project_loading_pending_3f = _129_
+  project_loading_pending_3f = _99_
   local function render_project_loading_21(session)
     local lines = loading_skeleton_lines(info_height(session))
     local ns = info_content_ns
@@ -1141,9 +909,9 @@ M.new = function(opts)
       local idxs = (meta.buf.indices or {})
       local total = #idxs
       if (total > 0) then
-        local _let_131_ = info_visible_range(session, meta, total, info_max_lines)
-        local wanted_start = _let_131_[1]
-        local wanted_stop = _let_131_[2]
+        local _let_101_ = info_visible_range(session, meta, total, info_max_lines)
+        local wanted_start = _let_101_[1]
+        local wanted_stop = _let_101_[2]
         session["info-showing-project-loading?"] = false
         render_info_lines_21(session, meta, wanted_start, wanted_stop, wanted_start, wanted_stop)
         return sync_info_selection_21(session, meta)
@@ -1171,9 +939,9 @@ M.new = function(opts)
   end
   local function project_info_range_state(session, meta)
     local selected1 = (meta.selected_index + 1)
-    local _let_135_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-    local wanted_start = _let_135_[1]
-    local wanted_stop = _let_135_[2]
+    local _let_105_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
+    local wanted_start = _let_105_[1]
+    local wanted_stop = _let_105_[2]
     local start_index = (session["info-start-index"] or 1)
     local stop_index = (session["info-stop-index"] or 0)
     return {["wanted-start"] = wanted_start, ["wanted-stop"] = wanted_stop, ["out-of-range"] = ((selected1 < start_index) or (selected1 > stop_index)), ["range-changed"] = ((wanted_start ~= start_index) or (wanted_stop ~= stop_index))}
@@ -1183,14 +951,14 @@ M.new = function(opts)
     return join_str("|", {#idxs, indices_slice_sig(idxs, wanted_start, wanted_stop), refs_slice_sig(session, meta.buf["source-refs"], idxs, wanted_start, wanted_stop), wanted_start, wanted_stop, (session["active-source-key"] or ""), (session["info-file-entry-view"] or ""), info_max_width_now(session), info_height(session), vim.o.columns})
   end
   local function schedule_project_info_finish_refresh_21(session)
-    local function _136_()
+    local function _106_()
       if (session and valid_info_win_3f(session) and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"]) and not project_loading_pending_3f(session)) then
         return update_21(session, true)
       else
         return nil
       end
     end
-    return vim.defer_fn(_136_, 17)
+    return vim.defer_fn(_106_, 17)
   end
   local function rerender_project_info_21(session, meta, wanted_start, wanted_stop, loading_finished_3f)
     session["info-render-sig"] = project_info_render_sig(session, meta, wanted_start, wanted_stop)
@@ -1214,11 +982,11 @@ M.new = function(opts)
         local meta = session.meta
         local loading_finished_3f = clj.boolean(session["info-project-loading-active?"])
         local force_refresh_3f = project_info_force_refresh_3f(session, refresh_lines)
-        local _let_139_ = project_info_range_state(session, meta)
-        local wanted_start = _let_139_["wanted-start"]
-        local wanted_stop = _let_139_["wanted-stop"]
-        local out_of_range = _let_139_["out-of-range"]
-        local range_changed = _let_139_["range-changed"]
+        local _let_109_ = project_info_range_state(session, meta)
+        local wanted_start = _let_109_["wanted-start"]
+        local wanted_stop = _let_109_["wanted-stop"]
+        local out_of_range = _let_109_["out-of-range"]
+        local range_changed = _let_109_["range-changed"]
         if (force_refresh_3f or out_of_range or range_changed) then
           local sig = project_info_render_sig(session, meta, wanted_start, wanted_stop)
           if (force_refresh_3f or out_of_range or range_changed or (session["info-render-sig"] ~= sig)) then
@@ -1233,7 +1001,7 @@ M.new = function(opts)
       end
     end
   end
-  local function _144_(session, refresh_lines)
+  local function _114_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -1246,7 +1014,7 @@ M.new = function(opts)
       return update_regular_21(session, refresh_lines0)
     end
   end
-  update_21 = _144_
+  update_21 = _114_
   return {["close-window!"] = close_info_window_21, ["update!"] = update_21, ["refresh-statusline!"] = refresh_info_statusline_21}
 end
 return M
