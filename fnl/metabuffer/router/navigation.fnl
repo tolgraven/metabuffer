@@ -310,7 +310,7 @@
                   (do
                     (vim.fn.winrestview target)
                     (set session.scroll-animating? false)
-                    (set session.scroll-command-view nil)
+                    (set session.scroll-command-view target)
                     {:row (or (. target :lnum) row) :animated false}))))))))
 
 (fn apply-scroll-selection!
@@ -324,7 +324,10 @@
             {:session session
              :line-nr (+ 1 (or session.meta.selected_index 0))
              :refresh-lines false}))
-        (sync-selection-to-row! deps session target-row))))
+        (do
+          (sync-selection-to-row! deps session target-row)
+          (M.maybe-sync-from-main! deps session true)
+          (restore-scroll-cursor! session)))))
 
 (fn move-selection-runner
   [deps session delta]
@@ -370,12 +373,13 @@
   (let [{: router : mods} deps
         active-by-prompt (. router :active-by-prompt)
         session-view (. mods :session-view)]
-    (session-view.maybe-sync-from-main!
-    session
-    force-refresh
-    {:active-by-prompt active-by-prompt
-     :schedule-source-syntax-refresh! (fn [s]
-                                        (schedule-source-syntax-refresh! deps s))})))
+    (when (and session-view session-view.maybe-sync-from-main!)
+      (session-view.maybe-sync-from-main!
+        session
+        force-refresh
+        {:active-by-prompt active-by-prompt
+         :schedule-source-syntax-refresh! (fn [s]
+                                            (schedule-source-syntax-refresh! deps s))}))))
 
 (fn M.schedule-scroll-sync!
   [deps session]

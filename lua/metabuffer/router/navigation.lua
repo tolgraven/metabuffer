@@ -310,7 +310,7 @@ local function execute_scroll_21(deps, animation_mod, active_by_prompt, session,
       else
         vim.fn.winrestview(target)
         session["scroll-animating?"] = false
-        session["scroll-command-view"] = nil
+        session["scroll-command-view"] = target
         return {row = (target.lnum or row), animated = false}
       end
     end
@@ -324,7 +324,9 @@ local function apply_scroll_selection_21(deps, session, result)
     set_selected_index_21(session, target_row)
     return events.send("on-selection-change!", {session = session, ["line-nr"] = (1 + (session.meta.selected_index or 0)), ["refresh-lines"] = false})
   else
-    return sync_selection_to_row_21(deps, session, target_row)
+    sync_selection_to_row_21(deps, session, target_row)
+    M["maybe-sync-from-main!"](deps, session, true)
+    return restore_scroll_cursor_21(session)
   end
 end
 local function move_selection_runner(deps, session, delta)
@@ -376,19 +378,23 @@ M["maybe-sync-from-main!"] = function(deps, session, force_refresh)
   local mods = deps.mods
   local active_by_prompt = router["active-by-prompt"]
   local session_view = mods["session-view"]
-  local function _46_(s)
-    return schedule_source_syntax_refresh_21(deps, s)
+  if (session_view and session_view["maybe-sync-from-main!"]) then
+    local function _46_(s)
+      return schedule_source_syntax_refresh_21(deps, s)
+    end
+    return session_view["maybe-sync-from-main!"](session, force_refresh, {["active-by-prompt"] = active_by_prompt, ["schedule-source-syntax-refresh!"] = _46_})
+  else
+    return nil
   end
-  return session_view["maybe-sync-from-main!"](session, force_refresh, {["active-by-prompt"] = active_by_prompt, ["schedule-source-syntax-refresh!"] = _46_})
 end
 M["schedule-scroll-sync!"] = function(deps, session)
   local timing = deps.timing
   local mods = deps.mods
   local scroll_sync_debounce_ms = timing["scroll-sync-debounce-ms"]
   local session_view = mods["session-view"]
-  local function _47_(s, force_refresh)
+  local function _48_(s, force_refresh)
     return M["maybe-sync-from-main!"](deps, s, force_refresh)
   end
-  return session_view["schedule-scroll-sync!"](session, {["scroll-sync-debounce-ms"] = scroll_sync_debounce_ms, ["maybe-sync-from-main!"] = _47_})
+  return session_view["schedule-scroll-sync!"](session, {["scroll-sync-debounce-ms"] = scroll_sync_debounce_ms, ["maybe-sync-from-main!"] = _48_})
 end
 return M

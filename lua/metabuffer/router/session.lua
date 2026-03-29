@@ -414,7 +414,7 @@ local function schedule_project_startup_refresh_21(session, startup_live_3f)
     return nil
   end
 end
-local function schedule_startup_finalize_21(project_source, active_by_prompt, session, startup_live_3f)
+local function schedule_startup_finalize_21(project_source, session, startup_live_3f)
   local function _70_()
     if startup_live_3f() then
       session["startup-initializing"] = false
@@ -507,7 +507,7 @@ local function finish_session_startup_21(deps, curr, session, initial_query_acti
   run_step_21("finish-session-startup!/emit-session-ready", _87_)
   schedule_project_startup_refresh_21(session, startup_live_3f)
   schedule_single_file_info_phases_21()
-  schedule_startup_finalize_21(project_source, active_by_prompt, session, startup_live_3f)
+  schedule_startup_finalize_21(project_source, session, startup_live_3f)
   instances[session["instance-id"]] = session
   return nil
 end
