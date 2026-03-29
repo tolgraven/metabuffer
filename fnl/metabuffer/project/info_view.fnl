@@ -1,5 +1,4 @@
 (import-macros {: when-let : when-not} :io.gitlab.andreyorst.cljlib.core)
-(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
 
 (fn M.new
@@ -174,7 +173,7 @@
                        session.info-buf
                        (vim.api.nvim_buf_is_valid session.info-buf))
               (let [meta session.meta
-                    loading-finished? (not (clj.boolean session.info-project-loading-active?))
+                    loading-finished? (not (project-loading-pending? session))
                     force-refresh? (project-info-force-refresh? session refresh-lines)
                     {: wanted-start : wanted-stop : out-of-range : range-changed}
                     (project-info-range-state session meta)]
