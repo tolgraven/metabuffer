@@ -4,6 +4,30 @@
 
 (local M {})
 
+(fn session-active-for-prompt?
+  [active-by-prompt session]
+  (and session
+       session.prompt-buf
+       (= (. active-by-prompt session.prompt-buf) session)))
+
+(fn results-window-valid?
+  [session]
+  (and session
+       session.meta
+       session.meta.win
+       (vim.api.nvim_win_is_valid session.meta.win.window)))
+
+(fn current-mode-insert?
+  []
+  (let [mode (. (vim.api.nvim_get_mode) :mode)]
+    (and (= (type mode) "string") (vim.startswith mode "i"))))
+
+(fn run-mode-safe!
+  [runner]
+  (if (current-mode-insert?)
+      (vim.schedule runner)
+      (runner)))
+
 (fn can-refresh-source-syntax?
   [session include-full?]
   (let [buf (and session session.meta session.meta.buf)]
@@ -35,30 +59,41 @@
   (when (can-refresh-source-syntax? session include-full?)
     (pcall session.meta.buf.apply-source-syntax-regions)))
 
+(fn mark-source-syntax-dirty!
+  [session]
+  (set session.syntax-refresh-dirty true))
+
+(fn apply-dirty-source-syntax-refresh!
+  [session]
+  (when session.syntax-refresh-dirty
+    (set session.syntax-refresh-dirty false)
+    (apply-source-syntax-refresh! session false)))
+
+(fn rerun-source-syntax-refresh?
+  [session]
+  session.syntax-refresh-dirty)
+
+(fn source-syntax-refresh-delay-ms
+  [deps]
+  (or (. (. deps :timing) :source-syntax-refresh-debounce-ms) 80))
+
 (fn schedule-source-syntax-refresh!
   [deps session]
-
-    (let [{: router : timing} deps
-        active-by-prompt (. router :active-by-prompt)
-        source-syntax-refresh-debounce-ms (. timing :source-syntax-refresh-debounce-ms)]
-    (when (can-refresh-source-syntax? session false)
-    (set session.syntax-refresh-dirty true)
+  (let [active-by-prompt (. (. deps :router) :active-by-prompt)]
+  (when (can-refresh-source-syntax? session false)
+    (mark-source-syntax-dirty! session)
     (when-not session.syntax-refresh-pending
       (set session.syntax-refresh-pending true)
       (vim.defer_fn
-          (fn []
-            (set session.syntax-refresh-pending false)
-            (when (and session
-                       session.prompt-buf
-                       (= (. active-by-prompt session.prompt-buf) session))
-              (when session.syntax-refresh-dirty
-                (set session.syntax-refresh-dirty false)
-                (apply-source-syntax-refresh! session false))
-              ;; If additional scroll events arrived while refreshing, ensure we
-              ;; run one trailing update.
-              (when session.syntax-refresh-dirty
-                (schedule-source-syntax-refresh! deps session))))
-        (or source-syntax-refresh-debounce-ms 80))))))
+        (fn []
+          (set session.syntax-refresh-pending false)
+          (when (session-active-for-prompt? active-by-prompt session)
+            (apply-dirty-source-syntax-refresh! session)
+            ;; If additional scroll events arrived while refreshing, ensure we
+            ;; run one trailing update.
+            (when (rerun-source-syntax-refresh? session)
+              (schedule-source-syntax-refresh! deps session))))
+        (source-syntax-refresh-delay-ms deps))))))
 
 (fn M.refresh-source-syntax!
   [deps session immediate?]
@@ -66,38 +101,45 @@
       (apply-source-syntax-refresh! session true)
       (schedule-source-syntax-refresh! deps session)))
 
+(fn mark-selection-refresh-pending!
+  [session force-refresh]
+  (set session.selection-refresh-force?
+       (or force-refresh session.selection-refresh-force?))
+  (set session.selection-refresh-token
+       (+ 1 (or session.selection-refresh-token 0))))
+
+(fn selection-refresh-delay-ms
+  [deps]
+  (or (. (or (. deps :timing) {}) :selection-refresh-debounce-ms) 12))
+
+(fn emit-selection-change!
+  [session force-refresh?]
+  (events.send :on-selection-change!
+    {:session session
+     :line-nr (+ 1 (or session.meta.selected_index 0))
+     :force-refresh? force-refresh?
+     :refresh-lines true}))
+
 (fn refresh-windows!
   [deps session force-refresh]
-  (let [{: router} deps
-        timing (or (. deps :timing) {})
-        active-by-prompt (. router :active-by-prompt)
-        selection-refresh-debounce-ms (or (. timing :selection-refresh-debounce-ms) 12)]
+  (let [active-by-prompt (. (. deps :router) :active-by-prompt)]
     (when session
-      (set session.selection-refresh-force?
-           (or force-refresh session.selection-refresh-force?))
-      (set session.selection-refresh-token
-           (+ 1 (or session.selection-refresh-token 0)))
-      (when-not session.selection-refresh-pending
-        (set session.selection-refresh-pending true)
-        (vim.defer_fn
-          (fn []
-            (set session.selection-refresh-pending false)
-            (when (and session
-                       session.prompt-buf
-                       (= (. active-by-prompt session.prompt-buf) session))
-              (let [token session.selection-refresh-token
-                    force-refresh? (clj.boolean session.selection-refresh-force?)]
-                (set session.selection-refresh-force? false)
-                (when (= token session.selection-refresh-token)
-                  (events.send :on-selection-change!
-                    {:session session
-                     :line-nr (+ 1 (or session.meta.selected_index 0))
-                     :force-refresh? force-refresh?
-                     :refresh-lines true}))
-                (restore-scroll-cursor! session)
-                (when (~= token session.selection-refresh-token)
-                  (refresh-windows! deps session false)))))
-          selection-refresh-debounce-ms)))))
+    (mark-selection-refresh-pending! session force-refresh)
+    (when-not session.selection-refresh-pending
+      (set session.selection-refresh-pending true)
+      (vim.defer_fn
+        (fn []
+          (set session.selection-refresh-pending false)
+          (when (session-active-for-prompt? active-by-prompt session)
+            (let [token session.selection-refresh-token
+                  force-refresh? (clj.boolean session.selection-refresh-force?)]
+              (set session.selection-refresh-force? false)
+              (when (= token session.selection-refresh-token)
+                (emit-selection-change! session force-refresh?))
+              (restore-scroll-cursor! session)
+              (when (~= token session.selection-refresh-token)
+                (refresh-windows! deps session false)))))
+        (selection-refresh-delay-ms deps))))))
 
 (fn set-selected-index!
   [session row]
@@ -109,6 +151,19 @@
               next-index (- target-row 1)]
           (set meta.selected_index next-index)))))
 
+(fn sync-results-cursor!
+  [session row]
+  (let [meta session.meta
+        max (# meta.buf.indices)]
+    (when (> max 0)
+      (let [target-row (math.max 1 (math.min row max))]
+        (when (results-window-valid? session)
+          (let [cursor (vim.api.nvim_win_get_cursor meta.win.window)
+                col (or (. cursor 2) 0)]
+            (when (or (~= (. cursor 1) target-row)
+                      (~= col 0))
+              (pcall vim.api.nvim_win_set_cursor meta.win.window [target-row 0]))))))))
+
 (fn sync-selection-state!
   [deps session row]
   (set-selected-index! session row)
@@ -116,17 +171,8 @@
 
 (fn sync-selection-to-row!
   [deps session row]
-  (let [meta session.meta
-        max (# meta.buf.indices)]
-    (sync-selection-state! deps session row)
-    (when (> max 0)
-      (let [target-row (math.max 1 (math.min row max))]
-        (when (vim.api.nvim_win_is_valid meta.win.window)
-          (let [cursor (vim.api.nvim_win_get_cursor meta.win.window)
-                col (or (. cursor 2) 0)]
-            (when (or (~= (. cursor 1) target-row)
-                      (~= col 0))
-              (pcall vim.api.nvim_win_set_cursor meta.win.window [target-row 0]))))))))
+  (sync-selection-state! deps session row)
+  (sync-results-cursor! session row))
 
 (fn effective-scroll-target
   [win restore-view target]
@@ -155,138 +201,176 @@
                       "\6"
                       "\2"))))))
 
+(fn target-step
+  [action win-height]
+  (let [half-step (math.max 1 (math.floor (/ win-height 2)))
+        page-step (math.max 1 (- win-height 2))]
+    (if (or (= action "line-down") (= action "line-up"))
+        1
+        (if (or (= action "half-down") (= action "half-up"))
+            half-step
+            page-step))))
+
+(fn target-direction
+  [action]
+  (if (or (= action "line-down")
+          (= action "half-down")
+          (= action "page-down"))
+      1
+      -1))
+
+(fn clamp-scroll-lnum
+  [dir line-count old-lnum new-lnum0]
+  (if (and (= dir -1)
+           (< (- old-lnum 1) (- old-lnum new-lnum0)))
+      1
+      (and (= dir 1)
+           (< (- line-count old-lnum) (- new-lnum0 old-lnum)))
+      line-count
+      new-lnum0))
+
+(fn scroll-target-view
+  [session action]
+  (let [line-count (vim.api.nvim_buf_line_count session.meta.buf.buffer)
+        win-height (math.max 1 (vim.api.nvim_win_get_height session.meta.win.window))
+        step (target-step action win-height)
+        dir (target-direction action)
+        max-top (math.max 1 (+ (- line-count win-height) 1))
+        view (vim.fn.winsaveview)
+        logical-view (or session.scroll-command-view view)
+        old-top (. logical-view :topline)
+        old-lnum (. logical-view :lnum)
+        old-col (or (. logical-view :col) 0)
+        new-top0 (math.max 1 (math.min (+ old-top (* dir step)) max-top))
+        new-lnum0 (math.max 1 (math.min (+ old-lnum (* dir step)) line-count))
+        new-lnum (clamp-scroll-lnum dir line-count old-lnum new-lnum0)
+        new-top (if (= new-lnum 1)
+                    1
+                    (= new-lnum line-count)
+                    max-top
+                    new-top0)
+        target0 {:topline new-top :lnum new-lnum :col old-col :leftcol (or (. logical-view :leftcol) 0)}]
+    {:line-count line-count
+     :step step
+     :view view
+     :target (effective-scroll-target session.meta.win.window view target0)
+     :row new-lnum}))
+
+(fn finish-scroll!
+  [deps active-by-prompt session]
+  (when (session-active-for-prompt? active-by-prompt session)
+    (set session.scroll-animating? false)
+    (set session.scroll-command-view nil)
+    (M.maybe-sync-from-main! deps session true)
+    (restore-scroll-cursor! session)))
+
+(fn scroll-animation-mode
+  [animation-mod session step]
+  (let [animate? (and animation-mod
+                      (animation-mod.enabled? session :scroll)
+                      (> (animation-mod.duration-ms session :scroll 140) 0)
+                      (not (= step 1)))
+        mini-scroll? (and animate?
+                          (= (animation-mod.animation-backend session :scroll) "mini")
+                          (animation-mod.supports-backend? "mini"))]
+    {:animate? animate? :mini-scroll? mini-scroll?}))
+
+(fn execute-scroll!
+  [deps animation-mod active-by-prompt session action]
+  (let [return-win (vim.api.nvim_get_current_win)
+        return-mode (. (vim.api.nvim_get_mode) :mode)]
+    (vim.api.nvim_win_call
+      session.meta.win.window
+      (fn []
+        (let [{: step : view : target : row} (scroll-target-view session action)
+              {: animate? : mini-scroll?} (scroll-animation-mode animation-mod session step)
+              done! (fn []
+                      (finish-scroll! deps active-by-prompt session))]
+          (set session.scroll-command-view target)
+          (if mini-scroll?
+              (do
+                (set session.scroll-animating? true)
+                (animation-mod.animate-scroll-action-mini!
+                  session
+                  session.meta.win.window
+                  (animation-mod.duration-ms session :scroll 140)
+                  (fn []
+                    (vim.cmd (.. "normal! " (scroll-command-text action))))
+                  {:return-win return-win
+                   :return-mode return-mode
+                   :done! done!})
+                {:row (or (. target :lnum) row) :animated true})
+              (if animate?
+                  (do
+                    (set session.scroll-animating? true)
+                    (animation-mod.animate-scroll-view!
+                      session
+                      "smooth-scroll"
+                      session.meta.win.window
+                      view
+                      target
+                      (animation-mod.duration-ms session :scroll 140)
+                      {:return-win return-win
+                       :return-mode return-mode
+                       :done! done!})
+                    {:row (or (. target :lnum) row) :animated true})
+                  (do
+                    (vim.fn.winrestview target)
+                    (set session.scroll-animating? false)
+                    (set session.scroll-command-view nil)
+                    {:row (or (. target :lnum) row) :animated false}))))))))
+
+(fn apply-scroll-selection!
+  [deps session result]
+  (let [target-row (. result :row)
+        animated? (. result :animated)]
+    (if animated?
+        (do
+          (set-selected-index! session target-row)
+          (events.send :on-selection-change!
+            {:session session
+             :line-nr (+ 1 (or session.meta.selected_index 0))
+             :refresh-lines false}))
+        (sync-selection-to-row! deps session target-row))))
+
+(fn move-selection-runner
+  [deps session delta]
+  (fn []
+    (hide-scroll-cursor! session)
+    (let [meta session.meta
+          max (# meta.buf.indices)]
+      (when (> max 0)
+        (set meta.selected_index
+             (math.max 0 (math.min (+ meta.selected_index delta) (- max 1))))
+        (let [row (+ meta.selected_index 1)]
+          (when (results-window-valid? session)
+            (pcall vim.api.nvim_win_set_cursor meta.win.window [row 0]))))
+      (refresh-windows! deps session false))))
+
+(fn scroll-main-runner
+  [deps active-by-prompt animation-mod session action]
+  (fn []
+    (hide-scroll-cursor! session)
+    (apply-scroll-selection!
+      deps
+      session
+      (execute-scroll! deps animation-mod active-by-prompt session action))))
+
 (fn M.move-selection!
   [deps prompt-buf delta]
   (let [active-by-prompt (. (. deps :router) :active-by-prompt)
         session (. active-by-prompt prompt-buf)]
     (when session
-      (let [runner (fn []
-                    (hide-scroll-cursor! session)
-                     (let [meta session.meta
-                           max (# meta.buf.indices)]
-                       (when (> max 0)
-                         (set meta.selected_index
-                              (math.max 0 (math.min (+ meta.selected_index delta) (- max 1))))
-                         (let [row (+ meta.selected_index 1)]
-                           (when (vim.api.nvim_win_is_valid meta.win.window)
-                             (pcall vim.api.nvim_win_set_cursor meta.win.window [row 0]))))
-                       (refresh-windows! deps session false)))
-            mode (. (vim.api.nvim_get_mode) :mode)]
-        (if (and (= (type mode) "string") (vim.startswith mode "i"))
-            (vim.schedule runner)
-            (runner))))))
+      (run-mode-safe! (move-selection-runner deps session delta)))))
 
 (fn M.scroll-main!
   [deps prompt-buf action]
   (let [active-by-prompt (. (. deps :router) :active-by-prompt)
         animation-mod (. (. deps :mods) :animation)
         session (. active-by-prompt prompt-buf)]
-    (when (and session (vim.api.nvim_win_is_valid session.meta.win.window))
-      (let [runner
-            (fn []
-              (hide-scroll-cursor! session)
-              (let [return-win (vim.api.nvim_get_current_win)
-                    return-mode (. (vim.api.nvim_get_mode) :mode)
-                    result
-                    (vim.api.nvim_win_call
-                      session.meta.win.window
-                      (fn []
-                        (let [line-count (vim.api.nvim_buf_line_count session.meta.buf.buffer)
-                              win-height (math.max 1 (vim.api.nvim_win_get_height session.meta.win.window))
-                              half-step (math.max 1 (math.floor (/ win-height 2)))
-                              page-step (math.max 1 (- win-height 2))
-                              step (if (or (= action "line-down") (= action "line-up"))
-                                       1
-                                       (if (or (= action "half-down") (= action "half-up"))
-                                           half-step
-                                           page-step))
-                              dir (if (or (= action "line-down") (= action "half-down") (= action "page-down")) 1 -1)
-                              max-top (math.max 1 (+ (- line-count win-height) 1))
-                              view (vim.fn.winsaveview)
-                              logical-view (or session.scroll-command-view view)
-                              old-top (. logical-view :topline)
-                              old-lnum (. logical-view :lnum)
-                              old-col (or (. logical-view :col) 0)
-                              new-top0 (math.max 1 (math.min (+ old-top (* dir step)) max-top))
-                              new-lnum0 (math.max 1 (math.min (+ old-lnum (* dir step)) line-count))
-                              ;; Clamp: if the boundary is closer than the
-                              ;; computed target, snap there instead.
-                              new-lnum (if (and (= dir -1)
-                                                (< (- old-lnum 1) (- old-lnum new-lnum0)))
-                                           1
-                                           (and (= dir 1)
-                                                (< (- line-count old-lnum) (- new-lnum0 old-lnum)))
-                                           line-count
-                                           new-lnum0)
-                              new-top (if (= new-lnum 1)
-                                         1
-                                         (= new-lnum line-count)
-                                         max-top
-                                         new-top0)
-                              target0 {:topline new-top :lnum new-lnum :col old-col :leftcol (or (. logical-view :leftcol) 0)}
-                              target (effective-scroll-target session.meta.win.window view target0)
-                              animate? (and animation-mod
-                                            (animation-mod.enabled? session :scroll)
-                                            (> (animation-mod.duration-ms session :scroll 140) 0)
-                                            (not (= step 1)))
-                              mini-scroll? (and animate?
-                                                (= (animation-mod.animation-backend session :scroll) "mini")
-                                                (animation-mod.supports-backend? "mini"))
-                              finish! (fn []
-                                        (when (and session
-                                                   session.prompt-buf
-                                                   (= (. active-by-prompt session.prompt-buf) session))
-                                          (set session.scroll-animating? false)
-                                          (set session.scroll-command-view nil)
-                                          (M.maybe-sync-from-main! deps session true)
-                                          (restore-scroll-cursor! session)))]
-                          (set session.scroll-command-view target)
-                          (if mini-scroll?
-                              (do
-                                (set session.scroll-animating? true)
-                                (animation-mod.animate-scroll-action-mini!
-                                  session
-                                  session.meta.win.window
-                                  (animation-mod.duration-ms session :scroll 140)
-                                  (fn []
-                                    (vim.cmd (.. "normal! " (scroll-command-text action))))
-                                  {:return-win return-win
-                                   :return-mode return-mode
-                                   :done! finish!})
-                                {:row (or (. target :lnum) new-lnum) :animated true})
-                              (if animate?
-                                  (do
-                                    (set session.scroll-animating? true)
-                                    (animation-mod.animate-scroll-view!
-                                      session
-                                      "smooth-scroll"
-                                      session.meta.win.window
-                                      view
-                                      target
-                                      (animation-mod.duration-ms session :scroll 140)
-                                      {:return-win return-win
-                                       :return-mode return-mode
-                                       :done! finish!})
-                                    {:row (or (. target :lnum) new-lnum) :animated true})
-                                  (do
-                                    (vim.fn.winrestview target)
-                                    (set session.scroll-animating? false)
-                                    (set session.scroll-command-view nil)
-                                    {:row (or (. target :lnum) new-lnum) :animated false}))))))
-                    target-row (. result :row)
-                    animated? (. result :animated)]
-                (if animated?
-                    (do
-                      (set-selected-index! session target-row)
-                      (events.send :on-selection-change!
-                        {:session session
-                         :line-nr (+ 1 (or session.meta.selected_index 0))
-                         :refresh-lines false}))
-                    (sync-selection-to-row! deps session target-row))))]
-        (let [mode (. (vim.api.nvim_get_mode) :mode)]
-          (if (and (= (type mode) "string") (vim.startswith mode "i"))
-              (vim.schedule runner)
-              (runner)))))))
+    (when (results-window-valid? session)
+      (run-mode-safe!
+        (scroll-main-runner deps active-by-prompt animation-mod session action)))))
 
 (fn M.maybe-sync-from-main!
   [deps session force-refresh]
