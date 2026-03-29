@@ -253,6 +253,38 @@ local function restore_results_buffer_21(session)
     return nil
   end
 end
+local function capture_hidden_ui_state_21(prompt_window_mod, router_util_mod, session)
+  local function _33_()
+    router_util_mod["persist-prompt-height!"](session)
+    return router_util_mod["persist-results-wrap!"](session)
+  end
+  local function _34_()
+    if (session["directive-help-win"] and vim.api.nvim_win_is_valid(session["directive-help-win"])) then
+      pcall(vim.api.nvim_win_close, session["directive-help-win"], true)
+    else
+    end
+    session["directive-help-win"] = nil
+    return nil
+  end
+  return prompt_window_mod["capture-hidden-state!"](session, {["persist-state!"] = _33_, ["close-directive-help!"] = _34_})
+end
+local function finish_session_ui_restore_21(deps, session, preserve_focus_3f)
+  local mods = deps.mods
+  local refresh = deps.refresh
+  local sync_prompt_buffer_name_21 = refresh["sync-prompt-buffer-name!"]
+  local session_view_mod = mods["session-view"]
+  local prompt_window_mod = mods["prompt-window"]
+  local curr = session.meta
+  local _prompt_window = restore_prompt_window_21(deps, session)
+  sync_prompt_buffer_name_21(session)
+  session["_last-prompt-statusline"] = nil
+  curr["status-win"] = curr.win
+  session["ui-hidden"] = false
+  resume_main_window_opts_21(deps, session)
+  restore_results_buffer_21(session)
+  events.send("on-restore-ui!", {session = session, ["restore-view?"] = (session_view_mod and session["source-view"]), ["refresh-lines"] = true})
+  return prompt_window_mod["restore-focus!"](session, preserve_focus_3f)
+end
 local function hide_session_ui_21(deps, session)
   local router = deps.router
   local mods = deps.mods
@@ -268,19 +300,7 @@ local function hide_session_ui_21(deps, session)
   end
   restore_startup_cursor_21(session)
   session["ui-last-insert-mode"] = vim.startswith(vim.api.nvim_get_mode().mode, "i")
-  local function _34_()
-    router_util_mod["persist-prompt-height!"](session)
-    return router_util_mod["persist-results-wrap!"](session)
-  end
-  local function _35_()
-    if (session["directive-help-win"] and vim.api.nvim_win_is_valid(session["directive-help-win"])) then
-      pcall(vim.api.nvim_win_close, session["directive-help-win"], true)
-    else
-    end
-    session["directive-help-win"] = nil
-    return nil
-  end
-  prompt_window_mod["capture-hidden-state!"](session, {["persist-state!"] = _34_, ["close-directive-help!"] = _35_})
+  capture_hidden_ui_state_21(prompt_window_mod, router_util_mod, session)
   prompt_window_mod["close!"](session)
   clear_managed_buffer_modified_21((session.meta and session.meta.buf))
   suspend_main_window_opts_21(session)
@@ -294,24 +314,12 @@ local function hide_session_ui_21(deps, session)
 end
 local function restore_session_ui_21(deps, session, opts)
   local mods = deps.mods
-  local refresh = deps.refresh
-  local sync_prompt_buffer_name_21 = refresh["sync-prompt-buffer-name!"]
-  local session_view_mod = mods["session-view"]
-  local prompt_window_mod = mods["prompt-window"]
   local preserve_focus_3f = (opts and opts["preserve-focus"])
   local curr = session.meta
   if (not session["restoring-ui?"] and session["ui-hidden"] and session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"]) and curr and curr.win and vim.api.nvim_win_is_valid(curr.win.window)) then
     session["restoring-ui?"] = true
     local function _38_()
-      local _prompt_window = restore_prompt_window_21(deps, session)
-      sync_prompt_buffer_name_21(session)
-      session["_last-prompt-statusline"] = nil
-      curr["status-win"] = curr.win
-      session["ui-hidden"] = false
-      resume_main_window_opts_21(deps, session)
-      restore_results_buffer_21(session)
-      events.send("on-restore-ui!", {session = session, ["restore-view?"] = (session_view_mod and session["source-view"]), ["refresh-lines"] = true})
-      return prompt_window_mod["restore-focus!"](session, preserve_focus_3f)
+      return finish_session_ui_restore_21(deps, session, preserve_focus_3f)
     end
     local ok,err = xpcall(_38_, debug.traceback)
     session["restoring-ui?"] = false

@@ -222,6 +222,39 @@
     (when curr
       (pcall curr.buf.render))))
 
+(fn capture-hidden-ui-state!
+  [prompt-window-mod router-util-mod session]
+  (prompt-window-mod.capture-hidden-state!
+    session
+    {:persist-state! (fn []
+                       (router-util-mod.persist-prompt-height! session)
+                       (router-util-mod.persist-results-wrap! session))
+     :close-directive-help! (fn []
+                              (when (and session.directive-help-win
+                                         (vim.api.nvim_win_is_valid session.directive-help-win))
+                                (pcall vim.api.nvim_win_close session.directive-help-win true))
+                              (set session.directive-help-win nil))}))
+
+(fn finish-session-ui-restore!
+  [deps session preserve-focus?]
+  (let [{: mods : refresh} deps
+        sync-prompt-buffer-name! (. refresh :sync-prompt-buffer-name!)
+        session-view-mod (. mods :session-view)
+        prompt-window-mod (. mods :prompt-window)
+        curr session.meta
+        _prompt-window (restore-prompt-window! deps session)]
+    (sync-prompt-buffer-name! session)
+    (set session._last-prompt-statusline nil)
+    (set curr.status-win curr.win)
+    (set session.ui-hidden false)
+    (resume-main-window-opts! deps session)
+    (restore-results-buffer! session)
+    (events.send :on-restore-ui!
+      {:session session
+       :restore-view? (and session-view-mod session.source-view)
+       :refresh-lines true})
+    (prompt-window-mod.restore-focus! session preserve-focus?)))
+
 (fn hide-session-ui!
   [deps session]
   (let [{: router : mods} deps
@@ -235,16 +268,7 @@
       (animation-mod.cancel-session! session))
     (restore-startup-cursor! session)
     (set session.ui-last-insert-mode (vim.startswith (. (vim.api.nvim_get_mode) :mode) "i"))
-    (prompt-window-mod.capture-hidden-state!
-      session
-      {:persist-state! (fn []
-                         (router-util-mod.persist-prompt-height! session)
-                         (router-util-mod.persist-results-wrap! session))
-       :close-directive-help! (fn []
-                                (when (and session.directive-help-win
-                                           (vim.api.nvim_win_is_valid session.directive-help-win))
-                                  (pcall vim.api.nvim_win_close session.directive-help-win true))
-                                (set session.directive-help-win nil))})
+    (capture-hidden-ui-state! prompt-window-mod router-util-mod session)
     (prompt-window-mod.close! session)
     (clear-managed-buffer-modified! (and session.meta session.meta.buf))
     (suspend-main-window-opts! session)
@@ -254,11 +278,7 @@
 
 (fn restore-session-ui!
   [deps session opts]
-  (let [{: mods : refresh} deps
-        sync-prompt-buffer-name! (. refresh :sync-prompt-buffer-name!)
-        session-view-mod (. mods :session-view)
-        prompt-window-mod (. mods :prompt-window)
-        preserve-focus? (and opts (. opts :preserve-focus))
+  (let [preserve-focus? (and opts (. opts :preserve-focus))
         curr session.meta]
     (when (and (not session.restoring-ui?)
                session.ui-hidden
@@ -271,18 +291,7 @@
       (let [[ok err]
             [(xpcall
                (fn []
-                 (let [_prompt-window (restore-prompt-window! deps session)]
-                   (sync-prompt-buffer-name! session)
-                   (set session._last-prompt-statusline nil)
-                   (set curr.status-win curr.win)
-                   (set session.ui-hidden false)
-                   (resume-main-window-opts! deps session)
-                   (restore-results-buffer! session)
-                   (events.send :on-restore-ui!
-                     {:session session
-                      :restore-view? (and session-view-mod session.source-view)
-                      :refresh-lines true})
-                   (prompt-window-mod.restore-focus! session preserve-focus?)))
+                 (finish-session-ui-restore! deps session preserve-focus?))
                debug.traceback)]]
         (set session.restoring-ui? false)
         (when-not ok
