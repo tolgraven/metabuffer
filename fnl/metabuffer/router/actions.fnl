@@ -32,29 +32,30 @@
   (when (and buf-wrapper buf-wrapper.clear-modified!)
     (pcall buf-wrapper.clear-modified! buf-wrapper)))
 
-(fn destroy-window-wrapper!
+(fn with-valid-window-wrapper!
   [wrapper]
   (when (and wrapper
              wrapper.window
-             (vim.api.nvim_win_is_valid wrapper.window)
-             wrapper.destroy)
-    (pcall wrapper.destroy)))
+             (vim.api.nvim_win_is_valid wrapper.window))
+    wrapper))
+
+(fn destroy-window-wrapper!
+  [wrapper]
+  (when-let [target (with-valid-window-wrapper! wrapper)]
+    (when target.destroy
+      (pcall target.destroy))))
 
 (fn restore-window-wrapper-opts!
   [wrapper]
-  (when (and wrapper
-             wrapper.window
-             (vim.api.nvim_win_is_valid wrapper.window)
-             wrapper.restore-opts)
-    (pcall wrapper.restore-opts)))
+  (when-let [target (with-valid-window-wrapper! wrapper)]
+    (when target.restore-opts
+      (pcall target.restore-opts))))
 
 (fn apply-window-wrapper-opts!
   [wrapper opts]
-  (when (and wrapper
-             wrapper.window
-             (vim.api.nvim_win_is_valid wrapper.window)
-             wrapper.apply-opts)
-    (pcall wrapper.apply-opts opts)))
+  (when-let [target (with-valid-window-wrapper! wrapper)]
+    (when target.apply-opts
+      (pcall target.apply-opts opts))))
 
 (fn session-main-wrappers
   [session]
