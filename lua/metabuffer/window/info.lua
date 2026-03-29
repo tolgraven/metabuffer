@@ -1154,50 +1154,75 @@ M.new = function(opts)
       return nil
     end
   end
+  local function settle_info_render_state_21(session)
+    ensure_info_window(session)
+    if (session["info-render-suspended?"] and not session["prompt-animating?"] and not session["startup-initializing"]) then
+      session["info-post-fade-refresh?"] = nil
+      session["info-render-suspended?"] = false
+    else
+    end
+    return settle_info_window_21(session)
+  end
+  local function project_info_debug_21(session, refresh_lines)
+    return debug_log(join_str(" ", {"info enter", ("refresh=" .. str(refresh_lines)), ("selected=" .. session.meta.selected_index), ("info-win=" .. session["info-win"]), ("info-buf=" .. session["info-buf"])}))
+  end
+  local function project_info_force_refresh_3f(session, refresh_lines)
+    return (clj.boolean(session["info-project-loading-active?"]) or clj.boolean(session["info-showing-project-loading?"]) or refresh_lines or (session["info-render-sig"] == nil) or (session["info-start-index"] == nil) or (session["info-stop-index"] == nil))
+  end
+  local function project_info_range_state(session, meta)
+    local selected1 = (meta.selected_index + 1)
+    local _let_135_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
+    local wanted_start = _let_135_[1]
+    local wanted_stop = _let_135_[2]
+    local start_index = (session["info-start-index"] or 1)
+    local stop_index = (session["info-stop-index"] or 0)
+    return {["wanted-start"] = wanted_start, ["wanted-stop"] = wanted_stop, ["out-of-range"] = ((selected1 < start_index) or (selected1 > stop_index)), ["range-changed"] = ((wanted_start ~= start_index) or (wanted_stop ~= stop_index))}
+  end
+  local function project_info_render_sig(session, meta, wanted_start, wanted_stop)
+    local idxs = (meta.buf.indices or {})
+    return join_str("|", {#idxs, indices_slice_sig(idxs, wanted_start, wanted_stop), refs_slice_sig(session, meta.buf["source-refs"], idxs, wanted_start, wanted_stop), wanted_start, wanted_stop, (session["active-source-key"] or ""), (session["info-file-entry-view"] or ""), info_max_width_now(session), info_height(session), vim.o.columns})
+  end
+  local function schedule_project_info_finish_refresh_21(session)
+    local function _136_()
+      if (session and valid_info_win_3f(session) and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"]) and not project_loading_pending_3f(session)) then
+        return update_21(session, true)
+      else
+        return nil
+      end
+    end
+    return vim.defer_fn(_136_, 17)
+  end
+  local function rerender_project_info_21(session, meta, wanted_start, wanted_stop, loading_finished_3f)
+    session["info-render-sig"] = project_info_render_sig(session, meta, wanted_start, wanted_stop)
+    session["info-project-loading-active?"] = false
+    session["info-showing-project-loading?"] = false
+    render_info_lines_21(session, meta, wanted_start, wanted_stop, wanted_start, wanted_stop)
+    if loading_finished_3f then
+      return schedule_project_info_finish_refresh_21(session)
+    else
+      return nil
+    end
+  end
   local function update_project_21(session, refresh_lines)
     if project_loading_pending_3f(session) then
       return update_project_startup_21(session)
     else
-      ensure_info_window(session)
-      if (session["info-render-suspended?"] and not session["prompt-animating?"] and not session["startup-initializing"]) then
-        session["info-post-fade-refresh?"] = nil
-        session["info-render-suspended?"] = false
-      else
-      end
-      settle_info_window_21(session)
-      debug_log(join_str(" ", {"info enter", ("refresh=" .. str(refresh_lines)), ("selected=" .. session.meta.selected_index), ("info-win=" .. session["info-win"]), ("info-buf=" .. session["info-buf"])}))
+      settle_info_render_state_21(session)
+      project_info_debug_21(session, refresh_lines)
       refresh_info_statusline_21(session)
       if (not session["info-render-suspended?"] and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
         local meta = session.meta
         local loading_finished_3f = clj.boolean(session["info-project-loading-active?"])
-        local force_refresh_3f = (loading_finished_3f or clj.boolean(session["info-showing-project-loading?"]) or refresh_lines or (session["info-render-sig"] == nil) or (session["info-start-index"] == nil) or (session["info-stop-index"] == nil))
-        local selected1 = (meta.selected_index + 1)
-        local _let_135_ = info_visible_range(session, meta, #(meta.buf.indices or {}), info_max_lines)
-        local wanted_start = _let_135_[1]
-        local wanted_stop = _let_135_[2]
-        local start_index = (session["info-start-index"] or 1)
-        local stop_index = (session["info-stop-index"] or 0)
-        local out_of_range = ((selected1 < start_index) or (selected1 > stop_index))
-        local range_changed = ((wanted_start ~= start_index) or (wanted_stop ~= stop_index))
+        local force_refresh_3f = project_info_force_refresh_3f(session, refresh_lines)
+        local _let_139_ = project_info_range_state(session, meta)
+        local wanted_start = _let_139_["wanted-start"]
+        local wanted_stop = _let_139_["wanted-stop"]
+        local out_of_range = _let_139_["out-of-range"]
+        local range_changed = _let_139_["range-changed"]
         if (force_refresh_3f or out_of_range or range_changed) then
-          local idxs = (meta.buf.indices or {})
-          local sig = join_str("|", {#idxs, indices_slice_sig(idxs, wanted_start, wanted_stop), refs_slice_sig(session, meta.buf["source-refs"], idxs, wanted_start, wanted_stop), wanted_start, wanted_stop, (session["active-source-key"] or ""), (session["info-file-entry-view"] or ""), info_max_width_now(session), info_height(session), vim.o.columns})
+          local sig = project_info_render_sig(session, meta, wanted_start, wanted_stop)
           if (force_refresh_3f or out_of_range or range_changed or (session["info-render-sig"] ~= sig)) then
-            session["info-render-sig"] = sig
-            session["info-project-loading-active?"] = false
-            session["info-showing-project-loading?"] = false
-            render_info_lines_21(session, meta, wanted_start, wanted_stop, wanted_start, wanted_stop)
-            if loading_finished_3f then
-              local function _136_()
-                if (session and valid_info_win_3f(session) and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"]) and not project_loading_pending_3f(session)) then
-                  return update_21(session, true)
-                else
-                  return nil
-                end
-              end
-              vim.defer_fn(_136_, 17)
-            else
-            end
+            rerender_project_info_21(session, meta, wanted_start, wanted_stop, loading_finished_3f)
           else
           end
         else
@@ -1208,7 +1233,7 @@ M.new = function(opts)
       end
     end
   end
-  local function _143_(session, refresh_lines)
+  local function _144_(session, refresh_lines)
     local refresh_lines0
     if (refresh_lines == nil) then
       refresh_lines0 = true
@@ -1221,7 +1246,7 @@ M.new = function(opts)
       return update_regular_21(session, refresh_lines0)
     end
   end
-  update_21 = _143_
+  update_21 = _144_
   return {["close-window!"] = close_info_window_21, ["update!"] = update_21, ["refresh-statusline!"] = refresh_info_statusline_21}
 end
 return M
