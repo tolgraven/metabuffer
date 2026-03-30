@@ -160,9 +160,7 @@
         wanted-stop
         wanted-start
         wanted-stop)
-      (sync-info-selection! session meta)
-      (when loading-finished?
-        (schedule-project-info-finish-refresh! session)))
+      (sync-info-selection! session meta))
 
     (set update-project!
          (fn [session refresh-lines]
@@ -192,6 +190,8 @@
                          wanted-start
                          wanted-stop
                          loading-finished?))
+                     (when loading-changed?
+                       (schedule-project-info-finish-refresh! session))
                      (set session.info-last-project-loading? false)
                      (sync-info-selection! session meta))))))))
 

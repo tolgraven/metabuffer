@@ -160,14 +160,9 @@ M.new = function(opts)
     session["info-project-loading-active?"] = not loading_finished_3f
     session["info-showing-project-loading?"] = false
     render_info_lines_21(session, meta, wanted_start, wanted_stop, wanted_start, wanted_stop)
-    sync_info_selection_21(session, meta)
-    if loading_finished_3f then
-      return schedule_project_info_finish_refresh_21(session)
-    else
-      return nil
-    end
+    return sync_info_selection_21(session, meta)
   end
-  local function _19_(session, refresh_lines)
+  local function _18_(session, refresh_lines)
     local loading_pending_3f = project_loading_pending_3f(session)
     local loading_changed_3f = (clj.boolean(session["info-last-project-loading?"]) ~= clj.boolean(loading_pending_3f))
     if loading_pending_3f then
@@ -180,15 +175,19 @@ M.new = function(opts)
         local meta = session.meta
         local loading_finished_3f = true
         local force_refresh_3f = project_info_force_refresh_3f(session, refresh_lines, loading_changed_3f)
-        local _let_20_ = project_info_range_state(session, meta)
-        local wanted_start = _let_20_["wanted-start"]
-        local wanted_stop = _let_20_["wanted-stop"]
-        local out_of_range = _let_20_["out-of-range"]
-        local range_changed = _let_20_["range-changed"]
+        local _let_19_ = project_info_range_state(session, meta)
+        local wanted_start = _let_19_["wanted-start"]
+        local wanted_stop = _let_19_["wanted-stop"]
+        local out_of_range = _let_19_["out-of-range"]
+        local range_changed = _let_19_["range-changed"]
         local sig = project_info_render_sig(session, meta, wanted_start, wanted_stop)
         local sig_changed_3f = (session["info-render-sig"] ~= sig)
         if (force_refresh_3f or out_of_range or range_changed or sig_changed_3f) then
           rerender_project_info_21(session, meta, wanted_start, wanted_stop, loading_finished_3f)
+        else
+        end
+        if loading_changed_3f then
+          schedule_project_info_finish_refresh_21(session)
         else
         end
         session["info-last-project-loading?"] = false
@@ -198,7 +197,7 @@ M.new = function(opts)
       end
     end
   end
-  update_project_21 = _19_
+  update_project_21 = _18_
   return {["project-loading-pending?"] = project_loading_pending_3f, ["update-project!"] = update_project_21}
 end
 return M
