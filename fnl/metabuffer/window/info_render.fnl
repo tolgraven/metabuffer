@@ -74,14 +74,22 @@
           info-visible-range (. viewport :info-visible-range)]
 
     (fn render-info-lines!
-      [session meta render-start render-stop visible-start visible-stop]
+      [{: session : meta : render-start : render-stop : visible-start : visible-stop}]
       (let [refs (or meta.buf.source-refs [])
             idxs (or meta.buf.indices [])
             _ (set session.info-start-index visible-start)
             _ (set session.info-stop-index visible-stop)
             _ (set session.info-render-start render-start)
             _ (set session.info-render-stop render-stop)
-            built (build-info-lines session refs idxs (info-max-width-now session) render-start render-stop visible-start visible-stop)
+            built (build-info-lines
+                    {:session session
+                     :refs refs
+                     :idxs idxs
+                     :target-width (info-max-width-now session)
+                     :start-index render-start
+                     :stop-index render-stop
+                     :visible-start visible-start
+                     :visible-stop visible-stop})
             raw-lines (. built :lines)
             lines (if (= (type raw-lines) "table")
                       (vim.tbl_map str raw-lines)
@@ -103,7 +111,12 @@
             (debug-log (.. "info set_lines failed: " (tostring err-set)))))
         (vim.api.nvim_buf_clear_namespace session.info-buf info-content-ns (- render-start 1) render-stop)
         (apply-info-highlights! session info-content-ns highlights)
-        (schedule-info-highlight-fill! session refs (info-max-width-now session) lnum-digit-width deferred-rows)
+        (schedule-info-highlight-fill!
+          {:session session
+           :refs refs
+           :target-width (info-max-width-now session)
+           :lnum-digit-width lnum-digit-width
+           :deferred-rows deferred-rows})
         (let [bo (. vim.bo session.info-buf)]
           (set (. bo :modifiable) false))
         (set-info-topline! session visible-start)
@@ -116,7 +129,13 @@
             overscan (math.max 1 (info-height session))
             render-start (math.max 1 (- start-index overscan))
             render-stop (math.min total (+ stop-index overscan))]
-        (render-info-lines! session meta render-start render-stop start-index stop-index)
+        (render-info-lines!
+          {:session session
+           :meta meta
+           :render-start render-start
+           :render-stop render-stop
+           :visible-start start-index
+           :visible-stop stop-index})
         (sync-info-selection! session meta)
         [start-index stop-index]))
 
@@ -237,7 +256,13 @@
                 (when refresh-lines
                   (set session.info-line-meta-range-key nil))
                 (set session.info-render-sig sig)
-                (render-info-lines! session meta render-start render-stop wanted-start wanted-stop)
+                (render-info-lines!
+                  {:session session
+                   :meta meta
+                   :render-start render-start
+                   :render-stop render-stop
+                   :visible-start wanted-start
+                   :visible-stop wanted-stop})
                 (set session.info-start-index wanted-start)
                 (set session.info-stop-index wanted-stop)
                 (sync-info-selection! session meta)

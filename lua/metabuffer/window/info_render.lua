@@ -57,7 +57,13 @@ M.new = function(opts)
   local fit_info_width_21 = viewport["fit-info-width!"]
   local info_max_width_now = viewport["info-max-width-now"]
   local info_visible_range = viewport["info-visible-range"]
-  local function render_info_lines_21(session, meta, render_start, render_stop, visible_start, visible_stop)
+  local function render_info_lines_21(_4_)
+    local session = _4_.session
+    local meta = _4_.meta
+    local render_start = _4_["render-start"]
+    local render_stop = _4_["render-stop"]
+    local visible_start = _4_["visible-start"]
+    local visible_stop = _4_["visible-stop"]
     local refs = (meta.buf["source-refs"] or {})
     local idxs = (meta.buf.indices or {})
     local _
@@ -72,7 +78,7 @@ M.new = function(opts)
     local _2
     session["info-render-stop"] = render_stop
     _2 = nil
-    local built = build_info_lines(session, refs, idxs, info_max_width_now(session), render_start, render_stop, visible_start, visible_stop)
+    local built = build_info_lines({session = session, refs = refs, idxs = idxs, ["target-width"] = info_max_width_now(session), ["start-index"] = render_start, ["stop-index"] = render_stop, ["visible-start"] = visible_start, ["visible-stop"] = visible_stop})
     local raw_lines = built.lines
     local lines
     if (type(raw_lines) == "table") then
@@ -101,7 +107,7 @@ M.new = function(opts)
     end
     vim.api.nvim_buf_clear_namespace(session["info-buf"], info_content_ns, (render_start - 1), render_stop)
     apply_info_highlights_21(session, info_content_ns, highlights)
-    schedule_info_highlight_fill_21(session, refs, info_max_width_now(session), lnum_digit_width, deferred_rows)
+    schedule_info_highlight_fill_21({session = session, refs = refs, ["target-width"] = info_max_width_now(session), ["lnum-digit-width"] = lnum_digit_width, ["deferred-rows"] = deferred_rows})
     do
       local bo = vim.bo[session["info-buf"]]
       bo["modifiable"] = false
@@ -111,13 +117,13 @@ M.new = function(opts)
   end
   local function render_current_range_21(session, meta)
     local total = #(meta.buf.indices or {})
-    local _let_6_ = info_visible_range(session, meta, total, info_max_lines)
-    local start_index = _let_6_[1]
-    local stop_index = _let_6_[2]
+    local _let_7_ = info_visible_range(session, meta, total, info_max_lines)
+    local start_index = _let_7_[1]
+    local stop_index = _let_7_[2]
     local overscan = math.max(1, info_height(session))
     local render_start = math.max(1, (start_index - overscan))
     local render_stop = math.min(total, (stop_index + overscan))
-    render_info_lines_21(session, meta, render_start, render_stop, start_index, stop_index)
+    render_info_lines_21({session = session, meta = meta, ["render-start"] = render_start, ["render-stop"] = render_stop, ["visible-start"] = start_index, ["visible-stop"] = stop_index})
     sync_info_selection_21(session, meta)
     return {start_index, stop_index}
   end
@@ -128,23 +134,23 @@ M.new = function(opts)
     local first_ref = (first_row and refs[first_row])
     local path = ref_path(session, first_ref)
     local rerender_21 = nil
-    local function _7_()
+    local function _8_()
       if (session and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"]) and not session["project-mode"] and session["single-file-info-ready"]) then
         if (session["scroll-animating?"] or session["scroll-command-view"] or session["scroll-sync-pending"] or session["selection-refresh-pending"]) then
           if not session["info-line-meta-refresh-pending"] then
             session["info-line-meta-refresh-pending"] = true
-            local function _8_()
+            local function _9_()
               session["info-line-meta-refresh-pending"] = false
               return rerender_21()
             end
-            return vim.defer_fn(_8_, 90)
+            return vim.defer_fn(_9_, 90)
           else
             return nil
           end
         else
-          local _let_10_ = render_current_range_21(session, meta)
-          local start1 = _let_10_[1]
-          local stop1 = _let_10_[2]
+          local _let_11_ = render_current_range_21(session, meta)
+          local start1 = _let_11_[1]
+          local stop1 = _let_11_[2]
           session["info-start-index"] = start1
           session["info-stop-index"] = stop1
           return nil
@@ -153,7 +159,7 @@ M.new = function(opts)
         return nil
       end
     end
-    rerender_21 = _7_
+    rerender_21 = _8_
     if (session["single-file-info-fetch-ready"] and (path ~= "") and (1 == vim.fn.filereadable(path))) then
       local lnums = {}
       for i = start_index, stop_index do
@@ -171,22 +177,22 @@ M.new = function(opts)
         local range_key = (path .. ":" .. start_index .. ":" .. stop_index .. ":" .. first_lnum .. ":" .. last_lnum)
         if (range_key ~= session["info-line-meta-range-key"]) then
           session["info-line-meta-range-key"] = range_key
-          local function _14_()
+          local function _15_()
             if (range_key == session["info-line-meta-range-key"]) then
               return rerender_21()
             else
               return nil
             end
           end
-          file_info["ensure-file-status-async!"](session, path, _14_)
-          local function _16_()
+          file_info["ensure-file-status-async!"](session, path, _15_)
+          local function _17_()
             if (range_key == session["info-line-meta-range-key"]) then
               return rerender_21()
             else
               return nil
             end
           end
-          return file_info["ensure-line-meta-range-async!"](session, path, lnums, _16_)
+          return file_info["ensure-line-meta-range-async!"](session, path, lnums, _17_)
         else
           return nil
         end
@@ -210,9 +216,9 @@ M.new = function(opts)
       local selected1 = (meta.selected_index + 1)
       local idxs = (meta.buf.indices or {})
       local overscan = math.max(1, info_height(session))
-      local _let_22_ = info_visible_range(session, meta, #idxs, info_max_lines)
-      local wanted_start = _let_22_[1]
-      local wanted_stop = _let_22_[2]
+      local _let_23_ = info_visible_range(session, meta, #idxs, info_max_lines)
+      local wanted_start = _let_23_[1]
+      local wanted_stop = _let_23_[2]
       local render_start
       if (#idxs > 0) then
         render_start = math.max(1, (wanted_start - overscan))
@@ -239,7 +245,7 @@ M.new = function(opts)
         else
         end
         session["info-render-sig"] = sig
-        render_info_lines_21(session, meta, render_start, render_stop, wanted_start, wanted_stop)
+        render_info_lines_21({session = session, meta = meta, ["render-start"] = render_start, ["render-stop"] = render_stop, ["visible-start"] = wanted_start, ["visible-stop"] = wanted_stop})
         session["info-start-index"] = wanted_start
         session["info-stop-index"] = wanted_stop
         sync_info_selection_21(session, meta)

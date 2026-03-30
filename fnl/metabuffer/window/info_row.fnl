@@ -21,7 +21,7 @@
         (vim.api.nvim_buf_add_highlight session.info-buf ns (. h 2) (. h 1) (. h 3) (. h 4))))
 
     (fn build-info-row
-      [session ref src-idx target-width lnum-digit-width lightweight?]
+      [{: session : ref : src-idx : target-width : lnum-digit-width : lightweight?}]
       (let [line-hl "LineNr"
             signcol-display-width 2
             file-hl (if (= 1 (vim.fn.hlexists "NERDTreeFile"))
@@ -130,7 +130,7 @@
         {:line line :highlights highlights}))
 
     (fn build-info-lines
-      [session refs idxs target-width start-index stop-index visible-start visible-stop]
+      [{: session : refs : idxs : target-width : start-index : stop-index : visible-start : visible-stop}]
       (let [lnum-digit-width (let [vis-lo (math.max 1 (or visible-start start-index))
                                    vis-hi (math.min (# idxs) (or visible-stop stop-index))
                                    max-lnum-len (if (> vis-hi 0)
@@ -152,14 +152,20 @@
               (let [src-idx (. idxs i)
                     ref (. refs src-idx)
                     row0 (- i 1)
-                    built (build-info-row session ref src-idx target-width lnum-digit-width false)]
+                    built (build-info-row
+                            {:session session
+                             :ref ref
+                             :src-idx src-idx
+                             :target-width target-width
+                             :lnum-digit-width lnum-digit-width
+                             :lightweight? false})]
                 (table.insert lines (. built :line))
                 (each [_ h (ipairs (or (. built :highlights) []))]
                   (table.insert highlights [row0 (. h 1) (. h 2) (. h 3)])))))
         {:lines lines :highlights highlights :deferred-rows deferred-rows :lnum-digit-width lnum-digit-width}))
 
     (fn schedule-highlight-fill!
-      [session refs target-width lnum-digit-width deferred-rows]
+      [{: session : refs : target-width : lnum-digit-width : deferred-rows}]
       (let [pending (or deferred-rows [])
             batch-size (math.max 4 (math.min 24 (math.max 1 (info-height session))))]
         (if (= (# pending) 0)
@@ -186,7 +192,13 @@
                             row0 (. spec 1)
                             src-idx (. spec 2)
                             ref (. refs src-idx)
-                            built (build-info-row session ref src-idx target-width lnum-digit-width false)
+                            built (build-info-row
+                                    {:session session
+                                     :ref ref
+                                     :src-idx src-idx
+                                     :target-width target-width
+                                     :lnum-digit-width lnum-digit-width
+                                     :lightweight? false})
                             line (str (. built :line))
                             highlights (or (. built :highlights) [])]
                         (vim.api.nvim_buf_set_lines session.info-buf row0 (+ row0 1) false [line])

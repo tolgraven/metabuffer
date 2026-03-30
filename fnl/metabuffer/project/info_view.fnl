@@ -67,12 +67,12 @@
                 (let [[wanted-start wanted-stop] (info-visible-range session meta total info-max-lines)]
                 (set session.info-showing-project-loading? false)
                 (render-info-lines!
-                  session
-                  meta
-                  wanted-start
-                  wanted-stop
-                  wanted-start
-                  wanted-stop)
+                  {:session session
+                   :meta meta
+                   :render-start wanted-start
+                   :render-stop wanted-stop
+                   :visible-start wanted-start
+                   :visible-stop wanted-stop})
                 (sync-info-selection! session meta))
               (render-project-loading! session fit-info-width!)))))
 
@@ -154,12 +154,12 @@
       (set session.info-project-loading-active? (not loading-finished?))
       (set session.info-showing-project-loading? false)
       (render-info-lines!
-        session
-        meta
-        wanted-start
-        wanted-stop
-        wanted-start
-        wanted-stop)
+        {:session session
+         :meta meta
+         :render-start wanted-start
+         :render-stop wanted-stop
+         :visible-start wanted-start
+         :visible-stop wanted-stop})
       (sync-info-selection! session meta))
 
     (set update-project!

@@ -23,7 +23,13 @@ M.new = function(opts)
     end
     return nil
   end
-  local function build_info_row(session, ref, src_idx, target_width, lnum_digit_width, lightweight_3f)
+  local function build_info_row(_2_)
+    local session = _2_.session
+    local ref = _2_.ref
+    local src_idx = _2_["src-idx"]
+    local target_width = _2_["target-width"]
+    local lnum_digit_width = _2_["lnum-digit-width"]
+    local lightweight_3f = _2_["lightweight?"]
     local line_hl = "LineNr"
     local signcol_display_width = 2
     local file_hl
@@ -122,16 +128,16 @@ M.new = function(opts)
     end
     local ext_hl = (ext_bucket_hl or icon_info["ext-hl"] or icon_info["icon-hl"] or file_hl)
     local icon_hl = (ext_bucket_hl or icon_info["icon-hl"] or file_hl)
-    local _15_
+    local _16_
     if show_icon_3f then
-      _15_ = iconf.width
+      _16_ = iconf.width
     else
-      _15_ = 0
+      _16_ = 0
     end
-    local _let_17_ = fit_path_into_width(path, math.max(1, (path_width - _15_)))
-    local dir = _let_17_[1]
-    local file0 = _let_17_[2]
-    local dir_original = _let_17_[3]
+    local _let_18_ = fit_path_into_width(path, math.max(1, (path_width - _16_)))
+    local dir = _let_18_[1]
+    local file0 = _let_18_[2]
+    local dir_original = _let_18_[3]
     local this_file_hl = (icon_info["file-hl"] or file_hl)
     local line = (sign_prefix .. lnum_cell0 .. icon_prefix .. dir .. file0 .. suffix_prefix .. suffix0)
     local sign_start = 0
@@ -200,7 +206,15 @@ M.new = function(opts)
     end
     return {line = line, highlights = highlights}
   end
-  local function build_info_lines(session, refs, idxs, target_width, start_index, stop_index, visible_start, visible_stop)
+  local function build_info_lines(_30_)
+    local session = _30_.session
+    local refs = _30_.refs
+    local idxs = _30_.idxs
+    local target_width = _30_["target-width"]
+    local start_index = _30_["start-index"]
+    local stop_index = _30_["stop-index"]
+    local visible_start = _30_["visible-start"]
+    local visible_stop = _30_["visible-stop"]
     local lnum_digit_width
     do
       local vis_lo = math.max(1, (visible_start or start_index))
@@ -230,7 +244,7 @@ M.new = function(opts)
         local src_idx = idxs[i]
         local ref = refs[src_idx]
         local row0 = (i - 1)
-        local built = build_info_row(session, ref, src_idx, target_width, lnum_digit_width, false)
+        local built = build_info_row({session = session, ref = ref, ["src-idx"] = src_idx, ["target-width"] = target_width, ["lnum-digit-width"] = lnum_digit_width, ["lightweight?"] = false})
         table.insert(lines, built.line)
         for _, h in ipairs((built.highlights or {})) do
           table.insert(highlights, {row0, h[1], h[2], h[3]})
@@ -239,7 +253,12 @@ M.new = function(opts)
     end
     return {lines = lines, highlights = highlights, ["deferred-rows"] = deferred_rows, ["lnum-digit-width"] = lnum_digit_width}
   end
-  local function schedule_highlight_fill_21(session, refs, target_width, lnum_digit_width, deferred_rows)
+  local function schedule_highlight_fill_21(_33_)
+    local session = _33_.session
+    local refs = _33_.refs
+    local target_width = _33_["target-width"]
+    local lnum_digit_width = _33_["lnum-digit-width"]
+    local deferred_rows = _33_["deferred-rows"]
     local pending = (deferred_rows or {})
     local batch_size = math.max(4, math.min(24, math.max(1, info_height(session))))
     if (#pending == 0) then
@@ -264,7 +283,7 @@ M.new = function(opts)
               local row0 = spec[1]
               local src_idx = spec[2]
               local ref = refs[src_idx]
-              local built = build_info_row(session, ref, src_idx, target_width, lnum_digit_width, false)
+              local built = build_info_row({session = session, ref = ref, ["src-idx"] = src_idx, ["target-width"] = target_width, ["lnum-digit-width"] = lnum_digit_width, ["lightweight?"] = false})
               local line = str(built.line)
               local highlights = (built.highlights or {})
               vim.api.nvim_buf_set_lines(session["info-buf"], row0, (row0 + 1), false, {line})

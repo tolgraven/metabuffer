@@ -68,7 +68,7 @@ M.new = function(opts)
         local wanted_start = _let_2_[1]
         local wanted_stop = _let_2_[2]
         session["info-showing-project-loading?"] = false
-        render_info_lines_21(session, meta, wanted_start, wanted_stop, wanted_start, wanted_stop)
+        render_info_lines_21({session = session, meta = meta, ["render-start"] = wanted_start, ["render-stop"] = wanted_stop, ["visible-start"] = wanted_start, ["visible-stop"] = wanted_stop})
         return sync_info_selection_21(session, meta)
       else
         return render_project_loading_21(session, fit_info_width_21)
@@ -159,7 +159,7 @@ M.new = function(opts)
     session["info-render-sig"] = project_info_render_sig(session, meta, wanted_start, wanted_stop)
     session["info-project-loading-active?"] = not loading_finished_3f
     session["info-showing-project-loading?"] = false
-    render_info_lines_21(session, meta, wanted_start, wanted_stop, wanted_start, wanted_stop)
+    render_info_lines_21({session = session, meta = meta, ["render-start"] = wanted_start, ["render-stop"] = wanted_stop, ["visible-start"] = wanted_start, ["visible-stop"] = wanted_stop})
     return sync_info_selection_21(session, meta)
   end
   local function _18_(session, refresh_lines)
