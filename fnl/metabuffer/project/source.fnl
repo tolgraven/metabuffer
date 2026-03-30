@@ -54,7 +54,7 @@
         (> (# session.meta.buf.content) before))))
 
   (fn collect-project-sources
-    [session include-hidden include-ignored include-deps include-binary include-files prefilter]
+    [{: session : include-hidden : include-ignored : include-deps : include-binary : include-files : prefilter}]
     "Collect eager project-mode content/ref pools. Returns {:content [] :refs []}."
     (let [root (vim.fn.getcwd)
           current-path (current-buffer-path session.source-buf)
@@ -67,12 +67,11 @@
       (if (file-only-mode? session)
           (do
             (each [_ path (ipairs (all-project-file-paths
-                                    session
-                                    include-hidden
-                                    include-ignored
-                                    include-deps
-                                    include-binary
-                                    file-filter))]
+                                    {:include-hidden include-hidden
+                                     :include-ignored include-ignored
+                                     :include-deps include-deps
+                                     :include-binary include-binary
+                                     :file-filter file-filter}))]
               (table.insert content "")
               (table.insert refs {:path path
                                   :lnum 1
@@ -98,12 +97,11 @@
             (when include-files
               (when-not (normal-query-active? session)
                 (each [_ path (ipairs (all-project-file-paths
-                                        session
-                                        include-hidden
-                                        include-ignored
-                                        include-deps
-                                        include-binary
-                                        file-filter))]
+                                        {:include-hidden include-hidden
+                                         :include-ignored include-ignored
+                                         :include-deps include-deps
+                                         :include-binary include-binary
+                                         :file-filter file-filter}))]
                   (push-file-entry-into-pool! session path))))
             (each [_ path (ipairs (project-file-list root include-hidden include-ignored include-deps))]
               (let [rel (vim.fn.fnamemodify path ":.")]
@@ -139,24 +137,23 @@
           all-paths (project-file-list root include-hidden include-ignored include-deps)
           file-entry-paths (if (and include-files (not (normal-query-active? session)))
                                (all-project-file-paths
-                                 session
-                                 include-hidden
-                                 include-ignored
-                                 include-deps
-                                  include-binary
-                                  file-filter)
+                                 {:include-hidden include-hidden
+                                  :include-ignored include-ignored
+                                  :include-deps include-deps
+                                  :include-binary include-binary
+                                  :file-filter file-filter})
                                [])
           deferred []
           deferred-seen {}]
       (if (file-only-mode? session)
           (do
             (set-file-entry-source-content!
-              session
-              include-hidden
-              include-ignored
-              include-deps
-              include-binary
-              file-filter)
+              {:session session
+               :include-hidden include-hidden
+               :include-ignored include-ignored
+               :include-deps include-deps
+               :include-binary include-binary
+               :file-filter file-filter})
             {:deferred-paths [] :estimated-lines 0})
           (do
       (set-single-source-content! session session.project-mode)
@@ -216,13 +213,14 @@
         (let [init (init-project-pool! session prefilter)]
           (if (lazy-preferred? session (or (. init :estimated-lines) 0))
               (start-project-stream! session prefilter init)
-              (let [pool (collect-project-sources session
-                                                  session.effective-include-hidden
-                                                  session.effective-include-ignored
-                                                  session.effective-include-deps
-                                                  session.effective-include-binary
-                                                  session.effective-include-files
-                                                  prefilter)]
+              (let [pool (collect-project-sources
+                           {:session session
+                            :include-hidden session.effective-include-hidden
+                            :include-ignored session.effective-include-ignored
+                            :include-deps session.effective-include-deps
+                            :include-binary session.effective-include-binary
+                            :include-files session.effective-include-files
+                            :prefilter prefilter})]
                 (set-project-pool! session pool)
                 (set session.lazy-stream-done true)
                 (enable-full-source-syntax! session))))

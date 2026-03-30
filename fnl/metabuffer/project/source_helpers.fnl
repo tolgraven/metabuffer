@@ -173,7 +173,7 @@
             (clj.boolean (and file-filter file-filter.ignorecase)))))
 
     (fn all-project-file-paths
-      [_session include-hidden include-ignored include-deps include-binary file-filter]
+      [{: include-hidden : include-ignored : include-deps : include-binary : file-filter}]
       (let [root (vim.fn.getcwd)
             seen {}
             out []]
@@ -290,18 +290,17 @@
           finish-project-stream! (. pool-helpers :finish-project-stream!)
           maybe-finish-project-stream! (. pool-helpers :maybe-finish-project-stream!)]
 
-      (fn set-file-entry-source-content!
-        [session include-hidden include-ignored include-deps include-binary file-filter]
+    (fn set-file-entry-source-content!
+        [{: session : include-hidden : include-ignored : include-deps : include-binary : file-filter}]
         (let [meta session.meta]
           (set meta.buf.content [])
           (set meta.buf.source-refs [])
           (each [_ path (ipairs (all-project-file-paths
-                                  session
-                                  include-hidden
-                                  include-ignored
-                                  include-deps
-                                  include-binary
-                                  file-filter))]
+                                  {:include-hidden include-hidden
+                                   :include-ignored include-ignored
+                                   :include-deps include-deps
+                                   :include-binary include-binary
+                                   :file-filter file-filter}))]
             (push-file-entry-into-pool! session path))
           (bump-content-version! meta)
           (set meta.buf.show-source-prefix true)

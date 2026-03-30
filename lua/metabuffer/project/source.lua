@@ -62,7 +62,14 @@ M.new = function(opts)
       return nil
     end
   end
-  local function collect_project_sources(session, include_hidden, include_ignored, include_deps, include_binary, include_files, prefilter)
+  local function collect_project_sources(_2_)
+    local session = _2_.session
+    local include_hidden = _2_["include-hidden"]
+    local include_ignored = _2_["include-ignored"]
+    local include_deps = _2_["include-deps"]
+    local include_binary = _2_["include-binary"]
+    local include_files = _2_["include-files"]
+    local prefilter = _2_.prefilter
     local root = vim.fn.getcwd()
     local current_path = current_buffer_path(session["source-buf"])
     local wrap_width = results_wrap_width(session)
@@ -74,18 +81,18 @@ M.new = function(opts)
     local content = {}
     local refs = {}
     if file_only_mode_3f(session) then
-      for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)) do
+      for _0, path in ipairs(all_project_file_paths({["include-hidden"] = include_hidden, ["include-ignored"] = include_ignored, ["include-deps"] = include_deps, ["include-binary"] = include_binary, ["file-filter"] = file_filter})) do
         table.insert(content, "")
-        local _2_
+        local _3_
         do
           local rel = vim.fn.fnamemodify(path, ":.")
           if ((type(rel) == "string") and (rel ~= "")) then
-            _2_ = rel
+            _3_ = rel
           else
-            _2_ = path
+            _3_ = path
           end
         end
-        table.insert(refs, {path = path, lnum = 1, line = _2_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
+        table.insert(refs, {path = path, lnum = 1, line = _3_, kind = "file-entry", ["open-lnum"] = 1, ["preview-lnum"] = 1})
       end
       return {content = content, refs = refs}
     else
@@ -97,7 +104,7 @@ M.new = function(opts)
       end
       if include_files then
         if not normal_query_active_3f(session) then
-          for _0, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)) do
+          for _0, path in ipairs(all_project_file_paths({["include-hidden"] = include_hidden, ["include-ignored"] = include_ignored, ["include-deps"] = include_deps, ["include-binary"] = include_binary, ["file-filter"] = file_filter})) do
             push_file_entry_into_pool_21(session, path)
           end
         else
@@ -137,14 +144,14 @@ M.new = function(opts)
     local all_paths = project_file_list(root, include_hidden, include_ignored, include_deps)
     local file_entry_paths
     if (include_files and not normal_query_active_3f(session)) then
-      file_entry_paths = all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)
+      file_entry_paths = all_project_file_paths({["include-hidden"] = include_hidden, ["include-ignored"] = include_ignored, ["include-deps"] = include_deps, ["include-binary"] = include_binary, ["file-filter"] = file_filter})
     else
       file_entry_paths = {}
     end
     local deferred = {}
     local deferred_seen = {}
     if file_only_mode_3f(session) then
-      set_file_entry_source_content_21(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)
+      set_file_entry_source_content_21({session = session, ["include-hidden"] = include_hidden, ["include-ignored"] = include_ignored, ["include-deps"] = include_deps, ["include-binary"] = include_binary, ["file-filter"] = file_filter})
       return {["deferred-paths"] = {}, ["estimated-lines"] = 0}
     else
       set_single_source_content_21(session, session["project-mode"])
@@ -192,7 +199,7 @@ M.new = function(opts)
       if lazy_preferred_3f(session, (init["estimated-lines"] or 0)) then
         start_project_stream_21(session, prefilter, init)
       else
-        local pool = collect_project_sources(session, session["effective-include-hidden"], session["effective-include-ignored"], session["effective-include-deps"], session["effective-include-binary"], session["effective-include-files"], prefilter)
+        local pool = collect_project_sources({session = session, ["include-hidden"] = session["effective-include-hidden"], ["include-ignored"] = session["effective-include-ignored"], ["include-deps"] = session["effective-include-deps"], ["include-binary"] = session["effective-include-binary"], ["include-files"] = session["effective-include-files"], prefilter = prefilter})
         set_project_pool_21(session, pool)
         session["lazy-stream-done"] = true
         enable_full_source_syntax_21(session)

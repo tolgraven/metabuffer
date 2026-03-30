@@ -234,7 +234,12 @@ M.new = function(opts)
   local function include_file_path_3f(path, file_filter)
     return (not (file_filter and file_filter["active?"]) or path_matches_file_queries_3f(path, ((file_filter and file_filter.queries) or {}), clj.boolean((file_filter and file_filter.ignorecase))))
   end
-  local function all_project_file_paths(_session, include_hidden, include_ignored, include_deps, include_binary, file_filter)
+  local function all_project_file_paths(_28_)
+    local include_hidden = _28_["include-hidden"]
+    local include_ignored = _28_["include-ignored"]
+    local include_deps = _28_["include-deps"]
+    local include_binary = _28_["include-binary"]
+    local file_filter = _28_["file-filter"]
     local root = vim.fn.getcwd()
     local seen = {}
     local out = {}
@@ -339,11 +344,17 @@ M.new = function(opts)
   local emit_source_pool_change_21 = pool_helpers["emit-source-pool-change!"]
   local finish_project_stream_21 = pool_helpers["finish-project-stream!"]
   local maybe_finish_project_stream_21 = pool_helpers["maybe-finish-project-stream!"]
-  local function set_file_entry_source_content_21(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)
+  local function set_file_entry_source_content_21(_37_)
+    local session = _37_.session
+    local include_hidden = _37_["include-hidden"]
+    local include_ignored = _37_["include-ignored"]
+    local include_deps = _37_["include-deps"]
+    local include_binary = _37_["include-binary"]
+    local file_filter = _37_["file-filter"]
     local meta = session.meta
     meta.buf.content = {}
     meta.buf["source-refs"] = {}
-    for _, path in ipairs(all_project_file_paths(session, include_hidden, include_ignored, include_deps, include_binary, file_filter)) do
+    for _, path in ipairs(all_project_file_paths({["include-hidden"] = include_hidden, ["include-ignored"] = include_ignored, ["include-deps"] = include_deps, ["include-binary"] = include_binary, ["file-filter"] = file_filter})) do
       push_file_entry_into_pool_21(session, path)
     end
     bump_content_version_21(meta)
@@ -388,13 +399,13 @@ M.new = function(opts)
       match_idx = best_idx
     else
     end
-    local _41_
+    local _43_
     if match_idx then
-      _41_ = (match_idx - 1)
+      _43_ = (match_idx - 1)
     else
-      _41_ = fallback_idx
+      _43_ = fallback_idx
     end
-    return math.max(0, math.min(_41_, math.max(0, (#meta.buf.indices - 1))))
+    return math.max(0, math.min(_43_, math.max(0, (#meta.buf.indices - 1))))
   end
   local function current_project_prefilter(session)
     if (session and session["project-mode"] and session["prefilter-mode"] and session.meta and session.meta.ignorecase) then
@@ -449,9 +460,9 @@ M.new = function(opts)
   local function cached_project_view(session, path, wrap_width)
     return (path and read_file_view_cached(path, project_view_opts(session, wrap_width)))
   end
-  local function _49_(session)
+  local function _51_(session)
     return file_only_mode_3f(session, normal_query_active_3f)
   end
-  return {["parse-prefilter-terms"] = parse_prefilter_terms, ["line-matches-prefilter?"] = line_matches_prefilter_3f, ["reset-meta-indices!"] = reset_meta_indices_21, ["bump-content-version!"] = bump_content_version_21, ["push-file-entry-into-pool!"] = push_file_entry_into_pool_21, ["include-file-path?"] = include_file_path_3f, ["all-project-file-paths"] = all_project_file_paths, ["results-wrap-width"] = results_wrap_width, ["single-source-view"] = single_source_view, ["set-single-source-content!"] = set_single_source_content_21, ["normal-query-active?"] = normal_query_active_3f, ["current-file-filter"] = current_file_filter, ["file-only-mode?"] = _49_, ["set-query-source-content!"] = set_query_source_content_21, ["set-file-entry-source-content!"] = set_file_entry_source_content_21, ["best-project-selection-index"] = best_project_selection_index, ["push-file-into-pool!"] = push_file_into_pool_21, ["current-project-prefilter"] = current_project_prefilter, ["open-project-buffer-paths"] = open_project_buffer_paths, ["estimate-lines-from-files"] = estimate_lines_from_files, ["project-view-opts"] = project_view_opts, ["cached-project-view"] = cached_project_view, ["set-project-pool!"] = set_project_pool_21, ["enable-full-source-syntax!"] = enable_full_source_syntax_21, ["emit-source-pool-change!"] = emit_source_pool_change_21, ["finish-project-stream!"] = finish_project_stream_21, ["maybe-finish-project-stream!"] = maybe_finish_project_stream_21}
+  return {["parse-prefilter-terms"] = parse_prefilter_terms, ["line-matches-prefilter?"] = line_matches_prefilter_3f, ["reset-meta-indices!"] = reset_meta_indices_21, ["bump-content-version!"] = bump_content_version_21, ["push-file-entry-into-pool!"] = push_file_entry_into_pool_21, ["include-file-path?"] = include_file_path_3f, ["all-project-file-paths"] = all_project_file_paths, ["results-wrap-width"] = results_wrap_width, ["single-source-view"] = single_source_view, ["set-single-source-content!"] = set_single_source_content_21, ["normal-query-active?"] = normal_query_active_3f, ["current-file-filter"] = current_file_filter, ["file-only-mode?"] = _51_, ["set-query-source-content!"] = set_query_source_content_21, ["set-file-entry-source-content!"] = set_file_entry_source_content_21, ["best-project-selection-index"] = best_project_selection_index, ["push-file-into-pool!"] = push_file_into_pool_21, ["current-project-prefilter"] = current_project_prefilter, ["open-project-buffer-paths"] = open_project_buffer_paths, ["estimate-lines-from-files"] = estimate_lines_from_files, ["project-view-opts"] = project_view_opts, ["cached-project-view"] = cached_project_view, ["set-project-pool!"] = set_project_pool_21, ["enable-full-source-syntax!"] = enable_full_source_syntax_21, ["emit-source-pool-change!"] = emit_source_pool_change_21, ["finish-project-stream!"] = finish_project_stream_21, ["maybe-finish-project-stream!"] = maybe_finish_project_stream_21}
 end
 return M
