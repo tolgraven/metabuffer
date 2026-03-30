@@ -2,7 +2,7 @@
 (local M {})
 (local animation-mod (require :metabuffer.window.animation))
 (local prompt-buffer-mod (require :metabuffer.buffer.prompt))
-(local events (require :metabuffer.events))
+(local hooks-core-mod (require :metabuffer.prompt.hooks_core))
 (local hooks-directive-mod (require :metabuffer.prompt.hooks_directive))
 (local hooks-keymaps-mod (require :metabuffer.prompt.hooks_keymaps))
 (local hooks-layout-mod (require :metabuffer.prompt.hooks_layout))
@@ -22,67 +22,13 @@
          : hide-visible-ui!
          : rebuild-source-set!
          : sign-mod} opts]
-    (let [animation-enabled? (. animation-mod :enabled?)
-          animation-duration-ms (. animation-mod :duration-ms)]
-    (fn prompt-animation-delay-ms
-      [session]
-      (if (and animation-mod
-               animation-enabled?
-               (animation-enabled? session :prompt))
-          (animation-duration-ms session :prompt 140)
-          0))
-
-    (fn switch-mode
-  [session which]
-      (let [meta session.meta]
-        (fn mode-label
-          [value]
-          (if (= (type value) "table")
-              (or (. value :name) (tostring value))
-              (tostring value)))
-        (let [old (mode-label ((. (. meta.mode which) :current)))]
-        (meta.switch_mode which)
-        (events.post :on-mode-switch!
-          {:session session
-           :kind which
-           :old old
-           :new (mode-label ((. (. meta.mode which) :current)))}
-          {:supersede? true
-           :dedupe-key (.. "on-mode-switch:" (tostring session.prompt-buf) ":" which)}))))
-
-    (fn nvim-exiting?
-      []
-      (let [v (and vim.v (. vim.v :exiting))]
-        (and (~= v nil)
-             (~= v vim.NIL)
-             (~= v 0)
-             (~= v ""))))
-
-    (fn session-prompt-valid?
-  [session]
-      (and (not (nvim-exiting?))
-           session
-           (not session.ui-hidden)
-           (not session.closing)
-           session.meta
-           session.prompt-buf
-           (vim.api.nvim_buf_is_valid session.prompt-buf)
-           (= (. active-by-prompt session.prompt-buf) session)))
-
-    (fn schedule-when-valid
-  [session f]
-      (vim.schedule
-        (fn []
-          (when (session-prompt-valid? session)
-            (f)))))
-
-    (fn option-prefix
-      []
-      (let [p (. vim.g "meta#prefix")]
-        (if (and (= (type p) "string") (~= p ""))
-            p
-            "#")))
-
+    (let [core-hooks (hooks-core-mod.new
+                       {:active-by-prompt active-by-prompt})
+          option-prefix (. core-hooks :option-prefix)
+          prompt-animation-delay-ms (. core-hooks :prompt-animation-delay-ms)
+          schedule-when-valid (. core-hooks :schedule-when-valid)
+          session-prompt-valid? (. core-hooks :session-prompt-valid?)
+          switch-mode! (. core-hooks :switch-mode!)]
     (let [window-hooks (hooks-window-mod.new session-prompt-valid?)
           covered-by-new-window? (. window-hooks :covered-by-new-window?)
           transient-overlay-buffer? (. window-hooks :transient-overlay-buffer?)
@@ -109,7 +55,7 @@
                            {:default-prompt-keymaps default-prompt-keymaps
                             :default-main-keymaps default-main-keymaps
                             :schedule-when-valid schedule-when-valid
-                            :switch-mode switch-mode
+                            :switch-mode switch-mode!
                             :sign-mod sign-mod})
             hide-directive-help! (. directive-hooks :hide-directive-help!)
             maybe-show-directive-help! (. directive-hooks :maybe-show-directive-help!)
@@ -121,8 +67,8 @@
             begin-direct-results-edit! (. keymap-hooks :begin-direct-results-edit!)
             loading-hooks (loading-mod.new
                             {:session-prompt-valid? session-prompt-valid?
-                             :animation-enabled? animation-enabled?
-                             :animation-duration-ms animation-duration-ms
+                             :animation-enabled? (. animation-mod :enabled?)
+                             :animation-duration-ms (. animation-mod :duration-ms)
                              :refresh-prompt-highlights! (fn [session]
                                                            (refresh-prompt-highlights! session))})
             loading-scheduler (. loading-hooks :schedule-loading-indicator!)
