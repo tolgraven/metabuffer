@@ -30,7 +30,17 @@ M.new = function(opts)
   local function build_prompt_window(settings, origin_win, prompt_animates_3f0)
     return prompt_window_mod.new(vim, {height = router_util_mod["prompt-height"](), ["start-height"] = prompt_start_height(prompt_animates_3f0), ["floating?"] = prompt_animates_3f0, ["window-local-layout"] = settings["window-local-layout"], ["origin-win"] = origin_win})
   end
-  local function build_last_parsed_query(parsed_query, start_hidden, start_ignored, start_deps, start_binary, start_files, start_prefilter, start_lazy, start_expansion, start_transforms)
+  local function build_last_parsed_query(_3_)
+    local parsed_query = _3_["parsed-query"]
+    local start_hidden = _3_["start-hidden"]
+    local start_ignored = _3_["start-ignored"]
+    local start_deps = _3_["start-deps"]
+    local start_binary = _3_["start-binary"]
+    local start_files = _3_["start-files"]
+    local start_prefilter = _3_["start-prefilter"]
+    local start_lazy = _3_["start-lazy"]
+    local start_expansion = _3_["start-expansion"]
+    local start_transforms = _3_["start-transforms"]
     return vim.tbl_extend("force", {lines = (parsed_query.lines or {""}), ["lgrep-lines"] = (parsed_query["lgrep-lines"] or {}), ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-files"] = start_files, ["file-lines"] = (parsed_query["file-lines"] or {}), prefilter = start_prefilter, lazy = start_lazy, expansion = start_expansion}, transform_mod["compat-view"](start_transforms))
   end
   local function startup_ui_delay_ms(animation_settings, ui_animation)
@@ -53,26 +63,69 @@ M.new = function(opts)
     end
     return math.max(prompt_ms, info_ms)
   end
-  local function build_prompt_session_state(settings, prompt_win, prompt_buf, initial_lines, parsed_query, animation_settings, ui_animation, ui, fast_test_startup_3f)
+  local function build_prompt_session_state(_6_)
+    local settings = _6_.settings
+    local prompt_win = _6_["prompt-win"]
+    local prompt_buf = _6_["prompt-buf"]
+    local initial_lines = _6_["initial-lines"]
+    local parsed_query = _6_["parsed-query"]
+    local animation_settings = _6_["animation-settings"]
+    local ui_animation = _6_["ui-animation"]
+    local ui = _6_.ui
+    local fast_test_startup_3f = _6_["fast-test-startup?"]
     local prompt_text = table.concat(initial_lines, "\n")
     return {["prompt-window"] = prompt_win, ["prompt-win"] = prompt_win.window, ["prompt-target-height"] = router_util_mod["prompt-height"](), ["prompt-buf"] = prompt_buf, ["prompt-floating?"] = prompt_win["floating?"], ["window-local-layout"] = settings["window-local-layout"], ["prompt-keymaps"] = settings["prompt-keymaps"], ["main-keymaps"] = settings["main-keymaps"], ["prompt-fallback-keymaps"] = settings["prompt-fallback-keymaps"], ["info-file-entry-view"] = (settings["info-file-entry-view"] or "meta"), ["initial-prompt-text"] = prompt_text, ["last-prompt-text"] = prompt_text, ["last-history-text"] = "", ["history-index"] = 0, ["history-cache"] = vim.deepcopy(history_store.list()), ["prompt-change-seq"] = 0, ["prompt-last-apply-ms"] = 0, ["prompt-last-event-text"] = prompt_text, ["initial-query-active"] = query_mod["query-lines-has-active?"](parsed_query.lines), ["startup-initializing"] = true, ["animate-enter?"] = (not fast_test_startup_3f and clj.boolean(ui_animation.enabled)), ["startup-ui-delay-ms"] = startup_ui_delay_ms(animation_settings, ui_animation), ["loading-indicator?"] = clj.boolean(ui["loading-indicator"]), ["animation-settings"] = animation_settings, ["prompt-animating?"] = false, ["prompt-update-dirty"] = false, ["prompt-update-pending"] = false}
   end
-  local function build_project_session_state(settings, parsed_query, project_mode, start_hidden, start_ignored, start_deps, start_binary, start_files, start_prefilter, start_lazy, start_expansion, start_transforms)
-    local _5_
+  local function build_project_session_state(_7_)
+    local settings = _7_.settings
+    local parsed_query = _7_["parsed-query"]
+    local project_mode = _7_["project-mode"]
+    local start_hidden = _7_["start-hidden"]
+    local start_ignored = _7_["start-ignored"]
+    local start_deps = _7_["start-deps"]
+    local start_binary = _7_["start-binary"]
+    local start_files = _7_["start-files"]
+    local start_prefilter = _7_["start-prefilter"]
+    local start_lazy = _7_["start-lazy"]
+    local start_expansion = _7_["start-expansion"]
+    local start_transforms = _7_["start-transforms"]
+    local _8_
     if query_mod["query-lines-has-active?"](parsed_query.lines) then
-      _5_ = settings["project-bootstrap-delay-ms"]
+      _8_ = settings["project-bootstrap-delay-ms"]
     else
-      _5_ = settings["project-bootstrap-idle-delay-ms"]
+      _8_ = settings["project-bootstrap-idle-delay-ms"]
     end
-    return {["project-mode"] = (project_mode or false), ["project-mode-starting?"] = clj.boolean(project_mode), ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-files"] = start_files, ["default-include-lgrep"] = query_mod["truthy?"](settings["default-include-lgrep"]), ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["effective-include-binary"] = start_binary, ["effective-include-files"] = start_files, ["transform-flags"] = vim.deepcopy(start_transforms), ["effective-transforms"] = vim.deepcopy(start_transforms), ["active-source-key"] = source_mod["query-source-key"](parsed_query), ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _5_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["expansion-mode"] = start_expansion, ["project-source-syntax-chunk-lines"] = settings["project-source-syntax-chunk-lines"], ["project-lazy-refresh-min-ms"] = settings["project-lazy-refresh-min-ms"], ["project-lazy-refresh-debounce-ms"] = settings["project-lazy-refresh-debounce-ms"], ["last-parsed-query"] = build_last_parsed_query(parsed_query, start_hidden, start_ignored, start_deps, start_binary, start_files, start_prefilter, start_lazy, start_expansion, start_transforms), ["file-query-lines"] = (parsed_query["file-lines"] or {}), ["project-bootstrap-pending"] = false}
+    return {["project-mode"] = (project_mode or false), ["project-mode-starting?"] = clj.boolean(project_mode), ["include-hidden"] = start_hidden, ["include-ignored"] = start_ignored, ["include-deps"] = start_deps, ["include-binary"] = start_binary, ["include-files"] = start_files, ["default-include-lgrep"] = query_mod["truthy?"](settings["default-include-lgrep"]), ["effective-include-hidden"] = start_hidden, ["effective-include-ignored"] = start_ignored, ["effective-include-deps"] = start_deps, ["effective-include-binary"] = start_binary, ["effective-include-files"] = start_files, ["transform-flags"] = vim.deepcopy(start_transforms), ["effective-transforms"] = vim.deepcopy(start_transforms), ["active-source-key"] = source_mod["query-source-key"](parsed_query), ["project-bootstrap-token"] = 0, ["project-bootstrap-delay-ms"] = _8_, ["project-bootstrapped"] = not (project_mode or false), ["prefilter-mode"] = start_prefilter, ["lazy-mode"] = start_lazy, ["expansion-mode"] = start_expansion, ["project-source-syntax-chunk-lines"] = settings["project-source-syntax-chunk-lines"], ["project-lazy-refresh-min-ms"] = settings["project-lazy-refresh-min-ms"], ["project-lazy-refresh-debounce-ms"] = settings["project-lazy-refresh-debounce-ms"], ["last-parsed-query"] = build_last_parsed_query({["parsed-query"] = parsed_query, ["start-hidden"] = start_hidden, ["start-ignored"] = start_ignored, ["start-deps"] = start_deps, ["start-binary"] = start_binary, ["start-files"] = start_files, ["start-prefilter"] = start_prefilter, ["start-lazy"] = start_lazy, ["start-expansion"] = start_expansion, ["start-transforms"] = start_transforms}), ["file-query-lines"] = (parsed_query["file-lines"] or {}), ["project-bootstrap-pending"] = false}
   end
-  local function build_session_state(deps, curr, source_buf, origin_win, origin_buf, source_view, condition, prompt_win, prompt_buf, initial_lines, parsed_query, project_mode, start_hidden, start_ignored, start_deps, start_binary, start_files, start_prefilter, start_lazy, start_expansion, start_transforms, fast_test_startup_3f)
+  local function build_session_state(_10_)
+    local deps = _10_.deps
+    local curr = _10_.curr
+    local source_buf = _10_["source-buf"]
+    local origin_win = _10_["origin-win"]
+    local origin_buf = _10_["origin-buf"]
+    local source_view = _10_["source-view"]
+    local condition = _10_.condition
+    local prompt_win = _10_["prompt-win"]
+    local prompt_buf = _10_["prompt-buf"]
+    local initial_lines = _10_["initial-lines"]
+    local parsed_query = _10_["parsed-query"]
+    local project_mode = _10_["project-mode"]
+    local start_hidden = _10_["start-hidden"]
+    local start_ignored = _10_["start-ignored"]
+    local start_deps = _10_["start-deps"]
+    local start_binary = _10_["start-binary"]
+    local start_files = _10_["start-files"]
+    local start_prefilter = _10_["start-prefilter"]
+    local start_lazy = _10_["start-lazy"]
+    local start_expansion = _10_["start-expansion"]
+    local start_transforms = _10_["start-transforms"]
+    local fast_test_startup_3f = _10_["fast-test-startup?"]
     local ui = deps.ui
     local ui_animation = ui.animation
     local next_instance_id_21 = deps["next-instance-id!"]
     local animation_settings = build_animation_settings(ui_animation, fast_test_startup_3f)
     local settings = deps.router
-    return vim.tbl_extend("force", {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["read-file-lines-cached"] = deps["read-file-lines-cached"], ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), ["instance-id"] = next_instance_id_21(), meta = curr}, build_prompt_session_state(settings, prompt_win, prompt_buf, initial_lines, parsed_query, animation_settings, ui_animation, ui, fast_test_startup_3f), build_project_session_state(settings, parsed_query, project_mode, start_hidden, start_ignored, start_deps, start_binary, start_files, start_prefilter, start_lazy, start_expansion, start_transforms))
+    return vim.tbl_extend("force", {["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, ["initial-source-line"] = math.max(1, (source_view.lnum or ((condition["selected-index"] or 0) + 1))), ["read-file-lines-cached"] = deps["read-file-lines-cached"], ["single-content"] = vim.deepcopy(curr.buf.content), ["single-refs"] = vim.deepcopy((curr.buf["source-refs"] or {})), ["instance-id"] = next_instance_id_21(), meta = curr}, build_prompt_session_state({settings = settings, ["prompt-win"] = prompt_win, ["prompt-buf"] = prompt_buf, ["initial-lines"] = initial_lines, ["parsed-query"] = parsed_query, ["animation-settings"] = animation_settings, ["ui-animation"] = ui_animation, ui = ui, ["fast-test-startup?"] = fast_test_startup_3f}), build_project_session_state({settings = settings, ["parsed-query"] = parsed_query, ["project-mode"] = project_mode, ["start-hidden"] = start_hidden, ["start-ignored"] = start_ignored, ["start-deps"] = start_deps, ["start-binary"] = start_binary, ["start-files"] = start_files, ["start-prefilter"] = start_prefilter, ["start-lazy"] = start_lazy, ["start-expansion"] = start_expansion, ["start-transforms"] = start_transforms}))
   end
   return {["build-prompt-window"] = build_prompt_window, ["build-session-state"] = build_session_state, ["prompt-animates?"] = prompt_animates_3f}
 end

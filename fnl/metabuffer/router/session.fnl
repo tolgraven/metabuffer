@@ -507,7 +507,9 @@
     curr))
 
 (fn launch-new-session!
-  [deps query mode project-mode prompt-query parsed-query start-hidden start-ignored start-deps start-binary start-files start-prefilter start-lazy start-expansion start-transforms source-buf]
+  [{: deps : query : mode : project-mode : prompt-query : parsed-query
+     : start-hidden : start-ignored : start-deps : start-binary : start-files
+     : start-prefilter : start-lazy : start-expansion : start-transforms : source-buf}]
   (let [router (. deps :router)
         mods (. deps :mods)
         meta-mod (. mods :meta)
@@ -530,28 +532,28 @@
                      ((. session-state :prompt-animates?) ui-animation fast-test-startup?))
         prompt-buf prompt-win.buffer
         session ((. session-state :build-session-state)
-                  deps
-                  curr
-                  source-buf
-                  origin-win
-                  origin-buf
-                  source-view
-                  condition
-                  prompt-win
-                  prompt-buf
-                  initial-lines
-                  parsed-query
-                  project-mode
-                  start-hidden
-                  start-ignored
-                  start-deps
-                  start-binary
-                  start-files
-                  start-prefilter
-                  start-lazy
-                  start-expansion
-                  start-transforms
-                  fast-test-startup?)]
+                  {:deps deps
+                   :curr curr
+                   :source-buf source-buf
+                   :origin-win origin-win
+                   :origin-buf origin-buf
+                   :source-view source-view
+                   :condition condition
+                   :prompt-win prompt-win
+                   :prompt-buf prompt-buf
+                   :initial-lines initial-lines
+                   :parsed-query parsed-query
+                   :project-mode project-mode
+                   :start-hidden start-hidden
+                   :start-ignored start-ignored
+                   :start-deps start-deps
+                   :start-binary start-binary
+                   :start-files start-files
+                   :start-prefilter start-prefilter
+                   :start-lazy start-lazy
+                   :start-expansion start-expansion
+                   :start-transforms start-transforms
+                   :fast-test-startup? fast-test-startup?})]
     (set curr.project-mode (or project-mode false))
     (router-util-mod.ensure-source-refs! curr)
     (prepare-fresh-meta-buffer! curr)
@@ -610,22 +612,22 @@
                       (when (and existing (not existing.ui-hidden))
                         (remove-session! existing))
                       (launch-new-session!
-                        deps
-                        query
-                        mode
-                        project-mode
-                        prompt-query
-                        parsed-query
-                        start-hidden
-                        start-ignored
-                        start-deps
-                        start-binary
-                        start-files
-                        start-prefilter
-                        start-lazy
-                        start-expansion
-                        start-transforms
-                        source-buf)))))))))
+                        {:deps deps
+                         :query query
+                         :mode mode
+                         :project-mode project-mode
+                         :prompt-query prompt-query
+                         :parsed-query parsed-query
+                         :start-hidden start-hidden
+                         :start-ignored start-ignored
+                         :start-deps start-deps
+                         :start-binary start-binary
+                         :start-files start-files
+                         :start-prefilter start-prefilter
+                         :start-lazy start-lazy
+                         :start-expansion start-expansion
+                         :start-transforms start-transforms
+                         :source-buf source-buf})))))))))
 
 (set (. M :project-start-selected-index) project-start-selected-index)
 

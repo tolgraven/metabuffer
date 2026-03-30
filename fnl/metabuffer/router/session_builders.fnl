@@ -60,7 +60,8 @@
          :origin-win origin-win}))
 
     (fn build-last-parsed-query
-      [parsed-query start-hidden start-ignored start-deps start-binary start-files start-prefilter start-lazy start-expansion start-transforms]
+      [{: parsed-query : start-hidden : start-ignored : start-deps : start-binary
+         : start-files : start-prefilter : start-lazy : start-expansion : start-transforms}]
       (vim.tbl_extend
         "force"
         {:lines (or (. parsed-query :lines) [""])
@@ -96,7 +97,8 @@
         (math.max prompt-ms info-ms)))
 
     (fn build-prompt-session-state
-      [settings prompt-win prompt-buf initial-lines parsed-query animation-settings ui-animation ui fast-test-startup?]
+      [{: settings : prompt-win : prompt-buf : initial-lines : parsed-query
+         : animation-settings : ui-animation : ui : fast-test-startup?}]
       (let [prompt-text (table.concat initial-lines "\n")]
         {:prompt-window prompt-win
          :prompt-win prompt-win.window
@@ -128,7 +130,8 @@
          :animation-settings animation-settings}))
 
     (fn build-project-session-state
-      [settings parsed-query project-mode start-hidden start-ignored start-deps start-binary start-files start-prefilter start-lazy start-expansion start-transforms]
+      [{: settings : parsed-query : project-mode : start-hidden : start-ignored : start-deps
+         : start-binary : start-files : start-prefilter : start-lazy : start-expansion : start-transforms}]
       {:project-mode (or project-mode false)
        :project-mode-starting? (clj.boolean project-mode)
        :include-hidden start-hidden
@@ -158,21 +161,23 @@
        :project-lazy-refresh-min-ms settings.project-lazy-refresh-min-ms
        :project-lazy-refresh-debounce-ms settings.project-lazy-refresh-debounce-ms
        :last-parsed-query (build-last-parsed-query
-                            parsed-query
-                            start-hidden
-                            start-ignored
-                            start-deps
-                            start-binary
-                            start-files
-                            start-prefilter
-                            start-lazy
-                            start-expansion
-                            start-transforms)
+                            {:parsed-query parsed-query
+                             :start-hidden start-hidden
+                             :start-ignored start-ignored
+                             :start-deps start-deps
+                             :start-binary start-binary
+                             :start-files start-files
+                             :start-prefilter start-prefilter
+                             :start-lazy start-lazy
+                             :start-expansion start-expansion
+                             :start-transforms start-transforms})
        :file-query-lines (or (. parsed-query :file-lines) [])})
 
     (fn build-session-state
-      [deps curr source-buf origin-win origin-buf source-view condition prompt-win prompt-buf initial-lines parsed-query project-mode
-       start-hidden start-ignored start-deps start-binary start-files start-prefilter start-lazy start-expansion start-transforms fast-test-startup?]
+      [{: deps : curr : source-buf : origin-win : origin-buf : source-view : condition
+         : prompt-win : prompt-buf : initial-lines : parsed-query : project-mode
+         : start-hidden : start-ignored : start-deps : start-binary : start-files
+         : start-prefilter : start-lazy : start-expansion : start-transforms : fast-test-startup?}]
       (let [ui (. deps :ui)
             ui-animation (. ui :animation)
             next-instance-id! (. deps :next-instance-id!)
@@ -191,28 +196,28 @@
            :instance-id (next-instance-id!)
            :meta curr}
           (build-prompt-session-state
-            settings
-            prompt-win
-            prompt-buf
-            initial-lines
-            parsed-query
-            animation-settings
-            ui-animation
-            ui
-            fast-test-startup?)
+            {:settings settings
+             :prompt-win prompt-win
+             :prompt-buf prompt-buf
+             :initial-lines initial-lines
+             :parsed-query parsed-query
+             :animation-settings animation-settings
+             :ui-animation ui-animation
+             :ui ui
+             :fast-test-startup? fast-test-startup?})
           (build-project-session-state
-            settings
-            parsed-query
-            project-mode
-            start-hidden
-            start-ignored
-            start-deps
-            start-binary
-            start-files
-            start-prefilter
-            start-lazy
-            start-expansion
-            start-transforms))))
+            {:settings settings
+             :parsed-query parsed-query
+             :project-mode project-mode
+             :start-hidden start-hidden
+             :start-ignored start-ignored
+             :start-deps start-deps
+             :start-binary start-binary
+             :start-files start-files
+             :start-prefilter start-prefilter
+             :start-lazy start-lazy
+             :start-expansion start-expansion
+             :start-transforms start-transforms}))))
 
     {:build-prompt-window build-prompt-window
      :build-session-state build-session-state

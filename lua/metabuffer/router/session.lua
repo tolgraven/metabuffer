@@ -549,7 +549,23 @@ local function finalize_started_session_21(deps, curr, session, initial_lines, s
   show_launch_message_21(session)
   return curr
 end
-local function launch_new_session_21(deps, query, mode, project_mode, prompt_query, parsed_query, start_hidden, start_ignored, start_deps, start_binary, start_files, start_prefilter, start_lazy, start_expansion, start_transforms, source_buf)
+local function launch_new_session_21(_90_)
+  local deps = _90_.deps
+  local query = _90_.query
+  local mode = _90_.mode
+  local project_mode = _90_["project-mode"]
+  local prompt_query = _90_["prompt-query"]
+  local parsed_query = _90_["parsed-query"]
+  local start_hidden = _90_["start-hidden"]
+  local start_ignored = _90_["start-ignored"]
+  local start_deps = _90_["start-deps"]
+  local start_binary = _90_["start-binary"]
+  local start_files = _90_["start-files"]
+  local start_prefilter = _90_["start-prefilter"]
+  local start_lazy = _90_["start-lazy"]
+  local start_expansion = _90_["start-expansion"]
+  local start_transforms = _90_["start-transforms"]
+  local source_buf = _90_["source-buf"]
   local router = deps.router
   local mods = deps.mods
   local meta_mod = mods.meta
@@ -573,7 +589,7 @@ local function launch_new_session_21(deps, query, mode, project_mode, prompt_que
   end
   local prompt_win = session_state["build-prompt-window"](router, origin_win, session_state["prompt-animates?"](ui_animation, fast_test_startup_3f))
   local prompt_buf = prompt_win.buffer
-  local session = session_state["build-session-state"](deps, curr, source_buf, origin_win, origin_buf, source_view, condition, prompt_win, prompt_buf, initial_lines, parsed_query, project_mode, start_hidden, start_ignored, start_deps, start_binary, start_files, start_prefilter, start_lazy, start_expansion, start_transforms, fast_test_startup_3f)
+  local session = session_state["build-session-state"]({deps = deps, curr = curr, ["source-buf"] = source_buf, ["origin-win"] = origin_win, ["origin-buf"] = origin_buf, ["source-view"] = source_view, condition = condition, ["prompt-win"] = prompt_win, ["prompt-buf"] = prompt_buf, ["initial-lines"] = initial_lines, ["parsed-query"] = parsed_query, ["project-mode"] = project_mode, ["start-hidden"] = start_hidden, ["start-ignored"] = start_ignored, ["start-deps"] = start_deps, ["start-binary"] = start_binary, ["start-files"] = start_files, ["start-prefilter"] = start_prefilter, ["start-lazy"] = start_lazy, ["start-expansion"] = start_expansion, ["start-transforms"] = start_transforms, ["fast-test-startup?"] = fast_test_startup_3f})
   curr["project-mode"] = (project_mode or false)
   router_util_mod["ensure-source-refs!"](curr)
   prepare_fresh_meta_buffer_21(curr)
@@ -596,19 +612,19 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
   if (current_session and existing_visible_meta(current_session)) then
     return existing_visible_meta(current_session)
   else
-    local _let_91_ = session_state["resolve-start-query-state"](query, settings)
-    local parsed_query = _let_91_["parsed-query"]
-    local query0 = _let_91_.query
-    local prompt_query = _let_91_["prompt-query"]
-    local start_hidden = _let_91_["start-hidden"]
-    local start_ignored = _let_91_["start-ignored"]
-    local start_deps = _let_91_["start-deps"]
-    local start_binary = _let_91_["start-binary"]
-    local start_files = _let_91_["start-files"]
-    local start_prefilter = _let_91_["start-prefilter"]
-    local start_lazy = _let_91_["start-lazy"]
-    local start_expansion = _let_91_["start-expansion"]
-    local start_transforms = _let_91_["start-transforms"]
+    local _let_92_ = session_state["resolve-start-query-state"](query, settings)
+    local parsed_query = _let_92_["parsed-query"]
+    local query0 = _let_92_.query
+    local prompt_query = _let_92_["prompt-query"]
+    local start_hidden = _let_92_["start-hidden"]
+    local start_ignored = _let_92_["start-ignored"]
+    local start_deps = _let_92_["start-deps"]
+    local start_binary = _let_92_["start-binary"]
+    local start_files = _let_92_["start-files"]
+    local start_prefilter = _let_92_["start-prefilter"]
+    local start_lazy = _let_92_["start-lazy"]
+    local start_expansion = _let_92_["start-expansion"]
+    local start_transforms = _let_92_["start-transforms"]
     local source_buf = vim.api.nvim_get_current_buf()
     local existing = active_by_source[source_buf]
     local already_launching_3f = (launching_by_source[source_buf] and existing and (clj.boolean(existing["project-mode"]) == clj.boolean(project_mode)))
@@ -624,7 +640,7 @@ M["start!"] = function(deps, query, mode, _meta, project_mode)
           remove_session_21(existing)
         else
         end
-        return launch_new_session_21(deps, query0, mode, project_mode, prompt_query, parsed_query, start_hidden, start_ignored, start_deps, start_binary, start_files, start_prefilter, start_lazy, start_expansion, start_transforms, source_buf)
+        return launch_new_session_21({deps = deps, query = query0, mode = mode, ["project-mode"] = project_mode, ["prompt-query"] = prompt_query, ["parsed-query"] = parsed_query, ["start-hidden"] = start_hidden, ["start-ignored"] = start_ignored, ["start-deps"] = start_deps, ["start-binary"] = start_binary, ["start-files"] = start_files, ["start-prefilter"] = start_prefilter, ["start-lazy"] = start_lazy, ["start-expansion"] = start_expansion, ["start-transforms"] = start_transforms, ["source-buf"] = source_buf})
       end
     end
   end
