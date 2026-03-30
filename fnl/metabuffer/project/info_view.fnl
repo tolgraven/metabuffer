@@ -10,6 +10,7 @@
          : render-info-lines! : sync-info-selection! : refs-slice-sig
          : info-visible-range : fit-info-width! : info-max-lines : debug-log : valid-info-win?
          } opts]
+    (var update-project! nil)
     (fn project-loading-pending?
       [session]
       (let [startup (startup-layout-pending? session)
@@ -143,7 +144,8 @@
                        (not (project-loading-pending? session)))
               (set session.info-project-loading-active? false)
               (set session.info-showing-project-loading? false)
-              (refresh-info-statusline! session)))
+              (set session.info-render-sig nil)
+              (update-project! session false)))
           30)))
 
     (fn rerender-project-info!
@@ -162,39 +164,36 @@
       (when loading-finished?
         (schedule-project-info-finish-refresh! session)))
 
-    (fn update-project!
-      [session refresh-lines]
-      (let [loading-pending? (project-loading-pending? session)
-            loading-changed? (~= (clj.boolean session.info-last-project-loading?)
-                                 (clj.boolean loading-pending?))]
-        (if loading-pending?
-          (update-project-startup! session)
-          (do
-            (settle-info-render-state! session)
-            (project-info-debug! session refresh-lines)
-            (refresh-info-statusline! session)
-            (when (and (not session.info-render-suspended?)
-                       session.info-buf
-                       (vim.api.nvim_buf_is_valid session.info-buf))
-              (let [meta session.meta
-                    loading-finished? true
-                    force-refresh? (project-info-force-refresh? session refresh-lines loading-changed?)
-                    {: wanted-start : wanted-stop : out-of-range : range-changed}
-                    (project-info-range-state session meta)]
-                (when (or force-refresh? out-of-range range-changed)
-                  (let [sig (project-info-render-sig session meta wanted-start wanted-stop)]
-                    (when (or force-refresh?
-                              out-of-range
-                              range-changed
-                              (~= session.info-render-sig sig))
-                      (rerender-project-info!
-                        session
-                        meta
-                        wanted-start
-                        wanted-stop
-                        loading-finished?))))
-                (set session.info-last-project-loading? false)
-                (sync-info-selection! session meta)))))))
+    (set update-project!
+         (fn [session refresh-lines]
+           (let [loading-pending? (project-loading-pending? session)
+                 loading-changed? (~= (clj.boolean session.info-last-project-loading?)
+                                      (clj.boolean loading-pending?))]
+             (if loading-pending?
+               (update-project-startup! session)
+               (do
+                 (settle-info-render-state! session)
+                 (project-info-debug! session refresh-lines)
+                 (refresh-info-statusline! session)
+                 (when (and (not session.info-render-suspended?)
+                            session.info-buf
+                            (vim.api.nvim_buf_is_valid session.info-buf))
+                   (let [meta session.meta
+                         loading-finished? true
+                         force-refresh? (project-info-force-refresh? session refresh-lines loading-changed?)
+                         {: wanted-start : wanted-stop : out-of-range : range-changed}
+                         (project-info-range-state session meta)
+                         sig (project-info-render-sig session meta wanted-start wanted-stop)
+                         sig-changed? (~= session.info-render-sig sig)]
+                     (when (or force-refresh? out-of-range range-changed sig-changed?)
+                       (rerender-project-info!
+                         session
+                         meta
+                         wanted-start
+                         wanted-stop
+                         loading-finished?))
+                     (set session.info-last-project-loading? false)
+                     (sync-info-selection! session meta))))))))
 
     {:project-loading-pending? project-loading-pending?
      :update-project! update-project!}))

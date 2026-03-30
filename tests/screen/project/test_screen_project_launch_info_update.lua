@@ -73,6 +73,21 @@ T['info window updates automatically when typing in prompt during project mode']
       and H.str_contains(snap.line, tostring(ref.lnum))
   end, 5000)
 
+  local moved_after_load = H.session_info_snapshot()
+  eq(moved_after_load.line ~= settled_snap.line, true, "Info window should keep changing after project loading finishes")
+
+  H.wait_for(function() return H.session_hit_count() > 20 end, 5000)
+  H.scroll_main_and_wait('page-down', 5000)
+  H.wait_for(function()
+    local ref = H.session_selected_ref()
+    local snap = H.session_info_snapshot()
+    return type(ref) == 'table'
+      and type(snap) == 'table'
+      and H.str_contains(snap.line, vim.fn.fnamemodify(ref.path, ':t'))
+      and H.str_contains(snap.line, tostring(ref.lnum))
+      and snap.line ~= moved_after_load.line
+  end, 5000)
+
   -- Now type a query that filters the list. 
   -- We expect info window to update its content.
   -- In this fixture, 'lua/mod.lua' has 'metabuffer'

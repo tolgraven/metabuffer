@@ -16,6 +16,7 @@ M.new = function(opts)
   local info_max_lines = opts["info-max-lines"]
   local debug_log = opts["debug-log"]
   local valid_info_win_3f = opts["valid-info-win?"]
+  local update_project_21 = nil
   local function project_loading_pending_3f(session)
     local startup = startup_layout_pending_3f(session)
     local bootstrap_pending = (session["project-bootstrap-pending"] or false)
@@ -143,7 +144,8 @@ M.new = function(opts)
         if (valid_info_win_3f(session) and not project_loading_pending_3f(session)) then
           session["info-project-loading-active?"] = false
           session["info-showing-project-loading?"] = false
-          return refresh_info_statusline_21(session)
+          session["info-render-sig"] = nil
+          return update_project_21(session, false)
         else
           return nil
         end
@@ -165,7 +167,7 @@ M.new = function(opts)
       return nil
     end
   end
-  local function update_project_21(session, refresh_lines)
+  local function _19_(session, refresh_lines)
     local loading_pending_3f = project_loading_pending_3f(session)
     local loading_changed_3f = (clj.boolean(session["info-last-project-loading?"]) ~= clj.boolean(loading_pending_3f))
     if loading_pending_3f then
@@ -178,17 +180,15 @@ M.new = function(opts)
         local meta = session.meta
         local loading_finished_3f = true
         local force_refresh_3f = project_info_force_refresh_3f(session, refresh_lines, loading_changed_3f)
-        local _let_19_ = project_info_range_state(session, meta)
-        local wanted_start = _let_19_["wanted-start"]
-        local wanted_stop = _let_19_["wanted-stop"]
-        local out_of_range = _let_19_["out-of-range"]
-        local range_changed = _let_19_["range-changed"]
-        if (force_refresh_3f or out_of_range or range_changed) then
-          local sig = project_info_render_sig(session, meta, wanted_start, wanted_stop)
-          if (force_refresh_3f or out_of_range or range_changed or (session["info-render-sig"] ~= sig)) then
-            rerender_project_info_21(session, meta, wanted_start, wanted_stop, loading_finished_3f)
-          else
-          end
+        local _let_20_ = project_info_range_state(session, meta)
+        local wanted_start = _let_20_["wanted-start"]
+        local wanted_stop = _let_20_["wanted-stop"]
+        local out_of_range = _let_20_["out-of-range"]
+        local range_changed = _let_20_["range-changed"]
+        local sig = project_info_render_sig(session, meta, wanted_start, wanted_stop)
+        local sig_changed_3f = (session["info-render-sig"] ~= sig)
+        if (force_refresh_3f or out_of_range or range_changed or sig_changed_3f) then
+          rerender_project_info_21(session, meta, wanted_start, wanted_stop, loading_finished_3f)
         else
         end
         session["info-last-project-loading?"] = false
@@ -198,6 +198,7 @@ M.new = function(opts)
       end
     end
   end
+  update_project_21 = _19_
   return {["project-loading-pending?"] = project_loading_pending_3f, ["update-project!"] = update_project_21}
 end
 return M
