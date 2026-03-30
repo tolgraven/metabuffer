@@ -59,6 +59,19 @@ T['info window updates automatically when typing in prompt during project mode']
     eq(initial_info_view.topline, settled_info_view.topline)
     eq(initial_info_view.selected_row, settled_info_view.selected_row)
   end
+  H.start_info_blank_watch(350)
+  H.wait_for(H.info_blank_watch_done, 2000)
+  eq(H.info_blank_seen(), false, "Info window should not leave a blank top row after the loading winbar clears")
+
+  H.type_prompt('<C-n>')
+  H.wait_for(function()
+    local ref = H.session_selected_ref()
+    local snap = H.session_info_snapshot()
+    return type(ref) == 'table'
+      and type(snap) == 'table'
+      and H.str_contains(snap.line, vim.fn.fnamemodify(ref.path, ':t'))
+      and H.str_contains(snap.line, tostring(ref.lnum))
+  end, 5000)
 
   -- Now type a query that filters the list. 
   -- We expect info window to update its content.

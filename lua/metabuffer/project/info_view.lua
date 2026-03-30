@@ -1,4 +1,5 @@
 -- [nfnl] fnl/metabuffer/project/info_view.fnl
+local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
 M.new = function(opts)
   local startup_layout_pending_3f = opts["startup-layout-pending?"]
@@ -26,6 +27,7 @@ M.new = function(opts)
   local function render_project_loading_21(session, fit_info_width_210)
     local lines = loading_skeleton_lines(info_height(session))
     local ns = vim.api.nvim_create_namespace("MetaInfoWindow")
+    session["info-last-project-loading?"] = true
     session["info-start-index"] = 1
     session["info-stop-index"] = #lines
     do
@@ -47,6 +49,7 @@ M.new = function(opts)
     return nil
   end
   local function update_project_startup_21(session)
+    session["info-last-project-loading?"] = true
     session["info-project-loading-active?"] = true
     ensure_info_window(session)
     if (session["info-render-suspended?"] and not session["prompt-animating?"] and not session["startup-initializing"]) then
@@ -114,8 +117,8 @@ M.new = function(opts)
       return nil
     end
   end
-  local function project_info_force_refresh_3f(session, refresh_lines)
-    return (refresh_lines or (session["info-render-sig"] == nil) or session["info-project-loading-active?"] or session["info-showing-project-loading?"])
+  local function project_info_force_refresh_3f(session, refresh_lines, loading_changed_3f)
+    return (refresh_lines or loading_changed_3f or (session["info-render-sig"] == nil) or session["info-project-loading-active?"] or session["info-showing-project-loading?"])
   end
   local function project_info_range_state(session, meta)
     local idxs = (meta.buf.indices or {})
@@ -130,7 +133,7 @@ M.new = function(opts)
   local function project_info_render_sig(session, meta, wanted_start, wanted_stop)
     local idxs = (meta.buf.indices or {})
     local refs = (meta.buf["source-refs"] or {})
-    return table.concat({(session["info-max-width"] or 0), wanted_start, wanted_stop, refs_slice_sig(session, refs, idxs, wanted_start, wanted_stop), (session["info-project-loading-active?"] or false)}, "|")
+    return table.concat({(session["info-max-width"] or 0), wanted_start, wanted_stop, (meta.selected_index or 0), refs_slice_sig(session, refs, idxs, wanted_start, wanted_stop), (session["info-project-loading-active?"] or false)}, "|")
   end
   local function schedule_project_info_finish_refresh_21(session)
     if not session["info-project-finish-refresh-pending?"] then
@@ -163,7 +166,9 @@ M.new = function(opts)
     end
   end
   local function update_project_21(session, refresh_lines)
-    if project_loading_pending_3f(session) then
+    local loading_pending_3f = project_loading_pending_3f(session)
+    local loading_changed_3f = (clj.boolean(session["info-last-project-loading?"]) ~= clj.boolean(loading_pending_3f))
+    if loading_pending_3f then
       return update_project_startup_21(session)
     else
       settle_info_render_state_21(session)
@@ -171,8 +176,8 @@ M.new = function(opts)
       refresh_info_statusline_21(session)
       if (not session["info-render-suspended?"] and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
         local meta = session.meta
-        local loading_finished_3f = not project_loading_pending_3f(session)
-        local force_refresh_3f = project_info_force_refresh_3f(session, refresh_lines)
+        local loading_finished_3f = true
+        local force_refresh_3f = project_info_force_refresh_3f(session, refresh_lines, loading_changed_3f)
         local _let_19_ = project_info_range_state(session, meta)
         local wanted_start = _let_19_["wanted-start"]
         local wanted_stop = _let_19_["wanted-stop"]
@@ -186,6 +191,7 @@ M.new = function(opts)
           end
         else
         end
+        session["info-last-project-loading?"] = false
         return sync_info_selection_21(session, meta)
       else
         return nil

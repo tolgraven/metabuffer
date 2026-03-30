@@ -1,4 +1,5 @@
 (import-macros {: when-let : when-not} :io.gitlab.andreyorst.cljlib.core)
+(local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
 
 (fn M.new
@@ -27,6 +28,7 @@
       [session fit-info-width!]
       (let [lines (loading-skeleton-lines (info-height session))
             ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
+        (set session.info-last-project-loading? true)
         (set session.info-start-index 1)
         (set session.info-stop-index (# lines))
         (let [bo (. vim.bo session.info-buf)]
@@ -45,6 +47,7 @@
 
     (fn update-project-startup!
       [session]
+      (set session.info-last-project-loading? true)
       (set session.info-project-loading-active? true)
       (ensure-info-window session)
       (when (and session.info-render-suspended?
@@ -95,8 +98,9 @@
             ""))))
 
     (fn project-info-force-refresh?
-      [session refresh-lines]
+      [session refresh-lines loading-changed?]
       (or refresh-lines
+          loading-changed?
           (= session.info-render-sig nil)
           session.info-project-loading-active?
           session.info-showing-project-loading?))
@@ -123,6 +127,7 @@
           [(or session.info-max-width 0)
            wanted-start
            wanted-stop
+           (or meta.selected_index 0)
            (refs-slice-sig session refs idxs wanted-start wanted-stop)
            (or session.info-project-loading-active? false)]
           "|")))
@@ -159,7 +164,10 @@
 
     (fn update-project!
       [session refresh-lines]
-      (if (project-loading-pending? session)
+      (let [loading-pending? (project-loading-pending? session)
+            loading-changed? (~= (clj.boolean session.info-last-project-loading?)
+                                 (clj.boolean loading-pending?))]
+        (if loading-pending?
           (update-project-startup! session)
           (do
             (settle-info-render-state! session)
@@ -169,8 +177,8 @@
                        session.info-buf
                        (vim.api.nvim_buf_is_valid session.info-buf))
               (let [meta session.meta
-                    loading-finished? (not (project-loading-pending? session))
-                    force-refresh? (project-info-force-refresh? session refresh-lines)
+                    loading-finished? true
+                    force-refresh? (project-info-force-refresh? session refresh-lines loading-changed?)
                     {: wanted-start : wanted-stop : out-of-range : range-changed}
                     (project-info-range-state session meta)]
                 (when (or force-refresh? out-of-range range-changed)
@@ -185,7 +193,8 @@
                         wanted-start
                         wanted-stop
                         loading-finished?))))
-                (sync-info-selection! session meta))))))
+                (set session.info-last-project-loading? false)
+                (sync-info-selection! session meta)))))))
 
     {:project-loading-pending? project-loading-pending?
      :update-project! update-project!}))
