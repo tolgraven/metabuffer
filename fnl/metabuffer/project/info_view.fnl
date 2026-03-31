@@ -1,6 +1,7 @@
 (import-macros {: when-let : when-not} :io.gitlab.andreyorst.cljlib.core)
 (local clj (require :io.gitlab.andreyorst.cljlib.core))
 (local M {})
+(local info-loading-ns (vim.api.nvim_create_namespace "MetaInfoWindow"))
 
 (fn M.new
   [opts]
@@ -29,7 +30,7 @@
     (fn render-project-loading!
       [session fit-info-width!]
       (let [lines (loading-skeleton-lines (info-height session))
-            ns (vim.api.nvim_create_namespace "MetaInfoWindow")]
+            ns info-loading-ns]
         (set session.info-last-project-loading? true)
         (set session.info-start-index 1)
         (set session.info-stop-index (# lines))

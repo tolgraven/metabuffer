@@ -26,8 +26,13 @@ M["mark-preview-buffer!"] = function(buf, transient_3f)
   end
 end
 M["unmark-preview-buffer!"] = function(buf)
-  if (buf and vim.api.nvim_buf_is_valid(buf) and not (true == pcall(vim.api.nvim_buf_get_var, buf, "meta_preview"))) then
-    return events.send("on-buf-teardown!", {buf = buf, role = "preview"})
+  if (buf and vim.api.nvim_buf_is_valid(buf)) then
+    local ok_3f,meta_preview_3f = pcall(vim.api.nvim_buf_get_var, buf, "meta_preview")
+    if not (ok_3f and (true == meta_preview_3f)) then
+      return events.send("on-buf-teardown!", {buf = buf, role = "preview"})
+    else
+      return nil
+    end
   else
     return nil
   end

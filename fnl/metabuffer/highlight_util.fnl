@@ -3,16 +3,20 @@
 (fn M.hl-rendered-fg
   [hl]
   "Return effective rendered foreground for HL, accounting for reverse."
-  (if (and hl (. hl :reverse))
-      (or (. hl :bg) (. hl :fg))
-      (. hl :fg)))
+  (if (not hl)
+      nil
+      (if (. hl :reverse)
+          (or (. hl :bg) (. hl :fg))
+          (. hl :fg))))
 
 (fn M.hl-rendered-bg
   [hl]
   "Return effective rendered background for HL, accounting for reverse."
-  (if (and hl (. hl :reverse))
-      (or (. hl :fg) (. hl :bg))
-      (. hl :bg)))
+  (if (not hl)
+      nil
+      (if (. hl :reverse)
+          (or (. hl :fg) (. hl :bg))
+          (. hl :bg))))
 
 (fn M.darken-rgb
   [n factor]

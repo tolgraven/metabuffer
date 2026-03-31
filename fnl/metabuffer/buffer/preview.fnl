@@ -46,8 +46,9 @@
   [buf]
   "Emit preview teardown for BUF unless it is already a managed preview buffer."
   (when (and buf
-             (vim.api.nvim_buf_is_valid buf)
-             (not (= true (pcall vim.api.nvim_buf_get_var buf "meta_preview"))))
-    (events.send :on-buf-teardown! {:buf buf :role :preview})))
+             (vim.api.nvim_buf_is_valid buf))
+    (let [[ok? meta-preview?] [(pcall vim.api.nvim_buf_get_var buf "meta_preview")]]
+      (when (not (and ok? (= true meta-preview?)))
+        (events.send :on-buf-teardown! {:buf buf :role :preview})))))
 
 M

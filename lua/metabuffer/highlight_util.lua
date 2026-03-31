@@ -1,17 +1,25 @@
 -- [nfnl] fnl/metabuffer/highlight_util.fnl
 local M = {}
 M["hl-rendered-fg"] = function(hl)
-  if (hl and hl.reverse) then
-    return (hl.bg or hl.fg)
+  if not hl then
+    return nil
   else
-    return hl.fg
+    if hl.reverse then
+      return (hl.bg or hl.fg)
+    else
+      return hl.fg
+    end
   end
 end
 M["hl-rendered-bg"] = function(hl)
-  if (hl and hl.reverse) then
-    return (hl.fg or hl.bg)
+  if not hl then
+    return nil
   else
-    return hl.bg
+    if hl.reverse then
+      return (hl.fg or hl.bg)
+    else
+      return hl.bg
+    end
   end
 end
 M["darken-rgb"] = function(n, factor)

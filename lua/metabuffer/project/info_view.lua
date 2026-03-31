@@ -1,6 +1,7 @@
 -- [nfnl] fnl/metabuffer/project/info_view.fnl
 local clj = require("io.gitlab.andreyorst.cljlib.core")
 local M = {}
+local info_loading_ns = vim.api.nvim_create_namespace("MetaInfoWindow")
 M.new = function(opts)
   local startup_layout_pending_3f = opts["startup-layout-pending?"]
   local loading_skeleton_lines = opts["loading-skeleton-lines"]
@@ -28,7 +29,7 @@ M.new = function(opts)
   end
   local function render_project_loading_21(session, fit_info_width_210)
     local lines = loading_skeleton_lines(info_height(session))
-    local ns = vim.api.nvim_create_namespace("MetaInfoWindow")
+    local ns = info_loading_ns
     session["info-last-project-loading?"] = true
     session["info-start-index"] = 1
     session["info-stop-index"] = #lines

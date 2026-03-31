@@ -64,13 +64,16 @@
   [args]
   (let [session (. args :session)
         hooks (refresh-hooks session)
-        refresh-lines? (or (clj.boolean (. args :refresh-lines))
-                           (and session session.project-mode))]
+        refresh-lines (if session.project-mode
+                          true
+                          (. args :refresh-lines))]
     (when (and session (clj.boolean (. args :force-refresh?)))
       (when-let [f (. hooks :source-syntax!)]
         (pcall f session false)))
-    (refresh-ui!
-      (vim.tbl_extend "force" args {:refresh-lines refresh-lines?}))))
+    (if (= refresh-lines nil)
+        (refresh-ui! args)
+        (refresh-ui!
+          (vim.tbl_extend "force" args {:refresh-lines refresh-lines})))))
 
 (fn refresh-project-info!
   [args]
