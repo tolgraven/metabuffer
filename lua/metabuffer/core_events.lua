@@ -113,6 +113,12 @@ end
 local function refresh_selection_ui_21(args)
   local session = args.session
   local hooks = refresh_hooks(session)
+  local refresh_lines
+  if session["project-mode"] then
+    refresh_lines = true
+  else
+    refresh_lines = args["refresh-lines"]
+  end
   if (session and clj.boolean(args["force-refresh?"])) then
     local val_110_auto = hooks["source-syntax!"]
     if val_110_auto then
@@ -122,7 +128,11 @@ local function refresh_selection_ui_21(args)
     end
   else
   end
-  return refresh_ui_21(args)
+  if (refresh_lines == nil) then
+    return refresh_ui_21(args)
+  else
+    return refresh_ui_21(vim.tbl_extend("force", args, {["refresh-lines"] = refresh_lines}))
+  end
 end
 local function refresh_project_info_21(args)
   local session = args.session
@@ -265,7 +275,7 @@ local function update_source_pool_now_21(session, args)
           events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = refresh_lines})
         else
           if (err and string.find(tostring(err), "E565")) then
-            local function _34_()
+            local function _36_()
               if valid_session_buffer_3f(session) then
                 pcall(session.meta["on-update"], 0)
                 return events.send("on-query-update!", {session = session, query = (session["prompt-last-applied-text"] or ""), ["refresh-lines"] = refresh_lines})
@@ -273,7 +283,7 @@ local function update_source_pool_now_21(session, args)
                 return nil
               end
             end
-            vim.defer_fn(_34_, 1)
+            vim.defer_fn(_36_, 1)
           else
           end
         end
@@ -313,7 +323,7 @@ local function schedule_source_pool_refresh_21(args)
       state["dirty?"] = true
       if not state["scheduled?"] then
         state["scheduled?"] = true
-        local function _44_()
+        local function _46_()
           if session then
             state["scheduled?"] = false
             if state["dirty?"] then
@@ -335,7 +345,7 @@ local function schedule_source_pool_refresh_21(args)
             return nil
           end
         end
-        return vim.defer_fn(_44_, math.max((session["project-lazy-refresh-min-ms"] or 0), (session["project-lazy-refresh-debounce-ms"] or 17)))
+        return vim.defer_fn(_46_, math.max((session["project-lazy-refresh-min-ms"] or 0), (session["project-lazy-refresh-debounce-ms"] or 17)))
       else
         return nil
       end

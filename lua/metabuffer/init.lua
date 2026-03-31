@@ -451,10 +451,7 @@ local function ensure_fennel_syntax_defaults_21()
     return nil
   end
 end
-local function ensure_defaults_and_highlights_21(opts)
-  ensure_fennel_syntax_defaults_21()
-  apply_ui_config_21(opts)
-  local hi = vim.api.nvim_set_hl
+local function apply_statusline_highlights_21(hi)
   hi(0, "MetaStatuslineModeInsert", statusline_color_from("ErrorMsg"))
   hi(0, "MetaStatuslineModeReplace", statusline_color_from("Todo"))
   do
@@ -479,18 +476,18 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaStatuslineKey", statusline_color_from("Comment"))
   hi(0, "MetaStatuslineFlagOn", statusline_color_from("String"))
   hi(0, "MetaStatuslineFlagOff", statusline_color_from("ErrorMsg"))
-  do
-    local bg_fn
-    local function _54_()
-      return results_pulse_bg(1)
-    end
-    bg_fn = _54_
-    hi(0, "MetaStatuslineMiddlePulse", meta_statusline_middle_hl_with_bg(bg_fn))
-    hi(0, "MetaStatuslineIndicatorPulse", statusline_fg_hl_with_bg("Tag", bg_fn))
-    hi(0, "MetaStatuslineKeyPulse", statusline_fg_hl_with_bg("Comment", bg_fn))
-    hi(0, "MetaStatuslineFlagOnPulse", statusline_fg_hl_with_bg("String", bg_fn))
-    hi(0, "MetaStatuslineFlagOffPulse", statusline_fg_hl_with_bg("ErrorMsg", bg_fn))
+  local bg_fn
+  local function _54_()
+    return results_pulse_bg(1)
   end
+  bg_fn = _54_
+  hi(0, "MetaStatuslineMiddlePulse", meta_statusline_middle_hl_with_bg(bg_fn))
+  hi(0, "MetaStatuslineIndicatorPulse", statusline_fg_hl_with_bg("Tag", bg_fn))
+  hi(0, "MetaStatuslineKeyPulse", statusline_fg_hl_with_bg("Comment", bg_fn))
+  hi(0, "MetaStatuslineFlagOnPulse", statusline_fg_hl_with_bg("String", bg_fn))
+  return hi(0, "MetaStatuslineFlagOffPulse", statusline_fg_hl_with_bg("ErrorMsg", bg_fn))
+end
+local function apply_search_and_prompt_highlights_21(hi)
   hi(0, "MetaSearchHitAll", hit_hl("Statement", "Error"))
   hi(0, "MetaSearchHitBuffer", hit_hl("Statement", "Error"))
   hi(0, "MetaSearchHitFuzzy", hit_hl("Number", "WarningMsg"))
@@ -515,7 +512,9 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaPromptFlagTextOn", fg_only_hl_from("String"))
   hi(0, "MetaPromptFlagTextOff", fg_only_hl_from("ErrorMsg"))
   hi(0, "MetaPromptFlagTextFuncOn", underlined_text_from("String", "Special"))
-  hi(0, "MetaPromptFlagTextFuncOff", underlined_text_from("ErrorMsg", "Special"))
+  return hi(0, "MetaPromptFlagTextFuncOff", underlined_text_from("ErrorMsg", "Special"))
+end
+local function apply_loading_and_window_highlights_21(hi)
   hi(0, "MetaLoading1", loading_hl("Comment", -0.1))
   hi(0, "MetaLoading2", loading_hl("Comment", 0))
   hi(0, "MetaLoading3", loading_hl("Comment", 0.14))
@@ -527,7 +526,9 @@ local function ensure_defaults_and_highlights_21(opts)
   hi(0, "MetaSourceBoundary", thin_underline_from("Error"))
   hi(0, "MetaWindowCursorLine", meta_window_cursorline_hl())
   hi(0, "MetaWindowSeparator", meta_window_separator_hl())
-  hi(0, "MetaSourceAltBg", alt_bg_from("Normal"))
+  return hi(0, "MetaSourceAltBg", alt_bg_from("Normal"))
+end
+local function apply_path_and_file_highlights_21(hi)
   for i, src in ipairs(PATH_SEG_GROUPS) do
     hi(0, ("MetaPathSeg" .. tostring(i)), {default = true, link = src})
   end
@@ -558,6 +559,15 @@ local function ensure_defaults_and_highlights_21(opts)
   else
     return hi(0, "MetaSourceFile", {default = true, link = "Normal"})
   end
+end
+local function ensure_defaults_and_highlights_21(opts)
+  ensure_fennel_syntax_defaults_21()
+  apply_ui_config_21(opts)
+  local hi = vim.api.nvim_set_hl
+  apply_statusline_highlights_21(hi)
+  apply_search_and_prompt_highlights_21(hi)
+  apply_loading_and_window_highlights_21(hi)
+  return apply_path_and_file_highlights_21(hi)
 end
 local function ensure_highlight_refresh_autocmd_21()
   if refresh_augroup then

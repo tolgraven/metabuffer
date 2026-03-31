@@ -304,26 +304,21 @@ local function commit_render_frame(self, frame)
   apply_frame_highlights(self, frame.ranges)
   return true
 end
-M.new = function(nvim, model)
-  local self = base.new(nvim, {model = model, name = "meta", ["default-opts"] = M["default-opts"]})
-  self["syntax-type"] = "buffer"
-  self.indexbuf = ui.new(nvim, self, "indexes")
-  self["show-source-prefix"] = false
-  self["show-source-separators"] = false
-  self["show-source-alt-bg"] = true
-  self["visible-source-syntax-only"] = false
-  self["source-hl-ns"] = vim.api.nvim_create_namespace("metabuffer_source")
-  self["source-sep-ns"] = vim.api.nvim_create_namespace("metabuffer_source_separator")
-  self["source-alt-ns"] = vim.api.nvim_create_namespace("metabuffer_source_alt")
-  self["source-syntax-groups"] = {}
-  self["source-syntax-included"] = {}
-  self["source-syntax-base-reset?"] = false
-  self["source-syntax-next-group-id"] = 0
-  self["source-syntax-fill-token"] = 0
-  self["source-syntax-fill-pending"] = false
-  self["keep-modifiable"] = false
-  self["last-rendered-lines"] = {}
-  self["pending-render-frame"] = nil
+local function attach_basic_buffer_methods_21(self)
+  self["prepare-visible-edit!"] = function()
+    do
+      local bo = vim.bo[self.buffer]
+      self["keep-modifiable"] = true
+      bo["buftype"] = "acwrite"
+      bo["bufhidden"] = "hide"
+      bo["modifiable"] = true
+      bo["readonly"] = false
+    end
+    return base["clear-modified!"](self.buffer)
+  end
+  self["clear-modified!"] = function()
+    return base["clear-modified!"](self.buffer)
+  end
   self["model-valid?"] = function()
     return (self.model and vim.api.nvim_buf_is_valid(self.model))
   end
@@ -346,6 +341,9 @@ M.new = function(nvim, model)
       end
     end
   end
+  return self["ref-filetype"]
+end
+local function attach_source_syntax_core_methods_21(self)
   self["clear-source-syntax"] = function()
     self["source-syntax-fill-token"] = (1 + (self["source-syntax-fill-token"] or 0))
     self["source-syntax-fill-pending"] = false
@@ -433,6 +431,9 @@ M.new = function(nvim, model)
       return nil
     end
   end
+  return self["add-source-syntax-range"]
+end
+local function attach_source_syntax_fill_methods_21(self)
   self["run-source-syntax-fill-step"] = function(total_lines)
     local session = self.session
     local chunk = math.max(1, ((session and session["project-source-syntax-chunk-lines"]) or 240))
@@ -478,6 +479,9 @@ M.new = function(nvim, model)
     end
     return vim.defer_fn(_54_, 17)
   end
+  return self["schedule-source-syntax-fill"]
+end
+local function attach_source_syntax_apply_methods_21(self)
   self["apply-source-syntax-regions"] = function()
     if not (self["show-source-separators"] and (self["syntax-type"] == "buffer") and self["source-refs"] and (#self.indices > 0)) then
       return self["clear-source-syntax"]()
@@ -544,6 +548,9 @@ M.new = function(nvim, model)
       return "metabuffer"
     end
   end
+  return self.syntax
+end
+local function attach_render_methods_21(self)
   self["apply-syntax"] = function(syntax_type)
     if syntax_type then
       self["syntax-type"] = syntax_type
@@ -616,6 +623,37 @@ M.new = function(nvim, model)
       return nil
     end
   end
+  return self["push-visible-lines"]
+end
+local function initialize_metabuffer_state_21(self, nvim)
+  self["syntax-type"] = "buffer"
+  self.indexbuf = ui.new(nvim, self, "indexes")
+  self["show-source-prefix"] = false
+  self["show-source-separators"] = false
+  self["show-source-alt-bg"] = true
+  self["visible-source-syntax-only"] = false
+  self["source-hl-ns"] = vim.api.nvim_create_namespace("metabuffer_source")
+  self["source-sep-ns"] = vim.api.nvim_create_namespace("metabuffer_source_separator")
+  self["source-alt-ns"] = vim.api.nvim_create_namespace("metabuffer_source_alt")
+  self["source-syntax-groups"] = {}
+  self["source-syntax-included"] = {}
+  self["source-syntax-base-reset?"] = false
+  self["source-syntax-next-group-id"] = 0
+  self["source-syntax-fill-token"] = 0
+  self["source-syntax-fill-pending"] = false
+  self["keep-modifiable"] = false
+  self["last-rendered-lines"] = {}
+  self["pending-render-frame"] = nil
+  return nil
+end
+M.new = function(nvim, model)
+  local self = base.new(nvim, {model = model, name = "meta", ["default-opts"] = M["default-opts"]})
+  initialize_metabuffer_state_21(self, nvim)
+  attach_basic_buffer_methods_21(self)
+  attach_source_syntax_core_methods_21(self)
+  attach_source_syntax_fill_methods_21(self)
+  attach_source_syntax_apply_methods_21(self)
+  attach_render_methods_21(self)
   return self
 end
 return M

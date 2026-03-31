@@ -938,10 +938,28 @@ function M.session_info_snapshot()
     if not (info_win and vim.api.nvim_win_is_valid(info_win) and info_buf and vim.api.nvim_buf_is_valid(info_buf)) then
       return nil
     end
-    local row = vim.api.nvim_win_get_cursor(info_win)[1]
+    local ns = vim.api.nvim_create_namespace('MetaInfoSelection')
+    local marks = vim.api.nvim_buf_get_extmarks(info_buf, ns, 0, -1, {})
+    local row = nil
+    if type(marks) == 'table' and #marks > 0 then
+      row = (marks[1][2] or 0) + 1
+    else
+      row = vim.api.nvim_win_get_cursor(info_win)[1]
+    end
     local line = vim.api.nvim_buf_get_lines(info_buf, row - 1, row, false)[1] or ''
+    local view = vim.api.nvim_win_call(info_win, function()
+      return vim.fn.winsaveview()
+    end)
+    local topline = math.max(1, (view and view.topline) or 1)
+    local first_visible = vim.api.nvim_buf_get_lines(info_buf, topline - 1, topline, false)[1] or ''
     local count = vim.api.nvim_buf_line_count(info_buf)
-    return vim.json.encode({ row = row, line = line, count = count })
+    return vim.json.encode({
+      row = row,
+      line = line,
+      count = count,
+      topline = topline,
+      first_visible = first_visible,
+    })
   ]]))
   if encoded == nil or encoded == vim.NIL then return nil end
   return vim.json.decode(encoded)

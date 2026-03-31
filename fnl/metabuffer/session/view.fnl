@@ -35,6 +35,67 @@
           (set ctx.source-view source-view))
         ctx)))
 
+(fn base-restore-view
+  [session src-view current-view]
+  (let [use-src-scroll? (and (not= (. src-view :topline) nil)
+                             (or (not (and session session.project-mode))
+                                 session.startup-initializing
+                                 (clj.boolean session.project-mode-starting?)))]
+    (if use-src-scroll? src-view current-view)))
+
+(fn restored-topline
+  [line-count win-height line base-view]
+  (let [base-lnum (or (. base-view :lnum) line)
+        base-topline (or (. base-view :topline) base-lnum)
+        offset (math.max 0 (- base-lnum base-topline))
+        unclamped-topline (math.max 1 (math.min (- line offset) line-count))]
+    (if (<= line-count win-height)
+        1
+        (math.max 1
+                  (math.min unclamped-topline
+                            (math.max 1 (+ (- line-count win-height) 1)))))))
+
+(fn emit-restored-selection!
+  [session]
+  (when session
+    (vim.defer_fn
+      (fn []
+        (when (and session
+                   session.meta
+                   session.meta.win
+                   (vim.api.nvim_win_is_valid session.meta.win.window))
+          (events.send :on-selection-change!
+            {:session session
+             :line-nr (+ 1 (or session.meta.selected_index 0))
+             :refresh-lines true})))
+      50)))
+
+(fn selection-change-payload
+  [session force-refresh? refresh-lines]
+  {:session session
+   :line-nr (+ 1 (or session.meta.selected_index 0))
+   :force-refresh? force-refresh?
+   :refresh-lines refresh-lines})
+
+(fn emit-selection-change!
+  [session force-refresh? refresh-lines]
+  (events.send :on-selection-change!
+    (selection-change-payload session force-refresh? refresh-lines)))
+
+(fn apply-restored-view!
+  [meta line topline base-view session]
+  (vim.api.nvim_win_call meta.win.window
+    (fn []
+      (let [view (vim.fn.winsaveview)]
+        (set (. view :lnum) line)
+        (set (. view :topline) topline)
+        (when (~= (. base-view :leftcol) nil)
+          (set (. view :leftcol) (. base-view :leftcol)))
+        (when (~= (. base-view :col) nil)
+          (set (. view :col) (. base-view :col)))
+        (vim.fn.winrestview view)
+        (emit-restored-selection! session)))))
+
 (fn M.restore-meta-view!
   [meta source-view session _update-info-window]
   "Restore cursor and viewport in the results window."
@@ -44,45 +105,9 @@
           win-height (math.max 1 (vim.api.nvim_win_get_height meta.win.window))
           current-view (vim.api.nvim_win_call meta.win.window (fn [] (vim.fn.winsaveview)))
           src-view (or source-view {})
-          ;; Only use source-view for topline/scroll-offset if we are not in project-mode
-          ;; unless project-mode is still in its startup phase, where we want
-          ;; the current-file selection to inherit the user's original viewport.
-          use-src-scroll? (and (not= (. src-view :topline) nil)
-                               (or (not (and session session.project-mode))
-                                   session.startup-initializing
-                                   (clj.boolean session.project-mode-starting?)))
-          base-view (if use-src-scroll? src-view current-view)
-          base-lnum (or (. base-view :lnum) line)
-          base-topline (or (. base-view :topline) base-lnum)
-          offset (math.max 0 (- base-lnum base-topline))
-          unclamped-topline (math.max 1 (math.min (- line offset) line-count))
-          topline (if (<= line-count win-height)
-                      1
-                      (math.max 1
-                                (math.min unclamped-topline
-                                          (math.max 1 (+ (- line-count win-height) 1)))))]
-      (vim.api.nvim_win_call meta.win.window
-        (fn []
-          (let [view (vim.fn.winsaveview)]
-            (set (. view :lnum) line)
-            (set (. view :topline) topline)
-            (when (~= (. base-view :leftcol) nil)
-              (set (. view :leftcol) (. base-view :leftcol)))
-            (when (~= (. base-view :col) nil)
-              (set (. view :col) (. base-view :col)))
-            (vim.fn.winrestview view)
-            (when session
-              (vim.defer_fn
-                (fn []
-                  (when (and session
-                             session.meta
-                             session.meta.win
-                             (vim.api.nvim_win_is_valid session.meta.win.window))
-                    (events.send :on-selection-change!
-                      {:session session
-                       :line-nr (+ 1 (or session.meta.selected_index 0))
-                       :refresh-lines true})))
-                50))))))))
+          base-view (base-restore-view session src-view current-view)
+          topline (restored-topline line-count win-height line base-view)]
+      (apply-restored-view! meta line topline base-view session))))
 
 (fn M.sync-selected-from-main-cursor!
   [session]
@@ -122,11 +147,14 @@
         (when force-refresh
           (schedule-source-syntax-refresh! session))
         (when (or force-refresh (~= before session.meta.selected_index))
-          (events.send :on-selection-change!
-            {:session session
-             :line-nr (+ 1 (or session.meta.selected_index 0))
-             :force-refresh? force-refresh
-             :refresh-lines false}))))))
+          (emit-selection-change! session force-refresh false))))))
+
+(fn scroll-sync-eligible?
+  [session]
+  (and session
+       (not session.scroll-sync-pending)
+       (not session.scroll-animating?)
+       (not session.scroll-command-view)))
 
 (fn M.schedule-scroll-sync!
   [session opts]
@@ -134,15 +162,13 @@
   (let [{: maybe-sync-from-main!
          : scroll-sync-debounce-ms}
         (or opts {})]
-    (when (and session
-               (not session.scroll-sync-pending)
-               (not session.scroll-animating?)
-               (not session.scroll-command-view))
+    (when (scroll-sync-eligible? session)
       (set session.scroll-sync-pending true)
       (vim.defer_fn
         (fn []
           (set session.scroll-sync-pending false)
-          (when (and (not session.scroll-animating?)
+          (when (and session
+                     (not session.scroll-animating?)
                      (not session.scroll-command-view))
             (maybe-sync-from-main! session true)))
         scroll-sync-debounce-ms))))

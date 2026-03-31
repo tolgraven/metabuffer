@@ -313,34 +313,25 @@
   (apply_frame_highlights self frame.ranges)
   true)
 
-(fn M.new
-  [nvim model]
-  "Public API: M.new."
-  (let [self (base.new nvim {:model model :name "meta" :default-opts M.default-opts})]
-    (set self.syntax-type "buffer")
-    (set self.indexbuf (ui.new nvim self "indexes"))
-    (set self.show-source-prefix false)
-    (set self.show-source-separators false)
-    (set self.show-source-alt-bg true)
-    (set self.visible-source-syntax-only false)
-    (set self.source-hl-ns (vim.api.nvim_create_namespace "metabuffer_source"))
-    (set self.source-sep-ns (vim.api.nvim_create_namespace "metabuffer_source_separator"))
-    (set self.source-alt-ns (vim.api.nvim_create_namespace "metabuffer_source_alt"))
-    (set self.source-syntax-groups [])
-    (set self.source-syntax-included {})
-    (set self.source-syntax-base-reset? false)
-    (set self.source-syntax-next-group-id 0)
-    (set self.source-syntax-fill-token 0)
-    (set self.source-syntax-fill-pending false)
-    (set self.keep-modifiable false)
-    (set self.last-rendered-lines [])
-    (set self.pending-render-frame nil)
-      (fn self.model-valid?
-  []
+(fn attach-basic-buffer-methods!
+  [self]
+  (fn self.prepare-visible-edit!
+    []
+    (let [bo (. vim.bo self.buffer)]
+      (set self.keep-modifiable true)
+      (set (. bo :buftype) "acwrite")
+      (set (. bo :bufhidden) "hide")
+      (set (. bo :modifiable) true)
+      (set (. bo :readonly) false))
+    (base.clear-modified! self.buffer))
+  (fn self.clear-modified!
+    []
+    (base.clear-modified! self.buffer))
+  (fn self.model-valid?
+    []
     (and self.model (vim.api.nvim_buf_is_valid self.model)))
-
-      (fn self.ref-filetype
-  [ref]
+  (fn self.ref-filetype
+    [ref]
     (let [kind (and ref ref.kind)
           path (and ref ref.path)
           ft (when (and (= (type path) "string") (~= path ""))
@@ -349,11 +340,13 @@
       (if (= kind "file-entry")
           "text"
           (if (and (= (type ft) "string") (~= ft ""))
-          ft
-          "text"))))
+              ft
+              "text")))))
 
-      (fn self.clear-source-syntax
-  []
+(fn attach-source-syntax-core-methods!
+  [self]
+  (fn self.clear-source-syntax
+    []
     (set self.source-syntax-fill-token (+ 1 (or self.source-syntax-fill-token 0)))
     (set self.source-syntax-fill-pending false)
     (stop-buffer-treesitter! self.buffer)
@@ -366,9 +359,8 @@
     (set self.source-syntax-included {})
     (set self.source-syntax-base-reset? false)
     (set self.source-syntax-next-group-id 0))
-
-      (fn self.add-source-syntax-range
-  [syntax-start syntax-stop]
+  (fn self.add-source-syntax-range
+    [syntax-start syntax-stop]
     (when (and self.source-refs
                (> (# self.indices) 0)
                (<= syntax-start syntax-stop))
@@ -377,19 +369,17 @@
         (vim.api.nvim_buf_call self.buffer
           (fn []
             (fn add-block
-  [start stop ft]
+              [start stop ft]
               (when (and ft (~= ft "") (<= start stop))
                 (let [synfiles (syntax-files-for-ft ft)
                       has-syntax (> (# synfiles) 0)]
                   (when has-syntax
                     (when-not self.source-syntax-base-reset?
-                      ;; Reset inherited/base syntax once before the first included source block.
                       (vim.cmd "silent! syntax clear")
                       (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
                       (set self.source-syntax-base-reset? true))
                     (let [cluster (.. "MetaSrcFt_" (sanitize-syntax-id ft))]
                       (when-not (. included cluster)
-                        ;; Most syntax files early-return when b:current_syntax is set.
                         (apply-ft-buffer-vars! self.buffer ft)
                         (each [_ synfile (ipairs synfiles)]
                           (pcall vim.api.nvim_buf_del_var self.buffer "current_syntax")
@@ -421,10 +411,12 @@
                   (set prev-ft ft))
                 (set prev-src-idx idx)))
             (when prev-ft
-              (add-block start syntax-stop prev-ft)))))))
+              (add-block start syntax-stop prev-ft))))))))
 
-      (fn self.run-source-syntax-fill-step
-  [total-lines]
+(fn attach-source-syntax-fill-methods!
+  [self]
+  (fn self.run-source-syntax-fill-step
+    [total-lines]
     (let [session self.session
           chunk (math.max 1 (or (and session session.project-source-syntax-chunk-lines) 240))
           token self.source-syntax-fill-token]
@@ -451,11 +443,9 @@
               (set self.source-syntax-fill-pending false)
               (vim.api.nvim_buf_call self.buffer
                 (fn []
-                  ;; Re-sync once after the background fill completes.
                   (vim.cmd "silent! syntax sync fromstart"))))))))
-
-      (fn self.schedule-source-syntax-fill
-  [syntax-start syntax-stop total-lines]
+  (fn self.schedule-source-syntax-fill
+    [syntax-start syntax-stop total-lines]
     (set self.source-syntax-fill-token (+ 1 (or self.source-syntax-fill-token 0)))
     (set self.source-syntax-fill-pending true)
     (set self.source-syntax-next-after (+ syntax-stop 1))
@@ -463,10 +453,12 @@
     (vim.defer_fn
       (fn []
         (self.run-source-syntax-fill-step total-lines))
-      17))
+      17)))
 
-      (fn self.apply-source-syntax-regions
-  []
+(fn attach-source-syntax-apply-methods!
+  [self]
+  (fn self.apply-source-syntax-regions
+    []
     (if (not (and self.show-source-separators
                   (= self.syntax-type "buffer")
                   self.source-refs
@@ -503,19 +495,19 @@
             (when (not (or self.visible-source-syntax-only incremental-fill?))
               (vim.api.nvim_buf_call self.buffer
                 (fn []
-                  ;; Re-sync immediately only when we already applied the complete range.
                   (vim.cmd "silent! syntax sync fromstart"))))
             (when incremental-fill?
               (self.schedule-source-syntax-fill syntax-start syntax-stop n))))))
-
-      (fn self.syntax
-  []
+  (fn self.syntax
+    []
     (if (and (= self.syntax-type "buffer") (self.model-valid?))
         (. (. vim.bo self.model) :syntax)
-        "metabuffer"))
+        "metabuffer")))
 
-      (fn self.apply-syntax
-  [syntax-type]
+(fn attach-render-methods!
+  [self]
+  (fn self.apply-syntax
+    [syntax-type]
     (when syntax-type
       (set self.syntax-type syntax-type))
     (let [bo (. vim.bo self.buffer)]
@@ -538,13 +530,11 @@
             (stop-buffer-treesitter! self.buffer)
             (set (. bo :filetype) "metabuffer")
             (set (. bo :syntax) "metabuffer")))))
-
-      (fn self.update
-  []
+  (fn self.update
+    []
     (self.render))
-
-      (fn self.render
-  []
+  (fn self.render
+    []
     (let [views (save_window_views self)
           frame (build_render_frame self)
           committed? (if (should_defer_empty_frame self frame)
@@ -553,9 +543,8 @@
       (when committed?
         (apply_frame_separators self)
         (finalize_render self views))))
-
-      (fn self.push-visible-lines
-  [visible]
+  (fn self.push-visible-lines
+    [visible]
     (when (self.model-valid?)
       (let [n (math.min (# visible) (# self.indices))]
         (for [i 1 n]
@@ -565,8 +554,39 @@
                 new-line (. visible i)]
             (when (~= old-line new-line)
               (vim.api.nvim_buf_set_lines self.model (- src 1) src false [new-line])
-              (set (. self.content src) new-line)))))))
+              (set (. self.content src) new-line))))))))
 
+(fn initialize-metabuffer-state!
+  [self nvim]
+  (set self.syntax-type "buffer")
+  (set self.indexbuf (ui.new nvim self "indexes"))
+  (set self.show-source-prefix false)
+  (set self.show-source-separators false)
+  (set self.show-source-alt-bg true)
+  (set self.visible-source-syntax-only false)
+  (set self.source-hl-ns (vim.api.nvim_create_namespace "metabuffer_source"))
+  (set self.source-sep-ns (vim.api.nvim_create_namespace "metabuffer_source_separator"))
+  (set self.source-alt-ns (vim.api.nvim_create_namespace "metabuffer_source_alt"))
+  (set self.source-syntax-groups [])
+  (set self.source-syntax-included {})
+  (set self.source-syntax-base-reset? false)
+  (set self.source-syntax-next-group-id 0)
+  (set self.source-syntax-fill-token 0)
+  (set self.source-syntax-fill-pending false)
+  (set self.keep-modifiable false)
+  (set self.last-rendered-lines [])
+  (set self.pending-render-frame nil))
+
+(fn M.new
+  [nvim model]
+  "Public API: M.new."
+  (let [self (base.new nvim {:model model :name "meta" :default-opts M.default-opts})]
+    (initialize-metabuffer-state! self nvim)
+    (attach-basic-buffer-methods! self)
+    (attach-source-syntax-core-methods! self)
+    (attach-source-syntax-fill-methods! self)
+    (attach-source-syntax-apply-methods! self)
+    (attach-render-methods! self)
     self))
 
 M

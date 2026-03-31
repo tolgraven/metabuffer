@@ -2,7 +2,7 @@
 local clj = require("io.gitlab.andreyorst.cljlib.core")
 local base = require("metabuffer.window.base")
 local animation_mod = require("metabuffer.window.animation")
-local directive_mod = require("metabuffer.query.directive")
+local prompt_buffer_mod = require("metabuffer.buffer.prompt")
 local events = require("metabuffer.events")
 local util = require("metabuffer.util")
 local M = {}
@@ -14,19 +14,7 @@ local function prompt_winhighlight()
 end
 local function prompt_buffer_21(win)
   local buf = vim.api.nvim_win_get_buf(win)
-  events.send("on-buf-create!", {buf = buf, role = "prompt"})
-  util["set-buffer-name!"](buf, "[Metabuffer Prompt]")
-  do
-    local bo = vim.bo[buf]
-    bo["buftype"] = "nofile"
-    bo["bufhidden"] = "wipe"
-    bo["swapfile"] = false
-    bo["modifiable"] = true
-    _G.__meta_directive_completefunc = directive_mod.completefunc
-    bo["completefunc"] = "v:lua.__meta_directive_completefunc"
-    bo["filetype"] = "metabufferprompt"
-  end
-  return buf
+  return prompt_buffer_mod.new(buf)
 end
 local function prompt_window_opts_21(win)
   events.send("on-win-create!", {win = win, role = "prompt"})
@@ -75,6 +63,12 @@ local function wipe_replaced_split_buffer_21(old_buf)
   else
     return nil
   end
+end
+local function new_prompt_wrapper(nvim, win, buf)
+  local self = base.new(nvim, win, {}, {})
+  self.buffer = buf
+  self["floating?"] = false
+  return self
 end
 local function float_config(origin_win, start_height)
   local host
@@ -155,9 +149,99 @@ M["handoff-to-split!"] = function(nvim, prompt_win, opts)
     pcall(vim.api.nvim_win_close, old_win, true)
   else
   end
-  local self = base.new(nvim, split_win, {}, {})
-  self.buffer = buf
-  self["floating?"] = false
-  return self
+  return new_prompt_wrapper(nvim, split_win, buf)
 end
+M["restore-hidden!"] = function(nvim, prompt_buf, opts)
+  local cfg = (opts or {})
+  local origin_win = cfg["origin-win"]
+  local local_layout_3f
+  if (cfg["window-local-layout"] == nil) then
+    local_layout_3f = true
+  else
+    local_layout_3f = cfg["window-local-layout"]
+  end
+  local height = math.max(1, (cfg.height or 1))
+  local split_win = open_split_win_21(origin_win, local_layout_3f, height)
+  local old_buf = (split_win and vim.api.nvim_win_is_valid(split_win) and vim.api.nvim_win_get_buf(split_win))
+  pcall(vim.api.nvim_win_set_buf, split_win, prompt_buf)
+  wipe_replaced_split_buffer_21(old_buf)
+  pcall(vim.api.nvim_win_set_height, split_win, height)
+  prompt_buffer_mod["prepare-buffer!"](prompt_buf)
+  prompt_window_opts_21(split_win)
+  return new_prompt_wrapper(nvim, split_win, prompt_buf)
+end
+M["restore-cursor!"] = function(prompt_win, cursor)
+  if (prompt_win and vim.api.nvim_win_is_valid(prompt_win)) then
+    local cursor0 = (cursor or {1, 0})
+    local row = math.max(1, (cursor0[1] or 1))
+    local col = math.max(0, (cursor0[2] or 0))
+    local line_count = math.max(1, vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(prompt_win)))
+    local row_2a = math.min(row, line_count)
+    local line = (vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(prompt_win), (row_2a - 1), row_2a, false)[1] or "")
+    local col_2a = math.min(col, #line)
+    return pcall(vim.api.nvim_win_set_cursor, prompt_win, {row_2a, col_2a})
+  else
+    return nil
+  end
+end
+M["capture-hidden-state!"] = function(session, opts)
+  local cfg = (opts or {})
+  local persist_state_21 = cfg["persist-state!"]
+  local close_directive_help_21 = cfg["close-directive-help!"]
+  if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+    if close_directive_help_21 then
+      close_directive_help_21()
+    else
+    end
+    do
+      local ok,cur = pcall(vim.api.nvim_win_get_cursor, session["prompt-win"])
+      if (ok and (type(cur) == "table")) then
+        session["hidden-prompt-cursor"] = {(cur[1] or 1), (cur[2] or 0)}
+      else
+      end
+    end
+    if persist_state_21 then
+      persist_state_21()
+    else
+    end
+    session["hidden-prompt-height"] = vim.api.nvim_win_get_height(session["prompt-win"])
+    prompt_buffer_mod["prepare-buffer!"](session["prompt-buf"])
+    if (session["prompt-buf"] and vim.api.nvim_buf_is_valid(session["prompt-buf"])) then
+      return pcall(vim.api.nvim_set_option_value, "bufhidden", "hide", {buf = session["prompt-buf"]})
+    else
+      return nil
+    end
+  else
+    return nil
+  end
+end
+M["close!"] = function(session)
+  if (session and session["prompt-win"] and vim.api.nvim_win_is_valid(session["prompt-win"])) then
+    prompt_buffer_mod["clear-modified!"](session["prompt-buf"])
+    pcall(vim.api.nvim_win_close, session["prompt-win"], true)
+  else
+  end
+  if session then
+    session["prompt-win"] = nil
+    session["prompt-window"] = nil
+    return nil
+  else
+    return nil
+  end
+end
+M["restore-focus!"] = function(session, preserve_focus_3f)
+  local prompt_win = (session and session["prompt-win"])
+  M["restore-cursor!"](prompt_win, (session and session["hidden-prompt-cursor"]))
+  if (not preserve_focus_3f and prompt_win and vim.api.nvim_win_is_valid(prompt_win)) then
+    vim.api.nvim_set_current_win(prompt_win)
+    if (session and session["ui-last-insert-mode"]) then
+      return vim.cmd("startinsert")
+    else
+      return vim.cmd("stopinsert")
+    end
+  else
+    return nil
+  end
+end
+M["prepare-buffer!"] = prompt_buffer_mod["prepare-buffer!"]
 return M

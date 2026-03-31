@@ -45,61 +45,77 @@ M["setup-state"] = function(query, mode, source_view)
     return ctx
   end
 end
+local function base_restore_view(session, src_view, current_view)
+  local use_src_scroll_3f = ((src_view.topline ~= nil) and (not (session and session["project-mode"]) or session["startup-initializing"] or clj.boolean(session["project-mode-starting?"])))
+  if use_src_scroll_3f then
+    return src_view
+  else
+    return current_view
+  end
+end
+local function restored_topline(line_count, win_height, line, base_view)
+  local base_lnum = (base_view.lnum or line)
+  local base_topline = (base_view.topline or base_lnum)
+  local offset = math.max(0, (base_lnum - base_topline))
+  local unclamped_topline = math.max(1, math.min((line - offset), line_count))
+  if (line_count <= win_height) then
+    return 1
+  else
+    return math.max(1, math.min(unclamped_topline, math.max(1, ((line_count - win_height) + 1))))
+  end
+end
+local function emit_restored_selection_21(session)
+  if session then
+    local function _10_()
+      if (session and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
+        return events.send("on-selection-change!", {session = session, ["line-nr"] = (1 + (session.meta.selected_index or 0)), ["refresh-lines"] = true})
+      else
+        return nil
+      end
+    end
+    return vim.defer_fn(_10_, 50)
+  else
+    return nil
+  end
+end
+local function selection_change_payload(session, force_refresh_3f, refresh_lines)
+  return {session = session, ["line-nr"] = (1 + (session.meta.selected_index or 0)), ["force-refresh?"] = force_refresh_3f, ["refresh-lines"] = refresh_lines}
+end
+local function emit_selection_change_21(session, force_refresh_3f, refresh_lines)
+  return events.send("on-selection-change!", selection_change_payload(session, force_refresh_3f, refresh_lines))
+end
+local function apply_restored_view_21(meta, line, topline, base_view, session)
+  local function _13_()
+    local view = vim.fn.winsaveview()
+    view["lnum"] = line
+    view["topline"] = topline
+    if (base_view.leftcol ~= nil) then
+      view["leftcol"] = base_view.leftcol
+    else
+    end
+    if (base_view.col ~= nil) then
+      view["col"] = base_view.col
+    else
+    end
+    vim.fn.winrestview(view)
+    return emit_restored_selection_21(session)
+  end
+  return vim.api.nvim_win_call(meta.win.window, _13_)
+end
 M["restore-meta-view!"] = function(meta, source_view, session, _update_info_window)
   if (meta and vim.api.nvim_win_is_valid(meta.win.window)) then
     local line_count = vim.api.nvim_buf_line_count(meta.buf.buffer)
     local line = math.max(1, math.min(meta.selected_line(), line_count))
     local win_height = math.max(1, vim.api.nvim_win_get_height(meta.win.window))
     local current_view
-    local function _8_()
+    local function _16_()
       return vim.fn.winsaveview()
     end
-    current_view = vim.api.nvim_win_call(meta.win.window, _8_)
+    current_view = vim.api.nvim_win_call(meta.win.window, _16_)
     local src_view = (source_view or {})
-    local use_src_scroll_3f = ((src_view.topline ~= nil) and (not (session and session["project-mode"]) or session["startup-initializing"] or clj.boolean(session["project-mode-starting?"])))
-    local base_view
-    if use_src_scroll_3f then
-      base_view = src_view
-    else
-      base_view = current_view
-    end
-    local base_lnum = (base_view.lnum or line)
-    local base_topline = (base_view.topline or base_lnum)
-    local offset = math.max(0, (base_lnum - base_topline))
-    local unclamped_topline = math.max(1, math.min((line - offset), line_count))
-    local topline
-    if (line_count <= win_height) then
-      topline = 1
-    else
-      topline = math.max(1, math.min(unclamped_topline, math.max(1, ((line_count - win_height) + 1))))
-    end
-    local function _11_()
-      local view = vim.fn.winsaveview()
-      view["lnum"] = line
-      view["topline"] = topline
-      if (base_view.leftcol ~= nil) then
-        view["leftcol"] = base_view.leftcol
-      else
-      end
-      if (base_view.col ~= nil) then
-        view["col"] = base_view.col
-      else
-      end
-      vim.fn.winrestview(view)
-      if session then
-        local function _14_()
-          if (session and session.meta and session.meta.win and vim.api.nvim_win_is_valid(session.meta.win.window)) then
-            return events.send("on-selection-change!", {session = session, ["line-nr"] = (1 + (session.meta.selected_index or 0)), ["refresh-lines"] = true})
-          else
-            return nil
-          end
-        end
-        return vim.defer_fn(_14_, 50)
-      else
-        return nil
-      end
-    end
-    return vim.api.nvim_win_call(meta.win.window, _11_)
+    local base_view = base_restore_view(session, src_view, current_view)
+    local topline = restored_topline(line_count, win_height, line, base_view)
+    return apply_restored_view_21(meta, line, topline, base_view, session)
   else
     return nil
   end
@@ -142,7 +158,7 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
     else
     end
     if (force_refresh or (before ~= session.meta.selected_index)) then
-      return events.send("on-selection-change!", {session = session, ["line-nr"] = (1 + (session.meta.selected_index or 0)), ["force-refresh?"] = force_refresh, ["refresh-lines"] = false})
+      return emit_selection_change_21(session, force_refresh, false)
     else
       return nil
     end
@@ -150,15 +166,18 @@ M["maybe-sync-from-main!"] = function(session, force_refresh, opts)
     return nil
   end
 end
+local function scroll_sync_eligible_3f(session)
+  return (session and not session["scroll-sync-pending"] and not session["scroll-animating?"] and not session["scroll-command-view"])
+end
 M["schedule-scroll-sync!"] = function(session, opts)
   local _let_26_ = (opts or {})
   local maybe_sync_from_main_21 = _let_26_["maybe-sync-from-main!"]
   local scroll_sync_debounce_ms = _let_26_["scroll-sync-debounce-ms"]
-  if (session and not session["scroll-sync-pending"] and not session["scroll-animating?"] and not session["scroll-command-view"]) then
+  if scroll_sync_eligible_3f(session) then
     session["scroll-sync-pending"] = true
     local function _27_()
       session["scroll-sync-pending"] = false
-      if (not session["scroll-animating?"] and not session["scroll-command-view"]) then
+      if (session and not session["scroll-animating?"] and not session["scroll-command-view"]) then
         return maybe_sync_from_main_21(session, true)
       else
         return nil

@@ -4,7 +4,7 @@
 
 ## Module Responsibilities
 
-### `hooks.fnl` (1229 lines — largest prompt module)
+### `hooks.fnl` (~524 lines after extraction passes)
 - `M.new` — Factory that creates the hooks manager. Receives a large dependency table from `router/session.fnl` (avoids circular requires).
 - Registers all prompt-related autocmds: `TextChanged`, `TextChangedI`, `CursorMoved`, `CursorMovedI`, `InsertEnter`, `InsertLeave`, `WinEnter`, `WinLeave`, `BufEnter`, `BufLeave`, `BufWritePost`.
 - `on-prompt-changed` — Core event handler: reads prompt text, detects directive changes, dispatches to `router/query_flow.fnl`.
@@ -19,6 +19,7 @@
 - Animation-aware delays: adjusts prompt evaluation timing when animations are active.
 - Event bus emission: emits lifecycle events (`:on-insert-enter!`, `:on-session-start!`, `:on-session-stop!`, `:on-mode-switch!`, etc.) via `events.send` so that compat modules and other subsystems react to prompt lifecycle changes without direct coupling.
 - Window restore: monitors `WinNew`, `VimResized`, and `OptionSet` to auto-restore Meta window layout after external disturbances.
+- Design rule: `hooks.fnl` should mainly do registration and dispatch. If an autocmd callback is doing real buffer/window work, prefer moving that work into `buffer/`, `window/`, or router/session orchestration and have hooks call into that narrower helper.
 
 ### `prompt.fnl`
 - Prompt object: wraps the prompt buffer.
@@ -68,6 +69,18 @@
 ### `init.fnl` (11 lines)
 - Barrel module: returns map of `{:prompt, :action, :keymap, :key, :keystroke, :caret, :history, :hooks, :digraph, :util}`.
 
+### `hooks_window.fnl`
+- Prompt-hook window/layout helpers extracted from `hooks.fnl`.
+- Contains overlay detection, expected-layout capture/restore, and prompt/manual resize classification.
+- If a helper is really generic window behavior rather than prompt-specific, prefer moving it onward into `window/` or shared handle utilities instead of growing this file indefinitely.
+
+### `hooks_directive.fnl`
+- Directive-help popup behavior and directive-completion helpers extracted from `hooks.fnl`.
+
+### `hooks_keymaps.fnl`
+- Prompt/main keymap application helpers extracted from `hooks.fnl`.
+- Keeps `hooks.fnl` focused on event registration instead of keymap table branching.
+
 ## Key Patterns
 
 ### Dependency Injection
@@ -101,10 +114,10 @@ Three helpers are defined inside `register!`, closing over `aug` (augroup) and `
 - `au-buf!` — Buffer-local + raw callback. Signature: `(au-buf! events buf callback)` where `callback` receives the event object. Use when the callback needs complex synchronous logic, its own `vim.schedule`, or access to the event data.
 - `au-global!` — Global (no buffer scope) + raw callback with optional opts override. Signature: `(au-global! events callback ?opts)`. Use for non-buffer-scoped autocmds like `VimResized`, `WinNew`, `WinScrolled`, `BufWritePost`. Pass `{:pattern "wrap"}` etc. via `?opts` for pattern-based autocmds like `OptionSet`.
 
-All raw `vim.api.nvim_create_autocmd` calls inside `register!` use one of these three helpers. The only direct `nvim_create_autocmd` calls remaining in hooks.fnl are the helper definitions themselves.
+All raw `vim.api.nvim_create_autocmd` calls inside `register!` should use one of these three helpers. Keep callback bodies brief and named when they do more than a trivial one-liner or a single `events.send`/`events.post`.
 
 ## Caution Points
 
-- `hooks.fnl` is large (~1230 lines) because it orchestrates all prompt-related events and now also emits lifecycle events via the event bus. Modifications should be carefully scoped — each autocmd callback has subtle interactions with debounce timing and animation delays.
+- `hooks.fnl` still has subtle debounce and animation timing behavior. Prefer extracting behavior into helper modules or buffer/window/router layers rather than expanding inline autocmd callbacks.
 - The keystroke timer in `keystroke.fnl` can race with prompt TextChanged events. The sequence detector must consume the input before the regular prompt handler sees it.
 - History navigation (`history.fnl`) behavior changes when the history browser float is open — `<Up>`/`<Down>` move the browser selection instead of cycling session history. This dual behavior is coordinated through a flag on the session object.

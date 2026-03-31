@@ -1,6 +1,6 @@
 # Router Subsystem
 
-The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) is the singleton entry point; its submodules split responsibilities into focused domains.
+The router is the central orchestrator for metabuffer. `router.fnl` is the singleton entry point; its submodules split responsibilities into focused domains.
 
 ## Module Responsibilities
 
@@ -10,8 +10,9 @@ The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) 
 - Exposes the public API called by user commands: `entry_start`, `resume`, `accept`, `cancel`, `move_selection`, `scroll_main`, `switch_mode`, `toggle_project_mode`, etc.
 - Owns `active-by-prompt` — the map from prompt buffer id to live session. This is the canonical session registry.
 - Manages prompt buffer naming (synced to origin buffer name for statusline clarity).
+- Failsafe teardown/wrapper logic now lives in `router/failsafe.fnl` instead of inflating the singleton file.
 
-### `session.fnl` (724 lines)
+### `session.fnl`
 - `start!` — Full session bootstrap: creates meta object, prompt buffer, all window wrappers, registers prompt hooks, sets keymaps, optionally bootstraps project-mode streaming.
 - `stop!` — Tears down a session: clears autocmds, destroys windows, restores stashed options, unloads buffers async.
 - `resume!` — Reactivates a previously stopped session (re-attaches windows, re-registers hooks).
@@ -19,7 +20,7 @@ The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) 
 - Builds `session.refresh-hooks`, the per-session fanout consumed by `core_events.fnl` for statusline/preview/info/context/sign refresh.
 - Wires the dependency table that hooks, actions, and query_flow modules receive.
 
-### `actions.fnl` (1216 lines — largest router file)
+### `actions.fnl` (largest router file)
 - Accept handlers: `accept-hit!` (jump to file:line), `accept-from-main!` (when results buffer focused).
 - Cancel handler: `cancel!` (restore viewport, teardown).
 - Toggle handlers: `toggle-project-mode!`, `toggle-scan-option!`.
@@ -27,6 +28,7 @@ The router is the central orchestrator for metabuffer. `router.fnl` (723 lines) 
 - Push: `push-to-origin!` writes metabuffer content over origin entirely.
 - Window teardown orchestration: destroys windows in correct order, restores airline, clears autocmds.
 - Uses shared `router.util/silent-win-set-buf!` when swapping buffers into windows without surfacing transient file messages.
+- Ongoing cleanup target: keep low-level buffer/window manipulation in `buffer/` and `window/` wrappers where possible, with `actions.fnl` sequencing those operations instead of open-coding them.
 
 ### `query_flow.fnl` (375 lines)
 - `apply-prompt-lines!` — The core filter pipeline. Reads prompt text → parses directives → decides if source/transform needs reload → runs matcher filter → triggers buffer render.
@@ -86,7 +88,7 @@ This pattern prevents Lua `require` cycles. Submodules never require `router.fnl
 
 ## Caution Points
 
-- `actions.fnl` is the largest file (1216 lines) and handles many responsibilities. When modifying accept/cancel flow, trace the full teardown sequence carefully — window destruction order matters.
+- `actions.fnl` and `session.fnl` are still active cleanup targets. Prefer extracting narrowly named lifecycle helpers rather than growing monolithic teardown/startup functions.
 - The debounce in `query_flow.fnl` interacts with the idle-window detection in `prompt.fnl` — changes to timing must consider both.
 - Project mode bootstrap in `session.fnl` sets up an async streaming callback. The session must stay alive until `stream-done` is set; premature teardown causes orphaned timers.
 - Query/navigation/startup code should emit lifecycle events and rely on `session.refresh-hooks` + `core_events.fnl` for UI fanout. Reintroducing direct preview/info/context refresh chains defeats the feature-22 architecture.

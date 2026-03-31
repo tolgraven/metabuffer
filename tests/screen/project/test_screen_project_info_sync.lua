@@ -35,4 +35,32 @@ T['project hit buffer and info window stay in sync while typing and deleting'] =
   eq(H.str_contains(snap2.line, tostring(ref2.lnum)), true)
 end)
 
+T['project info refreshes after scrolling and then filtering'] = H.timed_case(function()
+  local root = H.make_temp_project()
+  H.open_project_meta_in_dir(root, 'main.txt')
+
+  H.wait_for(function() return H.session_hit_count() > 20 end, 6000)
+  H.scroll_main_and_wait('page-down', 4000)
+
+  local before = H.session_info_snapshot()
+  eq(type(before), 'table')
+  eq(before.line ~= '', true)
+
+  H.type_prompt_human('meta', 25)
+  H.wait_for(function() return H.session_query_text() == 'meta' end, 6000)
+  H.wait_for(function()
+    local ref = H.session_selected_ref()
+    local snap = H.session_info_snapshot()
+    return type(ref) == 'table'
+      and type(snap) == 'table'
+      and H.str_contains(snap.line, vim.fn.fnamemodify(ref.path, ':t'))
+      and H.str_contains(snap.line, tostring(ref.lnum))
+  end, 6000)
+
+  local ref = H.session_selected_ref()
+  local snap = H.session_info_snapshot()
+  eq(H.str_contains(snap.line, vim.fn.fnamemodify(ref.path, ':t')), true)
+  eq(H.str_contains(snap.line, tostring(ref.lnum)), true)
+end)
+
 return T

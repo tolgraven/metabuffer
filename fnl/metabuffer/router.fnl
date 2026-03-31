@@ -10,6 +10,7 @@
 (local history_browser_window_mod (require :metabuffer.window.history_browser))
 (local project_source_mod (require :metabuffer.project.source))
 (local base_buffer (require :metabuffer.buffer.base))
+(local prompt_buffer_mod (require :metabuffer.buffer.prompt))
 (local session_view (require :metabuffer.session.view))
 (local debug (require :metabuffer.debug))
 (local config (require :metabuffer.config))
@@ -22,6 +23,7 @@
 (local router_prompt_mod (require :metabuffer.router.prompt))
 (local router_query_flow_mod (require :metabuffer.router.query_flow))
 (local router_actions_mod (require :metabuffer.router.actions))
+(local router_failsafe_mod (require :metabuffer.router.failsafe))
 (local router_navigation_mod (require :metabuffer.router.navigation))
 (local router_session_mod (require :metabuffer.router.session))
 
@@ -29,17 +31,7 @@
 
 (fn sync-prompt-buffer-name!
   [session]
-  (when (and session
-             session.prompt-buf
-             (vim.api.nvim_buf_is_valid session.prompt-buf)
-             session.meta
-             session.meta.buf
-             (= (type session.meta.buf.name) "string")
-             (~= session.meta.buf.name ""))
-    (pcall
-      vim.api.nvim_buf_set_name
-      session.prompt-buf
-      (.. session.meta.buf.name " [Prompt]"))))
+  (prompt_buffer_mod.sync-name! session))
 
 (set M.instances {})
 (set M._instance-seq 0)
@@ -639,95 +631,16 @@
     (if resume
         (M.entry_resume w)
         (M.entry_start w false))))
-
-(fn clear-table!
-  [tbl]
-  (each [k _ (pairs (or tbl {}))]
-    (set (. tbl k) nil)))
-
-(fn add-session!
-  [seen sessions session]
-  (when (and session
-             (= (type session) "table")
-             (not (. seen session)))
-    (set (. seen session) true)
-    (table.insert sessions session)))
-
-(fn maybe-close-win!
-  [win]
-  (when (and win (vim.api.nvim_win_is_valid win))
-    (pcall vim.api.nvim_win_close win true)))
-
-(fn maybe-delete-buf!
-  [buf]
-  (when (and buf (vim.api.nvim_buf_is_valid buf))
-    (pcall vim.api.nvim_set_option_value "modified" false {:buf buf})
-    (pcall vim.api.nvim_buf_delete buf {:force true})))
-
-(fn M.fail-safe-teardown!
-  [where err]
-  (set M._last-failsafe {:where where :error (tostring err)})
-  (when-not M._teardown-in-progress
-    (set M._teardown-in-progress true)
-    (let [seen {}
-          sessions {}]
-      (each [_ session (pairs (or M.instances {}))]
-        (add-session! seen sessions session))
-      (each [_ session (pairs (or M.active-by-prompt {}))]
-        (add-session! seen sessions session))
-      (each [_ session (pairs (or M.active-by-source {}))]
-        (add-session! seen sessions session))
-      (each [_ session (ipairs sessions)]
-        (pcall router_actions_mod.remove-session! actions-deps session)
-        (maybe-close-win! session.prompt-win)
-        (maybe-delete-buf! session.prompt-buf)
-        (when (and session.meta session.meta.win)
-          (maybe-close-win! session.meta.win.window))
-        (when (and session.meta session.meta.buf)
-          (maybe-delete-buf! session.meta.buf.buffer))
-        (when (and (= (type info-window) "table")
-                   info-window.close-window!)
-          (pcall info-window.close-window! session))
-        (when (and (= (type preview-window) "table")
-                   preview-window.close-window!)
-          (pcall preview-window.close-window! session))
-        (when (and (= (type context-window) "table")
-                   context-window.close-window!)
-          (pcall context-window.close-window! session))
-        (when history-api
-          (pcall history-api.close-history-browser! session))))
-    (clear-table! M.instances)
-    (clear-table! M.active-by-prompt)
-    (clear-table! M.active-by-source)
-    (clear-table! M.launching-by-source)
-    (set M._teardown-in-progress false))
-  (vim.schedule
-    (fn []
-      (vim.notify
-        (.. "metabuffer: torn down after error in " (tostring where) "\n" (tostring err))
-        vim.log.levels.ERROR))))
-
-(fn wrap-public-api-with-failsafe!
-  []
-  (when-not M._failsafe-wrapped
-    (each [k v (pairs M)]
-      (when (and (= (type k) "string")
-                 (= (type v) "function")
-                 (not (vim.startswith k "_"))
-                 (~= k "configure")
-                 (~= k "fail-safe-teardown!"))
-        (set (. M k)
-             (fn [...]
-               (let [res [(pcall v ...)]
-                     ok (. res 1)
-                     result (. res 2)]
-                 (if ok
-                     (unpack res 2)
-                     (do
-                       (M.fail-safe-teardown! k result)
-                       (error result))))))))
-    (set M._failsafe-wrapped true)))
-
-(wrap-public-api-with-failsafe!)
+(let [failsafe (router_failsafe_mod.new
+                  {:router M
+                   :base-buffer base_buffer
+                   :router-actions-mod router_actions_mod
+                   :actions-deps actions-deps
+                   :info-window info-window
+                   :preview-window preview-window
+                   :context-window context-window
+                   :history-api history-api})]
+  (set M.fail-safe-teardown! (. failsafe :fail-safe-teardown!))
+  ((. failsafe :wrap-public-api-with-failsafe!)))
 
 M

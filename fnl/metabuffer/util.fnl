@@ -111,6 +111,24 @@
   "Public API: M.win-valid?."
   (and win (vim.api.nvim_win_is_valid win)))
 
+(fn M.hide-global-cursor!
+  [owner hidden-key saved-key]
+  "Hide the global cursor while marking OWNER[HIDDEN-KEY]. Expected output: nil."
+  (when (and owner (not (. owner hidden-key)))
+    (let [[ok current] [(pcall vim.api.nvim_get_option_value "guicursor" {:scope "global"})]]
+      (set (. owner saved-key) (if ok current vim.o.guicursor))
+      (set (. owner hidden-key) true)
+      (pcall vim.api.nvim_set_option_value "guicursor" "a:ver0" {:scope "global"}))))
+
+(fn M.restore-global-cursor!
+  [owner hidden-key saved-key]
+  "Restore the global cursor from OWNER[SAVED-KEY]. Expected output: nil."
+  (when (and owner (. owner hidden-key))
+    (let [value (or (. owner saved-key) vim.o.guicursor)]
+      (set (. owner hidden-key) false)
+      (set (. owner saved-key) nil)
+      (pcall vim.api.nvim_set_option_value "guicursor" value {:scope "global"}))))
+
 (fn M.deepcopy
   [x]
   "Public API: M.deepcopy."

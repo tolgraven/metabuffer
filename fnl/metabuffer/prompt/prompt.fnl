@@ -30,6 +30,80 @@
        (vim.endswith s ">")
        (string.match (string.sub s 2 (- (# s) 1)) "^%w+:%w+.*$")))
 
+(fn insert-text!
+  [self txt]
+  (let [locus (self.caret.get-locus)]
+    (set self.text (.. (self.caret.get-backward-text)
+                       txt
+                       (self.caret.get-selected-text)
+                       (self.caret.get-forward-text)))
+    (self.caret.set-locus (+ locus (# txt)))))
+
+(fn replace-text!
+  [self txt]
+  (let [locus (self.caret.get-locus)]
+    (set self.text (.. (self.caret.get-backward-text)
+                       txt
+                       (string.sub (self.caret.get-forward-text) (# txt))))
+    (self.caret.set-locus (+ locus (# txt)))))
+
+(fn update-text!
+  [self txt]
+  (if (= self.insert-mode M.INSERT_MODE_INSERT)
+      (insert-text! self txt)
+      (replace-text! self txt)))
+
+(fn redraw-prompt!
+  [self]
+  (let [backward (self.caret.get-backward-text)
+        selected (self.caret.get-selected-text)
+        forward (self.caret.get-forward-text)]
+    (vim.cmd
+      (table.concat
+        ["redraw"
+         (util.build_echon_expr self.prefix self.highlight-prefix)
+         (util.build_echon_expr backward self.highlight-text)
+         (util.build_echon_expr selected self.highlight-caret)
+         (util.build_echon_expr forward self.highlight-text)]
+        "|"))
+    (when self.is-macvim
+      (vim.cmd "redraw"))))
+
+(fn on-keypress
+  [self keystroke]
+  (let [s (tostring keystroke)]
+    (if (is_action_keystroke s)
+        (let [action (string.sub s 2 (- (# s) 1))
+              ret (self.action.call self action)]
+          (when (= (type ret) "number") ret))
+        (update-text! self s))))
+
+(fn run-prompt-loop!
+  [self]
+  (var status (or (self.on-init) M.STATUS_PROGRESS))
+  (debug-log (.. "[prompt] start status=" (tostring status)))
+  (let [timeoutlen (when vim.o.timeout (/ vim.o.timeoutlen 1000.0))]
+    (let [[ok err] [(pcall
+                      (fn []
+                        (set status (or (self.on-update status) M.STATUS_PROGRESS))
+                        (debug-log (.. "[prompt] post-init-update status=" (tostring status)))
+                        (while (= status M.STATUS_PROGRESS)
+                          (self.on-redraw)
+                          (let [stroke (self.keymap.harvest self.nvim timeoutlen self.on-harvest self.harvest-interval)]
+                            (debug-log (.. "[prompt] stroke=" (tostring stroke)))
+                            (set status (or (self.on-keypress stroke) M.STATUS_PROGRESS))
+                            (debug-log (.. "[prompt] post-keypress status=" (tostring status)))
+                            (set status (or (self.on-update status) status))))))]]
+      (when-not ok
+        (debug-log (.. "[prompt] error=" (tostring err)))
+        (if (or (= err "Keyboard interrupt") (string.find (tostring err) "Keyboard interrupt"))
+            (set status M.STATUS_INTERRUPT)
+            (error err)))))
+  (when (~= self.text "")
+    (vim.fn.histadd "input" self.text))
+  (debug-log (.. "[prompt] term status=" (tostring status)))
+  (self.on-term status))
+
 (fn M.new
   [nvim]
   "Public API: M.new."
@@ -49,42 +123,19 @@
 
     (fn self.insert-text
       [txt]
-      (let [locus (self.caret.get-locus)]
-        (set self.text (.. (self.caret.get-backward-text)
-                           txt
-                           (self.caret.get-selected-text)
-                           (self.caret.get-forward-text)))
-        (self.caret.set-locus (+ locus (# txt)))))
+      (insert-text! self txt))
 
     (fn self.replace-text
       [txt]
-      (let [locus (self.caret.get-locus)]
-        (set self.text (.. (self.caret.get-backward-text)
-                           txt
-                           (string.sub (self.caret.get-forward-text) (# txt))))
-        (self.caret.set-locus (+ locus (# txt)))))
+      (replace-text! self txt))
 
     (fn self.update-text
       [txt]
-      (if (= self.insert-mode M.INSERT_MODE_INSERT)
-          (self.insert-text txt)
-          (self.replace-text txt)))
+      (update-text! self txt))
 
     (fn self.redraw-prompt
       []
-      (let [backward (self.caret.get-backward-text)
-            selected (self.caret.get-selected-text)
-            forward (self.caret.get-forward-text)]
-        (vim.cmd
-          (table.concat
-            ["redraw"
-             (util.build_echon_expr self.prefix self.highlight-prefix)
-             (util.build_echon_expr backward self.highlight-text)
-             (util.build_echon_expr selected self.highlight-caret)
-             (util.build_echon_expr forward self.highlight-text)]
-            "|"))
-        (when self.is-macvim
-          (vim.cmd "redraw"))))
+      (redraw-prompt! self))
 
   (fn self.on-init
   []
@@ -103,15 +154,10 @@
 
     (fn self.on-keypress
       [keystroke]
-      (let [s (tostring keystroke)]
-        (if (is_action_keystroke s)
-            (let [action (string.sub s 2 (- (# s) 1))
-                  ret (self.action.call self action)]
-              ;; Only numeric return values are treated as prompt statuses.
-              ;; Side-effect actions may return ""/other truthy values (from vim.cmd),
-              ;; which must not terminate the prompt loop.
-              (when (= (type ret) "number") ret))
-            (self.update-text s))))
+      ;; Only numeric return values are treated as prompt statuses.
+      ;; Side-effect actions may return ""/other truthy values (from vim.cmd),
+      ;; which must not terminate the prompt loop.
+      (on-keypress self keystroke))
 
   (fn self.on-term
   [status]
@@ -130,29 +176,7 @@
 
     (fn self.start
       []
-      (var status (or (self.on-init) M.STATUS_PROGRESS))
-      (debug-log (.. "[prompt] start status=" (tostring status)))
-      (let [timeoutlen (when vim.o.timeout (/ vim.o.timeoutlen 1000.0))]
-        (let [[ok err] [(pcall
-                          (fn []
-                            (set status (or (self.on-update status) M.STATUS_PROGRESS))
-                            (debug-log (.. "[prompt] post-init-update status=" (tostring status)))
-                            (while (= status M.STATUS_PROGRESS)
-                              (self.on-redraw)
-                              (let [stroke (self.keymap.harvest self.nvim timeoutlen self.on-harvest self.harvest-interval)]
-                                (debug-log (.. "[prompt] stroke=" (tostring stroke)))
-                                (set status (or (self.on-keypress stroke) M.STATUS_PROGRESS))
-                                (debug-log (.. "[prompt] post-keypress status=" (tostring status)))
-                                (set status (or (self.on-update status) status))))))]]
-          (when-not ok
-            (debug-log (.. "[prompt] error=" (tostring err)))
-            (if (or (= err "Keyboard interrupt") (string.find (tostring err) "Keyboard interrupt"))
-                (set status M.STATUS_INTERRUPT)
-                (error err)))))
-      (when (~= self.text "")
-        (vim.fn.histadd "input" self.text))
-      (debug-log (.. "[prompt] term status=" (tostring status)))
-      (self.on-term status))
+      (run-prompt-loop! self))
 
     self))
 

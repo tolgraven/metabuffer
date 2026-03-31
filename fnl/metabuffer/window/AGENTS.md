@@ -30,19 +30,31 @@
 - Line wrap persistence: wrap setting survives across sessions via state file.
 - Statusline: shows file path of previewed file, positioned under the preview column.
 
-### `info.fnl` (994 lines — largest window module)
-- Floating info panel showing metadata for the selected hit.
-- Two render modes:
-  1. **Hit info**: file path, line number, git blame, file size, permissions, etc.
-  2. **Project loading**: winbar-only progress (`N/M files`) during bootstrap while the buffer shows skeleton rows or already-available visible hit info.
-- Info window winbar should only be populated while loading is actually pending; clear it once the info slice is settled.
-- Buffer shaping must never introduce empty visible rows; use faded skeleton placeholders while async detail fill catches up, and prioritize rendering the current visible page before background loading continues.
-- `build-info-lines` — Constructs the info line table from hit metadata.
-- `render-info-lines!` — Writes lines to info buffer with highlight namespaces.
-- `schedule-info-highlight-fill!` — Async highlight application to avoid blocking.
-- `project-loading-pending?` — Determines whether to show loading view vs hit info. Only true during actual bootstrap (`startup`, `bootstrap-pending`, `not bootstrapped`, `not stream-done`), NOT during lazy refresh operations.
-- Info rerender signatures should include the concrete ref slice and active source mode, not just index counts, so source switches like `#file` cannot leave stale content in place.
-- Accounts for host window winbar when positioning (row offset).
+### `info.fnl`
+- Top-level info-window composition module.
+- Wires float lifecycle (`info_float.fnl`), viewport sizing (`info_viewport.fnl`), line building (`info_row.fnl`), regular-mode updates (`info_regular.fnl`), and project-mode policy from `project/info_view.fnl`.
+- Keep it as orchestration; do not let concrete render/update policy drift back into this file.
+
+### `info_float.fnl`
+- Float lifecycle and geometry helpers extracted from `info.fnl`.
+- Keeps float/window concerns separate from project-mode content policy.
+
+### `info_render.fnl`
+- Shared render primitives for the info buffer.
+- Owns `render-info-lines!`, selection highlight sync, and composition of row-builder + viewport + regular-mode updater.
+
+### `info_regular.fnl`
+- Regular-mode info update policy.
+- Owns rerender signatures, current-range refresh, and async line-meta refetch scheduling.
+- If the selected line or visible slice changes, this layer decides whether to rerender or just resync the viewport/highlight.
+
+### `info_row.fnl`
+- Builds concrete info buffer rows and synchronous/deferred highlight specs.
+- Extension/icon coloring should stay here or in shared highlight helpers, not in float/layout code.
+
+### `info_viewport.fnl`
+- Owns visible-range math, info-buffer shaping, and topline sync.
+- If the info view gets out of sync with the results viewport, fix it here rather than in project/ or prompt hooks.
 
 ### `animation.fnl` (580 lines)
 - Dual-backend animation system:
@@ -86,7 +98,7 @@ router → info.update!
 router → context.update!  (if visible)
 router → statusline rebuild
 ```
-Window modules receive their update call and act independently. They never import or call each other.
+Window modules receive their update call and act independently. They never import or call each other directly.
 
 ### Option Stash/Restore
 `base.fnl` provides the stash/restore mechanism inherited by all window wrappers. On creation, window-local options are saved; on teardown they are restored to their pre-Meta values. This prevents Meta from permanently altering the user's window configuration.
@@ -96,7 +108,7 @@ Airline compatibility is now handled by `compat/airline.fnl` via the event bus. 
 
 ## Caution Points
 
-- `info.fnl` is the most complex module (994 lines). The loading-vs-hit-info mode switch is sensitive — `project-loading-pending?` must only return true during actual bootstrap, not during lazy refresh operations (this was a previous bug).
+- `info.fnl` should stay thin. Push row building into `info_row.fnl`, regular-mode policy into `info_regular.fnl`, viewport math into `info_viewport.fnl`, and project-mode policy into `project/info_view.fnl`.
 - Animation cancellation tokens are per-session. Failing to cancel on teardown causes timer leaks and ghost updates to destroyed buffers.
 - Preview horizontal scroll interacts with wrap setting. When wrap is on, horizontal scroll is disabled.
 - Float positioning must account for winbar (row offset +1 when winbar present).
