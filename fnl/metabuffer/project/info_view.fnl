@@ -8,7 +8,8 @@
   (let [{: startup-layout-pending? : loading-skeleton-lines : info-height
          : ensure-info-window : settle-info-window! : refresh-info-statusline!
          : render-info-lines! : sync-info-selection! : refs-slice-sig
-         : info-visible-range : fit-info-width! : info-max-lines : debug-log : valid-info-win?
+         : info-visible-range : fit-info-width! : set-info-topline!
+         : info-max-lines : debug-log : valid-info-win?
          } opts]
     (var update-project! nil)
     (fn project-loading-pending?
@@ -99,9 +100,10 @@
             ""))))
 
     (fn project-info-force-refresh?
-      [session refresh-lines loading-changed?]
+      [session meta refresh-lines loading-changed?]
       (or refresh-lines
           loading-changed?
+          (~= (or session.info-last-selected-index -1) (or meta.selected_index -1))
           (= session.info-render-sig nil)
           session.info-project-loading-active?
           session.info-showing-project-loading?))
@@ -125,12 +127,12 @@
       (let [idxs (or meta.buf.indices [])
             refs (or meta.buf.source-refs [])]
         (table.concat
-          [(or session.info-max-width 0)
-           wanted-start
-           wanted-stop
-           (or meta.selected_index 0)
+          [(tostring (or session.info-max-width 0))
+           (tostring wanted-start)
+           (tostring wanted-stop)
+           (tostring (or meta.selected_index 0))
            (refs-slice-sig session refs idxs wanted-start wanted-stop)
-           (or session.info-project-loading-active? false)]
+           (tostring (or session.info-project-loading-active? false))]
           "|")))
 
     (fn schedule-project-info-finish-refresh!
@@ -176,9 +178,9 @@
                  (when (and (not session.info-render-suspended?)
                             session.info-buf
                             (vim.api.nvim_buf_is_valid session.info-buf))
-                   (let [meta session.meta
-                         loading-finished? true
-                         force-refresh? (project-info-force-refresh? session refresh-lines loading-changed?)
+                     (let [meta session.meta
+                           loading-finished? true
+                         force-refresh? (project-info-force-refresh? session meta refresh-lines loading-changed?)
                          {: wanted-start : wanted-stop : out-of-range : range-changed}
                          (project-info-range-state session meta)
                          sig (project-info-render-sig session meta wanted-start wanted-stop)
@@ -190,8 +192,12 @@
                          wanted-start
                          wanted-stop
                          loading-finished?))
+                     (when (and (not (or force-refresh? out-of-range range-changed sig-changed?))
+                                set-info-topline!)
+                       (set-info-topline! session wanted-start))
                      (when loading-changed?
                        (schedule-project-info-finish-refresh! session))
+                     (set session.info-last-selected-index (or meta.selected_index -1))
                      (set session.info-last-project-loading? false)
                      (sync-info-selection! session meta))))))))
 

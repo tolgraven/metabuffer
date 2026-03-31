@@ -13,6 +13,7 @@ M.new = function(opts)
   local refs_slice_sig = opts["refs-slice-sig"]
   local info_visible_range = opts["info-visible-range"]
   local fit_info_width_21 = opts["fit-info-width!"]
+  local set_info_topline_21 = opts["set-info-topline!"]
   local info_max_lines = opts["info-max-lines"]
   local debug_log = opts["debug-log"]
   local valid_info_win_3f = opts["valid-info-win?"]
@@ -118,8 +119,8 @@ M.new = function(opts)
       return nil
     end
   end
-  local function project_info_force_refresh_3f(session, refresh_lines, loading_changed_3f)
-    return (refresh_lines or loading_changed_3f or (session["info-render-sig"] == nil) or session["info-project-loading-active?"] or session["info-showing-project-loading?"])
+  local function project_info_force_refresh_3f(session, meta, refresh_lines, loading_changed_3f)
+    return (refresh_lines or loading_changed_3f or ((session["info-last-selected-index"] or -1) ~= (meta.selected_index or -1)) or (session["info-render-sig"] == nil) or session["info-project-loading-active?"] or session["info-showing-project-loading?"])
   end
   local function project_info_range_state(session, meta)
     local idxs = (meta.buf.indices or {})
@@ -134,7 +135,7 @@ M.new = function(opts)
   local function project_info_render_sig(session, meta, wanted_start, wanted_stop)
     local idxs = (meta.buf.indices or {})
     local refs = (meta.buf["source-refs"] or {})
-    return table.concat({(session["info-max-width"] or 0), wanted_start, wanted_stop, (meta.selected_index or 0), refs_slice_sig(session, refs, idxs, wanted_start, wanted_stop), (session["info-project-loading-active?"] or false)}, "|")
+    return table.concat({tostring((session["info-max-width"] or 0)), tostring(wanted_start), tostring(wanted_stop), tostring((meta.selected_index or 0)), refs_slice_sig(session, refs, idxs, wanted_start, wanted_stop), tostring((session["info-project-loading-active?"] or false))}, "|")
   end
   local function schedule_project_info_finish_refresh_21(session)
     if not session["info-project-finish-refresh-pending?"] then
@@ -174,7 +175,7 @@ M.new = function(opts)
       if (not session["info-render-suspended?"] and session["info-buf"] and vim.api.nvim_buf_is_valid(session["info-buf"])) then
         local meta = session.meta
         local loading_finished_3f = true
-        local force_refresh_3f = project_info_force_refresh_3f(session, refresh_lines, loading_changed_3f)
+        local force_refresh_3f = project_info_force_refresh_3f(session, meta, refresh_lines, loading_changed_3f)
         local _let_19_ = project_info_range_state(session, meta)
         local wanted_start = _let_19_["wanted-start"]
         local wanted_stop = _let_19_["wanted-stop"]
@@ -186,10 +187,15 @@ M.new = function(opts)
           rerender_project_info_21(session, meta, wanted_start, wanted_stop, loading_finished_3f)
         else
         end
+        if (not (force_refresh_3f or out_of_range or range_changed or sig_changed_3f) and set_info_topline_21) then
+          set_info_topline_21(session, wanted_start)
+        else
+        end
         if loading_changed_3f then
           schedule_project_info_finish_refresh_21(session)
         else
         end
+        session["info-last-selected-index"] = (meta.selected_index or -1)
         session["info-last-project-loading?"] = false
         return sync_info_selection_21(session, meta)
       else

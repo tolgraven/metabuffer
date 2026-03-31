@@ -19,7 +19,7 @@ local function launch_source_label(session)
   end
 end
 local function show_launch_message_21(session)
-  if session then
+  if (session and not session["project-mode"]) then
     local function _3_()
       return vim.api.nvim_echo({{("Metabuffer \226\128\162 " .. launch_source_label(session) .. " \226\128\162 instance " .. tostring((session["instance-id"] or "?"))), "ModeMsg"}}, true, {})
     end

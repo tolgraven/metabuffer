@@ -113,6 +113,7 @@ end
 local function refresh_selection_ui_21(args)
   local session = args.session
   local hooks = refresh_hooks(session)
+  local refresh_lines_3f = (clj.boolean(args["refresh-lines"]) or (session and session["project-mode"]))
   if (session and clj.boolean(args["force-refresh?"])) then
     local val_110_auto = hooks["source-syntax!"]
     if val_110_auto then
@@ -122,7 +123,7 @@ local function refresh_selection_ui_21(args)
     end
   else
   end
-  return refresh_ui_21(args)
+  return refresh_ui_21(vim.tbl_extend("force", args, {["refresh-lines"] = refresh_lines_3f}))
 end
 local function refresh_project_info_21(args)
   local session = args.session

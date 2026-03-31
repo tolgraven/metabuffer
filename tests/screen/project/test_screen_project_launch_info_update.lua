@@ -54,6 +54,7 @@ T['info window updates automatically when typing in prompt during project mode']
   local settled_info_view = H.session_info_view()
   eq(settled_snap.count > 0, true, "Info window should still be populated after project loading finishes")
   eq(settled_snap.line ~= '', true, "Info window should not go blank after the loading phase")
+  eq(settled_snap.first_visible ~= '', true, "Info window should not leave the first visible row blank after loading finishes")
   eq(settled_winbar, '', "Info window winbar should clear after project loading finishes")
   if initial_winbar ~= '' and initial_info_view and settled_info_view then
     eq(initial_info_view.topline, settled_info_view.topline)
@@ -75,6 +76,7 @@ T['info window updates automatically when typing in prompt during project mode']
 
   local moved_after_load = H.session_info_snapshot()
   eq(moved_after_load.line ~= settled_snap.line, true, "Info window should keep changing after project loading finishes")
+  eq(moved_after_load.first_visible ~= '', true, "Info window should keep a non-blank first visible row after project loading finishes")
 
   H.wait_for(function() return H.session_hit_count() > 20 end, 5000)
   H.scroll_main_and_wait('page-down', 5000)
@@ -85,6 +87,7 @@ T['info window updates automatically when typing in prompt during project mode']
       and type(snap) == 'table'
       and H.str_contains(snap.line, vim.fn.fnamemodify(ref.path, ':t'))
       and H.str_contains(snap.line, tostring(ref.lnum))
+      and snap.first_visible ~= ''
       and snap.line ~= moved_after_load.line
   end, 5000)
 

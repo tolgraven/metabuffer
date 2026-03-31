@@ -57,7 +57,8 @@
     (set session.info-project-finish-refresh-pending? false)
     (set session.info-highlight-fill-pending? false)
     (set session.info-showing-project-loading? nil)
-    (set session.info-project-loading-active? nil)))
+    (set session.info-project-loading-active? nil)
+    (set session.info-last-selected-index nil)))
 
 (fn resolve-parsed-query
   [query-mod session parsed]

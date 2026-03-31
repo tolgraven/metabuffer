@@ -21,7 +21,7 @@
 
 (fn show-launch-message!
   [session]
-  (when session
+  (when (and session (not session.project-mode))
     (vim.schedule
       (fn []
         (vim.api.nvim_echo

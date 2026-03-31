@@ -52,6 +52,7 @@ local function invalidate_info_refresh_state_21(session)
     session["info-highlight-fill-pending?"] = false
     session["info-showing-project-loading?"] = nil
     session["info-project-loading-active?"] = nil
+    session["info-last-selected-index"] = nil
     return nil
   else
     return nil

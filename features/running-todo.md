@@ -1,5 +1,4 @@
 # File for tracking stuff I think of while you work
-
 ## These are to be checked off as they are completed, and later (assuming previously committed to git) manually cleared so as to not clutter.
 - 1 [x] Any earlier hlsearch should be cleared when invoking Meta.
 - 2 [x] prompt window scratch buffer should also be renamed (to the same as existing statusline) so looks better when navigating away from tmux split and airline or similar does a statusline modification overriding us.
@@ -83,7 +82,7 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 73 [x] meta doesn't update file cache even when closed and restarted (possibly due to session reusage?). Need a refresh keybind for now, and (later on) file watcher support.
 - 74 [] popup window for completion information doesn't update contents when you select a new option with <Tab>
 - 75 [] investigate why unit tests take ~100ms while even basic screen tests take several seconds - even launching my full nvim config with hundreds of plugins and thousands of lines of init.vim, and then launching metabuffer, doesn't take remotely that long.
-- 76 [] the winbar for the info window remains visible even when not loading, and causes everything to be offset by one line. It should cause no offset and only be visible while loading, as an indicator.
+- 76 [x] the winbar for the info window remains visible even when not loading, and causes everything to be offset by one line. It should cause no offset and only be visible while loading, as an indicator.
 - 77 [x] you have made assumptions about backwards compatibility being required, when making major changes. But there are no users yet, and we do not need to preserve support for any legacy functionality. Do a full cleanup sweep removing dead code and shimmed support for outdated functionality. Also look for duplicate implementations of the same things after our move towards having everything going through event bus.
 - 78 [] we have many, many functions that are way too long. Aim for max around 30-40 lines, most much shorter unless good reason, and don't nest so much but rather break out chunks so that we have "sequencing functions" that mostly just call other functions with the actual work. This is especially true for impure functions that do a bunch of stuff that doesn't actually get returned but simply side effects. Offload this work into separate bang functions.
 - 79 [] prompt completion popup (info above prompt) doesn't disappear when pressing <CR> to go to a hit.
@@ -95,3 +94,6 @@ abuffer/metabuffer/lua/metabuffer/router.lua:332>"
 - 85 [] a number of animations we used to have are now gone. For example info window fading in opacity, scroll (<C-d> etc) animations. Only the animated appearance of the prompt/preview splits are still in place.
 - 86 [x] regression: jumping to file hit from project mode opens file with absolute path instead of relative
 - 87 [] an easy to hook into functionality for custom context (requires #68 first) so that codebases can have a quick LLM-built adapter that would follow indirection such as an untyped event bus in our case. Or for re-frame, subscriptions and events. In re-frame case, subs would appear on left as inputs, events on right as outputs/calls, showing handlers. The adapter would then simply point to subscriptions and events respectively, that then get loaded into the right slots, in the order referenced.
+- 88 [] make a pcall wrapper (or modify + externalize the event bus one) that doesn't swallow errors but either surfaces or logs them.
+- 89 [] bottom message line gets updated from custom one when metabuffer starts to "buffer [...]" regular file open thing after scrolling
+- 90 [] we are doing a lot of needless destructuring and separate `set` calls where a single set with a merge (possibly together with `clj.select-keys` or similar) would suffice and reduce line-count. Many functions have far too many args, try to compact most into (similarly constructed) opts/spec maps. Ensure we have util functions for setting properties on both buffers and windows when constructing them, which we can just pass a map. Generally our interop with nvim should preferably be performed in utility functions whenever feasible.
