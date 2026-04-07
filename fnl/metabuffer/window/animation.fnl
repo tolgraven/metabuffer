@@ -521,13 +521,11 @@ Expected output: config table."
       (when (and (= (type return-mode) "string")
                  (vim.startswith return-mode "i"))
         (pcall vim.cmd "stopinsert"))
-      (pcall vim.api.nvim_set_current_win win)
       (vim.schedule
         (fn []
           (if (and (active?) (vim.api.nvim_win_is_valid win))
               (do
-                (pcall vim.api.nvim_set_current_win win)
-                (action)
+                (pcall vim.api.nvim_win_call win action)
                 (mini-after! "scroll" duration-ms finish!))
               (finish!)))))))
 

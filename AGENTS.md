@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-- Project: `metabuffer` (Neovim plugin), Fennel-first port of `metabuffer.nvim` (Python remote plugin).
+- Project: `Metabuffer` (Neovim plugin), Fennel-first port of `metabuffer.nvim` (Python remote plugin).
 - Source of truth: `fnl/`.
 - Generated runtime code committed to repo: `lua/` and `plugin/`.
 - Main entrypoints:
@@ -28,11 +28,11 @@
 
 **Always use `make` targets, never the underlying scripts directly.** The Makefile sets `XDG_STATE_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, and `NVIM_APPNAME` automatically so headless Neovim runs stay sandboxed.
 
-- Compile all Fennel → Lua:
-  - `make` (or `make compile`)
 - Run the normal one-shot local verification flow:
   - `make full`
-  - runs `make check-fnl` and then `make test` (which already compiles)
+  - runs `make check-fnl` and then `make test` (which does a compile first)
+- To just compile all Fennel → Lua:
+  - `make` (or `make compile`)
 - Lint Fennel + Lua:
   - `make check` (both), `make check-fnl` (fennel-ls only), `make check-lua` (lua-language-server only)
   - Lint a single file: `make check-fnl -- fnl/metabuffer/window/info.fnl`
@@ -62,10 +62,9 @@
 
 ## Important Session Notes
 
-- The previous raw compiler flow (`fennel --compile`) was replaced with headless Neovim + `metabuffer.nfnl.api` compile flow.
 - `scripts/compile-fennel.sh` must not delete `lua/`; deleting it removes vendored `lua/metabuffer/nfnl`.
 - nfnl trust behavior in headless environments can block `.nfnl.fnl` (`vim.secure.read` untrusted); compile script includes a controlled local fallback reader for non-interactive compilation.
-- `scripts/init-nfnl` was implemented to avoid dependency on `sd`/`fd` (uses standard shell tools + `perl`), because those were not available in this environment.
+- `scripts/init` initializes the project, also runs `scripts/init-nfnl` which must be run on a fresh clone of repo.
 
 ## Repo Hygiene
 
@@ -76,13 +75,12 @@
   - `lua/metabuffer/nfnl/**/*.lua linguist-vendored`
 - `.gitignore` includes local artifacts:
   - `.nvimlog`
-  - `deps/`
+  - `deps/` which has git submodules (pulled by init script)
 
 ## Caution Points
 
 - If you rework compile tooling, keep compatibility with `plugin/metabuffer.lua` and `lua/` output paths.
 - If vendored `nfnl` is refreshed, verify no plain `nfnl.*` namespace imports remain.
-- This repository will later on commit compiled Lua so users do not need nfnl at runtime.
 - Never ever commit on your own without first running the full test suite. Limited/targeted runs are preferable while you are working, but before handing back controls always ensure every single test passes.
 
 ## Architecture & Data Flow
@@ -120,49 +118,17 @@ User accepts with <CR> →
 
 ### Module Map
 
-Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `window/`, and `prompt/`. Below is the overview.
-
 **Core orchestration:**
 - `router.fnl` — Singleton orchestrator. Wires all subsystems, dispatches user commands, manages session lifecycle. Delegates to `router/*` submodules.
 - `meta.fnl` — Per-session "model" object. Owns the prompt→matcher→render pipeline. Created by `M.new`, holds matchers, source set, prompt state.
 - `config.fnl` — Default configuration with deep-merge setup. All user options resolve here.
 - `init.fnl` — Plugin entry. `M.setup` merges config and registers `:Meta`, `:MetaResume`, etc.
 
-**Router submodules** (`router/` — see `fnl/metabuffer/router/AGENTS.md`):
-- `session.fnl` — Session lifecycle (start, stop, resume, project-mode bootstrap).
-- `actions.fnl` — Accept/cancel/toggle handlers, window teardown, writeback.
-- `query_flow.fnl` — Debounced prompt→filter pipeline, source/transform switching.
-- `navigation.fnl` — Selection movement, scroll sync, half-page jumps.
-- `prompt.fnl` — Prompt text analysis, debounce timing, directive detection.
-- `history.fnl` — History entry construction, recall, merge, saved-prompt management.
-- `util.fnl` — Shared helpers: state persistence, prompt-line reading, option resolution.
-
-**Window subsystem** (`window/` — see `fnl/metabuffer/window/AGENTS.md`):
-- `base.fnl` — Window wrapper base (stash/restore options, statusline, highlights).
-- `metawindow.fnl` — Main results window wrapper and statusline renderer.
-- `floating.fnl` — Floating window management (info, keybind popup).
-- `prompt.fnl` — Prompt window (split below results, height persistence).
-- `preview.fnl` — Preview pane (context around selected hit, horizontal scroll, wrap).
-- `info.fnl` — Info float (hit metadata, project loading progress, async highlight).
-- `animation.fnl` — Dual-backend animation system (mini.animate / native frame loop).
-- `context.fnl` — Contextual sidebar window.
-- `lineno.fnl` — Fake line-number column for project-mode (dynamic width).
-- `statusline.fnl` — Statusline content builder (flags, matcher name, counts).
-- `history_browser.fnl` — Floating history/saved-prompt browser.
-- `init.fnl` — Barrel module re-exporting public window modules.
-
-**Prompt subsystem** (`prompt/` — see `fnl/metabuffer/prompt/AGENTS.md`):
-- `hooks.fnl` — Autocmd registration, event dispatch, mode switching, UI sync.
-- `prompt.fnl` — Prompt object (buffer management, text get/set).
-- `action.fnl` — Prompt editing actions (kill, yank, home, end, newline).
-- `keymap.fnl` — Keymap registration and builder.
-- `key.fnl` — Key definition constants.
-- `keystroke.fnl` — Multi-key sequence detection (e.g. `!!`, `!$`).
-- `caret.fnl` — Cursor position tracking within prompt.
-- `history.fnl` — Prompt history navigation (up/down cycling).
-- `digraph.fnl` — Digraph input support.
-- `util.fnl` — Prompt text utilities.
-- `init.fnl` — Barrel module re-exporting prompt modules.
+**Router submodules** (`router/` — see `fnl/metabuffer/router/AGENTS.md`)
+**Window subsystem** (`window/` — see `fnl/metabuffer/window/AGENTS.md`)
+**Buffer modules** (`buffer/` — see `fnl/metabuffer/buffer/AGENTS.md`)
+**Prompt subsystem** (`prompt/` — see `fnl/metabuffer/prompt/AGENTS.md`)
+**Compat / Plugin shims** (`compat/` — see `fnl/metabuffer/compat/AGENTS.md`)
 
 **Source providers** (`source/`):
 - `init.fnl` — Provider index. Each source implements: `active?`, `hit-prefix`, `info-path`, `collect-source-set`, `apply-write-ops!`.
@@ -179,25 +145,10 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 **Event bus** (`events.fnl`):
 - `events.fnl` — Standalone generic lifecycle event dispatcher. Collects handler specs from registered modules, sorts by priority, filters by `:role-filter`, pcall-dispatches. Public API: `events.send`, `events.register!`, `events.registered-events`, `events.handlers-for`, `events.set-profile!`, `events.profile-stats`, `events.reset-profile-stats!`. The bus is used bidirectionally: compat modules consume events, core subsystems emit them, and the built-in `core_events.fnl` provider fans those lifecycle events back out into statusline/preview/info/context/sign refresh hooks. All lifecycle transitions — session start/stop, startup-ready, source switches, query updates, selection changes, project bootstrap/completion, accept/cancel, insert-enter, mode switches, directive changes — should flow through the bus instead of direct cross-module UI calls.
 
-**Compat / Plugin shims** (`compat/` — see `fnl/metabuffer/compat/AGENTS.md`):
-- `init.fnl` — Pure side-effect loader. Requires the 5 builtin compat sub-modules and registers each into the event bus via `events.register!`. Returns `{}`.
-- `airline.fnl` — Airline statusline disable/re-enable on Meta windows.
-- `buffer_plugins.fnl` — Disables conjure, LSP, gitgutter, gitsigns, diagnostics, auto-pairs on Meta buffers (role-filtered).
-- `cmp.fnl` — Disables nvim-cmp on prompt buffer, suppresses native completion, re-disables on InsertEnter.
-- `hlsearch.fnl` — Clears hlsearch on session start/cancel/restore, restores on accept.
-- `rainbow.fnl` — Deactivates rainbow_parentheses on Meta buffers, reactivates on teardown and session stop.
-
 **Matcher modules** (`matcher/`):
 - `init.fnl` — Barrel module.
 - `base.fnl` — Shared matcher interface (highlight, remove-highlight, filter).
 - Matchers: `all.fnl` (multi-token AND/negation), `fuzzy.fnl`, `regex.fnl`, `attrib.fnl`, `generic.fnl`, `range.fnl`, `textobj.fnl`.
-
-**Buffer modules** (`buffer/`):
-- `base.fnl` — Buffer wrapper base (name, options stash/restore).
-- `metabuffer.fnl` — Main results buffer (render filtered lines, line mapping, cursor management, source separators).
-- `regular.fnl` — Origin buffer tracking.
-- `ui.fnl` — UI buffer helpers (highlights, virtual text).
-- `init.fnl` — Barrel module.
 
 **Query & directives** (`query/`):
 - `query.fnl` (root) — Query parsing entry point.
@@ -228,7 +179,7 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 ### Key Design Patterns
 
 - **Event-driven UI updates**: Selection/query/startup/project lifecycle changes fan out to preview, info, context, statusline, and sign refresh through bus handlers (`core_events.fnl`). Window modules never call each other directly.
-- **Compat event bus**: Generic lifecycle dispatcher (`compat/init.fnl`). Modules declare `{:events {:<event> <spec>}}` with priority + role filters. The bus collects, sorts, and pcall-dispatches. See `fnl/metabuffer/compat/AGENTS.md` for the full event schema.
+- **Event bus**: Generic lifecycle dispatcher (`compat/init.fnl`). Modules declare `{:events {:<event> <spec>}}` with priority + role filters. The bus collects, sorts, and pcall-dispatches. See `fnl/metabuffer/compat/AGENTS.md` for the full event schema (should be moved to general location)
 - **Barrel/index modules**: `window/init.fnl`, `prompt/init.fnl`, `matcher/init.fnl`, `transform/init.fnl`, `source/init.fnl`, `buffer/init.fnl` — return maps of sub-module requires.
 - **Transform registry**: Pluggable modules with a common contract. Each transform can be toggled via `#directive` in the prompt. Custom transforms follow the same interface.
 - **Source provider**: Pluggable backends (text, file, lgrep) with a common contract. Active source determined by prompt directives.
@@ -289,12 +240,6 @@ Deeper documentation lives in subdirectory AGENTS.md files for `router/`, `windo
 - Remember `fennel-ls --lint` should be run directly after any file edit.
 - Fix `fennel-ls --lint` warnings you encounter while working, not just hard errors. Keep those cleanup fixes as their own commits when they are distinct from the feature change.
 - Treat stuck test cleanup as part of the task, not an optional follow-up. If a test appears wedged, stop the leaked processes, then continue debugging why teardown failed.
-
-## Symbol Index
-
-- After major code changes (new functions or other global symbols), update `SYMBOL_INDEX.md` by running `./skills/symbol-index/scripts/update-symbol-index.py`.
-- Prefer using a worker sub-agent to run this update step and report what changed.
-- Keep this file in context to avoid unecessary slow lookups.
 
 ## Feature files
 

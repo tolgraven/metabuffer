@@ -298,7 +298,7 @@ local function execute_scroll_21(deps, animation_mod, active_by_prompt, session,
     if mini_scroll_3f then
       session["scroll-animating?"] = true
       local function _36_()
-        return vim.cmd(("normal! " .. scroll_command_text(action)))
+        return pcall(vim.cmd, ("silent! normal! " .. scroll_command_text(action)))
       end
       animation_mod["animate-scroll-action-mini!"](session, session.meta.win.window, animation_mod["duration-ms"](session, "scroll", 140), _36_, {["return-win"] = return_win, ["return-mode"] = return_mode, ["done!"] = done_21})
       return {row = (target.lnum or row), animated = true}
@@ -321,8 +321,7 @@ local function apply_scroll_selection_21(deps, session, result)
   local target_row = result.row
   local animated_3f = result.animated
   if animated_3f then
-    set_selected_index_21(session, target_row)
-    return events.send("on-selection-change!", {session = session, ["line-nr"] = (1 + (session.meta.selected_index or 0)), ["refresh-lines"] = false})
+    return set_selected_index_21(session, target_row)
   else
     sync_selection_to_row_21(deps, session, target_row)
     M["maybe-sync-from-main!"](deps, session, true)
