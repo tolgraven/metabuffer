@@ -47,10 +47,14 @@
                   session.prompt-buf
                   false
                   (vim.api.nvim_buf_get_changedtick session.prompt-buf))))))
-      (au! "CompleteChanged" session.prompt-buf
+      (au-buf! "CompleteChanged" session.prompt-buf
         (fn [ev]
           (let [item (and ev (= (type ev) "table") (. ev :completed_item))]
-            (maybe-show-directive-help! session item))))
+            (vim.schedule
+              (fn []
+                (when (and session.prompt-buf
+                           (= (. active-by-prompt session.prompt-buf) session))
+                  (maybe-show-directive-help! session item)))))))
       (au! "CompleteDone" session.prompt-buf
         (fn [] (maybe-show-directive-help! session)))
       (au! "InsertEnter" session.prompt-buf

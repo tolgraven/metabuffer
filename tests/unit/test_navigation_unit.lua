@@ -136,6 +136,13 @@ T['animated scroll-main does not jump the real cursor before the animation runs'
         ['duration-ms'] = function()
           return 140
         end,
+        ['supports-backend?'] = function(kind)
+          return kind == 'mini'
+        end,
+        ['animation-backend'] = function()
+          return 'mini'
+        end,
+        ['ensure-mini-global!'] = function() end,
         ['animate-scroll-view!'] = function(_, _, win, from_view, to_view)
           animate_calls = animate_calls + 1
           eq(win, meta_win)
@@ -194,6 +201,120 @@ T['animated scroll-main does not jump the real cursor before the animation runs'
   eq(preview_calls, 0)
   eq(info_calls, 0)
   eq(context_calls, 0)
+
+  vim.api.nvim_set_current_win(meta_win)
+  vim.cmd('only')
+end
+
+T['animated scroll-main defers UI fanout until animation completion'] = function()
+  ensure_core_events()
+  vim.cmd('enew')
+  local meta_buf = vim.api.nvim_get_current_buf()
+  local lines = {}
+  for i = 1, 120 do
+    lines[i] = ('line %03d'):format(i)
+  end
+  vim.api.nvim_buf_set_lines(meta_buf, 0, -1, false, lines)
+
+  local meta_win = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_height(meta_win, 10)
+  vim.api.nvim_win_call(meta_win, function()
+    vim.fn.winrestview({ topline = 10, lnum = 10, col = 0, leftcol = 0 })
+  end)
+
+  vim.cmd('belowright split')
+  local prompt_buf = vim.api.nvim_get_current_buf()
+
+  local status_calls = 0
+  local preview_calls = 0
+  local info_calls = 0
+  local context_calls = 0
+  local done_cb = nil
+  local deps = {
+    router = { ['active-by-prompt'] = {} },
+    refresh = {
+      ['preview!'] = function()
+        preview_calls = preview_calls + 1
+      end,
+      ['info!'] = function()
+        info_calls = info_calls + 1
+      end,
+    },
+    windows = {
+      context = {
+        ['update!'] = function()
+          context_calls = context_calls + 1
+        end,
+      },
+    },
+    mods = {
+      animation = {
+        ['enabled?'] = function()
+          return true
+        end,
+        ['duration-ms'] = function()
+          return 140
+        end,
+        ['animate-scroll-view!'] = function(_, _, _, from_view, to_view, _, opts)
+          eq(from_view.topline, 10)
+          eq(from_view.lnum, 10)
+          eq(to_view.topline, 15)
+          eq(to_view.lnum, 15)
+          done_cb = opts['done!']
+        end,
+      },
+    },
+  }
+  local session = {
+    ['prompt-buf'] = prompt_buf,
+    ['refresh-hooks'] = {
+      ['statusline!'] = function()
+        status_calls = status_calls + 1
+      end,
+      ['preview!'] = function()
+        preview_calls = preview_calls + 1
+      end,
+      ['info!'] = function()
+        info_calls = info_calls + 1
+      end,
+      ['context!'] = function()
+        context_calls = context_calls + 1
+      end,
+    },
+    meta = {
+      ['selected_index'] = 9,
+      win = { window = meta_win },
+      buf = {
+        buffer = meta_buf,
+        indices = lines,
+      },
+      ['refresh_statusline'] = function()
+        status_calls = status_calls + 1
+      end,
+    },
+  }
+  deps.router['active-by-prompt'][prompt_buf] = session
+
+  navigation['scroll-main!'](deps, prompt_buf, 'half-down')
+
+  vim.wait(1000, function()
+    return type(done_cb) == 'function'
+  end, 10)
+  eq(type(done_cb), 'function')
+  eq(session.meta['selected_index'], 14)
+  eq(preview_calls, 0)
+  eq(info_calls, 0)
+  eq(context_calls, 0)
+  eq(status_calls, 0)
+
+  done_cb()
+
+  wait_for_refresh(function()
+    return status_calls
+  end, 1)
+  eq(preview_calls, 1)
+  eq(info_calls, 1)
+  eq(context_calls, 1)
 
   vim.api.nvim_set_current_win(meta_win)
   vim.cmd('only')
@@ -306,6 +427,8 @@ T['scroll-main uses Neovim effective final view when paging changes cursor row']
 end
 
 T['scroll-main keeps advancing selection after viewport reaches bottom'] = function()
+  vim.o.lines = math.max(vim.o.lines, 40)
+  vim.o.columns = math.max(vim.o.columns, 120)
   vim.cmd('enew')
   local meta_buf = vim.api.nvim_get_current_buf()
   local lines = {}

@@ -615,11 +615,9 @@ local function _89_(session, win, duration_ms0, action, opts)
     pcall(vim.cmd, "stopinsert")
   else
   end
-  pcall(vim.api.nvim_set_current_win, win)
   local function _95_()
     if (active_3f() and vim.api.nvim_win_is_valid(win)) then
-      pcall(vim.api.nvim_set_current_win, win)
-      action()
+      pcall(vim.api.nvim_win_call, win, action)
       return mini_after_21("scroll", duration_ms0, finish_21)
     else
       return finish_21()

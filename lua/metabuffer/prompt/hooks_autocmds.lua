@@ -71,105 +71,112 @@ M.new = function(opts)
     au_buf_21({"TextChanged", "TextChangedI"}, session["prompt-buf"], _8_)
     local function _10_(ev)
       local item = (ev and (type(ev) == "table") and ev.completed_item)
-      return maybe_show_directive_help_21(session, item)
+      local function _11_()
+        if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
+          return maybe_show_directive_help_21(session, item)
+        else
+          return nil
+        end
+      end
+      return vim.schedule(_11_)
     end
-    au_21("CompleteChanged", session["prompt-buf"], _10_)
-    local function _11_()
+    au_buf_21("CompleteChanged", session["prompt-buf"], _10_)
+    local function _13_()
       return maybe_show_directive_help_21(session)
     end
-    au_21("CompleteDone", session["prompt-buf"], _11_)
-    local function _12_()
+    au_21("CompleteDone", session["prompt-buf"], _13_)
+    local function _14_()
       events.send("on-insert-enter!", {session = session})
       apply_keymaps(router, session)
       return apply_emacs_insert_fallbacks(router, session)
     end
-    au_21("InsertEnter", session["prompt-buf"], _12_)
-    local function _13_()
+    au_21("InsertEnter", session["prompt-buf"], _14_)
+    local function _15_()
       return events.post("on-prompt-focus!", {session = session}, {["supersede?"] = true, ["dedupe-key"] = ("on-prompt-focus:" .. tostring(session["prompt-buf"]))})
     end
-    au_21({"BufEnter", "WinEnter", "FocusGained"}, session["prompt-buf"], _13_)
-    local function _14_()
+    au_21({"BufEnter", "WinEnter", "FocusGained"}, session["prompt-buf"], _15_)
+    local function _16_()
       events.post("on-prompt-focus!", {session = session}, {["supersede?"] = true, ["dedupe-key"] = ("on-prompt-focus:" .. tostring(session["prompt-buf"]))})
       return maybe_show_directive_help_21(session)
     end
-    au_21({"ModeChanged", "InsertEnter", "InsertLeave"}, session["prompt-buf"], _14_)
-    local function _15_()
+    au_21({"ModeChanged", "InsertEnter", "InsertLeave"}, session["prompt-buf"], _16_)
+    local function _17_()
       return maybe_show_directive_help_21(session)
     end
-    au_21({"CursorMoved", "CursorMovedI"}, session["prompt-buf"], _15_)
-    local function _16_()
+    au_21({"CursorMoved", "CursorMovedI"}, session["prompt-buf"], _17_)
+    local function _18_()
       return hide_directive_help_21(session)
     end
-    return au_21({"BufLeave", "WinLeave"}, session["prompt-buf"], _16_)
+    return au_21({"BufLeave", "WinLeave"}, session["prompt-buf"], _18_)
   end
   local function register_global_autocmds_21(router, session, au_global_21)
-    local function _17_(ev)
+    local function _19_(ev)
       return handle_global_resize_21(session, ev)
     end
-    au_global_21({"VimResized", "WinResized"}, _17_)
-    local function _18_(_)
+    au_global_21({"VimResized", "WinResized"}, _19_)
+    local function _20_(_)
       return handle_wrap_option_set_21(session)
     end
-    au_global_21("OptionSet", _18_, {pattern = "wrap"})
-    local function _19_(_)
+    au_global_21("OptionSet", _20_, {pattern = "wrap"})
+    local function _21_(_)
       return handle_overlay_winnew_21(session)
     end
-    au_global_21("WinNew", _19_)
-    local function _20_(ev)
+    au_global_21("WinNew", _21_)
+    local function _22_(ev)
       return handle_overlay_bufwinenter_21(session, ev)
     end
-    au_global_21("BufWinEnter", _20_)
-    local function _21_(_)
+    au_global_21("BufWinEnter", _22_)
+    local function _23_(_)
       return handle_hidden_session_gc_21(router, session)
     end
-    au_global_21({"BufEnter", "WinEnter", "FocusGained"}, _21_)
-    local function _22_(ev)
+    au_global_21({"BufEnter", "WinEnter", "FocusGained"}, _23_)
+    local function _24_(ev)
       return handle_external_write_21(router, session, ev)
     end
-    au_global_21("BufWritePost", _22_)
-    local function _23_(_)
+    au_global_21("BufWritePost", _24_)
+    local function _25_(_)
       return handle_scroll_sync_21(session)
     end
-    return au_global_21("WinScrolled", _23_)
+    return au_global_21("WinScrolled", _25_)
   end
   local function register_results_autocmds_21(router, session, au_21, au_buf_21)
-    local function _24_()
+    local function _26_()
       return handle_results_cursor_21(session)
     end
-    au_21({"CursorMoved", "CursorMovedI"}, session.meta.buf.buffer, _24_)
-    local function _25_(_)
+    au_21({"CursorMoved", "CursorMovedI"}, session.meta.buf.buffer, _26_)
+    local function _27_(_)
       return handle_results_edit_enter_21(session)
     end
-    au_buf_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _25_)
-    local function _26_(_)
+    au_buf_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _27_)
+    local function _28_(_)
       return handle_results_text_changed_21(router, session)
     end
-    au_buf_21({"TextChanged", "TextChangedI"}, session.meta.buf.buffer, _26_)
-    local function _27_(_)
+    au_buf_21({"TextChanged", "TextChangedI"}, session.meta.buf.buffer, _28_)
+    local function _29_(_)
       return handle_results_focus_21(session)
     end
-    au_buf_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _27_)
-    local function _28_()
+    au_buf_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _29_)
+    local function _30_()
       return handle_selection_focus_21(session)
     end
-    au_buf_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _28_)
-    local function _29_(_)
+    au_buf_21({"BufEnter", "WinEnter", "FocusGained"}, session.meta.buf.buffer, _30_)
+    local function _31_(_)
       return handle_results_leave_21(router, session)
     end
-    au_buf_21("BufLeave", session.meta.buf.buffer, _29_)
-    local function _30_(_)
+    au_buf_21("BufLeave", session.meta.buf.buffer, _31_)
+    local function _32_(_)
       return handle_results_writecmd_21(router, session)
     end
-    au_buf_21("BufWriteCmd", session.meta.buf.buffer, _30_)
-    local function _31_(_)
+    au_buf_21("BufWriteCmd", session.meta.buf.buffer, _32_)
+    local function _33_(_)
       return handle_results_wipeout_21(router, session)
     end
-    return au_buf_21("BufWipeout", session.meta.buf.buffer, _31_)
+    return au_buf_21("BufWipeout", session.meta.buf.buffer, _33_)
   end
   local function finalize_registration_21(router, session)
     refresh_prompt_highlights_21(session)
     maybe_show_directive_help_21(session)
-    local function _32_()
+    local function _34_()
       if (session["prompt-buf"] and (active_by_prompt[session["prompt-buf"]] == session)) then
         pcall(refresh_prompt_highlights_21, session)
         return capture_expected_layout_21(session)
@@ -177,7 +184,7 @@ M.new = function(opts)
         return nil
       end
     end
-    vim.defer_fn(_32_, prompt_animation_delay_ms(session))
+    vim.defer_fn(_34_, prompt_animation_delay_ms(session))
     apply_keymaps(router, session)
     apply_emacs_insert_fallbacks(router, session)
     apply_main_keymaps(router, session)

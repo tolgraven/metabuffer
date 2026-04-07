@@ -215,9 +215,19 @@ local function close_window_21(deps, session)
   end
   session["info-win"] = nil
   session["info-buf"] = nil
+  session["info-animated?"] = nil
   session["info-config-sig"] = nil
+  session["info-render-sig"] = nil
   session["info-post-fade-refresh?"] = nil
   session["info-render-suspended?"] = nil
+  session["info-start-index"] = nil
+  session["info-stop-index"] = nil
+  session["info-render-start"] = nil
+  session["info-render-stop"] = nil
+  session["info-last-selected-index"] = nil
+  session["info-last-project-loading?"] = nil
+  session["info-showing-project-loading?"] = nil
+  session["info-project-loading-active?"] = nil
   session["info-highlight-fill-pending?"] = nil
   session["info-highlight-fill-token"] = nil
   session["info-line-meta-refresh-pending"] = nil

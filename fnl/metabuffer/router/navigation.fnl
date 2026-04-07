@@ -283,15 +283,15 @@
           (if mini-scroll?
               (do
                 (set session.scroll-animating? true)
-                (animation-mod.animate-scroll-action-mini!
-                  session
-                  session.meta.win.window
-                  (animation-mod.duration-ms session :scroll 140)
-                  (fn []
-                    (vim.cmd (.. "normal! " (scroll-command-text action))))
-                  {:return-win return-win
-                   :return-mode return-mode
-                   :done! done!})
+                 (animation-mod.animate-scroll-action-mini!
+                   session
+                   session.meta.win.window
+                   (animation-mod.duration-ms session :scroll 140)
+                   (fn []
+                     (pcall vim.cmd (.. "silent! normal! " (scroll-command-text action))))
+                   {:return-win return-win
+                    :return-mode return-mode
+                    :done! done!})
                 {:row (or (. target :lnum) row) :animated true})
               (if animate?
                   (do
@@ -318,12 +318,7 @@
   (let [target-row (. result :row)
         animated? (. result :animated)]
     (if animated?
-        (do
-          (set-selected-index! session target-row)
-          (events.send :on-selection-change!
-            {:session session
-             :line-nr (+ 1 (or session.meta.selected_index 0))
-             :refresh-lines false}))
+        (set-selected-index! session target-row)
         (do
           (sync-selection-to-row! deps session target-row)
           (M.maybe-sync-from-main! deps session true)
